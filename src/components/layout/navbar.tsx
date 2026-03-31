@@ -1,0 +1,124 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { Menu, X, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LanguageSwitcher } from "@/components/ui/language-switcher";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { NotificationBell } from "@/components/ui/notification-bell";
+
+interface NavbarProps {
+  onMenuToggle?: () => void;
+  isSidebarOpen?: boolean;
+}
+
+export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
+  const { data: session } = useSession();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-border bg-surface">
+      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          {session && (
+            <button
+              onClick={onMenuToggle}
+              className="rounded-lg p-2 text-text-secondary hover:bg-border/50 md:hidden"
+              aria-label="Toggle sidebar"
+            >
+              {isSidebarOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          )}
+          <Link href="/" className="text-xl font-bold text-primary">
+            EthioLearn
+          </Link>
+        </div>
+
+        {session ? (
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <LanguageSwitcher />
+            <NotificationBell />
+            <Badge variant="success" className="hidden sm:inline-flex">
+              XP Level {Math.floor((session.user as any).xp ?? 0 / 100) + 1}
+            </Badge>
+            <span className="hidden text-sm font-medium text-text-primary sm:block">
+              {session.user?.name}
+            </span>
+            <Avatar
+              name={session.user?.name || "User"}
+              src={session.user?.image}
+              size="sm"
+            />
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="rounded-lg p-2 text-text-secondary hover:bg-border/50"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Desktop auth links */}
+            <div className="hidden items-center gap-3 sm:flex">
+              <ThemeToggle />
+              <LanguageSwitcher />
+              <Link
+                href="/login"
+                className="text-sm font-medium text-text-secondary hover:text-primary"
+              >
+                Sign In
+              </Link>
+              <Link href="/register">
+                <Button size="sm">Get Started</Button>
+              </Link>
+            </div>
+
+            {/* Mobile hamburger for unauthenticated */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="rounded-lg p-2 text-text-secondary hover:bg-border/50 sm:hidden"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Mobile dropdown for unauthenticated users */}
+      {!session && mobileMenuOpen && (
+        <div className="border-t border-border px-4 py-3 sm:hidden">
+          <Link
+            href="/login"
+            className="block py-2 text-sm font-medium text-text-secondary hover:text-primary"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/register"
+            className="block py-2 text-sm font-medium text-primary"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Get Started
+          </Link>
+        </div>
+      )}
+    </header>
+  );
+}

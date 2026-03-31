@@ -1,0 +1,367 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  STUDENT
+}
+
+enum SchoolType {
+  PUBLIC
+  PRIVATE
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  FILL_IN_BLANK
+  MATCH_PAIRS
+  ORDERING
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuizMode {
+  SOLO
+  TIMED
+  GROUP
+}
+
+enum GameStatus {
+  WAITING
+  ACTIVE
+  COMPLETED
+}
+
+enum RewardTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum QuestionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum RedemptionStatus {
+  PENDING
+  APPROVED
+  DENIED
+  FULFILLED
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  phoneNumber  String   @unique
+  email        String?  @unique
+  name         String
+  role         UserRole @default(STUDENT)
+  grade        Int?
+  section      String?
+  avatarUrl    String?
+  xpLevel      Int      @default(1)
+  totalPoints  Int      @default(0)
+  streakDays   Int      @default(0)
+  isActive     Boolean  @default(true)
+  lastActiveAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+
+  // Relations
+  quizzes         Quiz[]
+  hostedGameRooms GameRoom[]     @relation("GameHost")
+  gameParticipations GamePlayer[]
+  redemptions     Redemption[]
+  pointLedger     PointLedger[]
+  uploadedTextbooks Textbook[]   @relation("TextbookUploader")
+  approvedRedemptions Redemption[] @relation("RedemptionApprover")
+  notifications       Notification[]
+  achievements        UserAchievement[]
+  studentBooks        StudentBook[]
+
+  @@map("users")
+}
+
+model School {
+  id               String     @id @default(cuid())
+  name             String
+  region           String
+  city             String
+  type             SchoolType @default(PUBLIC)
+  subscriptionTier String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  users     User[]
+  textbooks Textbook[]
+  rewards   Reward[]
+
+  @@map("schools")
+}
+
+model Textbook {
+  id               String           @id @default(cuid())
+  title            String
+  grade            Int
+  subject          String
+  language         String           @default("en")
+  academicYear     String?
+  edition          String?
+  publisher        String?
+  content          String?          @db.Text
+  fileUrl          String
+  processingStatus ProcessingStatus @default(PENDING)
+  chapterCount     Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  uploadedById String
+  uploadedBy   User   @relation("TextbookUploader", fields: [uploadedById], references: [id])
+
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+
+  chapters Chapter[]
+
+  @@map("textbooks")
+}
+
+model Chapter {
+  id            String   @id @default(cuid())
+  chapterNumber Int
+  title         String
+  content       String?  @db.Text
+  contentHash   String?
+  topicTags     String[] @default([])
+  bloomLevels   String[] @default([])
+  questionCount Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  textbookId String
+  textbook   Textbook @relation(fields: [textbookId], references: [id], onDelete: Cascade)
+
+  questions Question[]
+
+  @@unique([textbookId, chapterNumber])
+  @@map("chapters")
+}
+
+model Question {
+  id            String         @id @default(cuid())
+  type          QuestionType   @default(MCQ)
+  difficulty    Difficulty     @default(MEDIUM)
+  status        QuestionStatus @default(PUBLISHED)
+  questionText  String
+  options       Json           @default("[]")
+  correctAnswer String
+  explanation   String?
+  usageCount    Int            @default(0)
+  avgAccuracy   Float?
+  language      String       @default("en")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  quizAnswers QuizAnswer[]
+
+  @@map("questions")
+}
+
+model Quiz {
+  id               String   @id @default(cuid())
+  mode             QuizMode @default(SOLO)
+  score            Int      @default(0)
+  totalPointsEarned Int     @default(0)
+  totalQuestions   Int      @default(0)
+  correctAnswers   Int      @default(0)
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id])
+
+  gameRoomId String?
+  gameRoom   GameRoom? @relation(fields: [gameRoomId], references: [id])
+
+  answers QuizAnswer[]
+
+  @@map("quizzes")
+}
+
+model QuizAnswer {
+  id           String  @id @default(cuid())
+  studentAnswer String
+  isCorrect    Boolean
+  timeTakenMs  Int
+  pointsEarned Int     @default(0)
+
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+
+  @@map("quiz_answers")
+}
+
+model GameRoom {
+  id         String     @id @default(cuid())
+  roomCode   String     @unique
+  status     GameStatus @default(WAITING)
+  quizConfig Json       @default("{}")
+  maxPlayers Int        @default(20)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  hostUserId String
+  host       User   @relation("GameHost", fields: [hostUserId], references: [id])
+
+  players GamePlayer[]
+  quizzes Quiz[]
+
+  @@map("game_rooms")
+}
+
+model GamePlayer {
+  id        String   @id @default(cuid())
+  score     Int      @default(0)
+  rank      Int?
+  joinedAt  DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  gameRoomId String
+  gameRoom   GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameRoomId])
+  @@map("game_players")
+}
+
+model Reward {
+  id             String    @id @default(cuid())
+  tier           RewardTier
+  name           String
+  description    String?
+  pointsCost     Int
+  inventoryCount Int       @default(0)
+  imageUrl       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  redemptions Redemption[]
+
+  @@map("rewards")
+}
+
+model Redemption {
+  id        String           @id @default(cuid())
+  status    RedemptionStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id])
+
+  rewardId String
+  reward   Reward @relation(fields: [rewardId], references: [id])
+
+  approvedById String?
+  approvedBy   User?   @relation("RedemptionApprover", fields: [approvedById], references: [id])
+
+  @@map("redemptions")
+}
+
+model PointLedger {
+  id          String   @id @default(cuid())
+  actionType  String
+  points      Int
+  description String?
+  createdAt   DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  quizId String?
+
+  @@map("point_ledger")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // "achievement", "reward", "battle_invite", "streak", "level_up", "system"
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  data      Json?    // optional metadata (e.g., achievementId, rewardId)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model UserAchievement {
+  id       String   @id @default(cuid())
+  userId   String
+  code     String
+  earnedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code])
+  @@map("user_achievements")
+}
+
+model StudentBook {
+  id               String           @id @default(cuid())
+  title            String
+  description      String?
+  fileUrl          String
+  processingStatus ProcessingStatus @default(PENDING)
+  isPublic         Boolean          @default(false)
+  storageBytes     Int              @default(0)
+  quizCount        Int              @default(0)
+  approvedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  uploadedById String
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+
+  @@map("student_books")
+}

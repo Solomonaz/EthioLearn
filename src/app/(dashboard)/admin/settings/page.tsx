@@ -1,0 +1,319 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Building2,
+  Users,
+  BookOpen,
+  Gift,
+  Calendar,
+  User,
+  Phone,
+  Shield,
+  Download,
+  Library,
+} from "lucide-react";
+
+interface SchoolData {
+  id: string;
+  name: string;
+  region: string;
+  city: string;
+  type: "PUBLIC" | "PRIVATE";
+  subscriptionTier: string | null;
+  createdAt: string;
+  _count: {
+    users: number;
+    textbooks: number;
+    rewards: number;
+  };
+}
+
+interface UserData {
+  name: string;
+  phoneNumber: string;
+  role: string;
+}
+
+export default function AdminSettingsPage() {
+  const [school, setSchool] = useState<SchoolData | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Form state
+  const [name, setName] = useState("");
+  const [region, setRegion] = useState("");
+  const [city, setCity] = useState("");
+  const [type, setType] = useState<"PUBLIC" | "PRIVATE">("PUBLIC");
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [settingsRes, userRes] = await Promise.all([
+          fetch("/api/admin/settings"),
+          fetch("/api/auth/session"),
+        ]);
+
+        if (!settingsRes.ok) throw new Error("Failed to load school settings");
+        const settingsData = await settingsRes.json();
+        setSchool(settingsData.school);
+        setName(settingsData.school.name);
+        setRegion(settingsData.school.region);
+        setCity(settingsData.school.city);
+        setType(settingsData.school.type);
+
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          if (userData?.user) {
+            setCurrentUser(userData.user);
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load settings");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, region, city, type }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update settings");
+      }
+
+      const data = await res.json();
+      setSchool((prev) =>
+        prev ? { ...prev, ...data.school } : prev
+      );
+      setSuccess("School settings updated successfully!");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error && !school) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-error">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary">School Settings</h1>
+        <p className="text-sm text-text-muted">Manage your school information and preferences</p>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-700">
+          {success}
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* School Info Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">School Information</h2>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              label="School Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter school name"
+            />
+            <Input
+              label="Region"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              placeholder="Enter region"
+            />
+            <Input
+              label="City"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Enter city"
+            />
+            <div className="w-full">
+              <label
+                htmlFor="school-type"
+                className="mb-2 block text-sm font-medium text-text-primary"
+              >
+                School Type
+              </label>
+              <select
+                id="school-type"
+                value={type}
+                onChange={(e) => setType(e.target.value as "PUBLIC" | "PRIVATE")}
+                className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+              >
+                <option value="PUBLIC">Public</option>
+                <option value="PRIVATE">Private</option>
+              </select>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSave} isLoading={saving}>
+              Save Changes
+            </Button>
+          </CardFooter>
+        </Card>
+
+        {/* School Stats Card */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-text-primary">School Statistics</h2>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-lg bg-blue-50 p-4">
+                <div className="flex items-center gap-2 text-blue-600">
+                  <Users className="h-4 w-4" />
+                  <span className="text-sm font-medium">Students</span>
+                </div>
+                <p className="mt-1 text-2xl font-bold text-blue-700">
+                  {school?._count.users ?? 0}
+                </p>
+              </div>
+              <div className="rounded-lg bg-green-50 p-4">
+                <div className="flex items-center gap-2 text-green-600">
+                  <BookOpen className="h-4 w-4" />
+                  <span className="text-sm font-medium">Textbooks</span>
+                </div>
+                <p className="mt-1 text-2xl font-bold text-green-700">
+                  {school?._count.textbooks ?? 0}
+                </p>
+              </div>
+              <div className="rounded-lg bg-purple-50 p-4">
+                <div className="flex items-center gap-2 text-purple-600">
+                  <Gift className="h-4 w-4" />
+                  <span className="text-sm font-medium">Rewards</span>
+                </div>
+                <p className="mt-1 text-2xl font-bold text-purple-700">
+                  {school?._count.rewards ?? 0}
+                </p>
+              </div>
+              <div className="rounded-lg bg-amber-50 p-4">
+                <div className="flex items-center gap-2 text-amber-600">
+                  <Calendar className="h-4 w-4" />
+                  <span className="text-sm font-medium">Created</span>
+                </div>
+                <p className="mt-1 text-sm font-bold text-amber-700">
+                  {school?.createdAt
+                    ? new Date(school.createdAt).toLocaleDateString()
+                    : "N/A"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Admin Account Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">Admin Account</h2>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3">
+              <User className="h-4 w-4 text-text-muted" />
+              <div>
+                <p className="text-xs text-text-muted">Name</p>
+                <p className="text-sm font-medium text-text-primary">
+                  {currentUser?.name ?? "N/A"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Phone className="h-4 w-4 text-text-muted" />
+              <div>
+                <p className="text-xs text-text-muted">Phone</p>
+                <p className="text-sm font-medium text-text-primary">
+                  {currentUser?.phoneNumber ?? "N/A"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Shield className="h-4 w-4 text-text-muted" />
+              <div>
+                <p className="text-xs text-text-muted">Role</p>
+                <Badge variant="info">
+                  {currentUser?.role ?? "N/A"}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions Card */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-text-primary">Quick Actions</h2>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() => alert("Coming soon")}
+            >
+              <Download className="h-4 w-4" />
+              Export Student Data
+            </Button>
+            <Link href="/admin/textbooks">
+              <Button variant="outline" className="w-full justify-start gap-2">
+                <Library className="h-4 w-4" />
+                Manage Textbooks
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

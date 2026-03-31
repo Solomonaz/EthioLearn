@@ -1,0 +1,225 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/get-session";
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentUser();
+  if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const schoolId = user.schoolId;
+
+  const student = await db.user.findFirst({
+    where: {
+      id,
+      role: "STUDENT" as const,
+      ...(schoolId ? { schoolId } : {}),
+    },
+    include: {
+      school: { select: { name: true } },
+      quizzes: {
+        where: { completedAt: { not: null } },
+        orderBy: { completedAt: "desc" },
+        take: 10,
+        include: {
+          answers: {
+            take: 1,
+            include: {
+              question: {
+                include: {
+                  chapter: {
+                    include: {
+                      textbook: { select: { subject: true, title: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      pointLedger: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      },
+    },
+  });
+
+  if (!student) {
+    return NextResponse.json({ error: "Student not found" }, { status: 404 });
+  }
+
+  // ── Compute stats from quizzes ──────────────────────────────────────────────
+
+  const totalQuizzes = student.quizzes.length;
+  const avgScore =
+    totalQuizzes > 0
+      ? Math.round(
+          student.quizzes.reduce((sum, q) => sum + q.score, 0) / totalQuizzes
+        )
+      : 0;
+
+  // ── Subject mastery ─────────────────────────────────────────────────────────
+
+  const subjectMap = new Map<
+    string,
+    { quizzes: number; scoreSum: number; totalPoints: number }
+  >();
+
+  for (const quiz of student.quizzes) {
+    const answer = quiz.answers[0];
+    const subject =
+      answer?.question?.chapter?.textbook?.subject ?? "Unknown";
+    const existing = subjectMap.get(subject) ?? {
+      quizzes: 0,
+      scoreSum: 0,
+      totalPoints: 0,
+    };
+    existing.quizzes += 1;
+    existing.scoreSum += quiz.score;
+    existing.totalPoints += quiz.totalPointsEarned;
+    subjectMap.set(subject, existing);
+  }
+
+  const subjectMastery = Array.from(subjectMap.entries()).map(
+    ([subject, data]) => ({
+      subject,
+      quizzes: data.quizzes,
+      avgScore:
+        data.quizzes > 0 ? Math.round(data.scoreSum / data.quizzes) : 0,
+      totalPoints: data.totalPoints,
+    })
+  );
+
+  // ── Achievements (data-driven from UserAchievement table) ───────────────────
+
+  const earnedRecords = await db.userAchievement.findMany({
+    where: { userId: student.id },
+    select: { code: true },
+  });
+  const earnedCodes = new Set(earnedRecords.map((r) => r.code));
+
+  const { ACHIEVEMENTS } = await import("@/lib/achievements");
+  const achievements = ACHIEVEMENTS.map((def) => ({
+    id: def.code,
+    name: def.name,
+    desc: def.desc,
+    icon: def.icon,
+    earned: earnedCodes.has(def.code),
+  }));
+
+  // ── Format recent quizzes ───────────────────────────────────────────────────
+
+  const recentQuizzes = student.quizzes.map((q) => {
+    const answer = q.answers[0];
+    const chapter = answer?.question?.chapter ?? null;
+    return {
+      id: q.id,
+      score: q.score,
+      totalQuestions: q.totalQuestions,
+      correctAnswers: q.correctAnswers,
+      totalPointsEarned: q.totalPointsEarned,
+      completedAt: q.completedAt,
+      subject: chapter?.textbook?.subject ?? null,
+      chapterTitle: chapter?.title ?? null,
+      chapterNumber: chapter?.chapterNumber ?? null,
+    };
+  });
+
+  return NextResponse.json({
+    student: {
+      id: student.id,
+      name: student.name,
+      phoneNumber: student.phoneNumber,
+      grade: student.grade,
+      section: student.section,
+      xpLevel: student.xpLevel,
+      totalPoints: student.totalPoints,
+      avatarUrl: student.avatarUrl,
+      streakDays: student.streakDays,
+      lastActiveAt: student.lastActiveAt,
+      createdAt: student.createdAt,
+      school: student.school,
+    },
+    stats: {
+      totalQuizzes,
+      avgScore,
+    },
+    subjectMastery,
+    recentQuizzes,
+    achievements,
+    pointLedger: student.pointLedger,
+  });
+}
+
+// ── PATCH: update student (grade, section, status, reset points) ────────────
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentUser();
+  if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const schoolId = user.schoolId;
+
+  // Verify the student belongs to admin's school
+  const student = await db.user.findFirst({
+    where: { id, role: "STUDENT", ...(schoolId ? { schoolId } : {}) },
+    select: { id: true, isActive: true },
+  });
+
+  if (!student) {
+    return NextResponse.json({ error: "Student not found" }, { status: 404 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { grade, section, isActive, resetStreak } = body as {
+    grade?: string;
+    section?: string;
+    isActive?: boolean;
+    resetStreak?: boolean;
+  };
+
+  const updateData: Record<string, unknown> = {};
+  if (grade !== undefined) updateData.grade = String(grade);
+  if (section !== undefined) updateData.section = String(section);
+  if (typeof isActive === "boolean") updateData.isActive = isActive;
+  if (resetStreak === true) updateData.streakDays = 0;
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+  }
+
+  const updated = await db.user.update({
+    where: { id },
+    data: updateData,
+    select: {
+      id: true,
+      name: true,
+      phoneNumber: true,
+      grade: true,
+      section: true,
+      isActive: true,
+      streakDays: true,
+      totalPoints: true,
+      xpLevel: true,
+    },
+  });
+
+  return NextResponse.json({ student: updated });
+}
