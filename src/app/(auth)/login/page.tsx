@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useState, Suspense } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get("registered") === "true";
+  const callbackUrl = searchParams.get("callbackUrl") ?? "";
+
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
@@ -48,12 +50,29 @@ function LoginForm() {
         otp,
         redirect: false,
       });
+
       if (result?.error) {
         setError("Invalid OTP or account not found.");
         return;
       }
+
       if (result?.ok) {
-        router.push("/student");
+        // Get the fresh session to determine the user's role
+        const session = await getSession();
+        const role = (session?.user as { role?: string } | undefined)?.role;
+        const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
+
+        // Honor callbackUrl only if it matches the user's allowed area
+        if (callbackUrl) {
+          const isAdminCallback = callbackUrl.startsWith("/admin");
+          const isStudentCallback = callbackUrl.startsWith("/student");
+          if ((isAdmin && isAdminCallback) || (!isAdmin && isStudentCallback)) {
+            router.push(callbackUrl);
+            return;
+          }
+        }
+
+        router.push(isAdmin ? "/admin" : "/student");
       }
     } catch {
       setError("Network error. Please check your connection and try again.");
@@ -105,7 +124,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isLoading ? "Sending..." : "Send OTP"}
               </button>
@@ -127,6 +146,7 @@ function LoginForm() {
                 maxLength={6}
                 required
                 disabled={isLoading}
+                autoFocus
               />
               {error && (
                 <p className="mt-3 text-sm text-red-600">{error}</p>
@@ -134,7 +154,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isLoading ? "Verifying..." : "Verify & Sign In"}
               </button>

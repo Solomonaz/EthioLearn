@@ -14,8 +14,6 @@ import {
   Download,
   Sparkles,
   Check,
-  Upload,
-  FileText,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -161,17 +159,8 @@ export default function AdminQuestionsPage() {
   const [bulkTextbookId, setBulkTextbookId] = useState<string | null>(null);
   const [bulkChapterId, setBulkChapterId] = useState<string | null>(null);
 
-  // ── AI Generate state — book-first upload flow ──────────────────
+  // ── AI Generate state — uses already-uploaded textbooks ──────────
   const [aiTextbookId, setAiTextbookId] = useState("");
-  const [aiFile, setAiFile] = useState<File | null>(null);
-  const [aiUploading, setAiUploading] = useState(false);
-  const [aiUploadResult, setAiUploadResult] = useState<{
-    fileName: string;
-    contentLength: number;
-    wordCount: number;
-    pageCount?: number;
-  } | null>(null);
-  const [aiContentSaved, setAiContentSaved] = useState(false);
   const [aiChapterId, setAiChapterId] = useState("");
   const [aiCount, setAiCount] = useState(10);
   const [aiDifficulty, setAiDifficulty] = useState("MIXED");
@@ -450,64 +439,20 @@ export default function AdminQuestionsPage() {
     }
   }
 
-  // ── AI handler functions — book-first flow ───────────────
+  // ── AI handler functions ─────────────────────────────────
 
   const aiSelectedTb = textbooks.find((t) => t.id === aiTextbookId);
   const aiChapters = aiSelectedTb?.chapters ?? [];
-  const aiBookHasContent = aiSelectedTb?.hasContent ?? false;
 
   function handleAiTextbookChange(tbId: string) {
     setAiTextbookId(tbId);
-    setAiFile(null);
-    setAiUploadResult(null);
-    setAiContentSaved(false);
     setAiChapterId("");
     setAiQuestions([]);
     setAiError(null);
-    const tb = textbooks.find((t) => t.id === tbId);
-    if (tb?.hasContent) setAiContentSaved(true);
-  }
-
-  async function handleUploadBook() {
-    if (!aiTextbookId || !aiFile) return;
-    setAiUploading(true);
-    setAiError(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", aiFile);
-      const res = await fetch(
-        `/api/admin/textbooks/${aiTextbookId}/upload`,
-        { method: "POST", body: formData }
-      );
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to upload book");
-      }
-      const data = await res.json();
-      setAiUploadResult({
-        fileName: data.fileName,
-        contentLength: data.contentLength,
-        wordCount: data.wordCount,
-        pageCount: data.pageCount,
-      });
-      setAiContentSaved(true);
-      setTextbooks((prev) => prev.map((t) =>
-        t.id === aiTextbookId ? { ...t, hasContent: true, contentLength: data.contentLength } : t
-      ));
-      toast.success(`Book uploaded successfully! Extracted ${data.wordCount.toLocaleString()} words.`);
-    } catch (e) {
-      setAiError(e instanceof Error ? e.message : "Failed to upload book");
-    } finally {
-      setAiUploading(false);
-    }
   }
 
   async function handleAiGenerate() {
     if (!aiTextbookId || !aiChapterId) return;
-    if (!aiContentSaved && !aiBookHasContent) {
-      setAiError("Upload the book content first.");
-      return;
-    }
     setAiGenerating(true);
     setAiError(null);
     setAiQuestions([]);
@@ -1210,138 +1155,58 @@ export default function AdminQuestionsPage() {
                       <p className="text-sm font-medium text-text-primary">AI Question Generation</p>
                     </div>
                     <p className="text-xs text-text-secondary">
-                      Upload the entire book content first, then select chapter and generate questions.
+                      Select a textbook with uploaded content, choose a chapter, and generate questions using AI.
                     </p>
                   </div>
 
-                  {/* Step 1: Textbook */}
-                  <div>
-                    <label className={LABEL_CLASS}>Step 1: Select Textbook</label>
-                    <select
-                      value={aiTextbookId}
-                      onChange={(e) => handleAiTextbookChange(e.target.value)}
-                      className={SELECT_CLASS}
-                    >
-                      <option value="">Select textbook…</option>
-                      {textbooks.map((tb) => (
-                        <option key={tb.id} value={tb.id}>
-                          {tb.title} — {tb.subject}, Gr {tb.grade}{tb.hasContent ? " ✓" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Step 2: Upload Book (PDF/DOCX) */}
-                  {aiTextbookId && (
-                    <div className="space-y-3">
-                      <label className={LABEL_CLASS}>
-                        Step 2: Upload Book
-                        <span className="ml-1 font-normal text-text-muted">(PDF or DOCX)</span>
-                      </label>
-
-                      {aiBookHasContent && aiContentSaved && !aiFile ? (
-                        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Check className="h-4 w-4 text-green-600" />
-                            <p className="text-sm font-medium text-green-800">Book content uploaded</p>
-                          </div>
-                          <p className="text-xs text-green-700">
-                            {aiSelectedTb?.contentLength?.toLocaleString()} characters extracted. Ready to generate questions.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAiContentSaved(false);
-                              setAiUploadResult(null);
-                            }}
-                            className="mt-2 text-xs text-green-700 underline hover:text-green-900"
-                          >
-                            Upload a different book
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Upload result info */}
-                          {aiUploadResult && (
-                            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Check className="h-4 w-4 text-green-600" />
-                                <p className="text-sm font-medium text-green-800">Upload successful</p>
-                              </div>
-                              <p className="text-xs text-green-700">
-                                {aiUploadResult.fileName}
-                                {aiUploadResult.pageCount ? ` — ${aiUploadResult.pageCount} pages` : ""}
-                                {" — "}{aiUploadResult.wordCount.toLocaleString()} words extracted
-                              </p>
-                            </div>
-                          )}
-
-                          {/* File input */}
-                          {!aiUploadResult && (
-                            <>
-                              <div className="rounded-lg border-2 border-dashed border-border bg-background p-6 text-center">
-                                <Upload className="mx-auto h-8 w-8 text-text-muted mb-2" />
-                                <p className="text-sm text-text-secondary mb-1">
-                                  Upload your textbook file
-                                </p>
-                                <p className="text-xs text-text-muted mb-3">
-                                  Supports PDF and DOCX files (max 50 MB)
-                                </p>
-                                <input
-                                  type="file"
-                                  accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                  onChange={(e) => {
-                                    const f = e.target.files?.[0] ?? null;
-                                    setAiFile(f);
-                                    setAiError(null);
-                                  }}
-                                  className="mx-auto block w-full max-w-xs cursor-pointer text-sm text-text-secondary file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
-                                />
-                              </div>
-
-                              {aiFile && (
-                                <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <FileText className="h-4 w-4 shrink-0 text-primary" />
-                                    <span className="truncate text-sm text-text-primary">
-                                      {aiFile.name}
-                                    </span>
-                                    <span className="shrink-0 text-xs text-text-muted">
-                                      ({(aiFile.size / (1024 * 1024)).toFixed(1)} MB)
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setAiFile(null)}
-                                    className="shrink-0 p-1 text-text-muted hover:text-error"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )}
-
-                              <Button
-                                type="button"
-                                className="w-full"
-                                isLoading={aiUploading}
-                                disabled={aiUploading || !aiFile}
-                                onClick={handleUploadBook}
-                              >
-                                <Upload className="mr-2 h-4 w-4" />
-                                {aiUploading ? "Extracting text from book…" : "Upload & Extract Content"}
-                              </Button>
-                            </>
-                          )}
-                        </>
-                      )}
+                  {/* No textbooks at all */}
+                  {textbooks.length === 0 && !loading && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
+                      <p className="text-sm font-medium text-amber-800 mb-1">
+                        No textbooks found
+                      </p>
+                      <p className="text-xs text-amber-700 mb-3">
+                        Add a textbook first from the{" "}
+                        <a href="/admin/textbooks" className="font-medium underline hover:text-amber-900">
+                          Textbook Management
+                        </a>{" "}
+                        page, then come back here to generate questions.
+                      </p>
                     </div>
                   )}
 
-                  {/* Step 3: Chapter + Generation Settings */}
-                  {aiTextbookId && aiContentSaved && (
-                    <>
-                      <div>
-                        <label className={LABEL_CLASS}>Step 3: Select Chapter</label>
+                  {/* Step 1: Select Textbook */}
+                  {textbooks.length > 0 && (
+                    <div>
+                      <label className={LABEL_CLASS}>Step 1: Select Textbook</label>
+                      <select
+                        value={aiTextbookId}
+                        onChange={(e) => handleAiTextbookChange(e.target.value)}
+                        className={SELECT_CLASS}
+                      >
+                        <option value="">Select textbook…</option>
+                        {textbooks.map((tb) => (
+                          <option key={tb.id} value={tb.id}>
+                            {tb.title} — {tb.subject}, Gr {tb.grade}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Step 2: Select Chapter */}
+                  {aiTextbookId && (
+                    <div>
+                      <label className={LABEL_CLASS}>Step 2: Select Chapter</label>
+                      {aiChapters.length === 0 ? (
+                        <p className="rounded-lg bg-background p-3 text-sm text-text-secondary">
+                          No chapters found. Add chapters via the{" "}
+                          <a href="/admin/textbooks" className="font-medium text-primary underline">
+                            Textbook Management
+                          </a>{" "}
+                          page.
+                        </p>
+                      ) : (
                         <select
                           value={aiChapterId}
                           onChange={(e) => {
@@ -1358,60 +1223,61 @@ export default function AdminQuestionsPage() {
                             </option>
                           ))}
                         </select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 3: Generation Settings */}
+                  {aiTextbookId && aiChapterId && (
+                    <>
+                      <div className="rounded-lg border border-border p-3 space-y-3">
+                        <h4 className="text-sm font-medium text-text-primary">Step 3: Generation Settings</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-text-secondary">Count</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={30}
+                              value={aiCount}
+                              onChange={(e) => setAiCount(Number(e.target.value) || 10)}
+                              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-text-secondary">Difficulty</label>
+                            <select
+                              value={aiDifficulty}
+                              onChange={(e) => setAiDifficulty(e.target.value)}
+                              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                            >
+                              <option value="MIXED">Mixed</option>
+                              <option value="EASY">Easy</option>
+                              <option value="MEDIUM">Medium</option>
+                              <option value="HARD">Hard</option>
+                            </select>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={aiIncludeTF}
+                            onChange={(e) => setAiIncludeTF(e.target.checked)}
+                            className="h-4 w-4 rounded border-border text-primary"
+                          />
+                          Include True/False
+                        </label>
                       </div>
 
-                      {aiChapterId && (
-                        <>
-                          <div className="rounded-lg border border-border p-3 space-y-3">
-                            <h4 className="text-sm font-medium text-text-primary">Step 4: Generation Settings</h4>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-text-secondary">Count</label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={30}
-                                  value={aiCount}
-                                  onChange={(e) => setAiCount(Number(e.target.value) || 10)}
-                                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
-                                />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-text-secondary">Difficulty</label>
-                                <select
-                                  value={aiDifficulty}
-                                  onChange={(e) => setAiDifficulty(e.target.value)}
-                                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
-                                >
-                                  <option value="MIXED">Mixed</option>
-                                  <option value="EASY">Easy</option>
-                                  <option value="MEDIUM">Medium</option>
-                                  <option value="HARD">Hard</option>
-                                </select>
-                              </div>
-                            </div>
-                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={aiIncludeTF}
-                                onChange={(e) => setAiIncludeTF(e.target.checked)}
-                                className="h-4 w-4 rounded border-border text-primary"
-                              />
-                              Include True/False
-                            </label>
-                          </div>
-
-                          <Button
-                            type="button"
-                            className="w-full"
-                            isLoading={aiGenerating}
-                            onClick={handleAiGenerate}
-                          >
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            {aiGenerating ? "Generating…" : "Generate Questions"}
-                          </Button>
-                        </>
-                      )}
+                      <Button
+                        type="button"
+                        className="w-full"
+                        isLoading={aiGenerating}
+                        onClick={handleAiGenerate}
+                      >
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        {aiGenerating ? "Generating…" : "Generate Questions"}
+                      </Button>
                     </>
                   )}
 

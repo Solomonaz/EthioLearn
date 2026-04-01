@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateQuestionsFromContent } from "@/lib/gemini";
+import { generateQuestions } from "@/lib/ai-provider";
 
 interface RouteParams {
   params: Promise<{ id: string; chapterId: string }>;
@@ -88,16 +88,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     ? (body.questionTypes.filter((t) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE")[])
     : ["MCQ" as const];
 
-  // Check Gemini API key
-  if (!process.env.GEMINI_API_KEY) {
+  // Check at least one AI API key
+  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
     return NextResponse.json(
-      { error: "AI generation is not configured. GEMINI_API_KEY is missing." },
+      { error: "AI generation is not configured. Set GEMINI_API_KEY or GROQ_API_KEY." },
       { status: 503 }
     );
   }
 
   try {
-    const questions = await generateQuestionsFromContent({
+    const { questions, provider } = await generateQuestions({
       content,
       chapterTitle: chapter.title,
       subject: textbook.subject,
@@ -107,8 +107,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       questionTypes,
     });
 
+    console.log(`[AI Generation] Used provider: ${provider}`);
+
     return NextResponse.json({
       questions,
+      provider,
       generatedAt: new Date().toISOString(),
       chapterId: chapter.id,
       chapterTitle: chapter.title,

@@ -2,10 +2,24 @@
 
 import { create } from "zustand";
 
+interface QuizQuestionOption {
+  label: string;
+  text: string;
+}
+
 interface QuizQuestion {
   id: string;
   questionText: string;
-  options: { label: string; text: string }[];
+  options: QuizQuestionOption[];
+  type: string;
+  difficulty: string;
+}
+
+// Input type: API may return options as string[] or { label, text }[]
+interface QuizQuestionInput {
+  id: string;
+  questionText: string;
+  options: (string | QuizQuestionOption)[];
   type: string;
   difficulty: string;
 }
@@ -28,7 +42,7 @@ interface QuizState {
   timerActive: boolean;
 
   // Actions
-  startQuiz: (quizId: string, questions: QuizQuestion[], mode?: "SOLO" | "TIMED") => void;
+  startQuiz: (quizId: string, questions: QuizQuestionInput[], mode?: "SOLO" | "TIMED") => void;
   selectAnswer: (questionId: string, answer: string) => void;
   nextQuestion: () => void;
   previousQuestion: () => void;
@@ -53,9 +67,20 @@ export const useQuizStore = create<QuizState>((set, get) => ({
   timerActive: false,
 
   startQuiz: (quizId, questions, mode = "SOLO") => {
+    // Normalize options: API may return string[] or { label, text }[]
+    const LABELS = ["A", "B", "C", "D", "E", "F"];
+    const normalized = questions.map((q) => ({
+      ...q,
+      options: q.options.map((opt: string | { label: string; text: string }, i: number) =>
+        typeof opt === "string"
+          ? { label: LABELS[i] || String(i + 1), text: opt }
+          : opt
+      ),
+    }));
+
     set({
       quizId,
-      questions,
+      questions: normalized,
       currentIndex: 0,
       answers: new Map(),
       questionStartTime: Date.now(),

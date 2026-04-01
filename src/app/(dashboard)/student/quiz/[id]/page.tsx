@@ -37,34 +37,18 @@ export default function QuizTakingPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // If no quiz loaded
-  if (!questions || questions.length === 0) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-4">
-        <AlertTriangle className="h-12 w-12 text-warning" />
-        <h2 className="text-lg font-semibold text-text-primary">
-          Quiz not found
-        </h2>
-        <p className="text-sm text-text-secondary">
-          This quiz may have expired or was not loaded properly.
-        </p>
-        <Link href="/student/quiz">
-          <Button variant="primary">Start a New Quiz</Button>
-        </Link>
-      </div>
-    );
-  }
-
-  const currentQuestion = questions[currentIndex];
+  // Derived values (safe even when questions is empty)
+  const hasQuestions = questions && questions.length > 0;
+  const currentQuestion = hasQuestions ? questions[currentIndex] : null;
   const totalQuestions = questions.length;
   const isLastQuestion = currentIndex === totalQuestions - 1;
   const isFirstQuestion = currentIndex === 0;
-  const progress = ((currentIndex + 1) / totalQuestions) * 100;
-  const currentAnswer = answers.get(currentQuestion.id);
+  const progress = totalQuestions > 0 ? ((currentIndex + 1) / totalQuestions) * 100 : 0;
+  const currentAnswer = currentQuestion ? answers.get(currentQuestion.id) : undefined;
   const answeredCount = answers.size;
 
-  function handleSelectAnswer(label: string) {
-    selectAnswer(currentQuestion.id, label);
+  function handleSelectAnswer(answerText: string) {
+    if (currentQuestion) selectAnswer(currentQuestion.id, answerText);
   }
 
   function handleNext() {
@@ -75,7 +59,7 @@ export default function QuizTakingPage() {
     }
   }
 
-  async function handleSubmit() {
+  const handleSubmit = useCallback(async () => {
     setTimerActive(false);
     setSubmitting(true);
     setSubmitError(null);
@@ -109,20 +93,16 @@ export default function QuizTakingPage() {
       );
       setSubmitting(false);
     }
-  }
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const handleSubmitRef = useCallback(handleSubmit, [quizId, getSubmitPayload, setSubmitting, setTimerActive, reset, router]);
+  }, [quizId, getSubmitPayload, setSubmitting, setTimerActive, reset, router]);
 
   // Timer countdown effect
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (mode !== "TIMED" || !timerActive) return;
 
     if (timeLeft <= 0) {
       // Auto-advance: if on last question, submit; otherwise next
       if (currentIndex >= questions.length - 1) {
-        handleSubmitRef();
+        handleSubmit();
       } else {
         nextQuestion();
         setTimeLeft(30);
@@ -135,16 +115,33 @@ export default function QuizTakingPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeLeft, timerActive, mode, currentIndex, questions.length, nextQuestion, setTimeLeft, handleSubmitRef]);
+  }, [timeLeft, timerActive, mode, currentIndex, questions.length, nextQuestion, setTimeLeft, handleSubmit]);
 
   // Reset timer when question changes
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (mode === "TIMED") {
       setTimeLeft(30);
       setTimerActive(true);
     }
   }, [currentIndex, mode, setTimeLeft, setTimerActive]);
+
+  // If no quiz loaded — render AFTER all hooks
+  if (!hasQuestions || !currentQuestion) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-4">
+        <AlertTriangle className="h-12 w-12 text-warning" />
+        <h2 className="text-lg font-semibold text-text-primary">
+          Quiz not found
+        </h2>
+        <p className="text-sm text-text-secondary">
+          This quiz may have expired or was not loaded properly.
+        </p>
+        <Link href="/student/quiz">
+          <Button variant="primary">Start a New Quiz</Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6">
@@ -254,12 +251,12 @@ export default function QuizTakingPage() {
       <div className="mb-6 space-y-3">
         {currentQuestion.options.map((option, index) => {
           const label = OPTION_LABELS[index] || option.label;
-          const isSelected = currentAnswer?.studentAnswer === label;
+          const isSelected = currentAnswer?.studentAnswer === option.text;
 
           return (
             <button
-              key={option.label}
-              onClick={() => handleSelectAnswer(label)}
+              key={`${index}-${option.label}`}
+              onClick={() => handleSelectAnswer(option.text)}
               className={cn(
                 "flex w-full items-start gap-3 rounded-xl border-2 p-4 text-left transition-all",
                 "min-h-[48px] active:scale-[0.98]",

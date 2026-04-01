@@ -21,15 +21,30 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { cn } from "@/lib/utils";
 import { useQuizStore } from "@/stores/quiz-store";
 
+interface AnswerResultOption {
+  label: string;
+  text: string;
+}
+
 interface AnswerResult {
   questionId: string;
   questionText: string;
-  options: { label: string; text: string }[];
+  options: (string | AnswerResultOption)[];
   studentAnswer: string;
   correctAnswer: string;
   isCorrect: boolean;
   explanation: string;
   pointsEarned: number;
+}
+
+const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
+
+function normalizeOptions(options: (string | AnswerResultOption)[]): AnswerResultOption[] {
+  return options.map((opt, i) =>
+    typeof opt === "string"
+      ? { label: OPTION_LABELS[i] || String(i + 1), text: opt }
+      : opt
+  );
 }
 
 interface QuizResults {
@@ -254,22 +269,22 @@ export default function QuizResultsPage() {
                 <div className="border-t border-border bg-gray-50 px-4 py-3">
                   {/* Options */}
                   <div className="mb-3 space-y-2">
-                    {(a.options as { label: string; text: string }[]).map(
-                      (opt) => (
+                    {normalizeOptions(a.options).map(
+                      (opt, optIdx) => (
                         <div
-                          key={opt.label}
+                          key={`${optIdx}-${opt.label}`}
                           className={cn(
                             "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
-                            opt.label === a.correctAnswer
+                            opt.text === a.correctAnswer
                               ? "bg-success/10 font-medium text-success"
-                              : opt.label === a.studentAnswer && !a.isCorrect
+                              : opt.text === a.studentAnswer && !a.isCorrect
                               ? "bg-error/10 text-error line-through"
                               : "text-text-secondary"
                           )}
                         >
                           <span className="font-bold">{opt.label}.</span>
                           <span>{opt.text}</span>
-                          {opt.label === a.correctAnswer && (
+                          {opt.text === a.correctAnswer && (
                             <CheckCircle className="ml-auto h-4 w-4 text-success" />
                           )}
                         </div>

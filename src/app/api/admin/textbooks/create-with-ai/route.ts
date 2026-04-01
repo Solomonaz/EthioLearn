@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/get-session";
 import { extractTextFromFile } from "@/lib/extract-text";
 import {
-  detectChaptersFromContent,
+  detectChapters,
   splitTextByChapters,
-} from "@/lib/gemini";
+} from "@/lib/ai-provider";
 
 // Simple in-memory rate limiter
 const rateLimitMap = new Map<string, number[]>();
@@ -94,10 +94,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate Gemini API key
-  if (!process.env.GEMINI_API_KEY) {
+  // Validate at least one AI API key
+  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
     return NextResponse.json(
-      { error: "Gemini API key is not configured." },
+      { error: "No AI API key configured. Set GEMINI_API_KEY or GROQ_API_KEY." },
       { status: 500 }
     );
   }
@@ -108,14 +108,15 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
     const extraction = await extractTextFromFile(buffer, file.name);
 
-    // 2. Detect chapters via AI
+    // 2. Detect chapters via AI (Gemini → Groq fallback)
     const language = (formData.get("language") as string) || "en";
-    const detectedChapters = await detectChaptersFromContent({
+    const { chapters: detectedChapters, provider } = await detectChapters({
       content: extraction.text,
       subject: subject.trim(),
       grade,
       language,
     });
+    console.log(`[Create With AI] Chapter detection used: ${provider}`);
 
     // 3. Split text by chapter boundaries
     const chaptersWithContent = splitTextByChapters(
