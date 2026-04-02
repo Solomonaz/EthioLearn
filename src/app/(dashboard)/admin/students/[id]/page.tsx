@@ -14,7 +14,12 @@ import {
   TrendingUp,
   Star,
   Clock,
+  Shield,
+  ShieldOff,
+  ShieldAlert,
+  KeyRound,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -75,6 +80,9 @@ interface StudentDetailResponse {
     lastActiveAt: string | null;
     createdAt: string;
     school: { name: string } | null;
+    isActive: boolean;
+    suspendedAt: string | null;
+    suspendReason: string | null;
   };
   stats: {
     totalQuizzes: number;
@@ -120,6 +128,7 @@ export default function AdminStudentDetailPage() {
   const [data, setData] = useState<StudentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -485,6 +494,247 @@ export default function AdminStudentDetailPage() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── Admin Actions ───────────────────────────────────────────────────── */}
+      <Card className="border-orange-200/50">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-orange-600" />
+            <h2 className="text-lg font-semibold text-text-primary">
+              Admin Actions
+            </h2>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5 pb-6">
+          {/* Current Status */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-text-secondary">
+              Account Status:
+            </span>
+            {student.suspendedAt ? (
+              <Badge variant="error" className="gap-1">
+                <ShieldAlert className="h-3 w-3" />
+                Suspended
+              </Badge>
+            ) : student.isActive ? (
+              <Badge variant="success" className="gap-1">
+                <Shield className="h-3 w-3" />
+                Active
+              </Badge>
+            ) : (
+              <Badge variant="default" className="gap-1">
+                <ShieldOff className="h-3 w-3" />
+                Inactive
+              </Badge>
+            )}
+            {student.suspendedAt && student.suspendReason && (
+              <span className="text-xs text-text-secondary">
+                Reason: {student.suspendReason}
+              </span>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-2">
+            {/* Activate — shown when inactive or suspended */}
+            {(!student.isActive || student.suspendedAt) && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={actionLoading}
+                className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50"
+                onClick={async () => {
+                  setActionLoading(true);
+                  try {
+                    const res = await fetch(`/api/admin/students/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ isActive: true, suspend: false }),
+                    });
+                    if (!res.ok) throw new Error("Failed");
+                    toast.success("Student account activated");
+                    setData((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            student: {
+                              ...prev.student,
+                              isActive: true,
+                              suspendedAt: null,
+                              suspendReason: null,
+                            },
+                          }
+                        : prev
+                    );
+                  } catch {
+                    toast.error("Failed to activate account");
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+              >
+                <Shield className="h-3.5 w-3.5" />
+                Activate
+              </Button>
+            )}
+
+            {/* Deactivate — shown when active and not suspended */}
+            {student.isActive && !student.suspendedAt && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={actionLoading}
+                className="gap-1.5"
+                onClick={async () => {
+                  if (!confirm("Deactivate this student? They will not be able to log in.")) return;
+                  setActionLoading(true);
+                  try {
+                    const res = await fetch(`/api/admin/students/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ isActive: false }),
+                    });
+                    if (!res.ok) throw new Error("Failed");
+                    toast.success("Student account deactivated");
+                    setData((prev) =>
+                      prev
+                        ? { ...prev, student: { ...prev.student, isActive: false } }
+                        : prev
+                    );
+                  } catch {
+                    toast.error("Failed to deactivate account");
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+              >
+                <ShieldOff className="h-3.5 w-3.5" />
+                Deactivate
+              </Button>
+            )}
+
+            {/* Suspend — shown when active and not suspended */}
+            {student.isActive && !student.suspendedAt && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={actionLoading}
+                className="gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                onClick={async () => {
+                  const reason = prompt("Enter suspension reason (optional):");
+                  if (reason === null) return; // user cancelled
+                  setActionLoading(true);
+                  try {
+                    const res = await fetch(`/api/admin/students/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ suspend: true, suspendReason: reason || undefined }),
+                    });
+                    if (!res.ok) throw new Error("Failed");
+                    toast.success("Student account suspended");
+                    setData((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            student: {
+                              ...prev.student,
+                              suspendedAt: new Date().toISOString(),
+                              suspendReason: reason || null,
+                            },
+                          }
+                        : prev
+                    );
+                  } catch {
+                    toast.error("Failed to suspend account");
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                Suspend
+              </Button>
+            )}
+
+            {/* Unsuspend — shown when suspended */}
+            {student.suspendedAt && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={actionLoading}
+                className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50"
+                onClick={async () => {
+                  setActionLoading(true);
+                  try {
+                    const res = await fetch(`/api/admin/students/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ suspend: false }),
+                    });
+                    if (!res.ok) throw new Error("Failed");
+                    toast.success("Student account unsuspended");
+                    setData((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            student: {
+                              ...prev.student,
+                              suspendedAt: null,
+                              suspendReason: null,
+                            },
+                          }
+                        : prev
+                    );
+                  } catch {
+                    toast.error("Failed to unsuspend account");
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+              >
+                <Shield className="h-3.5 w-3.5" />
+                Unsuspend
+              </Button>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-border" />
+
+          {/* Reset OTP Lock */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-text-primary">Reset OTP Lock</p>
+              <p className="text-xs text-text-secondary">
+                Clears rate limits and stored OTP for this student.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={actionLoading}
+              className="gap-1.5"
+              onClick={async () => {
+                setActionLoading(true);
+                try {
+                  const res = await fetch(`/api/admin/students/${id}/reset-otp`, {
+                    method: "POST",
+                  });
+                  if (!res.ok) throw new Error("Failed");
+                  toast.success("OTP lock reset successfully");
+                } catch {
+                  toast.error("Failed to reset OTP lock");
+                } finally {
+                  setActionLoading(false);
+                }
+              }}
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              Reset OTP
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

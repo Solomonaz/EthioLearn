@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { toast } from "@/components/ui/sonner";
 import { formatDate } from "@/lib/utils";
 
@@ -13,6 +14,7 @@ import { formatDate } from "@/lib/utils";
 
 type RewardTier = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
 type RedemptionStatus = "PENDING" | "APPROVED" | "DENIED" | "FULFILLED";
+type RedemptionWindow = "ANYTIME" | "MONTHLY" | "QUARTERLY" | "SEMESTER";
 
 interface Reward {
   id: string;
@@ -22,6 +24,10 @@ interface Reward {
   pointsCost: number;
   inventoryCount: number;
   imageUrl: string | null;
+  redemptionWindow?: RedemptionWindow;
+  windowStartDate?: string | null;
+  windowEndDate?: string | null;
+  maxRedemptionsPerWindow?: number | null;
   createdAt: string;
   _count: { redemptions: number };
 }
@@ -44,6 +50,16 @@ interface Redemption {
     pointsCost: number;
   };
   approvedBy: { name: string } | null;
+}
+
+interface Budget {
+  id: string;
+  name: string;
+  totalBudget: number;
+  spent: number;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,6 +100,14 @@ function RewardForm({ initial, onSuccess, onCancel }: RewardFormProps) {
   const [pointsCost, setPointsCost] = useState(String(initial?.pointsCost ?? ""));
   const [inventoryCount, setInventoryCount] = useState(String(initial?.inventoryCount ?? "10"));
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? "");
+  const [redemptionWindow, setRedemptionWindow] = useState<RedemptionWindow>(
+    initial?.redemptionWindow ?? "ANYTIME"
+  );
+  const [windowStartDate, setWindowStartDate] = useState(initial?.windowStartDate ?? "");
+  const [windowEndDate, setWindowEndDate] = useState(initial?.windowEndDate ?? "");
+  const [maxRedemptionsPerWindow, setMaxRedemptionsPerWindow] = useState(
+    initial?.maxRedemptionsPerWindow != null ? String(initial.maxRedemptionsPerWindow) : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -97,16 +121,28 @@ function RewardForm({ initial, onSuccess, onCancel }: RewardFormProps) {
       return setError("Valid points cost is required.");
     if (!inventoryCount || isNaN(Number(inventoryCount)) || Number(inventoryCount) < 0)
       return setError("Valid inventory count is required.");
+    if (redemptionWindow === "SEMESTER") {
+      if (!windowStartDate) return setError("Window start date is required for SEMESTER window.");
+      if (!windowEndDate) return setError("Window end date is required for SEMESTER window.");
+      if (new Date(windowStartDate) >= new Date(windowEndDate))
+        return setError("Window start date must be before end date.");
+    }
 
     setLoading(true);
 
-    const body = {
+    const body: Record<string, unknown> = {
       name: name.trim(),
       description: description.trim(),
       tier,
       pointsCost: Number(pointsCost),
       inventoryCount: Number(inventoryCount),
       imageUrl: imageUrl.trim() || undefined,
+      redemptionWindow,
+      windowStartDate: redemptionWindow === "SEMESTER" ? windowStartDate : null,
+      windowEndDate: redemptionWindow === "SEMESTER" ? windowEndDate : null,
+      maxRedemptionsPerWindow: maxRedemptionsPerWindow
+        ? Number(maxRedemptionsPerWindow)
+        : null,
     };
 
     try {
@@ -206,6 +242,51 @@ function RewardForm({ initial, onSuccess, onCancel }: RewardFormProps) {
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="https://example.com/image.png"
           />
+
+          {/* Redemption Window fields */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="w-full">
+              <label className="mb-2 block text-sm font-medium text-text-primary">
+                Redemption Window
+              </label>
+              <select
+                value={redemptionWindow}
+                onChange={(e) => setRedemptionWindow(e.target.value as RedemptionWindow)}
+                className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+              >
+                <option value="ANYTIME">Anytime</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="QUARTERLY">Quarterly</option>
+                <option value="SEMESTER">Semester</option>
+              </select>
+            </div>
+
+            <Input
+              label="Max Redemptions Per Window (optional)"
+              type="number"
+              min={1}
+              value={maxRedemptionsPerWindow}
+              onChange={(e) => setMaxRedemptionsPerWindow(e.target.value)}
+              placeholder="e.g. 5"
+            />
+          </div>
+
+          {redemptionWindow === "SEMESTER" && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label="Window Start Date"
+                type="date"
+                value={windowStartDate}
+                onChange={(e) => setWindowStartDate(e.target.value)}
+              />
+              <Input
+                label="Window End Date"
+                type="date"
+                value={windowEndDate}
+                onChange={(e) => setWindowEndDate(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <Button type="submit" isLoading={loading}>
@@ -783,10 +864,356 @@ function RedemptionsTab({ pendingCount }: RedemptionsTabProps) {
   );
 }
 
+// ─── Budget Tab ───────────────────────────────────────────────────────────────
+
+function BudgetTab() {
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+
+  // Form state
+  const [formName, setFormName] = useState("");
+  const [formTotal, setFormTotal] = useState("");
+  const [formStart, setFormStart] = useState("");
+  const [formEnd, setFormEnd] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchBudgets = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/rewards/budgets");
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "Failed to load budgets.");
+        return;
+      }
+      const data = await res.json();
+      setBudgets(data.budgets ?? []);
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBudgets();
+  }, [fetchBudgets]);
+
+  function openCreateForm() {
+    setEditingBudget(null);
+    setFormName("");
+    setFormTotal("");
+    setFormStart("");
+    setFormEnd("");
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(budget: Budget) {
+    setEditingBudget(budget);
+    setFormName(budget.name);
+    setFormTotal(String(budget.totalBudget));
+    setFormStart(budget.periodStart.slice(0, 10));
+    setFormEnd(budget.periodEnd.slice(0, 10));
+    setFormError(null);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleFormCancel() {
+    setShowForm(false);
+    setEditingBudget(null);
+  }
+
+  async function handleFormSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+
+    if (!formName.trim()) return setFormError("Name is required.");
+    if (!formTotal || isNaN(Number(formTotal)) || Number(formTotal) <= 0)
+      return setFormError("Valid total budget is required.");
+    if (!formStart) return setFormError("Period start date is required.");
+    if (!formEnd) return setFormError("Period end date is required.");
+    if (new Date(formStart) >= new Date(formEnd))
+      return setFormError("Start date must be before end date.");
+
+    setFormLoading(true);
+
+    const body = {
+      name: formName.trim(),
+      totalBudget: Number(formTotal),
+      periodStart: formStart,
+      periodEnd: formEnd,
+    };
+
+    try {
+      const url = editingBudget
+        ? `/api/admin/rewards/budgets/${editingBudget.id}`
+        : "/api/admin/rewards/budgets";
+      const res = await fetch(url, {
+        method: editingBudget ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setFormError(data.error ?? "Failed to save budget.");
+        return;
+      }
+
+      toast.success(editingBudget ? "Budget updated." : "Budget created.");
+      setShowForm(false);
+      setEditingBudget(null);
+      fetchBudgets();
+    } catch {
+      setFormError("Network error. Please try again.");
+    } finally {
+      setFormLoading(false);
+    }
+  }
+
+  async function handleDelete(budget: Budget) {
+    setDeletingId(budget.id);
+    try {
+      const res = await fetch(`/api/admin/rewards/budgets/${budget.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error ?? "Failed to delete budget.");
+        return;
+      }
+      toast.success(`"${budget.name}" deleted.`);
+      fetchBudgets();
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-text-primary">Budget Periods</h2>
+        {!showForm && (
+          <Button onClick={openCreateForm}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Create Budget
+          </Button>
+        )}
+      </div>
+
+      {/* Budget Form */}
+      {showForm && (
+        <Card className="mb-6 border-primary/20">
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-text-primary">
+              {editingBudget ? "Edit Budget" : "Create Budget"}
+            </h2>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleFormSubmit} className="space-y-4">
+              {formError && (
+                <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-error">
+                  {formError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input
+                  label="Name"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="e.g. Q1 2026 Budget"
+                />
+                <Input
+                  label="Total Budget (ETB)"
+                  type="number"
+                  min={1}
+                  value={formTotal}
+                  onChange={(e) => setFormTotal(e.target.value)}
+                  placeholder="e.g. 50000"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input
+                  label="Period Start"
+                  type="date"
+                  value={formStart}
+                  onChange={(e) => setFormStart(e.target.value)}
+                />
+                <Input
+                  label="Period End"
+                  type="date"
+                  value={formEnd}
+                  onChange={(e) => setFormEnd(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" isLoading={formLoading}>
+                  {editingBudget ? "Save Changes" : "Create Budget"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleFormCancel}
+                  disabled={formLoading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-error">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Spinner size="lg" />
+        </div>
+      ) : budgets.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
+          <div className="mb-3 text-4xl">💰</div>
+          <p className="font-semibold text-text-primary">No budgets yet</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Click &quot;Create Budget&quot; to set up your first budget period.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {budgets.map((budget) => {
+            const spentPercent =
+              budget.totalBudget > 0
+                ? Math.round((budget.spent / budget.totalBudget) * 100)
+                : 0;
+            const progressColor =
+              spentPercent >= 90 ? "success" : spentPercent >= 70 ? "secondary" : "primary";
+
+            return (
+              <Card key={budget.id} className="flex flex-col">
+                <CardContent className="flex flex-1 flex-col gap-3 pt-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-text-primary">{budget.name}</h3>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => openEditForm(budget)}
+                        className="rounded p-1.5 text-text-secondary transition-colors hover:bg-gray-100 hover:text-text-primary"
+                        title="Edit budget"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(budget)}
+                        disabled={deletingId === budget.id}
+                        className="rounded p-1.5 text-text-secondary transition-colors hover:bg-red-50 hover:text-error disabled:opacity-50"
+                        title="Delete budget"
+                      >
+                        {deletingId === budget.id ? (
+                          <Spinner size="sm" />
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-text-secondary">
+                    {formatDate(budget.periodStart)} &ndash; {formatDate(budget.periodEnd)}
+                  </p>
+
+                  <div className="mt-auto space-y-2 pt-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-text-secondary">
+                        Spent:{" "}
+                        <span className="font-medium text-text-primary">
+                          {budget.spent.toLocaleString()} ETB
+                        </span>
+                      </span>
+                      <span className="text-text-secondary">
+                        Total:{" "}
+                        <span className="font-medium text-text-primary">
+                          {budget.totalBudget.toLocaleString()} ETB
+                        </span>
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={spentPercent}
+                      color={progressColor as "primary" | "secondary" | "success"}
+                      size="md"
+                      showLabel
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminRewardsPage() {
-  const [activeTab, setActiveTab] = useState<"rewards" | "redemptions">("rewards");
+  const [activeTab, setActiveTab] = useState<"rewards" | "redemptions" | "budget">("rewards");
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [rewardsLoading, setRewardsLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -865,6 +1292,16 @@ export default function AdminRewardsPage() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("budget")}
+              className={`relative px-6 py-3 text-sm font-medium transition-colors ${
+                activeTab === "budget"
+                  ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:content-['']"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              Budget
+            </button>
           </div>
         </div>
 
@@ -878,8 +1315,10 @@ export default function AdminRewardsPage() {
               fetchPendingCount();
             }}
           />
-        ) : (
+        ) : activeTab === "redemptions" ? (
           <RedemptionsTab pendingCount={pendingCount} />
+        ) : (
+          <BudgetTab />
         )}
       </div>
     </div>

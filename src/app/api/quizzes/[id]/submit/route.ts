@@ -5,6 +5,7 @@ import { calculateQuizPoints, calculateXPLevel } from "@/lib/points";
 import { Difficulty } from "@prisma/client";
 import { notifyLevelUp } from "@/lib/notifications";
 import { checkAndAwardAchievements } from "@/lib/achievements";
+import { normalizeOption } from "@/lib/utils";
 
 interface SubmittedAnswer {
   questionId: string;
@@ -78,7 +79,8 @@ export async function POST(
         };
       }
 
-      const isCorrect = answer.studentAnswer === question.correctAnswer;
+      const normalizedCorrect = normalizeOption(question.correctAnswer as unknown);
+      const isCorrect = answer.studentAnswer === normalizedCorrect;
 
       return {
         questionId: answer.questionId,
@@ -86,10 +88,10 @@ export async function POST(
         isCorrect,
         timeTakenMs: answer.timeTakenMs,
         difficulty: question.difficulty,
-        correctAnswer: question.correctAnswer,
+        correctAnswer: normalizedCorrect,
         explanation: question.explanation || "",
         questionText: question.questionText,
-        options: question.options,
+        options: (question.options as unknown[]).map(normalizeOption),
       };
     });
 

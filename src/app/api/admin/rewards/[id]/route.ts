@@ -14,6 +14,11 @@ interface UpdateRewardBody {
   pointsCost?: number;
   inventoryCount?: number;
   imageUrl?: string;
+  redemptionWindow?: string;
+  windowStartDate?: string;
+  windowEndDate?: string;
+  maxRedemptionsPerWindow?: number;
+  unitCost?: number;
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
@@ -59,6 +64,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     pointsCost?: number;
     inventoryCount?: number;
     imageUrl?: string | null;
+    redemptionWindow?: any;
+    windowStartDate?: Date | null;
+    windowEndDate?: Date | null;
+    maxRedemptionsPerWindow?: number | null;
+    unitCost?: number | null;
   } = {};
 
   if (body.name !== undefined) {
@@ -98,6 +108,39 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   if (body.imageUrl !== undefined) {
     updateData.imageUrl = body.imageUrl?.trim() || null;
+  }
+
+  if (body.redemptionWindow !== undefined) {
+    const validWindows = ["ANYTIME", "MONTHLY", "QUARTERLY", "SEMESTER"];
+    if (!validWindows.includes(body.redemptionWindow)) {
+      return NextResponse.json(
+        { error: "Invalid redemptionWindow. Must be ANYTIME, MONTHLY, QUARTERLY, or SEMESTER" },
+        { status: 400 }
+      );
+    }
+    updateData.redemptionWindow = body.redemptionWindow;
+  }
+
+  if (body.windowStartDate !== undefined) {
+    updateData.windowStartDate = body.windowStartDate ? new Date(body.windowStartDate) : null;
+  }
+
+  if (body.windowEndDate !== undefined) {
+    updateData.windowEndDate = body.windowEndDate ? new Date(body.windowEndDate) : null;
+  }
+
+  if (body.maxRedemptionsPerWindow !== undefined) {
+    if (body.maxRedemptionsPerWindow !== null && (typeof body.maxRedemptionsPerWindow !== "number" || body.maxRedemptionsPerWindow < 1)) {
+      return NextResponse.json({ error: "maxRedemptionsPerWindow must be a positive integer" }, { status: 400 });
+    }
+    updateData.maxRedemptionsPerWindow = body.maxRedemptionsPerWindow ?? null;
+  }
+
+  if (body.unitCost !== undefined) {
+    if (body.unitCost !== null && (typeof body.unitCost !== "number" || body.unitCost < 0)) {
+      return NextResponse.json({ error: "unitCost must be a non-negative number" }, { status: 400 });
+    }
+    updateData.unitCost = body.unitCost ?? null;
   }
 
   const reward = await db.reward.update({

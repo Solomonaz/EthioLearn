@@ -37,6 +37,18 @@ export function formatDate(
   return new Date(iso).toLocaleDateString("en-US", opts);
 }
 
+/**
+ * Normalizes a question option that may be stored as a plain string
+ * OR as an object `{ text: string; label: string }` (older AI generation format).
+ */
+export function normalizeOption(option: unknown): string {
+  if (typeof option === "string") return option;
+  if (option && typeof option === "object" && "text" in option) {
+    return String((option as { text: unknown }).text);
+  }
+  return String(option);
+}
+
 /** Maps a quiz score percentage to a Badge variant. */
 export function scoreVariant(score: number): "success" | "warning" | "error" {
   if (score >= 70) return "success";

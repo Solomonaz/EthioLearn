@@ -110,7 +110,7 @@ export default function BattleRoomPage() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      // Join the room on connect
+      // Join/rejoin the room on connect
       socket.emit("join_room", { roomCode, userId, name: userName });
     });
 
@@ -128,8 +128,14 @@ export default function BattleRoomPage() {
         setPlayers(players);
         setHostId(hostId);
         if (status === "waiting") setPhase("waiting");
+        else if (status === "countdown") setPhase("countdown");
+        else if (status === "in_progress") setPhase("in_progress");
       }
     );
+
+    socket.on("connect_error", () => {
+      setError("Cannot connect to game server.");
+    });
 
     socket.on("countdown_start", ({ seconds }: { seconds: number }) => {
       setPhase("countdown");

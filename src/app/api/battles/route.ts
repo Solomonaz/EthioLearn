@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { normalizeOption } from "@/lib/utils";
 
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -82,10 +83,12 @@ export async function POST(request: Request) {
 
     const selected = shuffled.slice(0, Math.min(questionCount, shuffled.length));
 
-    // Build question objects with correctIndex for socket server
+    // Build question objects with correctIndex for socket server.
+    // Normalize options: DB may store them as plain strings OR as {text, label} objects.
     const questionsWithIndex = selected.map((q) => {
-      const options = q.options as string[];
-      const correctIndex = options.indexOf(q.correctAnswer);
+      const options = (q.options as unknown[]).map(normalizeOption);
+      const normalizedAnswer = normalizeOption(q.correctAnswer as unknown);
+      const correctIndex = options.indexOf(normalizedAnswer);
       return {
         id: q.id,
         question: q.questionText,

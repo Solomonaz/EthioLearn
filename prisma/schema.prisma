@@ -72,6 +72,21 @@ enum RedemptionStatus {
   FULFILLED
 }
 
+enum RedemptionWindow {
+  ANYTIME
+  MONTHLY
+  QUARTERLY
+  SEMESTER
+}
+
+enum TournamentStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 // ─── Models ──────────────────────────────────────────────
 
 model User {
@@ -86,25 +101,28 @@ model User {
   xpLevel      Int      @default(1)
   totalPoints  Int      @default(0)
   streakDays   Int      @default(0)
-  isActive     Boolean  @default(true)
-  lastActiveAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive      Boolean   @default(true)
+  suspendedAt   DateTime?
+  suspendReason String?
+  lastActiveAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id])
 
   // Relations
-  quizzes         Quiz[]
-  hostedGameRooms GameRoom[]     @relation("GameHost")
-  gameParticipations GamePlayer[]
-  redemptions     Redemption[]
-  pointLedger     PointLedger[]
-  uploadedTextbooks Textbook[]   @relation("TextbookUploader")
-  approvedRedemptions Redemption[] @relation("RedemptionApprover")
-  notifications       Notification[]
-  achievements        UserAchievement[]
-  studentBooks        StudentBook[]
+  quizzes              Quiz[]
+  hostedGameRooms      GameRoom[]         @relation("GameHost")
+  gameParticipations   GamePlayer[]
+  redemptions          Redemption[]
+  pointLedger          PointLedger[]
+  uploadedTextbooks    Textbook[]         @relation("TextbookUploader")
+  approvedRedemptions  Redemption[]       @relation("RedemptionApprover")
+  notifications        Notification[]
+  achievements         UserAchievement[]
+  studentBooks         StudentBook[]
+  createdTournaments   Tournament[]       @relation("TournamentCreator")
 
   @@map("users")
 }
@@ -119,9 +137,12 @@ model School {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  users     User[]
-  textbooks Textbook[]
-  rewards   Reward[]
+  users          User[]
+  textbooks      Textbook[]
+  rewards        Reward[]
+  rewardBudgets  RewardBudget[]
+  tournaments    Tournament[]
+  gameConfig     GameConfig?
 
   @@map("schools")
 }
@@ -246,8 +267,9 @@ model GameRoom {
   hostUserId String
   host       User   @relation("GameHost", fields: [hostUserId], references: [id])
 
-  players GamePlayer[]
-  quizzes Quiz[]
+  players         GamePlayer[]
+  quizzes         Quiz[]
+  tournamentRound TournamentRound?
 
   @@map("game_rooms")
 }
@@ -276,6 +298,11 @@ model Reward {
   pointsCost     Int
   inventoryCount Int       @default(0)
   imageUrl       String?
+  unitCost       Float?
+  redemptionWindow       RedemptionWindow @default(ANYTIME)
+  windowStartDate        DateTime?
+  windowEndDate          DateTime?
+  maxRedemptionsPerWindow Int?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -364,4 +391,83 @@ model StudentBook {
   uploadedBy   User   @relation(fields: [uploadedById], references: [id])
 
   @@map("student_books")
+}
+
+// ─── Reward Budget ──────────────────────────────────────
+
+model RewardBudget {
+  id          String   @id @default(cuid())
+  name        String
+  totalBudget Float
+  spentAmount Float    @default(0)
+  currency    String   @default("ETB")
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  @@map("reward_budgets")
+}
+
+// ─── Tournaments & Game Config ──────────────────────────
+
+model Tournament {
+  id               String           @id @default(cuid())
+  name             String
+  description      String?
+  status           TournamentStatus @default(DRAFT)
+  rules            Json?
+  competitionStart DateTime?
+  competitionEnd   DateTime?
+  maxPlayers       Int              @default(100)
+  subject          String?
+  grade            Int?
+  difficulty       Difficulty?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  schoolId    String
+  school      School @relation(fields: [schoolId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("TournamentCreator", fields: [createdById], references: [id])
+
+  rounds TournamentRound[]
+
+  @@map("tournaments")
+}
+
+model TournamentRound {
+  id          String    @id @default(cuid())
+  roundNumber Int
+  startAt     DateTime?
+  endAt       DateTime?
+  createdAt   DateTime  @default(now())
+
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  gameRoomId String?  @unique
+  gameRoom   GameRoom? @relation(fields: [gameRoomId], references: [id])
+
+  @@unique([tournamentId, roundNumber])
+  @@map("tournament_rounds")
+}
+
+model GameConfig {
+  id                String     @id @default(cuid())
+  maxPlayersPerRoom Int        @default(20)
+  timePerQuestion   Int        @default(20)
+  defaultDifficulty Difficulty @default(MEDIUM)
+  difficultyLocked  Boolean    @default(false)
+  minPlayersToStart Int        @default(2)
+  updatedAt         DateTime   @updatedAt
+
+  schoolId String @unique
+  school   School @relation(fields: [schoolId], references: [id])
+
+  @@map("game_configs")
 }

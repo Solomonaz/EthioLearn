@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:socket": "tsx server.ts",
+    "dev": "tsx server.ts",
+    "dev:next-only": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

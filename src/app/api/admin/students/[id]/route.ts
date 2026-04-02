@@ -145,6 +145,9 @@ export async function GET(
       lastActiveAt: student.lastActiveAt,
       createdAt: student.createdAt,
       school: student.school,
+      isActive: student.isActive,
+      suspendedAt: student.suspendedAt,
+      suspendReason: student.suspendReason,
     },
     stats: {
       totalQuizzes,
@@ -188,18 +191,30 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { grade, section, isActive, resetStreak } = body as {
-    grade?: string;
-    section?: string;
-    isActive?: boolean;
-    resetStreak?: boolean;
-  };
+  const { grade, section, isActive, resetStreak, suspend, suspendReason } =
+    body as {
+      grade?: string;
+      section?: string;
+      isActive?: boolean;
+      resetStreak?: boolean;
+      suspend?: boolean;
+      suspendReason?: string;
+    };
 
   const updateData: Record<string, unknown> = {};
   if (grade !== undefined) updateData.grade = String(grade);
   if (section !== undefined) updateData.section = String(section);
   if (typeof isActive === "boolean") updateData.isActive = isActive;
   if (resetStreak === true) updateData.streakDays = 0;
+  if (typeof suspend === "boolean") {
+    if (suspend) {
+      updateData.suspendedAt = new Date();
+      if (suspendReason) updateData.suspendReason = String(suspendReason);
+    } else {
+      updateData.suspendedAt = null;
+      updateData.suspendReason = null;
+    }
+  }
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
+import { normalizeOption } from "@/lib/utils";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       questions: selected.map((q) => ({
         id: q.id,
         questionText: q.questionText,
-        options: q.options,
+        options: (q.options as unknown[]).map(normalizeOption),
         type: q.type,
         difficulty: q.difficulty,
       })),

@@ -11,6 +11,9 @@ import {
   Library,
   Gift,
   BarChart2,
+  Database,
+  Brain,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -50,10 +53,18 @@ interface AdminDashboardData {
   }[];
 }
 
+interface HealthData {
+  api: { status: "operational" | "down" };
+  database: { status: "operational" | "down"; latencyMs: number };
+  ai: { status: "operational" | "degraded" | "unavailable" };
+  sms: { status: "operational" | "unavailable" };
+}
+
 export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<HealthData | null>(null);
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -68,6 +79,22 @@ export default function AdminDashboardPage() {
       }
     }
     fetchDashboard();
+  }, []);
+
+  useEffect(() => {
+    async function fetchHealth() {
+      try {
+        const res = await fetch("/api/admin/health");
+        if (res.ok) {
+          setHealth(await res.json());
+        }
+      } catch {
+        // silently fail — health bar just won't render
+      }
+    }
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -134,6 +161,115 @@ export default function AdminDashboardPage() {
           icon={Target}
         />
       </div>
+
+      {/* System Health Bar */}
+      {health && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-4 px-4 py-3 sm:gap-6">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              System Health
+            </span>
+
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-text-secondary" />
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  health.api.status === "operational"
+                    ? "bg-green-500"
+                    : "bg-red-500"
+                )}
+              />
+              <span className="text-xs text-text-primary">API</span>
+              <Badge
+                variant={
+                  health.api.status === "operational" ? "success" : "error"
+                }
+                className="text-[10px] px-1.5 py-0"
+              >
+                {health.api.status === "operational" ? "Operational" : "Down"}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-text-secondary" />
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  health.database.status === "operational"
+                    ? "bg-green-500"
+                    : "bg-red-500"
+                )}
+              />
+              <span className="text-xs text-text-primary">Database</span>
+              <Badge
+                variant={
+                  health.database.status === "operational" ? "success" : "error"
+                }
+                className="text-[10px] px-1.5 py-0"
+              >
+                {health.database.status === "operational"
+                  ? `${health.database.latencyMs}ms`
+                  : "Down"}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Brain className="h-4 w-4 text-text-secondary" />
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  health.ai.status === "operational"
+                    ? "bg-green-500"
+                    : health.ai.status === "degraded"
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
+                )}
+              />
+              <span className="text-xs text-text-primary">AI Services</span>
+              <Badge
+                variant={
+                  health.ai.status === "operational"
+                    ? "success"
+                    : health.ai.status === "degraded"
+                    ? "warning"
+                    : "error"
+                }
+                className="text-[10px] px-1.5 py-0"
+              >
+                {health.ai.status === "operational"
+                  ? "Operational"
+                  : health.ai.status === "degraded"
+                  ? "Degraded"
+                  : "Unavailable"}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-text-secondary" />
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  health.sms.status === "operational"
+                    ? "bg-green-500"
+                    : "bg-red-500"
+                )}
+              />
+              <span className="text-xs text-text-primary">SMS Gateway</span>
+              <Badge
+                variant={
+                  health.sms.status === "operational" ? "success" : "error"
+                }
+                className="text-[10px] px-1.5 py-0"
+              >
+                {health.sms.status === "operational"
+                  ? "Operational"
+                  : "Unavailable"}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Admin Quick Links */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

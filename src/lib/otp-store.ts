@@ -70,3 +70,7 @@ export function verifyOTP(phone: string, code: string): boolean {
   otpStore.delete(phone); // one-time use
   return true;
 }
+
+export function clearOTP(phone: string): void {
+  otpStore.delete(phone);
+}

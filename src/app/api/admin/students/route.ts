@@ -95,6 +95,8 @@ export async function GET(req: NextRequest) {
     lastActiveAt: s.lastActiveAt,
     createdAt: s.createdAt,
     quizCount: s._count.quizzes,
+    isActive: s.isActive,
+    suspendedAt: s.suspendedAt,
   }));
 
   return NextResponse.json({

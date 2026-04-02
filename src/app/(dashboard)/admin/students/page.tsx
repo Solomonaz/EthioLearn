@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
+import Papa from "papaparse";
 import {
   Users,
   Activity,
@@ -13,6 +14,10 @@ import {
   ChevronRight,
   Eye,
   BookOpen,
+  Upload,
+  Download,
+  X,
+  FileText,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +40,8 @@ interface Student {
   lastActiveAt: string | null;
   createdAt: string;
   quizCount: number;
+  isActive: boolean;
+  suspendedAt: string | null;
 }
 
 interface Stats {
@@ -49,6 +56,14 @@ interface StudentsResponse {
   page: number;
   totalPages: number;
   stats: Stats;
+}
+
+type StatusFilter = "all" | "active" | "inactive" | "suspended";
+
+interface ImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,6 +83,268 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
+function getStudentStatus(student: Student): "active" | "inactive" | "suspended" {
+  if (student.suspendedAt) return "suspended";
+  if (!student.isActive) return "inactive";
+  return "active";
+}
+
+function statusBadge(student: Student) {
+  const status = getStudentStatus(student);
+  switch (status) {
+    case "active":
+      return <Badge variant="success">Active</Badge>;
+    case "inactive":
+      return <Badge variant="default">Inactive</Badge>;
+    case "suspended":
+      return <Badge variant="error">Suspended</Badge>;
+  }
+}
+
+// ── CSV Import Modal ─────────────────────────────────────────────────────────
+
+function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [csvText, setCsvText] = useState("");
+  const [parsedRows, setParsedRows] = useState<Record<string, string>[] | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function downloadTemplate() {
+    const blob = new Blob(["name,phone,grade,section\n"], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "students_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setCsvText(text);
+      setParsedRows(null);
+      setParseError(null);
+      setResult(null);
+    };
+    reader.readAsText(file);
+  }
+
+  function handlePreview() {
+    setParseError(null);
+    setParsedRows(null);
+    setResult(null);
+
+    if (!csvText.trim()) {
+      setParseError("No CSV content provided.");
+      return;
+    }
+
+    const parsed = Papa.parse<Record<string, string>>(csvText.trim(), {
+      header: true,
+      skipEmptyLines: true,
+    });
+
+    if (parsed.errors.length > 0) {
+      setParseError(parsed.errors.map((e) => e.message).join("; "));
+      return;
+    }
+
+    if (parsed.data.length === 0) {
+      setParseError("No rows found in CSV.");
+      return;
+    }
+
+    setParsedRows(parsed.data);
+  }
+
+  async function handleImport() {
+    if (!csvText.trim()) return;
+    setImporting(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/admin/students/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvData: csvText }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setResult({ imported: 0, skipped: 0, errors: [json.error || "Import failed"] });
+        return;
+      }
+
+      setResult({
+        imported: json.imported ?? 0,
+        skipped: json.skipped ?? 0,
+        errors: json.errors ?? [],
+      });
+
+      if ((json.imported ?? 0) > 0) {
+        onImported();
+      }
+    } catch {
+      setResult({ imported: 0, skipped: 0, errors: ["Network error during import."] });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <CardContent className="space-y-4 py-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">Import Students</h2>
+            </div>
+            <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
+              <X className="h-5 w-5 text-text-secondary" />
+            </button>
+          </div>
+
+          {/* Template download */}
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-gray-50 p-3">
+            <FileText className="h-5 w-5 text-text-secondary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-text-primary">CSV Template</p>
+              <p className="text-xs text-text-secondary">
+                Download the template, fill it in, then upload or paste below.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={downloadTemplate} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </Button>
+          </div>
+
+          {/* File input */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text-primary">
+              Upload CSV File
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary"
+            />
+          </div>
+
+          {/* Textarea */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text-primary">
+              Or Paste CSV Content
+            </label>
+            <textarea
+              value={csvText}
+              onChange={(e) => {
+                setCsvText(e.target.value);
+                setParsedRows(null);
+                setParseError(null);
+                setResult(null);
+              }}
+              placeholder={"name,phone,grade,section\nAbebe Kebede,0911223344,9,A"}
+              rows={5}
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono"
+            />
+          </div>
+
+          {/* Preview button */}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handlePreview} disabled={!csvText.trim()}>
+              Preview
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleImport}
+              disabled={!csvText.trim() || importing}
+              className="gap-1.5"
+            >
+              {importing && <Spinner size="sm" />}
+              Import
+            </Button>
+          </div>
+
+          {/* Parse error */}
+          {parseError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-error">
+              {parseError}
+            </div>
+          )}
+
+          {/* Preview table */}
+          {parsedRows && parsedRows.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="border-b border-border bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-text-secondary">#</th>
+                    {Object.keys(parsedRows[0]).map((key) => (
+                      <th key={key} className="px-3 py-2 text-left font-semibold text-text-secondary">
+                        {key}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {parsedRows.slice(0, 20).map((row, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 text-text-secondary">{i + 1}</td>
+                      {Object.values(row).map((val, j) => (
+                        <td key={j} className="px-3 py-2 text-text-primary">
+                          {val}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {parsedRows.length > 20 && (
+                <p className="p-2 text-center text-xs text-text-secondary">
+                  Showing 20 of {parsedRows.length} rows
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Import result */}
+          {result && (
+            <div className="space-y-2 rounded-lg border border-border bg-gray-50 p-4">
+              <h3 className="text-sm font-semibold text-text-primary">Import Results</h3>
+              <div className="flex flex-wrap gap-3">
+                <Badge variant="success">{result.imported} imported</Badge>
+                <Badge variant="default">{result.skipped} skipped</Badge>
+                {result.errors.length > 0 && (
+                  <Badge variant="error">{result.errors.length} errors</Badge>
+                )}
+              </div>
+              {result.errors.length > 0 && (
+                <ul className="mt-2 max-h-32 overflow-y-auto space-y-1 text-xs text-error">
+                  {result.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 function AdminStudentsContent() {
@@ -85,12 +362,21 @@ function AdminStudentsContent() {
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Status filter (client-side)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+
+  // CSV import modal
+  const [showImportModal, setShowImportModal] = useState(false);
+
   // Derive filter state from URL
   const currentSearch = searchParams.get("search") ?? "";
   const currentGrade = searchParams.get("grade") ?? "";
   const currentSection = searchParams.get("section") ?? "";
   const currentSort = searchParams.get("sort") ?? "points";
   const currentPage = parseInt(searchParams.get("page") ?? "1", 10);
+
+  // Reload counter to re-fetch after import
+  const [reloadCount, setReloadCount] = useState(0);
 
   // ── URL helpers ─────────────────────────────────────────────────────────────
 
@@ -152,7 +438,15 @@ function AdminStudentsContent() {
         setError(err instanceof Error ? err.message : "Something went wrong");
       })
       .finally(() => setLoading(false));
-  }, [currentSearch, currentGrade, currentSection, currentSort, currentPage]);
+  }, [currentSearch, currentGrade, currentSection, currentSort, currentPage, reloadCount]);
+
+  // ── Client-side status filtering ────────────────────────────────────────────
+
+  const filteredStudents = data
+    ? statusFilter === "all"
+      ? data.students
+      : data.students.filter((s) => getStudentStatus(s) === statusFilter)
+    : [];
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -169,6 +463,14 @@ function AdminStudentsContent() {
             </Badge>
           )}
         </div>
+        <Button
+          variant="outline"
+          onClick={() => setShowImportModal(true)}
+          className="gap-1.5"
+        >
+          <Upload className="h-4 w-4" />
+          Import Students
+        </Button>
       </div>
 
       {/* ── Stats pills ─────────────────────────────────────────────────────── */}
@@ -205,7 +507,7 @@ function AdminStudentsContent() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
           <input
             type="text"
-            placeholder="Search by name or phone…"
+            placeholder="Search by name or phone..."
             value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full rounded-lg border border-border bg-surface py-2.5 pl-9 pr-4 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -229,11 +531,23 @@ function AdminStudentsContent() {
         {/* Section filter */}
         <input
           type="text"
-          placeholder="Section…"
+          placeholder="Section..."
           value={currentSection}
           onChange={(e) => pushUrl({ section: e.target.value })}
           className="w-24 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
+
+        {/* Status filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="suspended">Suspended</option>
+        </select>
 
         {/* Sort */}
         <select
@@ -242,7 +556,7 @@ function AdminStudentsContent() {
           className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option value="points">Top Points</option>
-          <option value="name">Name A–Z</option>
+          <option value="name">Name A-Z</option>
           <option value="recent">Recently Active</option>
         </select>
       </div>
@@ -259,7 +573,7 @@ function AdminStudentsContent() {
             Try Again
           </Button>
         </div>
-      ) : !data || data.students.length === 0 ? (
+      ) : !data || filteredStudents.length === 0 ? (
         <Card>
           <CardContent className="flex min-h-[40vh] flex-col items-center justify-center gap-3 py-16 text-center">
             <BookOpen className="h-12 w-12 text-text-secondary/30" />
@@ -267,7 +581,7 @@ function AdminStudentsContent() {
               No students found
             </p>
             <p className="text-sm text-text-secondary">
-              {currentSearch || currentGrade || currentSection
+              {currentSearch || currentGrade || currentSection || statusFilter !== "all"
                 ? "Try adjusting your filters."
                 : "No students have been enrolled yet."}
             </p>
@@ -290,6 +604,9 @@ function AdminStudentsContent() {
                     Grade / Section
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-text-secondary">
                     XP / Points
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
@@ -304,7 +621,7 @@ function AdminStudentsContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-surface">
-                {data.students.map((student) => (
+                {filteredStudents.map((student) => (
                   <tr
                     key={student.id}
                     className="transition-colors hover:bg-gray-50/60"
@@ -332,7 +649,12 @@ function AdminStudentsContent() {
                     <td className="px-4 py-3 text-text-secondary">
                       {student.grade
                         ? `Grade ${student.grade}${student.section ? ` / ${student.section}` : ""}`
-                        : "—"}
+                        : "\u2014"}
+                    </td>
+
+                    {/* Status badge */}
+                    <td className="px-4 py-3">
+                      {statusBadge(student)}
                     </td>
 
                     {/* XP Level + Total Points */}
@@ -375,7 +697,7 @@ function AdminStudentsContent() {
 
           {/* Mobile cards */}
           <div className="space-y-3 md:hidden">
-            {data.students.map((student) => (
+            {filteredStudents.map((student) => (
               <Card key={student.id}>
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
@@ -405,6 +727,7 @@ function AdminStudentsContent() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {statusBadge(student)}
                     <Badge variant="info">
                       {student.totalPoints.toLocaleString()} pts
                     </Badge>
@@ -444,19 +767,19 @@ function AdminStudentsContent() {
                     p === data.totalPages ||
                     Math.abs(p - currentPage) <= 2
                 )
-                .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                .reduce<(number | "\u2026")[]>((acc, p, idx, arr) => {
                   if (idx > 0 && p - (arr[idx - 1] as number) > 1)
-                    acc.push("…");
+                    acc.push("\u2026");
                   acc.push(p);
                   return acc;
                 }, [])
                 .map((item, idx) =>
-                  item === "…" ? (
+                  item === "\u2026" ? (
                     <span
                       key={`ellipsis-${idx}`}
                       className="px-2 text-text-secondary"
                     >
-                      …
+                      ...
                     </span>
                   ) : (
                     <Button
@@ -483,6 +806,14 @@ function AdminStudentsContent() {
             </div>
           )}
         </>
+      )}
+
+      {/* CSV Import Modal */}
+      {showImportModal && (
+        <CsvImportModal
+          onClose={() => setShowImportModal(false)}
+          onImported={() => setReloadCount((c) => c + 1)}
+        />
       )}
     </div>
   );

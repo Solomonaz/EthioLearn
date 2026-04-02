@@ -63,3 +63,7 @@ export function rateLimit(
     retryAfter: 0,
   };
 }
+
+export function clearRateLimit(key: string): void {
+  store.delete(key);
+}

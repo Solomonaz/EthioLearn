@@ -36,6 +36,28 @@ interface RoomState {
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true);
+
+    // Live games REST endpoint for admin dashboard
+    if (parsedUrl.pathname === "/api/admin/games/live" && req.method === "GET") {
+      const roomList = Array.from(rooms.values()).map((room) => ({
+        roomCode: room.roomCode,
+        status: room.status,
+        hostId: room.hostId,
+        playerCount: room.players.size,
+        currentQuestion: room.currentQuestion,
+        totalQuestions: room.questions.length,
+        players: Array.from(room.players.values()).map((p) => ({
+          userId: p.userId,
+          name: p.name,
+          score: p.score,
+          answered: p.answered,
+        })),
+      }));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ rooms: roomList }));
+      return;
+    }
+
     handle(req, res, parsedUrl);
   });
 
@@ -56,6 +78,35 @@ app.prepare().then(() => {
           socket.emit("error", { message: "Room not found" });
           return;
         }
+
+        // Allow existing players to reconnect (e.g. page navigation)
+        const existingPlayer = room.players.get(userId);
+        if (existingPlayer) {
+          existingPlayer.socketId = socket.id;
+          socket.join(roomCode);
+
+          // Send current room state to reconnected player
+          io.to(roomCode).emit("room_updated", {
+            players: Array.from(room.players.values()),
+            status: room.status,
+            hostId: room.hostId,
+          });
+
+          // If game is in progress, send current question
+          if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
+            const q = room.questions[room.currentQuestion];
+            socket.emit("question", {
+              index: room.currentQuestion,
+              total: room.questions.length,
+              question: q.question,
+              options: q.options,
+              timeLimit: 20,
+            });
+          }
+          return;
+        }
+
+        // New player joining — only allowed while waiting
         if (room.status !== "waiting") {
           socket.emit("error", { message: "Game already in progress" });
           return;
@@ -191,16 +242,49 @@ app.prepare().then(() => {
       }
     );
 
+    // Admin spectator: join a room as read-only observer
+    socket.on(
+      "spectate_room",
+      ({ roomCode }: { roomCode: string }) => {
+        const room = rooms.get(roomCode);
+        if (!room) {
+          socket.emit("error", { message: "Room not found" });
+          return;
+        }
+        socket.join(roomCode);
+        // Send current state to spectator
+        socket.emit("room_updated", {
+          players: Array.from(room.players.values()),
+          status: room.status,
+          hostId: room.hostId,
+        });
+        if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
+          const q = room.questions[room.currentQuestion];
+          socket.emit("question", {
+            index: room.currentQuestion,
+            total: room.questions.length,
+            question: q.question,
+            options: q.options,
+            timeLimit: 20,
+          });
+        }
+      }
+    );
+
     socket.on("disconnect", () => {
       rooms.forEach((room, code) => {
         room.players.forEach((player, userId) => {
           if (player.socketId === socket.id) {
-            room.players.delete(userId);
-            io.to(code).emit("room_updated", {
-              players: Array.from(room.players.values()),
-              status: room.status,
-              hostId: room.hostId,
-            });
+            // Only remove player if game hasn't started yet (lobby disconnect)
+            // During active games, keep the player for reconnection
+            if (room.status === "waiting") {
+              room.players.delete(userId);
+              io.to(code).emit("room_updated", {
+                players: Array.from(room.players.values()),
+                status: room.status,
+                hostId: room.hostId,
+              });
+            }
           }
         });
       });
@@ -284,7 +368,7 @@ app.prepare().then(() => {
     }
   }
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || 3001;
   httpServer.listen(PORT, () => {
     console.log(`> Ready on http://localhost:${PORT}`);
   });

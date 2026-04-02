@@ -2,18 +2,14 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "Next.js Dev",
+      "name": "dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3001,
-      "autoPort": false
-    },
-    {
-      "name": "Next.js + Socket.io (Battle Mode)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:socket"],
-      "port": 3001,
-      "autoPort": false
+      "autoPort": false,
+      "env": {
+        "PORT": "3001"
+      }
     },
     {
       "name": "Prisma Studio",

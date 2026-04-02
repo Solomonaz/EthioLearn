@@ -121,6 +121,12 @@ export default function BattleLobbyPage() {
       setJoining(false);
     });
 
+    socket.on("connect_error", () => {
+      setSocketError(
+        "Cannot connect to game server. Make sure the server is running with 'npm run dev'."
+      );
+    });
+
     socket.on("disconnect", () => {
       console.log("Socket disconnected");
     });
@@ -175,8 +181,14 @@ export default function BattleLobbyPage() {
 
       questionsRef.current = data.questions;
 
+      // Check socket is connected before emitting
+      if (!socketRef.current?.connected) {
+        setSocketError("Not connected to game server. Please refresh and try again.");
+        return;
+      }
+
       // Emit create_room to socket server
-      socketRef.current?.emit("create_room", {
+      socketRef.current.emit("create_room", {
         roomCode: data.roomCode,
         hostId: userId,
         hostName: userName,
@@ -185,6 +197,8 @@ export default function BattleLobbyPage() {
 
       setCreatedRoomCode(data.roomCode);
       setCurrentRoomCode(data.roomCode);
+      setInRoom(true);
+      setHostId(userId);
     } catch {
       setSocketError("Network error. Please try again.");
     } finally {

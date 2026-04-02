@@ -37,7 +37,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body suppressHydrationWarning>
           <PWAInit />
           <ThemeProvider>
             <AuthProvider>{children}</AuthProvider>

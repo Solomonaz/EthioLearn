@@ -24,8 +24,8 @@ export async function getCurrentUser() {
     include: { school: true },
   });
 
-  // Deactivated accounts are treated as unauthenticated
-  if (user && !user.isActive) return null;
+  // Deactivated or suspended accounts are treated as unauthenticated
+  if (user && (!user.isActive || user.suspendedAt)) return null;
 
   return user;
 }
