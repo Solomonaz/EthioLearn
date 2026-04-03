@@ -56,6 +56,7 @@ export async function GET() {
 
 interface QuestionInput {
   question: string;
+  type?: string;
   options: string[];
   correctAnswer: string;
   explanation?: string;
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
   }
 
   const validDifficulties = ["EASY", "MEDIUM", "HARD"];
+  const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
 
   const textbook = await db.textbook.create({
     data: {
@@ -134,6 +136,7 @@ export async function POST(request: NextRequest) {
           questions: {
             create: (chapter.questions ?? []).map((q) => ({
               questionText: q.question,
+              type: validTypes.includes(q.type || "") ? (q.type as QuestionType) : QuestionType.MCQ,
               options: Array.isArray(q.options) ? q.options : [],
               correctAnswer: q.correctAnswer,
               explanation: q.explanation ?? null,

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // Verify textbook + school isolation — also fetch book-level content
   const textbook = await db.textbook.findUnique({
     where: { id: textbookId },
-    select: { id: true, schoolId: true, subject: true, grade: true, content: true },
+    select: { id: true, title: true, schoolId: true, subject: true, grade: true, content: true },
   });
 
   if (!textbook) {
@@ -44,20 +44,42 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Verify chapter exists
-  const chapter = await db.chapter.findFirst({
-    where: { id: chapterId, textbookId },
-    select: { id: true, title: true, content: true },
-  });
+  let finalContent = "";
+  let finalTitle = "";
 
-  if (!chapter) {
-    return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
+  if (chapterId === "all") {
+    // Cumulative generation from all chapters
+    const chapters = await db.chapter.findMany({
+      where: { textbookId },
+      orderBy: { chapterNumber: "asc" },
+      select: { title: true, content: true, chapterNumber: true },
+    });
+
+    if (chapters.length === 0) {
+      return NextResponse.json({ error: "No chapters found to generate from" }, { status: 400 });
+    }
+
+    finalTitle = `All Chapters of ${textbook.title}`;
+    // Concatenate chapter contents (with a reasonable limit for token safety)
+    finalContent = chapters
+      .map((c) => `CHAPTER ${c.chapterNumber}: ${c.title}\n${c.content || ""}`)
+      .join("\n\n")
+      .slice(0, 80000); // 80k chars is roughly 20k tokens, safe for most LLMs
+  } else {
+    // Verify specific chapter exists
+    const chapter = await db.chapter.findFirst({
+      where: { id: chapterId, textbookId },
+      select: { id: true, title: true, content: true },
+    });
+
+    if (!chapter) {
+      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
+    }
+    finalTitle = chapter.title;
+    finalContent = chapter.content || textbook.content || "";
   }
 
-  // Use chapter content if available, otherwise fall back to textbook content
-  const content = chapter.content || textbook.content;
-
-  if (!content || content.length < 100) {
+  if (!finalContent || finalContent.length < 100) {
     return NextResponse.json(
       { error: "No book content found. Upload the textbook content first before generating questions." },
       { status: 400 }
@@ -83,9 +105,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     ? (body.difficulty as "EASY" | "MEDIUM" | "HARD" | "MIXED")
     : "MIXED";
 
-  const validTypes = ["MCQ", "TRUE_FALSE"];
-  const questionTypes = Array.isArray(body.questionTypes)
-    ? (body.questionTypes.filter((t) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE")[])
+  const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
+  const questionTypes = Array.isArray(body.questionTypes) && body.questionTypes.length > 0
+    ? (body.questionTypes.filter((t) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[])
     : ["MCQ" as const];
 
   // Check at least one AI API key
@@ -98,13 +120,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const { questions, provider } = await generateQuestions({
-      content,
-      chapterTitle: chapter.title,
+      content: finalContent,
+      chapterTitle: finalTitle,
       subject: textbook.subject,
       grade: textbook.grade,
       count,
       difficulty,
-      questionTypes,
+      questionTypes: questionTypes as any,
     });
 
     console.log(`[AI Generation] Used provider: ${provider}`);
@@ -113,8 +135,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       questions,
       provider,
       generatedAt: new Date().toISOString(),
-      chapterId: chapter.id,
-      chapterTitle: chapter.title,
+      chapterId: chapterId === "all" ? "all" : chapterId,
+      chapterTitle: finalTitle,
     });
   } catch (error) {
     console.error("[AI Generation Error]", error);

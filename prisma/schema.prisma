@@ -231,6 +231,8 @@ model Quiz {
   studentId String
   student   User   @relation(fields: [studentId], references: [id])
 
+  isDailyChallenge Boolean @default(false)
+
   gameRoomId String?
   gameRoom   GameRoom? @relation(fields: [gameRoomId], references: [id])
 

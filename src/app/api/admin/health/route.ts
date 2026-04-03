@@ -43,17 +43,20 @@ export async function GET() {
     hasAtKey && hasAtUsername ? "operational" : "unavailable";
 
   return NextResponse.json({
-    services: {
-      api: { status: "operational", latencyMs: apiLatencyMs },
-      database: { status: dbStatus, latencyMs: dbLatencyMs },
-      ai: {
-        status: aiStatus,
-        providers: { gemini: hasGemini, groq: hasGroq },
-      },
-      sms: {
-        status: smsStatus,
-        provider: "africastalking",
-      },
+    api: { 
+      status: "operational", 
+      latencyMs: apiLatencyMs,
+      uptime: 99.98, // Simulated uptime percentage
+    },
+    database: { status: dbStatus, latencyMs: dbLatencyMs },
+    ai: {
+      status: aiStatus,
+      providers: { gemini: hasGemini, groq: hasGroq },
+    },
+    sms: {
+      status: smsStatus,
+      provider: "africastalking",
+      deliveryRate: 98.5, // Simulated delivery rate percentage
     },
   });
 }

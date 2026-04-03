@@ -14,6 +14,7 @@ import {
   Shuffle,
   Clock,
   Timer,
+  Sparkles,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,14 @@ interface Chapter {
 type Difficulty = "EASY" | "MEDIUM" | "HARD" | "MIXED";
 type QuizMode = "SOLO" | "TIMED";
 
-const STEPS = ["Subject", "Chapter", "Difficulty", "Questions", "Mode", "Review"];
+const STEPS = ["Subject", "Source", "Chapter", "Difficulty", "Types", "Questions", "Mode", "Review"];
+const TYPE_OPTIONS = [
+  { value: "MCQ", label: "Multiple Choice", icon: Layers },
+  { value: "TRUE_FALSE", label: "True / False", icon: CheckCircle },
+  { value: "FILL_IN_BLANK", label: "Fill in the Blank", icon: Sparkles },
+  { value: "MATCH_PAIRS", label: "Match Pairs", icon: Shuffle },
+  { value: "ORDERING", label: "Ordering", icon: Layers },
+];
 const QUESTION_COUNTS = [5, 10, 15, 20];
 
 const DIFFICULTY_CONFIG: {
@@ -80,6 +88,21 @@ const DIFFICULTY_CONFIG: {
   },
 ];
 
+const SOURCE_CONFIG = [
+  {
+    value: "BANK" as const,
+    label: "Question Bank",
+    description: "Practice with verified questions from the school curriculum",
+    icon: Layers,
+  },
+  {
+    value: "AI" as const,
+    label: "AI Generation",
+    description: "Generate fresh, unique questions using artificial intelligence",
+    icon: Sparkles,
+  },
+];
+
 export default function QuizLauncherPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -96,8 +119,10 @@ export default function QuizLauncherPage() {
 
   // Selections
   const [selectedTextbook, setSelectedTextbook] = useState<Textbook | null>(null);
-  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | "all" | null>(null);
+  const [selectedSource, setSelectedSource] = useState<"BANK" | "AI">("BANK");
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(["MCQ"]);
   const [selectedCount, setSelectedCount] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<QuizMode>("SOLO");
 
@@ -146,58 +171,65 @@ export default function QuizLauncherPage() {
   // Auto-launch daily challenge when URL params are present
   useEffect(() => {
     const challengeChapterId = searchParams.get("chapterId");
-    const isChallenge = searchParams.get("challenge") === "true";
-    const count = parseInt(searchParams.get("count") || "5", 10);
-    if (!isChallenge || !challengeChapterId) return;
-
-    async function launchChallenge() {
-      setGenerating(true);
-      setError(null);
-      try {
-        const res = await fetch("/api/quizzes/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chapterId: challengeChapterId,
-            difficulty: "MIXED",
-            questionCount: count,
-            mode: "SOLO",
-          }),
-        });
-        if (!res.ok) {
+      const isChallenge = searchParams.get("challenge") === "true";
+      const count = parseInt(searchParams.get("count") || "5", 10);
+      if (!isChallenge || !challengeChapterId) return;
+  
+      async function launchChallenge() {
+        setGenerating(true);
+        setError(null);
+        try {
+          const res = await fetch("/api/quizzes/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chapterId: challengeChapterId,
+              difficulty: "MIXED",
+              questionCount: count,
+              mode: "SOLO",
+              isDailyChallenge: true, // Mark it as a challenge
+            }),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || "Failed to generate quiz");
+          }
           const data = await res.json();
-          throw new Error(data.error || "Failed to generate quiz");
+          startQuiz(data.quizId, data.questions, "SOLO");
+          
+          // REMOVED premature points award POST call
+          
+          router.push(`/student/quiz/${data.quizId}`);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to start challenge");
+          setGenerating(false);
         }
-        const data = await res.json();
-        startQuiz(data.quizId, data.questions, "SOLO");
-        // Award daily challenge points
-        fetch("/api/students/me/daily-challenge", { method: "POST" }).catch(() => {});
-        router.push(`/student/quiz/${data.quizId}`);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to start challenge");
-        setGenerating(false);
       }
-    }
     launchChallenge();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleStartQuiz() {
-    if (!selectedChapter || !selectedDifficulty || !selectedCount) return;
+    if (!selectedTextbook || !selectedChapter || !selectedDifficulty || !selectedCount) return;
 
     setGenerating(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/quizzes/generate", {
+      const endpoint = selectedSource === "AI" ? "/api/quizzes/generate-ai" : "/api/quizzes/generate";
+      const body = {
+        textbookId: selectedTextbook.id,
+        chapterId: selectedChapter === "all" ? "all" : selectedChapter.id,
+        difficulty: selectedDifficulty,
+        questionCount: selectedCount,
+        questionTypes: selectedTypes,
+        mode: selectedMode,
+      };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chapterId: selectedChapter.id,
-          difficulty: selectedDifficulty,
-          questionCount: selectedCount,
-          mode: selectedMode,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -240,14 +272,15 @@ export default function QuizLauncherPage() {
         </div>
         <h1 className="mt-2 text-xl font-bold text-text-primary">
           {step === 0 && "Select a Subject"}
-          {step === 1 && "Select a Chapter"}
-          {step === 2 && "Choose Difficulty"}
-          {step === 3 && "How Many Questions?"}
-          {step === 4 && "Choose Mode"}
-          {step === 5 && "Review & Start"}
+          {step === 1 && "Question Source"}
+          {step === 2 && "Select a Chapter"}
+          {step === 3 && "Choose Difficulty"}
+          {step === 4 && "Question Types"}
+          {step === 5 && "How Many Questions?"}
+          {step === 6 && "Choose Mode"}
+          {step === 7 && "Review & Start"}
         </h1>
 
-        {/* Progress dots */}
         <div className="mt-3 flex gap-2">
           {STEPS.map((_, i) => (
             <div
@@ -319,55 +352,131 @@ export default function QuizLauncherPage() {
         </div>
       )}
 
-      {/* Step 2: Select Chapter */}
+      {/* Step 2: Select Source */}
       {step === 1 && (
+        <div className="grid gap-4">
+          {SOURCE_CONFIG.map((src) => {
+            const Icon = src.icon;
+            return (
+              <Card
+                key={src.value}
+                className={cn(
+                  "cursor-pointer transition-all hover:shadow-md",
+                  selectedSource === src.value &&
+                    "border-primary ring-2 ring-primary/20"
+                )}
+                onClick={() => {
+                  setSelectedSource(src.value);
+                  setStep(2);
+                }}
+              >
+                <CardContent className="flex items-center gap-4 py-5">
+                  <div className={cn(
+                    "rounded-xl p-3",
+                    src.value === "AI" ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-600"
+                  )}>
+                    <Icon className="h-7 w-7" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-text-primary">{src.label}</p>
+                      {src.value === "AI" && (
+                        <Badge className="bg-primary/10 text-primary border-none text-[10px] uppercase">New</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-text-secondary">
+                      {src.description}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-border" />
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Step 3: Select Chapter */}
+      {step === 2 && (
         <div className="space-y-2">
           {loadingChapters ? (
             <div className="flex justify-center py-12">
               <Spinner size="lg" className="text-primary" />
             </div>
-          ) : chapters.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center">
-                <Layers className="mx-auto mb-2 h-10 w-10 text-text-secondary/40" />
-                <p className="text-text-secondary">
-                  No chapters available for this textbook.
-                </p>
-              </CardContent>
-            </Card>
           ) : (
-            chapters.map((ch) => (
+            <>
+              {/* All Chapters Selection */}
               <Card
-                key={ch.id}
                 className={cn(
-                  "cursor-pointer transition-all hover:shadow-md",
-                  selectedChapter?.id === ch.id &&
+                  "cursor-pointer border-dashed border-2 transition-all hover:shadow-md",
+                  selectedChapter === "all" &&
                     "border-primary ring-2 ring-primary/20"
                 )}
                 onClick={() => {
-                  setSelectedChapter(ch);
-                  setStep(2);
+                  setSelectedChapter("all");
+                  setStep(3);
                 }}
               >
-                <CardContent className="flex items-center justify-between py-3">
+                <CardContent className="flex items-center justify-between py-4">
                   <div className="flex items-center gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                      {ch.chapterNumber}
+                      <Shuffle className="h-4 w-4" />
                     </span>
-                    <p className="font-medium text-text-primary">{ch.title}</p>
+                    <div>
+                      <p className="font-bold text-text-primary">All Chapters</p>
+                      <p className="text-xs text-text-secondary">Comprehensive practice across the entire book</p>
+                    </div>
                   </div>
-                  <Badge variant="info">
-                    {ch._count.questions} questions
-                  </Badge>
+                  {selectedSource === "BANK" && <Badge variant="default">Recommended</Badge>}
                 </CardContent>
               </Card>
-            ))
+
+              {chapters.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center">
+                    <Layers className="mx-auto mb-2 h-10 w-10 text-text-secondary/40" />
+                    <p className="text-text-secondary">
+                      No chapters available for this textbook.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                chapters.map((ch) => (
+                  <Card
+                    key={ch.id}
+                    className={cn(
+                      "cursor-pointer transition-all hover:shadow-md",
+                      selectedChapter !== "all" && selectedChapter?.id === ch.id &&
+                        "border-primary ring-2 ring-primary/20"
+                    )}
+                    onClick={() => {
+                      setSelectedChapter(ch);
+                      setStep(3);
+                    }}
+                  >
+                    <CardContent className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                          {ch.chapterNumber}
+                        </span>
+                        <p className="font-medium text-text-primary">{ch.title}</p>
+                      </div>
+                      {selectedSource === "BANK" && (
+                        <Badge variant="info">
+                          {ch._count.questions} questions
+                        </Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </>
           )}
         </div>
       )}
 
-      {/* Step 3: Select Difficulty */}
-      {step === 2 && (
+      {/* Step 4: Select Difficulty */}
+      {step === 3 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {DIFFICULTY_CONFIG.map((d) => (
             <Card
@@ -380,7 +489,7 @@ export default function QuizLauncherPage() {
               )}
               onClick={() => {
                 setSelectedDifficulty(d.value);
-                setStep(3);
+                setStep(4);
               }}
             >
               <CardContent className="py-5 text-center">
@@ -399,8 +508,54 @@ export default function QuizLauncherPage() {
         </div>
       )}
 
-      {/* Step 4: Select Question Count */}
-      {step === 3 && (
+      {/* Step 5: Question Types */}
+      {step === 4 && (
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">
+            {selectedSource === "AI" 
+              ? "What types of questions would you like the AI to generate?" 
+              : "Filter questions from the bank by type:"}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {TYPE_OPTIONS.map((type) => {
+              const Icon = type.icon;
+              const isSelected = selectedTypes.includes(type.value);
+              return (
+                <Card
+                  key={type.value}
+                  className={cn(
+                    "cursor-pointer transition-all hover:shadow-md",
+                    isSelected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border"
+                  )}
+                  onClick={() => {
+                    if (isSelected) {
+                      if (selectedTypes.length > 1) {
+                        setSelectedTypes(prev => prev.filter(t => t !== type.value));
+                      }
+                    } else {
+                      setSelectedTypes(prev => [...prev, type.value]);
+                    }
+                  }}
+                >
+                  <CardContent className="flex items-center gap-3 py-4">
+                    <div className={cn("rounded-lg p-2", isSelected ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <span className="font-semibold text-text-primary">{type.label}</span>
+                    {isSelected && <CheckCircle className="ml-auto h-5 w-5 text-primary" />}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <Button className="w-full mt-4" onClick={() => setStep(5)}>
+            Continue
+          </Button>
+        </div>
+      )}
+
+      {/* Step 6: Select Question Count */}
+      {step === 5 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {QUESTION_COUNTS.map((count) => (
             <Card
@@ -413,7 +568,7 @@ export default function QuizLauncherPage() {
               )}
               onClick={() => {
                 setSelectedCount(count);
-                setStep(4);
+                setStep(6);
               }}
             >
               <CardContent className="py-6 text-center">
@@ -426,8 +581,8 @@ export default function QuizLauncherPage() {
         </div>
       )}
 
-      {/* Step 5: Select Mode */}
-      {step === 4 && (
+      {/* Step 7: Select Mode */}
+      {step === 6 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {/* SOLO card */}
           <div
@@ -439,7 +594,7 @@ export default function QuizLauncherPage() {
             )}
             onClick={() => {
               setSelectedMode("SOLO");
-              setStep(5);
+              setStep(7);
             }}
           >
             <Clock className="mx-auto mb-2 h-8 w-8 text-primary" />
@@ -460,7 +615,7 @@ export default function QuizLauncherPage() {
             )}
             onClick={() => {
               setSelectedMode("TIMED");
-              setStep(5);
+              setStep(7);
             }}
           >
             <Timer className="mx-auto mb-2 h-8 w-8 text-warning" />
@@ -473,8 +628,8 @@ export default function QuizLauncherPage() {
         </div>
       )}
 
-      {/* Step 6: Review & Start */}
-      {step === 5 && (
+      {/* Step 8: Review & Start */}
+      {step === 7 && (
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-4 py-5">
@@ -486,10 +641,29 @@ export default function QuizLauncherPage() {
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <span className="text-sm text-text-secondary">Chapter</span>
-                <span className="font-medium text-text-primary">
-                  Ch. {selectedChapter?.chapterNumber} &ndash;{" "}
-                  {selectedChapter?.title}
+                <span className="font-medium text-text-primary text-right">
+                  {selectedChapter === "all" ? (
+                    "All Chapters (Cumulative)"
+                  ) : (
+                    `Ch. ${selectedChapter?.chapterNumber} – ${selectedChapter?.title}`
+                  )}
                 </span>
+              </div>
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <span className="text-sm text-text-secondary">Source</span>
+                <Badge variant={selectedSource === "AI" ? "info" : "default"}>
+                  {selectedSource === "AI" ? "AI Generated" : "Question Bank"}
+                </Badge>
+              </div>
+              <div className="flex flex-col gap-2 border-b border-border pb-3">
+                <span className="text-sm text-text-secondary">Question Types</span>
+                <div className="flex flex-wrap gap-1">
+                  {selectedTypes.map(t => (
+                    <Badge key={t} variant="default" className="text-[10px]">
+                      {TYPE_OPTIONS.find(opt => opt.value === t)?.label}
+                    </Badge>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <span className="text-sm text-text-secondary">Difficulty</span>
@@ -529,12 +703,16 @@ export default function QuizLauncherPage() {
 
           <Button
             size="lg"
-            className="w-full gap-2 text-base"
+            className="w-full gap-2 text-base shadow-lg shadow-primary/20"
             onClick={handleStartQuiz}
             isLoading={generating}
           >
-            <CheckCircle className="h-5 w-5" />
-            Start Quiz
+            {selectedSource === "AI" ? (
+              <Sparkles className="h-5 w-5" />
+            ) : (
+              <CheckCircle className="h-5 w-5" />
+            )}
+            {selectedSource === "AI" ? "Generate & Start Practice" : "Start Quiz"}
           </Button>
         </div>
       )}

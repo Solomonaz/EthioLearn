@@ -34,7 +34,10 @@ export async function GET() {
   const chapters = await db.chapter.findMany({
     where: {
       questionCount: { gt: 0 },
-      textbook: { processingStatus: "COMPLETED" },
+      textbook: { 
+        processingStatus: "COMPLETED",
+        grade: user.grade ?? undefined
+      },
     },
     select: {
       id: true,
@@ -59,13 +62,26 @@ export async function GET() {
   });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { today, tomorrow } = getTodayRange();
+
+  let body: { score?: number } = {};
+  try {
+    const text = await request.text();
+    if (text) body = JSON.parse(text);
+  } catch (e) {
+    // No body or invalid json
+  }
+  const { score }: { score?: number } = body;
+
+  if (score !== undefined && score < 60) {
+     return NextResponse.json({ message: "Quiz completed, but score too low for bonus." }, { status: 200 });
+  }
 
   const todayEntry = await db.pointLedger.findFirst({
     where: {

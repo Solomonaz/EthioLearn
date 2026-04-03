@@ -13,7 +13,7 @@ export async function GET(
 
   const { id } = await params;
 
-  const textbook = await db.textbook.findUnique({
+  const textbook = await (db as any).textbook.findUnique({
     where: { id },
     select: { id: true, title: true, grade: true, subject: true },
   });
@@ -22,7 +22,7 @@ export async function GET(
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  const chapters = await db.chapter.findMany({
+  const chapters = await (db as any).chapter.findMany({
     where: { textbookId: id },
     include: {
       _count: { select: { questions: true } },

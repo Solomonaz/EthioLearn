@@ -54,10 +54,10 @@ interface AdminDashboardData {
 }
 
 interface HealthData {
-  api: { status: "operational" | "down" };
+  api: { status: "operational" | "down"; latencyMs: number; uptime: number };
   database: { status: "operational" | "down"; latencyMs: number };
   ai: { status: "operational" | "degraded" | "unavailable" };
-  sms: { status: "operational" | "unavailable" };
+  sms: { status: "operational" | "unavailable"; deliveryRate: number };
 }
 
 export default function AdminDashboardPage() {
@@ -187,7 +187,7 @@ export default function AdminDashboardPage() {
                 }
                 className="text-[10px] px-1.5 py-0"
               >
-                {health.api.status === "operational" ? "Operational" : "Down"}
+                {health.api.status === "operational" ? `Operational (${health.api.uptime}%)` : "Down"}
               </Badge>
             </div>
 
@@ -263,7 +263,7 @@ export default function AdminDashboardPage() {
                 className="text-[10px] px-1.5 py-0"
               >
                 {health.sms.status === "operational"
-                  ? "Operational"
+                  ? `Operational (${health.sms.deliveryRate}%)`
                   : "Unavailable"}
               </Badge>
             </div>
@@ -272,10 +272,11 @@ export default function AdminDashboardPage() {
       )}
 
       {/* Admin Quick Links */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <AdminLink href="/admin/students" icon={Users} label="Students" desc={`${stats.totalStudents} registered`} />
         <AdminLink href="/admin/textbooks" icon={Library} label="Textbooks" desc={`${stats.totalTextbooks} available`} />
-        <AdminLink href="/admin/rewards" icon={Gift} label="Rewards" desc="Manage rewards" />
+        <AdminLink href="/admin/rewards" icon={Gift} label="Rewards" desc="Manage" />
+        <AdminLink href="/admin/games" icon={Trophy} label="Games" desc="Manage tournaments" />
         <AdminLink href="/admin/analytics" icon={BarChart2} label="Analytics" desc="View reports" />
       </div>
 

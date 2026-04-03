@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { chapterId, difficulty, questionCount = 10, mode = "SOLO" } = body;
+    const { textbookId, chapterId, difficulty, questionCount = 10, mode = "SOLO", questionTypes, isDailyChallenge = false } = body;
 
     if (!chapterId) {
       return NextResponse.json(
@@ -49,20 +49,41 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify chapter exists
-    const chapterExists = await db.chapter.findUnique({
-      where: { id: chapterId },
-      select: { id: true },
-    });
-    if (!chapterExists) {
-      return NextResponse.json(
-        { error: "Chapter not found" },
-        { status: 404 }
-      );
+    // Build query filter — only PUBLISHED questions (not DRAFT AI-generated ones)
+    const where: any = { status: "PUBLISHED" };
+
+    if (chapterId === "all") {
+      if (!textbookId) {
+        return NextResponse.json(
+          { error: "Textbook ID is required for cumulative quizzes" },
+          { status: 400 }
+        );
+      }
+      // Get all chapter IDs for this textbook
+      const chapters = await db.chapter.findMany({
+        where: { textbookId },
+        select: { id: true },
+      });
+      where.chapterId = { in: chapters.map((c) => c.id) };
+    } else {
+      // Verify chapter exists
+      const chapterExists = await db.chapter.findUnique({
+        where: { id: chapterId },
+        select: { id: true },
+      });
+      if (!chapterExists) {
+        return NextResponse.json(
+          { error: "Chapter not found" },
+          { status: 404 }
+        );
+      }
+      where.chapterId = chapterId;
     }
 
-    // Build query filter — only PUBLISHED questions (not DRAFT AI-generated ones)
-    const where: Record<string, unknown> = { chapterId, status: "PUBLISHED" };
+    if (Array.isArray(questionTypes) && questionTypes.length > 0) {
+      where.type = { in: questionTypes };
+    }
+
     if (difficulty && difficulty !== "MIXED") {
       where.difficulty = difficulty;
     }
@@ -100,8 +121,9 @@ export async function POST(request: Request) {
       data: {
         studentId: user.id,
         mode,
+        isDailyChallenge,
         totalQuestions: selected.length,
-      },
+      } as any,
     });
 
     // Return questions WITHOUT correctAnswer (security)

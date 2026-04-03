@@ -42,14 +42,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Verify chapter belongs to textbook
-  const chapter = await db.chapter.findFirst({
-    where: { id: chapterId, textbookId },
-    select: { id: true },
-  });
+  let targetChapterId = chapterId;
 
-  if (!chapter) {
-    return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
+  if (chapterId === "all") {
+    // Cumulative save - find first chapter to link questions to
+    const firstChapter = await db.chapter.findFirst({
+      where: { textbookId },
+      orderBy: { chapterNumber: "asc" },
+      select: { id: true },
+    });
+
+    if (!firstChapter) {
+      return NextResponse.json({ error: "No chapters found to save questions to" }, { status: 400 });
+    }
+    targetChapterId = firstChapter.id;
+  } else {
+    // Verify chapter belongs to textbook
+    const chapter = await db.chapter.findFirst({
+      where: { id: chapterId, textbookId },
+      select: { id: true },
+    });
+
+    if (!chapter) {
+      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
+    }
+    targetChapterId = chapter.id;
   }
 
   let body: { questions?: QuestionInput[]; publish?: boolean };
@@ -88,7 +105,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return true;
     })
     .map((q) => ({
-      chapterId,
+      chapterId: targetChapterId,
       questionText: q.questionText.trim(),
       type: validTypes.includes(q.type) ? q.type : ("MCQ" as const),
       difficulty: validDifficulties.includes(q.difficulty)
@@ -114,11 +131,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   // Update chapter question count
   const totalQuestions = await db.question.count({
-    where: { chapterId, status: "PUBLISHED" },
+    where: { chapterId: targetChapterId, status: "PUBLISHED" },
   });
 
   await db.chapter.update({
-    where: { id: chapterId },
+    where: { id: targetChapterId },
     data: { questionCount: totalQuestions },
   });
 

@@ -48,12 +48,13 @@ export function calculateQuizPoints(
     total += 200;
   }
 
-  // Speed bonus: +50% if avg time per question ≤ 8 seconds (top 25% of time)
+  // Speed bonus: +50% if avg time per question ≤ 8 seconds
   let speedBonus = 0;
   if (
     opts?.totalTimeTakenMs !== undefined &&
     opts.questionCount &&
-    opts.questionCount > 0
+    opts.questionCount > 0 &&
+    total > 0
   ) {
     const avgTimePerQuestion = opts.totalTimeTakenMs / opts.questionCount;
     if (avgTimePerQuestion <= 8000) {
@@ -62,14 +63,7 @@ export function calculateQuizPoints(
     }
   }
 
-  // 7-day login streak bonus: +100 points (per SRS §4.7.1)
-  let streakBonus = 0;
-  if (opts?.streakDays !== undefined && opts.streakDays >= 7 && opts.streakDays % 7 === 0) {
-    streakBonus = 100;
-    total += streakBonus;
-  }
-
-  return { total, breakdown, speedBonus, streakBonus };
+  return { total, breakdown, speedBonus, streakBonus: 0 };
 }
 
 export function calculateXPLevel(totalPoints: number): number {

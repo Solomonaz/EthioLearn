@@ -164,7 +164,7 @@ export default function AdminQuestionsPage() {
   const [aiChapterId, setAiChapterId] = useState("");
   const [aiCount, setAiCount] = useState(10);
   const [aiDifficulty, setAiDifficulty] = useState("MIXED");
-  const [aiIncludeTF, setAiIncludeTF] = useState(false);
+  const [aiQuestionTypes, setAiQuestionTypes] = useState<string[]>(["MCQ"]);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiQuestions, setAiQuestions] = useState<
     { questionText: string; type: string; options: string[]; correctAnswer: string; difficulty: string; explanation: string; _selected: boolean }[]
@@ -453,18 +453,37 @@ export default function AdminQuestionsPage() {
 
   async function handleAiGenerate() {
     if (!aiTextbookId || !aiChapterId) return;
+    if (aiQuestionTypes.length === 0) {
+      setAiError("Please select at least one question type.");
+      return;
+    }
     setAiGenerating(true);
     setAiError(null);
     setAiQuestions([]);
     try {
-      const qTypes = aiIncludeTF ? ["MCQ", "TRUE_FALSE"] : ["MCQ"];
       const res = await fetch(
         `/api/admin/textbooks/${aiTextbookId}/chapters/${aiChapterId}/generate`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count: aiCount, difficulty: aiDifficulty, questionTypes: qTypes }) }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            count: aiCount,
+            difficulty: aiDifficulty,
+            questionTypes: aiQuestionTypes,
+          }),
+        }
       );
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? "AI generation failed"); }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "AI generation failed");
+      }
       const data = await res.json();
-      setAiQuestions((data.questions ?? []).map((q: Record<string, unknown>) => ({ ...q, _selected: true })));
+      setAiQuestions(
+        (data.questions ?? []).map((q: Record<string, unknown>) => ({
+          ...q,
+          _selected: true,
+        }))
+      );
       toast.success(`Generated ${data.questions?.length ?? 0} questions.`);
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "AI generation failed");
@@ -1217,6 +1236,7 @@ export default function AdminQuestionsPage() {
                           className={SELECT_CLASS}
                         >
                           <option value="">Select chapter…</option>
+                          <option value="all">All Chapters (Cumulative)</option>
                           {aiChapters.map((ch) => (
                             <option key={ch.id} value={ch.id}>
                               Ch {ch.chapterNumber}: {ch.title}
@@ -1232,6 +1252,35 @@ export default function AdminQuestionsPage() {
                     <>
                       <div className="rounded-lg border border-border p-3 space-y-3">
                         <h4 className="text-sm font-medium text-text-primary">Step 3: Generation Settings</h4>
+                        <div className="space-y-1.5 pt-1">
+                          <label className="text-xs font-medium text-text-secondary">Question Types</label>
+                          <div className="flex flex-wrap gap-2">
+                            {TYPE_OPTIONS.map((type) => {
+                              const isSelected = aiQuestionTypes.includes(type.value);
+                              return (
+                                <button
+                                  key={type.value}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setAiQuestionTypes(prev => prev.filter(t => t !== type.value));
+                                    } else {
+                                      setAiQuestionTypes(prev => [...prev, type.value]);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "rounded-full border px-3 py-1 text-xs font-medium transition-all",
+                                    isSelected
+                                      ? "border-primary bg-primary/10 text-primary"
+                                      : "border-border bg-surface text-text-secondary hover:border-primary/40"
+                                  )}
+                                >
+                                  {type.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="mb-1 block text-xs font-medium text-text-secondary">Count</label>
@@ -1258,15 +1307,6 @@ export default function AdminQuestionsPage() {
                             </select>
                           </div>
                         </div>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={aiIncludeTF}
-                            onChange={(e) => setAiIncludeTF(e.target.checked)}
-                            className="h-4 w-4 rounded border-border text-primary"
-                          />
-                          Include True/False
-                        </label>
                       </div>
 
                       <Button

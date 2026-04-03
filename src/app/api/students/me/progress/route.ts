@@ -116,10 +116,13 @@ export async function GET() {
     totalScore: number;
     chapterCount: number;
     quizCount: number;
+    // Array of { date, score } for trend (last 10 quizzes)
+    trend: { date: string; score: number }[];
   };
 
   const subjectMap = new Map<string, SubjectAccum>();
 
+  // Process subject-level trends and groupings
   for (const chapter of chapters) {
     const key = `${chapter.subject}__${chapter.grade}`;
     if (!subjectMap.has(key)) {
@@ -129,12 +132,41 @@ export async function GET() {
         totalScore: 0,
         chapterCount: 0,
         quizCount: 0,
+        trend: [],
       });
     }
     const sub = subjectMap.get(key)!;
     sub.totalScore += chapter.avgScore;
     sub.chapterCount += 1;
     sub.quizCount += chapter.attemptCount;
+  }
+
+  // Get trend data for each subject (last 10 unique quizzes per subject)
+  for (const [key, sub] of subjectMap) {
+    const subAnswers = quizAnswers.filter(
+      (a) =>
+        a.question.chapter.textbook.subject === sub.subject &&
+        a.question.chapter.textbook.grade === sub.grade,
+    );
+
+    // Deduplicate by quiz to get unique quiz scores for trend
+    const uniqueQuizzes = new Map<string, { date: string; score: number }>();
+    for (const a of subAnswers) {
+      if (a.quiz.completedAt) {
+        const id = a.quiz.completedAt.toISOString();
+        if (!uniqueQuizzes.has(id)) {
+          uniqueQuizzes.set(id, {
+            date: a.quiz.completedAt.toLocaleDateString(),
+            score: a.quiz.score,
+          });
+        }
+      }
+    }
+
+    // Sort by date and take last 7 for mobile-friendly view
+    sub.trend = Array.from(uniqueQuizzes.values())
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(-7);
   }
 
   const subjects = Array.from(subjectMap.values()).map((sub) => ({
@@ -144,6 +176,7 @@ export async function GET() {
       sub.chapterCount > 0 ? Math.round(sub.totalScore / sub.chapterCount) : 0,
     quizCount: sub.quizCount,
     chapterCount: sub.chapterCount,
+    trend: sub.trend,
   }));
 
   // Weakest chapters: avgScore < 60, sorted asc, top 5
@@ -152,10 +185,14 @@ export async function GET() {
     .sort((a, b) => a.avgScore - b.avgScore)
     .slice(0, 5);
 
-  // Study recommendations
+  // Study recommendations (AI-style logic)
   const studyRecommendations = weakestChapters.map((c) => {
     const lastAttempts = Math.min(c.attemptCount, 3);
-    return `Review ${c.title} in ${c.subject} — your${lastAttempts < c.attemptCount ? ` last ${lastAttempts} attempts` : ""} average score is ${c.avgScore}%`;
+    const avgText =
+      lastAttempts > 1
+        ? `your last ${lastAttempts} attempts averaged ${c.avgScore}%`
+        : `your latest attempt was ${c.avgScore}%`;
+    return `You should review ${c.title} of ${c.subject} — ${avgText}.`;
   });
 
   return NextResponse.json({

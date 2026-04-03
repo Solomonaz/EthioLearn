@@ -32,9 +32,13 @@ function buildPrompt(opts: GenerateOptions): string {
     difficultyInstruction = `Mix difficulties: roughly 30% EASY, 40% MEDIUM, 30% HARD.`;
   }
 
-  const typeInstruction = types.includes("TRUE_FALSE")
-    ? `Question types: MCQ (4 options) and TRUE_FALSE (2 options: "True", "False"). Mix both types.`
-    : `All questions must be MCQ type with exactly 4 options each.`;
+  const typeInstruction = `Generate a mix of the following types as requested: ${types.join(", ")}.
+SPECIFIC FORMATTING RULES:
+1. MCQ: questionText (the question), options (4 items), correctAnswer (one of the options).
+2. TRUE_FALSE: questionText (the statement), options (["True", "False"]), correctAnswer (either "True" or "False").
+3. FILL_IN_BLANK: questionText must contain exactly one "_______" (at least 7 underscores). correctAnswer must be the exact missing word/phrase. options can be empty [].
+4. MATCH_PAIRS: questionText asks to match items. options must contain all items for Column A followed by all corresponding items for Column B (e.g. [A1, A2, B1, B2]). DO NOT shuffle these in the JSON; the UI will handle shuffling Column B for the student. "correctAnswer" must be a string of pairs separated by pipe, items in pair separated by colon (e.g., "A1:B1|A2:B2").
+5. ORDERING: questionText asks to arrange in sequence. options must contain all items in random order. correctAnswer must be the items in correct order separated by pipe (e.g., "Event A|Event B|Event C").`;
 
   return `You are an expert educational content creator specializing in the Ethiopian curriculum.
 
@@ -49,28 +53,27 @@ RULES:
 1. ${difficultyInstruction}
 2. ${typeInstruction}
 3. Every question MUST be directly based on the chapter content provided — do NOT invent facts.
-4. Each question must have exactly one correct answer that appears in the options array.
-5. For MCQ, provide exactly 4 plausible options. Make distractors realistic but clearly wrong.
-6. For TRUE_FALSE, options must be exactly ["True", "False"].
-7. Include a clear, educational explanation for each answer.
-8. Questions should test comprehension, application, and analysis — not just recall.
-9. Vary question styles: definitions, cause-effect, comparisons, applications, scenarios.
-10. Avoid ambiguous or trick questions.
+4. For all types, the "correctAnswer" property must be formatted exactly as requested.
+5. Include a clear, educational explanation for each answer.
+6. Questions should test comprehension, application, and analysis — not just recall.
+7. Use Bloom's Taxonomy: mix questions that test Remembering, Understanding, Applying, and Analyzing.
+8. Avoid ambiguous or trick questions.
 
-OUTPUT FORMAT: Return ONLY a JSON array of question objects. No markdown, no code fences, no extra text. Each object must have:
-- "questionText": string (the question)
-- "type": "MCQ" or "TRUE_FALSE"
-- "options": string[] (4 items for MCQ, 2 for TRUE_FALSE)
-- "correctAnswer": string (must exactly match one of the options)
+OUTPUT FORMAT: Return a JSON object with a single key "questions" containing an array of exactly ${count} question objects.
+Each object must have:
+- "questionText": string
+- "type": "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING"
+- "options": string[]
+- "correctAnswer": string (Exactly as formatted in specific rules!)
 - "difficulty": "EASY" | "MEDIUM" | "HARD"
-- "explanation": string (why the correct answer is right)
+- "explanation": string
 
 CHAPTER CONTENT:
 """
 ${opts.content.slice(0, 30000)}
 """
 
-Generate exactly ${count} questions now as a JSON array.`;
+Generate exactly ${count} questions now as a JSON object with a "questions" array. No preamble or markdown.`;
 }
 
 function buildChapterDetectionPrompt(opts: DetectChaptersOptions): string {
@@ -133,39 +136,53 @@ function validateQuestions(raw: unknown): GeneratedQuestion[] {
   }
 
   const validated: GeneratedQuestion[] = [];
+  const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
 
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
 
     const q = item as Record<string, unknown>;
 
+    // Required fields
     if (typeof q.questionText !== "string" || !q.questionText.trim()) continue;
     if (typeof q.correctAnswer !== "string" || !q.correctAnswer.trim()) continue;
-    if (!Array.isArray(q.options) || q.options.length < 2) continue;
+    if (!Array.isArray(q.options)) continue;
 
-    const type = q.type === "TRUE_FALSE" ? "TRUE_FALSE" : "MCQ";
+    // Normalize type
+    let type = String(q.type).toUpperCase();
+    if (!validTypes.includes(type)) type = "MCQ";
 
+    // Normalize difficulty
     const diff = String(q.difficulty || "MEDIUM").toUpperCase();
     const difficulty: "EASY" | "MEDIUM" | "HARD" =
       diff === "EASY" ? "EASY" : diff === "HARD" ? "HARD" : "MEDIUM";
 
     const options = q.options.map((o: unknown) => String(o));
-    if (!options.includes(q.correctAnswer)) {
-      const match = options.find(
-        (o: string) => o.toLowerCase() === String(q.correctAnswer).toLowerCase()
-      );
-      if (match) {
-        q.correctAnswer = match;
-      } else {
-        continue;
+    const correctAnswer = String(q.correctAnswer).trim();
+
+    // Type-specific validation
+    if (type === "MCQ") {
+      if (options.length < 2) continue;
+      if (!options.includes(correctAnswer)) {
+        const match = options.find(o => o.toLowerCase() === correctAnswer.toLowerCase());
+        if (!match) continue;
       }
+    } else if (type === "TRUE_FALSE") {
+      if (!["True", "False"].includes(correctAnswer)) continue;
+    } else if (type === "MATCH_PAIRS") {
+      const numPairs = correctAnswer.split("|").filter(Boolean).length;
+      if (options.length !== numPairs * 2 || options.length < 2) continue;
+      if (!correctAnswer.includes(":") || !correctAnswer.includes("|")) continue;
+    } else if (type === "ORDERING") {
+      if (options.length < 2) continue;
+      if (!correctAnswer.includes("|")) continue;
     }
 
     validated.push({
       questionText: q.questionText.trim(),
-      type,
+      type: type as any,
       options,
-      correctAnswer: String(q.correctAnswer),
+      correctAnswer,
       difficulty,
       explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
     });
@@ -224,7 +241,7 @@ export async function groqGenerateQuestions(
         },
         { role: "user", content: prompt },
       ],
-      temperature: 0.7,
+      temperature: 0.5,
       max_tokens: 8192,
       response_format: { type: "json_object" },
     });

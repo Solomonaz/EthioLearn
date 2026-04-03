@@ -11,7 +11,158 @@ import { Spinner } from "@/components/ui/spinner";
 import { useQuizStore } from "@/stores/quiz-store";
 import { cn } from "@/lib/utils";
 
-const OPTION_LABELS = ["A", "B", "C", "D"];
+const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
+
+/**
+ * Renders text with underscores replaced by inline input fields.
+ */
+function FillInBlankRenderer({ text, value, onChange }: { text: string; value: string; onChange: (val: string) => void }) {
+  // Find underscores (e.g., "The ____ is...")
+  const parts = text.split(/_{3,}/g);
+  if (parts.length < 2) return <span>{text}</span>;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {parts.map((part, i) => (
+        <span key={i} className="flex items-center gap-2">
+          {part}
+          {i < parts.length - 1 && (
+            <input
+              type="text"
+              autoFocus={i === 0}
+              className="inline-block min-w-[120px] border-b-2 border-primary bg-transparent px-2 py-1 text-center font-bold text-primary focus:outline-none"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="type here..."
+            />
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Interface for matching two columns (e.g., A:1|B:2).
+ */
+function MatchPairsInterface({ options, value, onChange }: { options: any[]; value: string; onChange: (val: string) => void }) {
+  const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
+  const [shuffledRight, setShuffledRight] = useState<string[]>([]);
+
+  const pairs = value.split("|").filter(Boolean).reduce((acc, p) => {
+    const [l, r] = p.split(":");
+    acc[l] = r;
+    return acc;
+  }, {} as Record<string, string>);
+
+  const allItems = options.map(o => o.text);
+  let leftItems: string[] = [];
+  let rightItems: string[] = [];
+
+  // Try to parse pairs from options first (Correct format)
+  const parsedPairs = options.map(o => o.text).filter(t => t.includes(":"));
+  if (parsedPairs.length > 0) {
+    leftItems = parsedPairs.map(p => p.split(":")[0]);
+    rightItems = parsedPairs.map(p => p.split(":")[1]);
+  } else {
+    // Balanced split: first half is Column A, second half is Column B.
+    // The AI is now instructed to provide them in this order.
+    const mid = Math.floor(allItems.length / 2);
+    leftItems = allItems.slice(0, mid);
+    rightItems = allItems.slice(mid);
+  }
+
+  // Shuffle right items once
+  useEffect(() => {
+    if (rightItems.length > 0 && shuffledRight.length === 0) {
+      setShuffledRight([...rightItems].sort(() => Math.random() - 0.5));
+    }
+  }, [rightItems, shuffledRight.length]);
+
+  const handlePair = (right: string) => {
+    if (!selectedLeft) return;
+    const newPairs = { ...pairs, [selectedLeft]: right };
+    const serialized = Object.entries(newPairs).map(([l, r]) => `${l}:${r}`).join("|");
+    onChange(serialized);
+    setSelectedLeft(null);
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:gap-8">
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-text-secondary text-center">Column A</p>
+        {leftItems.map((item) => (
+          <button
+            key={item}
+            className={cn(
+              "w-full rounded-lg border-2 p-3 text-left text-sm transition-all sm:text-base",
+              selectedLeft === item ? "border-primary bg-primary/10 shadow-sm" : pairs[item] ? "border-success bg-success/5 opacity-60" : "border-border hover:border-primary/40"
+            )}
+            onClick={() => setSelectedLeft(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-text-secondary text-center">Column B</p>
+        {(shuffledRight.length > 0 ? shuffledRight : rightItems).map((item) => {
+          const isPaired = Object.values(pairs).includes(item);
+          return (
+            <button
+              key={item}
+              className={cn(
+                "w-full rounded-lg border-2 p-3 text-left text-sm transition-all sm:text-base",
+                isPaired ? "border-success bg-success/5 opacity-60" : "border-border hover:border-primary/40"
+              )}
+              onClick={() => handlePair(item)}
+              disabled={isPaired}
+            >
+              {item}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Interface for ordering a list of items.
+ */
+function OrderingInterface({ options, value, onChange }: { options: any[]; value: string; onChange: (val: string) => void }) {
+  const items = value ? value.split("|") : options.map(o => o.text);
+
+  const move = (index: number, direction: -1 | 1) => {
+    const newItems = [...items];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+    [newItems[index], newItems[targetIndex]] = [newItems[targetIndex], newItems[index]];
+    onChange(newItems.join("|"));
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-text-secondary">Arrange the items in correct order:</p>
+      {items.map((item, index) => (
+        <div key={item} className="flex items-center gap-3 rounded-xl border-2 border-border bg-surface p-4">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-text-secondary">
+            {index + 1}
+          </span>
+          <span className="flex-1 text-sm font-medium text-text-primary">{item}</span>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" onClick={() => move(index, -1)} disabled={index === 0}>
+              <ChevronLeft className="h-4 w-4 rotate-90" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => move(index, 1)} disabled={index === items.length - 1}>
+              <ChevronLeft className="h-4 w-4 -rotate-90" />
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function QuizTakingPage() {
   const router = useRouter();
@@ -221,12 +372,20 @@ export default function QuizTakingPage() {
         <ProgressBar value={progress} color="primary" size="sm" className="mt-2" />
       </div>
 
-      {/* Question Card */}
+      {/* Question Card & Answer Interfaces */}
       <Card className="mb-4">
         <CardContent className="py-5">
-          <p className="text-base font-semibold leading-relaxed text-text-primary sm:text-lg">
-            {currentQuestion.questionText}
-          </p>
+          <div className="text-base font-semibold leading-relaxed text-text-primary sm:text-lg">
+            {currentQuestion.type === "FILL_IN_BLANK" ? (
+              <FillInBlankRenderer
+                text={currentQuestion.questionText}
+                value={currentAnswer?.studentAnswer || ""}
+                onChange={handleSelectAnswer}
+              />
+            ) : (
+              currentQuestion.questionText
+            )}
+          </div>
 
           {/* Countdown progress bar (TIMED mode) */}
           {mode === "TIMED" && (
@@ -234,11 +393,7 @@ export default function QuizTakingPage() {
               <div
                 className={cn(
                   "h-full transition-all duration-1000",
-                  timeLeft <= 10
-                    ? "bg-error"
-                    : timeLeft <= 20
-                    ? "bg-warning"
-                    : "bg-success"
+                  timeLeft <= 10 ? "bg-error" : timeLeft <= 20 ? "bg-warning" : "bg-success"
                 )}
                 style={{ width: `${(timeLeft / 30) * 100}%` }}
               />
@@ -247,47 +402,81 @@ export default function QuizTakingPage() {
         </CardContent>
       </Card>
 
-      {/* Answer Options */}
-      <div className="mb-6 space-y-3">
-        {currentQuestion.options.map((option, index) => {
-          const label = OPTION_LABELS[index] || option.label;
-          const isSelected = currentAnswer?.studentAnswer === option.text;
+      {/* Dynamic Answer Interface Selection */}
+      <div className="mb-6">
+        {currentQuestion.type === "MCQ" && (
+          <div className="space-y-3">
+            {currentQuestion.options.map((option, index) => {
+              const label = OPTION_LABELS[index] || option.label;
+              const isSelected = currentAnswer?.studentAnswer === option.text;
+              return (
+                <button
+                  key={`${index}-${option.label}`}
+                  onClick={() => handleSelectAnswer(option.text)}
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-xl border-2 p-4 text-left transition-all",
+                    isSelected ? "border-primary bg-primary/10" : "border-border bg-surface hover:border-primary/40"
+                  )}
+                >
+                  <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold", isSelected ? "bg-primary text-white" : "bg-gray-100 text-text-secondary")}>
+                    {label}
+                  </span>
+                  <span className={cn("pt-1 text-sm sm:text-base", isSelected ? "font-medium text-text-primary" : "text-text-secondary")}>
+                    {option.text}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-          return (
-            <button
-              key={`${index}-${option.label}`}
-              onClick={() => handleSelectAnswer(option.text)}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-xl border-2 p-4 text-left transition-all",
-                "min-h-[48px] active:scale-[0.98]",
-                isSelected
-                  ? "border-primary bg-primary/10"
-                  : "border-border bg-surface hover:border-primary/40 hover:shadow-sm"
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-                  isSelected
-                    ? "bg-primary text-white"
-                    : "bg-gray-100 text-text-secondary"
-                )}
-              >
-                {label}
-              </span>
-              <span
-                className={cn(
-                  "pt-1 text-sm sm:text-base",
-                  isSelected
-                    ? "font-medium text-text-primary"
-                    : "text-text-secondary"
-                )}
-              >
-                {option.text}
-              </span>
-            </button>
-          );
-        })}
+        {currentQuestion.type === "TRUE_FALSE" && (
+          <div className="grid grid-cols-2 gap-4">
+            {["True", "False"].map((option) => {
+              const isSelected = currentAnswer?.studentAnswer === option;
+              return (
+                <Button
+                  key={option}
+                  variant={isSelected ? "primary" : "outline"}
+                  size="lg"
+                  className="h-16 text-lg"
+                  onClick={() => handleSelectAnswer(option)}
+                >
+                  {option}
+                </Button>
+              );
+            })}
+          </div>
+        )}
+
+        {currentQuestion.type === "FILL_IN_BLANK" && !currentQuestion.questionText.includes("_") && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-text-secondary">Type your answer below:</p>
+            <input
+              type="text"
+              value={currentAnswer?.studentAnswer || ""}
+              onChange={(e) => handleSelectAnswer(e.target.value)}
+              className="w-full rounded-xl border-2 border-border p-4 focus:border-primary focus:outline-none"
+              placeholder="Your answer..."
+            />
+          </div>
+        )}
+
+        {currentQuestion.type === "MATCH_PAIRS" && (
+          <MatchPairsInterface
+            options={currentQuestion.options}
+            value={currentAnswer?.studentAnswer || ""}
+            onChange={handleSelectAnswer}
+          />
+        )}
+
+        {currentQuestion.type === "ORDERING" && (
+          <OrderingInterface
+            options={currentQuestion.options}
+            value={currentAnswer?.studentAnswer || ""}
+            onChange={handleSelectAnswer}
+          />
+        )}
       </div>
 
       {/* Navigation */}

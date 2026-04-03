@@ -79,8 +79,32 @@ export async function POST(
         };
       }
 
-      const normalizedCorrect = normalizeOption(question.correctAnswer as unknown);
-      const isCorrect = answer.studentAnswer === normalizedCorrect;
+      const normalizedCorrect = String(question.correctAnswer || "").trim();
+      const studentAns = String(answer.studentAnswer || "").trim();
+      let isCorrect = false;
+
+      if (question.type === "FILL_IN_BLANK") {
+        // More intelligent subjective grading:
+        // 1. Exact match (case-insensitive, trimmed)
+        const c = normalizedCorrect.toLowerCase().replace(/[.,!?;:]/g, "").trim();
+        const s = studentAns.toLowerCase().replace(/[.,!?;:]/g, "").trim();
+
+        if (s === c) {
+          isCorrect = true;
+        } else if (s.length >= 4 && (c.includes(s) || s.includes(c))) {
+          // Partial match for longer key terms (e.g. "Lalibela" in "Rock Hewn Church of Lalibela")
+          isCorrect = true;
+        }
+      } else if (question.type === "MATCH_PAIRS") {
+        // Unordered pair comparison (A:1|B:2 should equal B:2|A:1)
+        const correctPairs = new Set(normalizedCorrect.split("|").filter(Boolean).map(p => p.trim()));
+        const studentPairs = studentAns.split("|").filter(Boolean).map(p => p.trim());
+        isCorrect = studentPairs.length === correctPairs.size && 
+                    studentPairs.every(p => correctPairs.has(p));
+      } else {
+        // Standard comparison for MCQ, TRUE_FALSE, ORDERING
+        isCorrect = studentAns === normalizedCorrect;
+      }
 
       return {
         questionId: answer.questionId,
@@ -160,6 +184,47 @@ export async function POST(
         completedAt: new Date(),
       },
     });
+ 
+    // If it's a Daily Challenge, award extra points only for 60%+ performance
+    let challengePoints = 0;
+    const quizAny = quiz as any;
+    if (quizAny.isDailyChallenge && correctCount >= 3) {
+      // Check if already completed today
+      const { today, tomorrow } = (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        const next = new Date(d);
+        next.setDate(next.getDate() + 1);
+        return { today: d, tomorrow: next };
+      })();
+
+      const existingDone = await db.pointLedger.findFirst({
+        where: {
+          userId: user.id,
+          actionType: "DAILY_CHALLENGE",
+          createdAt: { gte: today, lt: tomorrow },
+        },
+      });
+
+      if (!existingDone) {
+        challengePoints = 50;
+        await db.pointLedger.create({
+          data: {
+            userId: user.id,
+            actionType: "DAILY_CHALLENGE",
+            points: challengePoints,
+            quizId,
+            description: "Daily challenge performance bonus",
+          },
+        });
+        
+        // Final point update (challenge points included)
+        await db.user.update({
+          where: { id: user.id },
+          data: { totalPoints: { increment: challengePoints } },
+        });
+      }
+    }
 
     // Create point ledger entry
     if (totalPointsEarned > 0) {
