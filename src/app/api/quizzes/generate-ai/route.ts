@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { generateQuestions } from "@/lib/ai-provider";
 import { QuestionType, Difficulty } from "@prisma/client";
 import { normalizeOption } from "@/lib/utils";
+import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -23,10 +24,16 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { textbookId, chapterId, difficulty = "MIXED", questionCount = 10, mode = "SOLO", isDailyChallenge = false } = body;
+    let { textbookId, chapterId, difficulty = "MIXED", questionCount = 10, mode = "SOLO", isDailyChallenge = false } = body;
 
     if (!textbookId) {
       return NextResponse.json({ error: "Textbook ID is required" }, { status: 400 });
+    }
+
+    // Resolve Adaptive Difficulty
+    if (difficulty === "ADAPTIVE") {
+      difficulty = await getRecommendedDifficulty(user.id);
+      console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty}`);
     }
 
     // 1. Fetch Textbook & Content
@@ -100,11 +107,22 @@ export async function POST(request: Request) {
       questionTypes: questionTypes as any,
     });
 
-    // 4. Save to DB (so they can be linked to a quiz)
-    // We safe them as PUBLISHED so other students can benefit, 
-    // and they are grouped by the target chapter.
-    const createdQuestions = await Promise.all(
-      aiQuestions.map((q) =>
+    // 4. Save to DB (Filtered by Deduplication)
+    // We fetch existing questions for this chapter to avoid duplicates
+    const questionTexts = aiQuestions.map((q) => q.questionText);
+    const existingQuestions = await db.question.findMany({
+      where: {
+        chapterId: targetChapterId!,
+        questionText: { in: questionTexts },
+      },
+    });
+
+    // Separate New vs. existing (Exact Text Match)
+    const existingTexts = new Set(existingQuestions.map((q) => q.questionText));
+    const newQuestionsData = aiQuestions.filter((q) => !existingTexts.has(q.questionText));
+
+    const newlyCreatedQuestions = await Promise.all(
+      newQuestionsData.map((q) =>
         db.question.create({
           data: {
             chapterId: targetChapterId!,
@@ -120,27 +138,29 @@ export async function POST(request: Request) {
       )
     );
 
+    // Combine for final quiz (maintaining original AI order if possible, or just concat)
+    const allQuizQuestions = [...existingQuestions, ...newlyCreatedQuestions];
+
     // 5. Create Quiz Session
     const quiz = await db.quiz.create({
       data: {
         studentId: user.id,
         mode: mode as any,
         isDailyChallenge,
-        totalQuestions: createdQuestions.length,
+        totalQuestions: allQuizQuestions.length,
       } as any,
     });
 
     return NextResponse.json({
       quizId: quiz.id,
-      mode: quiz.mode,
-      totalQuestions: createdQuestions.length,
-      questions: createdQuestions.map((q) => ({
+      questions: allQuizQuestions.map((q) => ({
         id: q.id,
         questionText: q.questionText,
         options: (q.options as any[]).map(normalizeOption),
         type: q.type,
         difficulty: q.difficulty,
       })),
+      adaptiveCalibrated: body.difficulty === "ADAPTIVE" ? difficulty : undefined,
     });
   } catch (error) {
     console.error("[Student AI Generation Error]", error);

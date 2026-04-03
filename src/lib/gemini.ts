@@ -401,3 +401,46 @@ export function splitTextByChapters(
 
   return result;
 }
+export async function tutorResponseFromContent(opts: {
+  message: string;
+  history: { role: "user" | "model"; parts: { text: string }[] }[];
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+}): Promise<string> {
+  const client = getClient();
+  const model = client.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction: `You are an expert AI Tutor for the EthioLearn platform, specializing in the Ethiopian national curriculum.
+Your goal is to help students understand concepts from their textbooks.
+
+RULES:
+1. FOCUS: Use ONLY the provided textbook chapter content as your primary source of truth.
+2. PEDAGOGY: Act as a supportive, encouraging teacher. Explain things step-by-step. Use analogies appropriate for a Grade ${opts.grade} student.
+3. NO DIRECT ANSWERS: If a student asks for a specific exam answer, guide them to find it in the text rather than just giving it.
+4. ENGAGEMENT: Ask follow-up questions to check if the student understood your explanation.
+5. LANGUAGE: Respond in the language used by the student (English or Amharic). Use clear, simple formatting.
+6. SCOPE: If the student asks about something outside the provided chapter context, politely redirect them to focus on the current topic.
+
+SUBJECT: ${opts.subject}
+GRADE: ${opts.grade}
+CHAPTER: ${opts.chapterTitle}
+
+CHAPTER CONTENT:
+"""
+${opts.content.slice(0, 50000)}
+"""`,
+  });
+
+  const chat = model.startChat({
+    history: opts.history,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 2048,
+    },
+  });
+
+  const result = await chat.sendMessage(opts.message);
+  return result.response.text();
+}

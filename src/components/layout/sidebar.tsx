@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   BookOpen,
+  MessageSquare,
   User,
   Trophy,
   Gift,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 const studentNavItems = [
   { label: "Dashboard", href: "/student", icon: Home, exact: true },
   { label: "Take Quiz", href: "/student/quiz", icon: BookOpen },
+  { label: "AI Tutor", href: "/student/tutor", icon: MessageSquare },
   { label: "Battle Mode", href: "/student/battle", icon: Swords },
   { label: "Leaderboard", href: "/student/leaderboard", icon: Trophy },
   { label: "Rewards", href: "/student/rewards", icon: Gift },

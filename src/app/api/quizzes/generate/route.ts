@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { normalizeOption } from "@/lib/utils";
+import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { textbookId, chapterId, difficulty, questionCount = 10, mode = "SOLO", questionTypes, isDailyChallenge = false } = body;
+    let { textbookId, chapterId, difficulty, questionCount = 10, mode = "SOLO", questionTypes, isDailyChallenge = false } = body;
 
     if (!chapterId) {
       return NextResponse.json(
@@ -30,13 +31,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Resolve Adaptive Difficulty
+    let adaptiveCalibrated: string | undefined = undefined;
+    if (difficulty === "ADAPTIVE") {
+      difficulty = await getRecommendedDifficulty(user.id);
+      adaptiveCalibrated = difficulty;
+      console.log(`[Adaptive Bank] Calibrated difficulty to: ${difficulty}`);
+    }
+
     // Validate question count (1–50)
     const count = Math.min(Math.max(Number(questionCount) || 10, 1), 50);
 
     // Validate difficulty enum
     if (difficulty && !["EASY", "MEDIUM", "HARD", "MIXED"].includes(difficulty)) {
       return NextResponse.json(
-        { error: "difficulty must be EASY, MEDIUM, HARD, or MIXED" },
+        { error: "difficulty must be EASY, MEDIUM, HARD, MIXED, or ADAPTIVE" },
         { status: 400 }
       );
     }
@@ -138,6 +147,7 @@ export async function POST(request: Request) {
         type: q.type,
         difficulty: q.difficulty,
       })),
+      adaptiveCalibrated,
     });
   } catch (error) {
     console.error("Quiz generation error:", error);

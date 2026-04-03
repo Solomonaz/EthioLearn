@@ -28,6 +28,11 @@ interface SchoolData {
   type: "PUBLIC" | "PRIVATE";
   subscriptionTier: string | null;
   createdAt: string;
+  gameConfig?: {
+    maxPlayersPerRoom: number;
+    timePerQuestion: number;
+    defaultDifficulty: "EASY" | "MEDIUM" | "HARD";
+  };
   _count: {
     users: number;
     textbooks: number;
@@ -54,6 +59,11 @@ export default function AdminSettingsPage() {
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [type, setType] = useState<"PUBLIC" | "PRIVATE">("PUBLIC");
+  
+  // Game Config state
+  const [maxPlayersPerRoom, setMaxPlayersPerRoom] = useState(20);
+  const [timePerQuestion, setTimePerQuestion] = useState(20);
+  const [defaultDifficulty, setDefaultDifficulty] = useState<"EASY" | "MEDIUM" | "HARD">("MEDIUM");
 
   useEffect(() => {
     async function fetchData() {
@@ -70,6 +80,12 @@ export default function AdminSettingsPage() {
         setRegion(settingsData.school.region);
         setCity(settingsData.school.city);
         setType(settingsData.school.type);
+
+        if (settingsData.school.gameConfig) {
+          setMaxPlayersPerRoom(settingsData.school.gameConfig.maxPlayersPerRoom);
+          setTimePerQuestion(settingsData.school.gameConfig.timePerQuestion);
+          setDefaultDifficulty(settingsData.school.gameConfig.defaultDifficulty);
+        }
 
         if (userRes.ok) {
           const userData = await userRes.json();
@@ -94,7 +110,10 @@ export default function AdminSettingsPage() {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, region, city, type }),
+        body: JSON.stringify({ 
+          name, region, city, type,
+          maxPlayersPerRoom, timePerQuestion, defaultDifficulty 
+        }),
       });
 
       if (!res.ok) {
@@ -199,6 +218,57 @@ export default function AdminSettingsPage() {
           <CardFooter>
             <Button onClick={handleSave} isLoading={saving}>
               Save Changes
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">Game & Quiz Settings</h2>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-text-primary">Time Per Question (seconds)</label>
+              <div className="flex items-center gap-2">
+                <Spinner className="hidden" /> {/* just to ensure spinner exists if needed */}
+                <Input
+                  type="number"
+                  value={timePerQuestion}
+                  onChange={(e) => setTimePerQuestion(parseInt(e.target.value) || 20)}
+                  min={5}
+                  max={60}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-text-primary">Max Players Per Room</label>
+              <Input
+                type="number"
+                value={maxPlayersPerRoom}
+                onChange={(e) => setMaxPlayersPerRoom(parseInt(e.target.value) || 20)}
+                min={2}
+                max={100}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-text-primary">Default Quiz Difficulty</label>
+              <select
+                value={defaultDifficulty}
+                onChange={(e) => setDefaultDifficulty(e.target.value as any)}
+                className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary focus:border-primary outline-none"
+              >
+                <option value="EASY">Easy</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HARD">Hard</option>
+              </select>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSave} isLoading={saving} className="w-full">
+              Save Game Settings
             </Button>
           </CardFooter>
         </Card>

@@ -327,3 +327,46 @@ export async function groqDetectChapters(
 
   throw new Error("Groq chapter detection failed after 2 attempts");
 }
+export async function groqTutorChatResponse(opts: {
+  message: string;
+  history: { role: "user" | "assistant"; content: string }[];
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+}): Promise<string> {
+  const client = getGroqClient();
+
+  const systemPrompt = `You are an expert AI Tutor for the EthioLearn platform, specializing in the Ethiopian national curriculum.
+Your goal is to help students understand concepts from their textbooks.
+
+RULES:
+1. FOCUS: Use ONLY the provided textbook chapter content as your primary source of truth.
+2. PEDAGOGY: Act as a supportive, encouraging teacher. Explain things step-by-step. Use analogies appropriate for a Grade ${opts.grade} student.
+3. NO DIRECT ANSWERS: If a student asks for a specific exam answer, guide them to find it in the text rather than just giving it.
+4. ENGAGEMENT: Ask follow-up questions to check if the student understood your explanation.
+5. LANGUAGE: Respond in the language used by the student (English or Amharic). Use clear, simple formatting.
+6. SCOPE: If the student asks about something outside the provided chapter context, politely redirect them to focus on the current topic.
+
+SUBJECT: ${opts.subject}
+GRADE: ${opts.grade}
+CHAPTER: ${opts.chapterTitle}
+
+CHAPTER CONTENT:
+"""
+${opts.content.slice(0, 30000)}
+"""`;
+
+  const completion = await client.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...opts.history,
+      { role: "user", content: opts.message },
+    ],
+    temperature: 0.7,
+    max_tokens: 2048,
+  });
+
+  return completion.choices[0]?.message?.content ?? "I apologize, but I'm having trouble responding right now.";
+}

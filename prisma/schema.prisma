@@ -252,7 +252,7 @@ model QuizAnswer {
   quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   questionId String
-  question   Question @relation(fields: [questionId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@map("quiz_answers")
 }

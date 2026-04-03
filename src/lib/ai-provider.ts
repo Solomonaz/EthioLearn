@@ -92,3 +92,38 @@ export async function detectChapters(
     throw err;
   }
 }
+
+// ─── AI Tutor Chat (Gemini → Groq fallback) ─────────────
+
+export async function chatWithTutor(opts: {
+  message: string;
+  history: { role: "user" | "model"; parts: { text: string }[] }[];
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+}): Promise<{ response: string; provider: "gemini" | "groq" }> {
+  try {
+    const { tutorResponseFromContent } = await import("./gemini");
+    const response = await tutorResponseFromContent(opts);
+    return { response, provider: "gemini" };
+  } catch (err) {
+    if (isRateLimitError(err) && hasGroqKey()) {
+      console.warn("[AI Provider] Gemini rate-limited (Chat), falling back to Groq…");
+      const { groqTutorChatResponse } = await import("./groq");
+
+      // Transform history for Groq (assistant instead of model)
+      const groqHistory = opts.history.map((h) => ({
+        role: h.role === "model" ? ("assistant" as const) : ("user" as const),
+        content: h.parts[0].text,
+      }));
+
+      const response = await groqTutorChatResponse({
+        ...opts,
+        history: groqHistory,
+      });
+      return { response, provider: "groq" };
+    }
+    throw err;
+  }
+}

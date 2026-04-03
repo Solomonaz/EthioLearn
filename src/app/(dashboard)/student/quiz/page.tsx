@@ -36,9 +36,10 @@ interface Chapter {
   title: string;
   chapterNumber: number;
   _count: { questions: number };
+  difficultyCounts: { EASY: number; MEDIUM: number; HARD: number };
 }
 
-type Difficulty = "EASY" | "MEDIUM" | "HARD" | "MIXED";
+type Difficulty = "EASY" | "MEDIUM" | "HARD" | "MIXED" | "ADAPTIVE";
 type QuizMode = "SOLO" | "TIMED";
 
 const STEPS = ["Subject", "Source", "Chapter", "Difficulty", "Types", "Questions", "Mode", "Review"];
@@ -80,6 +81,13 @@ const DIFFICULTY_CONFIG: {
     borderColor: "border-red-400",
   },
   {
+    value: "ADAPTIVE",
+    label: "AI Adaptive",
+    description: "AI calibrates the perfect level for you based on history",
+    badgeVariant: "info",
+    borderColor: "border-purple-400",
+  },
+  {
     value: "MIXED",
     label: "Mixed",
     description: "A mix of all difficulty levels",
@@ -114,6 +122,10 @@ export default function QuizLauncherPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loadingTextbooks, setLoadingTextbooks] = useState(true);
   const [loadingChapters, setLoadingChapters] = useState(false);
+  const [textbookTotals, setTextbookTotals] = useState<{
+    totalQuestions: number;
+    difficultyCounts: { EASY: number; MEDIUM: number; HARD: number };
+  } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,6 +171,7 @@ export default function QuizLauncherPage() {
         if (!res.ok) throw new Error("Failed to load chapters");
         const data = await res.json();
         setChapters(data.chapters);
+        setTextbookTotals(data.textbookTotals);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load chapters");
       } finally {
@@ -427,7 +440,14 @@ export default function QuizLauncherPage() {
                       <p className="text-xs text-text-secondary">Comprehensive practice across the entire book</p>
                     </div>
                   </div>
-                  {selectedSource === "BANK" && <Badge variant="default">Recommended</Badge>}
+                  <div className="flex items-center gap-2">
+                    {selectedSource === "BANK" && textbookTotals && (
+                      <Badge variant="info">
+                        {textbookTotals.totalQuestions} questions
+                      </Badge>
+                    )}
+                    {selectedSource === "BANK" && <Badge variant="default">Recommended</Badge>}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -441,34 +461,39 @@ export default function QuizLauncherPage() {
                   </CardContent>
                 </Card>
               ) : (
-                chapters.map((ch) => (
-                  <Card
-                    key={ch.id}
-                    className={cn(
-                      "cursor-pointer transition-all hover:shadow-md",
-                      selectedChapter !== "all" && selectedChapter?.id === ch.id &&
-                        "border-primary ring-2 ring-primary/20"
-                    )}
-                    onClick={() => {
-                      setSelectedChapter(ch);
-                      setStep(3);
-                    }}
-                  >
-                    <CardContent className="flex items-center justify-between py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                          {ch.chapterNumber}
-                        </span>
-                        <p className="font-medium text-text-primary">{ch.title}</p>
-                      </div>
-                      {selectedSource === "BANK" && (
-                        <Badge variant="info">
-                          {ch._count.questions} questions
-                        </Badge>
+                chapters.map((ch) => {
+                  const isEmptyBank = selectedSource === "BANK" && ch._count.questions === 0;
+                  return (
+                    <Card
+                      key={ch.id}
+                      className={cn(
+                        "transition-all",
+                        isEmptyBank ? "opacity-60 grayscale cursor-not-allowed" : "cursor-pointer hover:shadow-md",
+                        selectedChapter !== "all" && selectedChapter?.id === ch.id &&
+                          "border-primary ring-2 ring-primary/20"
                       )}
-                    </CardContent>
-                  </Card>
-                ))
+                      onClick={() => {
+                        if (isEmptyBank) return;
+                        setSelectedChapter(ch);
+                        setStep(3);
+                      }}
+                    >
+                      <CardContent className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                            {ch.chapterNumber}
+                          </span>
+                          <p className="font-medium text-text-primary">{ch.title}</p>
+                        </div>
+                        {selectedSource === "BANK" && (
+                          <Badge variant="info">
+                            {ch._count.questions} questions
+                          </Badge>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </>
           )}
@@ -478,33 +503,58 @@ export default function QuizLauncherPage() {
       {/* Step 4: Select Difficulty */}
       {step === 3 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          {DIFFICULTY_CONFIG.map((d) => (
+          {DIFFICULTY_CONFIG.map((d) => {
+            const counts = selectedChapter === "all" 
+              ? textbookTotals?.difficultyCounts 
+              : selectedChapter?.difficultyCounts;
+            
+            const isAdaptive = d.value === "ADAPTIVE";
+
+            const qCount = isAdaptive 
+              ? 0 // Placeholder
+              : d.value === "MIXED" 
+                ? (selectedChapter === "all" ? textbookTotals?.totalQuestions : selectedChapter?._count.questions)
+                : (counts ? counts[d.value as keyof typeof counts] : 0);
+            
+            const isEmpty = selectedSource === "BANK" && !isAdaptive && qCount === 0;
+
+            return (
             <Card
               key={d.value}
               className={cn(
-                "cursor-pointer border-2 transition-all hover:shadow-md",
+                "border-2 transition-all",
+                isEmpty ? "opacity-60 grayscale cursor-not-allowed" : "cursor-pointer hover:shadow-md",
                 selectedDifficulty === d.value
                   ? `${d.borderColor} ring-2 ring-primary/20`
                   : "border-border"
               )}
               onClick={() => {
+                if (isEmpty) return;
                 setSelectedDifficulty(d.value);
                 setStep(4);
               }}
             >
               <CardContent className="py-5 text-center">
-                {d.value === "MIXED" ? (
+                {d.value === "ADAPTIVE" ? (
+                  <Sparkles className="mx-auto mb-2 h-8 w-8 text-purple-500 animate-pulse" />
+                ) : d.value === "MIXED" ? (
                   <Shuffle className="mx-auto mb-2 h-8 w-8 text-info" />
                 ) : (
                   <Zap className="mx-auto mb-2 h-8 w-8 text-primary" />
                 )}
-                <Badge variant={d.badgeVariant} className="mb-2">
+                <Badge variant={d.badgeVariant} className={cn("mb-2", isAdaptive && "bg-purple-100 text-purple-700 border-purple-200")}>
                   {d.label}
                 </Badge>
                 <p className="text-sm text-text-secondary">{d.description}</p>
+                {selectedSource === "BANK" && (
+                  <p className="mt-2 text-[10px] uppercase font-bold text-primary">
+                    {isAdaptive ? "Personalized selection" : `${qCount} Questions available`}
+                  </p>
+                )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -555,31 +605,98 @@ export default function QuizLauncherPage() {
       )}
 
       {/* Step 6: Select Question Count */}
-      {step === 5 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {QUESTION_COUNTS.map((count) => (
-            <Card
-              key={count}
-              className={cn(
-                "cursor-pointer border-2 transition-all hover:shadow-md",
-                selectedCount === count
-                  ? "border-primary ring-2 ring-primary/20"
-                  : "border-border"
-              )}
-              onClick={() => {
-                setSelectedCount(count);
-                setStep(6);
-              }}
+      {step === 5 && (() => {
+        const counts = selectedChapter === "all" 
+          ? textbookTotals?.difficultyCounts 
+          : selectedChapter?.difficultyCounts;
+        
+        // Define max based on selection
+        let maxAvailable = 20; // Default for AI
+        if (selectedSource === "BANK") {
+          if (selectedDifficulty === "MIXED") {
+            maxAvailable = selectedChapter === "all" ? (textbookTotals?.totalQuestions || 0) : (selectedChapter?._count.questions || 0);
+          } else if (counts) {
+            maxAvailable = counts[selectedDifficulty as keyof typeof counts] || 0;
+          }
+        }
+
+        const isInvalid = !selectedCount || selectedCount < 1 || selectedCount > maxAvailable;
+
+        return (
+          <div className="space-y-6">
+            <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 text-center">
+              <Hash className="mx-auto mb-2 h-8 w-8 text-primary" />
+              <p className="mb-2 text-sm font-medium text-text-secondary uppercase tracking-wide">
+                How many questions would you like?
+              </p>
+              
+              <div className="flex items-center justify-center gap-4">
+                <input
+                  type="number"
+                  min="1"
+                  max={maxAvailable}
+                  value={selectedCount || ""}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (isNaN(val)) setSelectedCount(null);
+                    else setSelectedCount(val);
+                  }}
+                  className="w-32 rounded-xl border-2 border-primary bg-white py-3 text-center text-4xl font-bold text-text-primary focus:outline-none focus:ring-4 focus:ring-primary/20"
+                  placeholder="0"
+                />
+              </div>
+              
+              <div className="mt-4 flex justify-center gap-2 flex-wrap">
+                {[5, 10, 20].filter(n => n <= maxAvailable).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setSelectedCount(n)}
+                    className={cn(
+                      "px-4 py-2 rounded-lg border-2 text-sm font-bold transition-all",
+                      selectedCount === n 
+                        ? "bg-primary text-white border-primary" 
+                        : "bg-white text-primary border-primary/20 hover:border-primary"
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+                {maxAvailable > 0 && (
+                  <button
+                    onClick={() => setSelectedCount(maxAvailable)}
+                    className={cn(
+                      "px-4 py-2 rounded-lg border-2 text-sm font-bold transition-all",
+                      selectedCount === maxAvailable 
+                        ? "bg-primary text-white border-primary" 
+                        : "bg-white text-primary border-primary/20 hover:border-primary"
+                    )}
+                  >
+                    Max ({maxAvailable})
+                  </button>
+                )}
+              </div>
+              
+              <p className={cn(
+                "mt-4 text-xs font-semibold",
+                isInvalid && selectedCount ? "text-error" : "text-text-secondary"
+              )}>
+                {selectedSource === "BANK" 
+                  ? `Available questions in this selection: ${maxAvailable}`
+                  : `AI can generate up to 20 questions per session.`}
+              </p>
+            </div>
+
+            <Button 
+              className="w-full" 
+              size="lg"
+              disabled={isInvalid}
+              onClick={() => setStep(6)}
             >
-              <CardContent className="py-6 text-center">
-                <Hash className="mx-auto mb-2 h-6 w-6 text-primary" />
-                <p className="text-2xl font-bold text-text-primary">{count}</p>
-                <p className="text-sm text-text-secondary">questions</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              Continue
+            </Button>
+          </div>
+        );
+      })()}
 
       {/* Step 7: Select Mode */}
       {step === 6 && (

@@ -8,13 +8,36 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
-    return NextResponse.json({ error: "No school assigned" }, { status: 400 });
+  let schoolId = user.schoolId;
+
+  // Self-healing: If admin has no schoolId, find or create one
+  if (!schoolId) {
+    const existingSchool = await db.school.findFirst();
+    if (existingSchool) {
+      schoolId = existingSchool.id;
+    } else {
+      const newSchool = await db.school.create({
+        data: {
+          name: "Default School",
+          region: "Addis Ababa",
+          city: "Addis Ababa",
+          type: "PUBLIC",
+        },
+      });
+      schoolId = newSchool.id;
+    }
+
+    // Link the user to the school for future requests
+    await db.user.update({
+      where: { id: user.id },
+      data: { schoolId },
+    });
   }
 
   const school = await db.school.findUnique({
-    where: { id: user.schoolId },
+    where: { id: schoolId },
     include: {
+      gameConfig: true,
       _count: {
         select: {
           users: true,
@@ -42,35 +65,52 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "No school assigned" }, { status: 400 });
   }
 
-  let body: Record<string, unknown>;
+  let body: any;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { name, region, city, type } = body as {
-    name?: string; region?: string; city?: string; type?: string;
-  };
+  const { 
+    name, region, city, type,
+    maxPlayersPerRoom, timePerQuestion, defaultDifficulty 
+  } = body;
 
-  // Validate field lengths
+  // Validate School Info
   if (name !== undefined && (typeof name !== "string" || name.length < 2 || name.length > 100)) {
     return NextResponse.json({ error: "Name must be 2–100 characters" }, { status: 400 });
   }
-  if (type !== undefined && !["PRIMARY", "SECONDARY", "PREPARATORY", "PRIVATE"].includes(type)) {
-    return NextResponse.json({ error: "Invalid school type" }, { status: 400 });
+  if (type !== undefined && !["PUBLIC", "PRIVATE"].includes(type)) {
+    return NextResponse.json({ error: "Invalid school type. Must be PUBLIC or PRIVATE" }, { status: 400 });
   }
 
-  const updateData: Record<string, string> = {};
-  if (name !== undefined) updateData.name = name;
-  if (region !== undefined) updateData.region = String(region);
-  if (city !== undefined) updateData.city = String(city);
-  if (type !== undefined) updateData.type = type;
+  // Use a transaction or separate updates
+  const [updatedSchool] = await db.$transaction([
+    db.school.update({
+      where: { id: user.schoolId },
+      data: {
+        ...(name && { name }),
+        ...(region && { region: String(region) }),
+        ...(city && { city: String(city) }),
+        ...(type && { type: type as any }),
+      },
+    }),
+    db.gameConfig.upsert({
+      where: { schoolId: user.schoolId },
+      update: {
+        ...(maxPlayersPerRoom !== undefined && { maxPlayersPerRoom: Number(maxPlayersPerRoom) }),
+        ...(timePerQuestion !== undefined && { timePerQuestion: Number(timePerQuestion) }),
+        ...(defaultDifficulty !== undefined && { defaultDifficulty: defaultDifficulty as any }),
+      },
+      create: {
+        schoolId: user.schoolId,
+        maxPlayersPerRoom: Number(maxPlayersPerRoom) || 20,
+        timePerQuestion: Number(timePerQuestion) || 20,
+        defaultDifficulty: (defaultDifficulty as any) || "MEDIUM",
+      },
+    }),
+  ]);
 
-  const school = await db.school.update({
-    where: { id: user.schoolId },
-    data: updateData,
-  });
-
-  return NextResponse.json({ school });
+  return NextResponse.json({ school: updatedSchool });
 }
