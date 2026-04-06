@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Send, AlertTriangle, Timer } from "lucide-react";
@@ -10,6 +10,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuizStore } from "@/stores/quiz-store";
 import { cn } from "@/lib/utils";
+import { useAntiCheat } from "@/lib/useAntiCheat";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 
@@ -191,6 +192,15 @@ export default function QuizTakingPage() {
   // Derived values (safe even when questions is empty)
   const hasQuestions = questions && questions.length > 0;
   const currentQuestion = hasQuestions ? questions[currentIndex] : null;
+
+  // ── Anti-cheat ───────────────────────────────────────────────────────────
+  // Use a mutable ref so the hook always calls the latest handleSubmit
+  // without creating a circular dependency.
+  const handleSubmitRef = useRef<() => void>(() => {});
+  const { resetViolations } = useAntiCheat({
+    onAutoSubmit: useCallback(() => handleSubmitRef.current(), []),
+    enabled: hasQuestions && !isSubmitting,
+  });
   const totalQuestions = questions.length;
   const isLastQuestion = currentIndex === totalQuestions - 1;
   const isFirstQuestion = currentIndex === 0;
@@ -211,6 +221,7 @@ export default function QuizTakingPage() {
   }
 
   const handleSubmit = useCallback(async () => {
+    resetViolations(); // clear anti-cheat state before submit
     setTimerActive(false);
     setSubmitting(true);
     setSubmitError(null);
@@ -244,7 +255,10 @@ export default function QuizTakingPage() {
       );
       setSubmitting(false);
     }
-  }, [quizId, getSubmitPayload, setSubmitting, setTimerActive, reset, router]);
+  }, [quizId, getSubmitPayload, setSubmitting, setTimerActive, reset, router, resetViolations]);
+
+  // Keep the anti-cheat ref always up-to-date
+  handleSubmitRef.current = handleSubmit;
 
   // Timer countdown effect
   useEffect(() => {

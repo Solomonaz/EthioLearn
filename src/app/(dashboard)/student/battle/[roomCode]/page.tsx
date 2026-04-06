@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { useAntiCheat } from "@/lib/useAntiCheat";
 
 interface PlayerScore {
   userId: string;
@@ -86,6 +87,18 @@ export default function BattleRoomPage() {
 
   const userId = session?.user?.id;
   const userName = session?.user?.name ?? "Player";
+
+  // ── Anti-cheat ───────────────────────────────────────────────────────
+  // Only active while the game is actively in progress.
+  // On 2nd offence the player is disconnected and redirected home.
+  useAntiCheat({
+    onAutoSubmit: useCallback(() => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      socketRef.current?.disconnect();
+      router.push("/student");
+    }, [router]),
+    enabled: phase === "in_progress",
+  });
 
   // Timer tick
   const startTimer = useCallback((limit: number) => {
