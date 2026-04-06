@@ -15,6 +15,11 @@ import {
   Home,
   RefreshCw,
   Swords,
+  Star,
+  Zap,
+  BarChart2,
+  RotateCcw,
+  WifiOff,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +36,19 @@ interface PlayerScore {
   score: number;
   answered: number;
   socketId: string;
+  correctAnswers: number;
+  totalAnswerTimeMs: number;
+}
+
+interface Awards {
+  mvpUserId: string | null;
+  fastestFingerUserId: string | null;
+}
+
+interface GroupStats {
+  avgScore: number;
+  avgAccuracy: number;
+  avgAnswerTimeMs: number;
 }
 
 interface QuestionData {
@@ -82,6 +100,16 @@ export default function BattleRoomPage() {
 
   // Results state
   const [finalScores, setFinalScores] = useState<PlayerScore[]>([]);
+  const [awards, setAwards] = useState<Awards | null>(null);
+  const [groupStats, setGroupStats] = useState<GroupStats | null>(null);
+
+  // Rematch
+  const [rematchVotes, setRematchVotes] = useState(0);
+  const [rematchTotal, setRematchTotal] = useState(0);
+  const [rematchRequested, setRematchRequested] = useState(false);
+
+  // Disconnect tracking
+  const [disconnectedPlayerIds, setDisconnectedPlayerIds] = useState<Set<string>>(new Set());
 
   const [error, setError] = useState<string | null>(null);
 
@@ -89,8 +117,6 @@ export default function BattleRoomPage() {
   const userName = session?.user?.name ?? "Player";
 
   // ── Anti-cheat ───────────────────────────────────────────────────────
-  // Only active while the game is actively in progress.
-  // On 2nd offence the player is disconnected and redirected home.
   useAntiCheat({
     onAutoSubmit: useCallback(() => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -195,10 +221,52 @@ export default function BattleRoomPage() {
       setPlayers([...players]);
     });
 
-    socket.on("game_finished", ({ finalScores }: { finalScores: PlayerScore[] }) => {
+    socket.on("game_finished", ({ finalScores, awards, groupStats }: {
+      finalScores: PlayerScore[];
+      awards: Awards;
+      groupStats: GroupStats;
+    }) => {
       setFinalScores(finalScores);
+      setAwards(awards);
+      setGroupStats(groupStats);
       setPhase("finished");
       if (timerRef.current) clearInterval(timerRef.current);
+    });
+
+    // ── Disconnect / reconnect tracking ────────────────────────────────
+    socket.on("player_disconnected", ({ userId: dcId }: { userId: string }) => {
+      setDisconnectedPlayerIds((prev) => new Set(prev).add(dcId));
+    });
+
+    socket.on("player_reconnected", ({ userId: rcId }: { userId: string }) => {
+      setDisconnectedPlayerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rcId);
+        return next;
+      });
+    });
+
+    // ── Rematch ────────────────────────────────────────────────────────
+    socket.on("rematch_vote_updated", ({ votes, total }: { votes: number; total: number }) => {
+      setRematchVotes(votes);
+      setRematchTotal(total);
+    });
+
+    socket.on("rematch_starting", () => {
+      // Reset all client-side state for the new round
+      setFinalScores([]);
+      setAwards(null);
+      setGroupStats(null);
+      setRematchVotes(0);
+      setRematchTotal(0);
+      setRematchRequested(false);
+      setDisconnectedPlayerIds(new Set());
+      setSelectedAnswer(null);
+      setCorrectIndex(null);
+      setIsCorrect(null);
+      setPointsEarned(0);
+      setAnswered(false);
+      setPhase("countdown");
     });
 
     socket.on("error", ({ message }: { message: string }) => {
@@ -223,6 +291,12 @@ export default function BattleRoomPage() {
       answerIndex: index,
       timeLeft,
     });
+  }
+
+  function handleRematch() {
+    if (!userId || rematchRequested) return;
+    setRematchRequested(true);
+    socketRef.current?.emit("request_rematch", { roomCode, userId });
   }
 
   const myScore = players.find((p) => p.userId === userId);
@@ -454,7 +528,8 @@ export default function BattleRoomPage() {
                       key={p.userId}
                       className={cn(
                         "flex items-center gap-2 rounded-lg px-2 py-1.5",
-                        p.userId === userId ? "bg-primary/10" : ""
+                        p.userId === userId ? "bg-primary/10" : "",
+                        disconnectedPlayerIds.has(p.userId) && "opacity-50"
                       )}
                     >
                       <span
@@ -474,7 +549,13 @@ export default function BattleRoomPage() {
                           )}
                         </p>
                         <p className="text-xs text-text-secondary">
-                          {p.score} pts
+                          {disconnectedPlayerIds.has(p.userId) ? (
+                            <span className="inline-flex items-center gap-1 text-orange-500">
+                              <WifiOff className="h-3 w-3" /> Disconnected
+                            </span>
+                          ) : (
+                            `${p.score} pts`
+                          )}
                         </p>
                       </div>
                     </li>
@@ -497,7 +578,10 @@ export default function BattleRoomPage() {
                 {sortedPlayers.map((p, i) => (
                   <li
                     key={p.userId}
-                    className="flex items-center gap-2 text-sm"
+                    className={cn(
+                      "flex items-center gap-2 text-sm",
+                      disconnectedPlayerIds.has(p.userId) && "opacity-50"
+                    )}
                   >
                     <span className="w-4 text-center font-bold text-text-secondary">
                       {i + 1}
@@ -506,6 +590,9 @@ export default function BattleRoomPage() {
                       {p.name}
                       {p.userId === userId && (
                         <span className="ml-1 text-xs text-primary">(you)</span>
+                      )}
+                      {disconnectedPlayerIds.has(p.userId) && (
+                        <WifiOff className="ml-1 inline h-3 w-3 text-orange-500" />
                       )}
                     </span>
                     <span className="font-bold text-primary">{p.score}</span>
@@ -527,7 +614,16 @@ export default function BattleRoomPage() {
 
     const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
     const podiumHeights = ["h-20", "h-28", "h-16"];
-    const podiumPositions = [1, 0, 2]; // indexes into top3 for each podium slot
+
+    // My personal stats
+    const myAccuracy =
+      myFinalScore && myFinalScore.answered > 0
+        ? myFinalScore.correctAnswers / myFinalScore.answered
+        : 0;
+    const myAvgTimeMs =
+      myFinalScore && myFinalScore.correctAnswers > 0
+        ? myFinalScore.totalAnswerTimeMs / myFinalScore.correctAnswers
+        : 0;
 
     return (
       <div className="mx-auto max-w-xl p-4 sm:p-6">
@@ -540,10 +636,7 @@ export default function BattleRoomPage() {
           {myFinalScore && (
             <p className="mt-1 text-text-secondary">
               You finished{" "}
-              <span className="font-bold text-primary">
-                #{myRank}
-              </span>{" "}
-              with{" "}
+              <span className="font-bold text-primary">#{myRank}</span> with{" "}
               <span className="font-bold text-primary">
                 {myFinalScore.score} points
               </span>
@@ -551,12 +644,128 @@ export default function BattleRoomPage() {
           )}
         </div>
 
+        {/* ── Awards Row ──────────────────────────────────────── */}
+        {awards && (
+          <div className="mb-6 grid grid-cols-2 gap-3">
+            {/* MVP */}
+            <Card className="border-yellow-200 bg-yellow-50/50">
+              <CardContent className="py-4 text-center">
+                <Star className="mx-auto mb-1.5 h-6 w-6 text-yellow-500" />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-700">
+                  MVP
+                </p>
+                <p className="mt-1 truncate text-sm font-bold text-text-primary">
+                  {finalScores.find((p) => p.userId === awards.mvpUserId)?.name ?? "—"}
+                </p>
+                <p className="text-[10px] text-text-secondary">Highest Accuracy</p>
+              </CardContent>
+            </Card>
+
+            {/* Fastest Finger */}
+            <Card className="border-purple-200 bg-purple-50/50">
+              <CardContent className="py-4 text-center">
+                <Zap className="mx-auto mb-1.5 h-6 w-6 text-purple-500" />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                  Fastest Finger
+                </p>
+                <p className="mt-1 truncate text-sm font-bold text-text-primary">
+                  {finalScores.find((p) => p.userId === awards.fastestFingerUserId)?.name ?? "—"}
+                </p>
+                <p className="text-[10px] text-text-secondary">Lowest Avg Time</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ── Personal vs. Group Stats ─────────────────────── */}
+        {groupStats && myFinalScore && (
+          <Card className="mb-6">
+            <CardContent className="py-4">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-text-secondary uppercase tracking-wide">
+                <BarChart2 className="h-4 w-4" />
+                Your Performance vs. Group
+              </h2>
+              <div className="space-y-3">
+                {/* Score */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-text-secondary">Score</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-primary">{myFinalScore.score}</span>
+                    <span className="text-xs text-text-secondary">vs</span>
+                    <span className="text-sm font-medium text-text-secondary">
+                      {groupStats.avgScore} avg
+                    </span>
+                    {myFinalScore.score > groupStats.avgScore ? (
+                      <Badge className="bg-green-100 text-green-700 border-none text-[10px]">
+                        Above
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-red-100 text-red-700 border-none text-[10px]">
+                        Below
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Accuracy */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-text-secondary">Accuracy</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-primary">
+                      {Math.round(myAccuracy * 100)}%
+                    </span>
+                    <span className="text-xs text-text-secondary">vs</span>
+                    <span className="text-sm font-medium text-text-secondary">
+                      {Math.round(groupStats.avgAccuracy * 100)}% avg
+                    </span>
+                    {myAccuracy > groupStats.avgAccuracy ? (
+                      <Badge className="bg-green-100 text-green-700 border-none text-[10px]">
+                        Above
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-red-100 text-red-700 border-none text-[10px]">
+                        Below
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Avg Answer Time */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-text-secondary">Avg Speed</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-primary">
+                      {myAvgTimeMs > 0 ? `${(myAvgTimeMs / 1000).toFixed(1)}s` : "—"}
+                    </span>
+                    <span className="text-xs text-text-secondary">vs</span>
+                    <span className="text-sm font-medium text-text-secondary">
+                      {groupStats.avgAnswerTimeMs > 0
+                        ? `${(groupStats.avgAnswerTimeMs / 1000).toFixed(1)}s avg`
+                        : "— avg"}
+                    </span>
+                    {myAvgTimeMs > 0 && groupStats.avgAnswerTimeMs > 0 && myAvgTimeMs < groupStats.avgAnswerTimeMs ? (
+                      <Badge className="bg-green-100 text-green-700 border-none text-[10px]">
+                        Faster
+                      </Badge>
+                    ) : myAvgTimeMs > 0 ? (
+                      <Badge className="bg-red-100 text-red-700 border-none text-[10px]">
+                        Slower
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Podium — only show if 2+ players */}
         {finalScores.length >= 2 && top3.length >= 2 && (
           <div className="mb-6 flex items-end justify-center gap-3">
             {podiumOrder.map((player, slot) => {
               if (!player) return <div key={slot} className="w-28" />;
-              const rank = finalScores.findIndex((p) => p.userId === player.userId) + 1;
+              const rank =
+                finalScores.findIndex((p) => p.userId === player.userId) + 1;
               const isMe = player.userId === userId;
               const medalColor =
                 rank === 1
@@ -566,7 +775,10 @@ export default function BattleRoomPage() {
                   : "text-orange-400";
 
               return (
-                <div key={player.userId} className="flex w-28 flex-col items-center gap-2">
+                <div
+                  key={player.userId}
+                  className="flex w-28 flex-col items-center gap-2"
+                >
                   <Avatar name={player.name} size="lg" />
                   <p
                     className={cn(
@@ -583,7 +795,11 @@ export default function BattleRoomPage() {
                   <div
                     className={cn(
                       "flex w-full items-center justify-center rounded-t-lg",
-                      rank === 1 ? "bg-yellow-100" : rank === 2 ? "bg-gray-100" : "bg-orange-50",
+                      rank === 1
+                        ? "bg-yellow-100"
+                        : rank === 2
+                        ? "bg-gray-100"
+                        : "bg-orange-50",
                       podiumHeights[slot]
                     )}
                   >
@@ -595,7 +811,7 @@ export default function BattleRoomPage() {
           </div>
         )}
 
-        {/* Full Leaderboard */}
+        {/* Full Leaderboard with award badges */}
         <Card className="mb-6">
           <CardContent className="py-4">
             <h2 className="mb-3 text-sm font-bold text-text-secondary uppercase tracking-wide">
@@ -613,12 +829,17 @@ export default function BattleRoomPage() {
                     ? "bg-orange-100 text-orange-600"
                     : "bg-gray-50 text-text-secondary";
 
+                const isMvp = awards?.mvpUserId === p.userId;
+                const isFastest = awards?.fastestFingerUserId === p.userId;
+
                 return (
                   <li
                     key={p.userId}
                     className={cn(
                       "flex items-center gap-3 rounded-xl px-3 py-2.5",
-                      isMe ? "bg-primary/10 border border-primary/20" : "bg-gray-50"
+                      isMe
+                        ? "bg-primary/10 border border-primary/20"
+                        : "bg-gray-50"
                     )}
                   >
                     <span
@@ -638,6 +859,18 @@ export default function BattleRoomPage() {
                         </span>
                       )}
                     </span>
+                    <div className="flex items-center gap-1.5">
+                      {isMvp && (
+                        <span title="MVP" className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100">
+                          <Star className="h-3 w-3 text-yellow-600" />
+                        </span>
+                      )}
+                      {isFastest && (
+                        <span title="Fastest Finger" className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100">
+                          <Zap className="h-3 w-3 text-purple-600" />
+                        </span>
+                      )}
+                    </div>
                     <span className="font-bold text-primary">{p.score}</span>
                     <span className="text-xs text-text-secondary">pts</span>
                   </li>
@@ -661,12 +894,20 @@ export default function BattleRoomPage() {
           <Button
             size="lg"
             className="flex-1 gap-2"
-            onClick={() => router.push("/student/battle")}
+            onClick={handleRematch}
+            disabled={rematchRequested}
           >
-            <RefreshCw className="h-4 w-4" />
-            Play Again
+            <RotateCcw className="h-4 w-4" />
+            {rematchRequested
+              ? `Rematch (${rematchVotes}/${rematchTotal})`
+              : "Rematch"}
           </Button>
         </div>
+        {rematchRequested && rematchVotes < rematchTotal && (
+          <p className="mt-2 text-center text-xs text-text-secondary animate-pulse">
+            Waiting for all players to accept rematch… ({rematchVotes}/{rematchTotal})
+          </p>
+        )}
       </div>
     );
   }
