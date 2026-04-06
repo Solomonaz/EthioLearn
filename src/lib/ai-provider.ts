@@ -31,6 +31,14 @@ export type {
 };
 export { splitTextByChapters };
 
+// Re-export new modules for convenient access
+export { chunkContent, chunkChapters } from "./content-chunker";
+export type { ContentChunk } from "./content-chunker";
+export { tagChunksWithBloomLevel, tagQuestionBloomLevel } from "./bloom-tagger";
+export type { BloomLevel, BloomTagResult } from "./bloom-tagger";
+export { runQualityPipeline } from "./quality-pipeline";
+export type { QualityResult, QualityPipelineResult, QualityFlag } from "./quality-pipeline";
+
 // ─── Helpers ────────────────────────────────────────────
 
 function isRateLimitError(err: unknown): boolean {

@@ -78,10 +78,10 @@ export async function POST(request: NextRequest) {
   // Validate file type
   const fileName = file.name.toLowerCase();
   if (
-    ![".pdf", ".docx", ".doc"].some((ext) => fileName.endsWith(ext))
+    ![".pdf", ".docx", ".doc", ".epub"].some((ext) => fileName.endsWith(ext))
   ) {
     return NextResponse.json(
-      { error: "Invalid file type. Please upload a PDF or DOCX file." },
+      { error: "Invalid file type. Please upload a PDF, DOCX, or EPUB file." },
       { status: 400 }
     );
   }

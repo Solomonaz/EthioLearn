@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { Difficulty } from "@prisma/client";
+import { Difficulty, QuestionType } from "@prisma/client";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -16,7 +16,7 @@ export async function GET() {
 
   const schoolId = user.schoolId;
 
-  const textbooks = await db.textbook.findMany({
+  const textbooks = (await db.textbook.findMany({
     where: schoolId ? { schoolId } : {},
     orderBy: { createdAt: "desc" },
     select: {
@@ -25,6 +25,7 @@ export async function GET() {
       subject: true,
       grade: true,
       processingStatus: true,
+      chunkingStatus: true,
       createdAt: true,
       content: true,
       _count: {
@@ -36,16 +37,17 @@ export async function GET() {
           id: true,
           title: true,
           chapterNumber: true,
+          ocrConfidence: true,
           _count: {
             select: { questions: true },
           },
         },
       },
-    },
-  });
+    } as any,
+  })) as any;
 
   // Map to include hasContent flag without sending full content to client
-  const mapped = textbooks.map(({ content, ...rest }) => ({
+  const mapped = (textbooks as any[]).map(({ content, ...rest }: any) => ({
     ...rest,
     hasContent: !!content && content.length > 100,
     contentLength: content?.length ?? 0,

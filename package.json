@@ -20,6 +20,7 @@
     "@types/papaparse": "^5.5.2",
     "africastalking": "^0.7.9",
     "clsx": "^2.1.1",
+    "epub2": "^3.0.2",
     "groq-sdk": "^1.1.2",
     "lucide-react": "^0.577.0",
     "mammoth": "^1.12.0",

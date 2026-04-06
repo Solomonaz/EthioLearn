@@ -131,9 +131,36 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     console.log(`[AI Generation] Used provider: ${provider}`);
 
-    return NextResponse.json({
+    // Run Post-Processing Quality Pipeline
+    const { runQualityPipeline } = await import("@/lib/ai-provider");
+    const qualityResults = await runQualityPipeline(
       questions,
+      finalContent,
+      textbook.subject,
+      textbook.grade
+    );
+
+    // Map quality results back to questions
+    const finalQuestions = questions.map((q, i) => {
+      const qResult = qualityResults.results[i];
+      return {
+        ...q,
+        qualityScore: qResult.qualityScore,
+        qualityFlags: qResult.flags,
+        qualityPassed: qResult.passed,
+        qualityDetails: qResult.details,
+      };
+    });
+
+    return NextResponse.json({
+      questions: finalQuestions,
       provider,
+      quality: {
+        averageScore: qualityResults.averageScore,
+        passCount: qualityResults.passCount,
+        failCount: qualityResults.failCount,
+        duplicatePairs: qualityResults.duplicatePairs,
+      },
       generatedAt: new Date().toISOString(),
       chapterId: chapterId === "all" ? "all" : chapterId,
       chapterTitle: finalTitle,

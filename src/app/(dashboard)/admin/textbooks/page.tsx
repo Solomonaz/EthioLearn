@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3 } from "lucide-react";
+import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,12 @@ interface TextbookListItem {
   subject: string;
   grade: number;
   processingStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  chunkingStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
   createdAt: string;
   hasContent: boolean;
   contentLength: number;
   _count: { chapters: number };
-  chapters: { id: string; title: string; chapterNumber: number; _count: { questions: number } }[];
+  chapters: { id: string; title: string; chapterNumber: number; _count: { questions: number }; ocrConfidence: number | null }[];
 }
 
 interface AIGeneratedQuestion {
@@ -112,6 +113,16 @@ const STATUS_CONFIG: Record<
   FAILED: { label: "Failed", variant: "error" },
 };
 
+const CHUNKING_STATUS_CONFIG: Record<
+  TextbookListItem["chunkingStatus"],
+  { label: string; variant: "success" | "warning" | "error" | "default" | "info" } | null
+> = {
+  COMPLETED: { label: "Vectors Ready", variant: "success" },
+  PENDING: null, // don't show badge when not yet processed
+  PROCESSING: { label: "Processing Vectors…", variant: "info" },
+  FAILED: { label: "Vector Failed", variant: "error" },
+};
+
 // ─── Helper: count total questions ────────────────────────
 
 function totalQuestions(textbook: TextbookListItem): number {
@@ -164,6 +175,9 @@ export default function AdminTextbooksPage() {
   const [aiCreating, setAiCreating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Process (vector embedding) state
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -188,6 +202,25 @@ export default function AdminTextbooksPage() {
   useEffect(() => {
     fetchTextbooks();
   }, [fetchTextbooks]);
+
+  // ── Process Content (chunking + embeddings) ─────────────
+
+  async function handleProcessContent(id: string) {
+    setProcessingId(id);
+    try {
+      const res = await fetch(`/api/admin/textbooks/${id}/process`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Processing failed");
+      toast.success(
+        `Content processed: ${data.totalChunks} chunks, ${data.totalEmbeddings} embeddings created.`
+      );
+      await fetchTextbooks();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Processing failed");
+    } finally {
+      setProcessingId(null);
+    }
+  }
 
   // ── Delete ───────────────────────────────────────────────
 
@@ -399,7 +432,7 @@ export default function AdminTextbooksPage() {
     if (!aiTitle.trim()) { setAiError("Title is required."); return; }
     if (!aiSubject) { setAiError("Subject is required."); return; }
     if (!aiGrade) { setAiError("Grade is required (1-12)."); return; }
-    if (!aiFile) { setAiError("Please upload a PDF or DOCX file."); return; }
+    if (!aiFile) { setAiError("Please upload a PDF, DOCX, or EPUB file."); return; }
 
     setAiDetecting(true);
     setAiDetectedChapters([]);
@@ -603,73 +636,119 @@ export default function AdminTextbooksPage() {
                 <div className="divide-y divide-border">
                   {textbooks.map((textbook) => {
                     const status = STATUS_CONFIG[textbook.processingStatus] ?? STATUS_CONFIG.PENDING;
+                    const chunkStatus = CHUNKING_STATUS_CONFIG[textbook.chunkingStatus];
                     const qCount = totalQuestions(textbook);
                     const isConfirming = confirmDeleteId === textbook.id;
                     const isDeleting = deletingId === textbook.id;
+                    const isProcessing = processingId === textbook.id;
+
+                    // OCR warnings: chapters with confidence < 80
+                    const ocrFlaggedChapters = textbook.chapters.filter(
+                      (ch) => ch.ocrConfidence !== null && ch.ocrConfidence < 80
+                    );
 
                     return (
                       <div
                         key={textbook.id}
-                        className="flex items-start justify-between gap-3 px-4 py-3"
+                        className="flex flex-col gap-2 px-4 py-3"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-medium text-text-primary">
-                              {textbook.title}
-                            </p>
-                            <Badge variant={status.variant}>{status.label}</Badge>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-medium text-text-primary">
+                                {textbook.title}
+                              </p>
+                              <Badge variant={status.variant}>{status.label}</Badge>
+                              {chunkStatus && (
+                                <Badge variant={chunkStatus.variant}>{chunkStatus.label}</Badge>
+                              )}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
+                              <span>{textbook.subject}</span>
+                              <Badge variant="default">Grade {textbook.grade}</Badge>
+                              <span>
+                                {textbook._count.chapters} chapter
+                                {textbook._count.chapters !== 1 ? "s" : ""}
+                              </span>
+                              <span>
+                                {qCount} question{qCount !== 1 ? "s" : ""}
+                              </span>
+                              {textbook.hasContent && (
+                                <Badge variant="info">Content uploaded</Badge>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
-                            <span>{textbook.subject}</span>
-                            <Badge variant="default">Grade {textbook.grade}</Badge>
-                            <span>
-                              {textbook._count.chapters} chapter
-                              {textbook._count.chapters !== 1 ? "s" : ""}
-                            </span>
-                            <span>
-                              {qCount} question{qCount !== 1 ? "s" : ""}
-                            </span>
-                            {textbook.hasContent && (
-                              <Badge variant="info">Content uploaded</Badge>
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            {/* Process Content Button */}
+                            {textbook.hasContent && !isConfirming && (
+                              <button
+                                className="rounded-lg p-2 text-text-muted transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Process content: chunk text and generate vector embeddings"
+                                disabled={isProcessing || textbook.chunkingStatus === "PROCESSING"}
+                                onClick={() => handleProcessContent(textbook.id)}
+                              >
+                                {isProcessing ? (
+                                  <Spinner size="sm" />
+                                ) : (
+                                  <Cpu className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+
+                            {isConfirming ? (
+                              <>
+                                <span className="text-xs text-text-secondary">Delete?</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                >
+                                  No
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  isLoading={isDeleting}
+                                  className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-300"
+                                  onClick={() => handleDelete(textbook.id)}
+                                >
+                                  Yes
+                                </Button>
+                              </>
+                            ) : (
+                              <button
+                                className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Delete textbook"
+                                disabled={isDeleting}
+                                onClick={() => setConfirmDeleteId(textbook.id)}
+                              >
+                                {isDeleting ? (
+                                  <Spinner size="sm" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-2">
-                          {isConfirming ? (
-                            <>
-                              <span className="text-xs text-text-secondary">Delete?</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setConfirmDeleteId(null)}
-                              >
-                                No
-                              </Button>
-                              <Button
-                                size="sm"
-                                isLoading={isDeleting}
-                                className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-300"
-                                onClick={() => handleDelete(textbook.id)}
-                              >
-                                Yes
-                              </Button>
-                            </>
-                          ) : (
-                            <button
-                              className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Delete textbook"
-                              disabled={isDeleting}
-                              onClick={() => setConfirmDeleteId(textbook.id)}
-                            >
-                              {isDeleting ? (
-                                <Spinner size="sm" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </button>
-                          )}
-                        </div>
+                        {/* OCR Confidence Warnings */}
+                        {ocrFlaggedChapters.length > 0 && (
+                          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                            <span>
+                              <strong>Low OCR confidence:</strong>{" "}
+                              {ocrFlaggedChapters.map((ch) => (
+                                <span key={ch.id}>
+                                  {ch.title} ({Math.round(ch.ocrConfidence!)}%)
+                                </span>
+                              )).reduce((acc: React.ReactNode[], el, i) => [
+                                ...acc, i > 0 ? ", " : "", el
+                              ], [])}{" "}
+                              — review these chapters manually.
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -738,7 +817,10 @@ export default function AdminTextbooksPage() {
                       </p>
                     </div>
                     <p className="text-xs text-text-secondary">
-                      Fill in the details, upload a PDF/DOCX book, and AI will automatically detect chapters. Review and confirm to create.
+                      Fill in the details, upload a PDF, DOCX, or EPUB book, and AI will automatically detect chapters. Review and confirm to create.
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      💡 After creating, click the <Cpu className="inline h-3 w-3" /> icon on a textbook to process its content into semantic vector embeddings for smarter exam generation.
                     </p>
                   </div>
 
@@ -804,7 +886,7 @@ export default function AdminTextbooksPage() {
                     <div className="space-y-3">
                       <label className="block text-sm font-medium text-text-primary">
                         Upload Book *
-                        <span className="ml-1 font-normal text-text-muted">(PDF or DOCX, max 50 MB)</span>
+                        <span className="ml-1 font-normal text-text-muted">(PDF, DOCX, or EPUB, max 50 MB)</span>
                       </label>
 
                       <div className="rounded-lg border-2 border-dashed border-border bg-background p-6 text-center">
@@ -817,7 +899,7 @@ export default function AdminTextbooksPage() {
                         </p>
                         <input
                           type="file"
-                          accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          accept=".pdf,.docx,.doc,.epub,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/epub+zip"
                           onChange={(e) => {
                             const f = e.target.files?.[0] ?? null;
                             setAiFile(f);

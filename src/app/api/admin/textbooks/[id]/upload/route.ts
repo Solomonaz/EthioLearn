@@ -55,10 +55,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   // Validate file type
   const fileName = file.name.toLowerCase();
-  const validExtensions = [".pdf", ".docx", ".doc"];
+  const validExtensions = [".pdf", ".docx", ".doc", ".epub"];
   if (!validExtensions.some((ext) => fileName.endsWith(ext))) {
     return NextResponse.json(
-      { error: "Invalid file type. Please upload a PDF or DOCX file." },
+      { error: "Invalid file type. Please upload a PDF, DOCX, or EPUB file." },
       { status: 400 }
     );
   }

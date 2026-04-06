@@ -27,6 +27,13 @@ enum ProcessingStatus {
   FAILED
 }
 
+enum ChunkingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum QuestionType {
   MCQ
   TRUE_FALSE
@@ -186,6 +193,7 @@ model Textbook {
   content          String?          @db.Text
   fileUrl          String
   processingStatus ProcessingStatus @default(PENDING)
+  chunkingStatus   ChunkingStatus   @default(PENDING)
   chapterCount     Int              @default(0)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -210,6 +218,7 @@ model Chapter {
   topicTags     String[] @default([])
   bloomLevels   String[] @default([])
   questionCount Int      @default(0)
+  ocrConfidence Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -217,6 +226,7 @@ model Chapter {
   textbook   Textbook @relation(fields: [textbookId], references: [id], onDelete: Cascade)
 
   questions Question[]
+  chunks    ContentChunk[]
 
   @@unique([textbookId, chapterNumber])
   @@map("chapters")
@@ -231,6 +241,9 @@ model Question {
   options       Json           @default("[]")
   correctAnswer String
   explanation   String?
+  bloomLevel    String?
+  qualityScore  Float?
+  qualityFlags  String[]       @default([])
   usageCount    Int            @default(0)
   avgAccuracy   Float?
   language      String       @default("en")
@@ -499,4 +512,24 @@ model GameConfig {
   school   School @relation(fields: [schoolId], references: [id])
 
   @@map("game_configs")
+}
+
+// ─── Content Chunks (pgvector semantic retrieval) ───────
+
+model ContentChunk {
+  id            String   @id @default(cuid())
+  chapterId     String
+  chapter       Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  chunkIndex    Int
+  content       String   @db.Text
+  tokenCount    Int
+  bloomLevel    String?
+  embedding     Unsupported("vector(768)")?
+
+  createdAt     DateTime @default(now())
+
+  @@unique([chapterId, chunkIndex])
+  @@index([chapterId])
+  @@map("content_chunks")
 }
