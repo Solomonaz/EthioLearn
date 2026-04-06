@@ -36,6 +36,7 @@ interface UpdateQuestionBody {
   correctAnswer?: string;
   difficulty?: string;
   explanation?: string;
+  videoUrl?: string | null;
   type?: string;
 }
 
@@ -68,7 +69,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { questionText, options, correctAnswer, difficulty, explanation, type } = body;
+  const { questionText, options, correctAnswer, difficulty, explanation, videoUrl, type } = body;
 
   const validDifficulties: string[] = ["EASY", "MEDIUM", "HARD"];
   const validTypes: string[] = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
@@ -121,6 +122,13 @@ export async function PATCH(
 
   if (explanation !== undefined) {
     updateData.explanation = explanation ?? null;
+  }
+
+  if (videoUrl !== undefined) {
+    if (videoUrl !== null && typeof videoUrl !== "string") {
+      return NextResponse.json({ error: "videoUrl must be a string or null" }, { status: 400 });
+    }
+    updateData.videoUrl = videoUrl ?? null;
   }
 
   if (type !== undefined) {

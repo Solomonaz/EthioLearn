@@ -58,6 +58,17 @@ export async function POST(
     const questionIds = answers.map((a) => a.questionId);
     const questions = await db.question.findMany({
       where: { id: { in: questionIds } },
+      select: {
+        id: true,
+        type: true,
+        difficulty: true,
+        correctAnswer: true,
+        explanation: true,
+        videoUrl: true,
+        questionText: true,
+        options: true,
+        chapterId: true,
+      },
     });
 
     const questionMap = new Map(questions.map((q) => [q.id, q]));
@@ -74,6 +85,7 @@ export async function POST(
           difficulty: "MEDIUM" as Difficulty,
           correctAnswer: "",
           explanation: "",
+          videoUrl: null as string | null,
           questionText: "",
           options: [] as unknown,
         };
@@ -114,6 +126,7 @@ export async function POST(
         difficulty: question.difficulty,
         correctAnswer: normalizedCorrect,
         explanation: question.explanation || "",
+        videoUrl: question.videoUrl ?? null,
         questionText: question.questionText,
         options: (question.options as unknown[]).map(normalizeOption),
       };
@@ -324,6 +337,7 @@ export async function POST(
         correctAnswer: a.correctAnswer,
         isCorrect: a.isCorrect,
         explanation: a.explanation,
+        videoUrl: a.videoUrl,
         pointsEarned: breakdown[i],
       })),
     });

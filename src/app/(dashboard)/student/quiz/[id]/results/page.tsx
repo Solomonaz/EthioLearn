@@ -13,6 +13,8 @@ import {
   ChevronUp,
   Star,
   RefreshCw,
+  PlayCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,10 +36,30 @@ interface AnswerResult {
   correctAnswer: string;
   isCorrect: boolean;
   explanation: string;
+  videoUrl?: string | null;
   pointsEarned: number;
 }
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
+
+/** Convert a YouTube watch URL to an embed URL, or return null if not YouTube */
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    // https://www.youtube.com/watch?v=XXXXXXXX
+    if (parsed.hostname.includes("youtube.com")) {
+      const v = parsed.searchParams.get("v");
+      if (v) return `https://www.youtube.com/embed/${v}`;
+      // https://youtu.be/XXXXXXXX
+    }
+    if (parsed.hostname === "youtu.be") {
+      return `https://www.youtube.com/embed${parsed.pathname}`;
+    }
+  } catch {
+    // invalid URL — fall through
+  }
+  return null;
+}
 
 function normalizeOptions(options: (string | AnswerResultOption)[]): AnswerResultOption[] {
   return options.map((opt, i) =>
@@ -298,6 +320,43 @@ export default function QuizResultsPage() {
                       {a.explanation}
                     </div>
                   )}
+
+                  {/* Video Explanation */}
+                  {a.videoUrl && (() => {
+                    const embedUrl = getYouTubeEmbedUrl(a.videoUrl);
+                    return embedUrl ? (
+                      <div className="mt-3">
+                        <div className="mb-1 flex items-center gap-1.5">
+                          <PlayCircle className="h-4 w-4 text-red-500" />
+                          <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
+                            Video Explanation
+                          </span>
+                        </div>
+                        <div className="overflow-hidden rounded-lg border border-border bg-black">
+                          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                            <iframe
+                              src={embedUrl}
+                              title="Video explanation"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              className="absolute inset-0 h-full w-full border-0"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <a
+                        href={a.videoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+                      >
+                        <PlayCircle className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 truncate">Watch Video Explanation</span>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                      </a>
+                    );
+                  })()}
                 </div>
               )}
             </Card>

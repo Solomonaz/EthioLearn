@@ -444,3 +444,130 @@ ${opts.content.slice(0, 50000)}
   const result = await chat.sendMessage(opts.message);
   return result.response.text();
 }
+
+// ─── Video Tutorial Types ────────────────────────────────
+
+export type TeacherEmotion = "explaining" | "pointing" | "excited" | "thinking" | "writing";
+export type VisualType = "process" | "comparison" | "formula" | "timeline" | "highlight" | "diagram" | "list";
+
+export interface VideoSlide {
+  heading: string;
+  narration: string;
+  keyPoints: string[];
+  teacherEmotion: TeacherEmotion;
+  visualType: VisualType;
+  visualData: {
+    // process: sequential steps with arrows between them
+    steps?: string[];
+    // comparison: two-column side-by-side
+    leftLabel?: string;
+    leftItems?: string[];
+    rightLabel?: string;
+    rightItems?: string[];
+    // formula / highlight: big centred text
+    text?: string;
+    subtext?: string;
+    // timeline: ordered events
+    events?: { period: string; event: string }[];
+    // diagram: labelled nodes (use steps[] for node labels)
+    // list: use keyPoints as the visual — no extra data needed
+  };
+}
+
+export interface VideoScript {
+  title: string;
+  estimatedMinutes: number;
+  slides: VideoSlide[];
+}
+
+// ─── Video Tutorial Script Generation ───────────────────
+
+export async function generateVideoScript(opts: {
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+  topic?: string;
+}): Promise<VideoScript> {
+  const client = getClient();
+  const model = client.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      maxOutputTokens: 5000,
+      temperature: 0.6,
+    },
+  });
+
+  const prompt = `You are an expert educational video script writer for the Ethiopian national curriculum.
+Create a richly animated video tutorial script for a Grade ${opts.grade} student.
+
+Subject: ${opts.subject}
+Chapter: ${opts.chapterTitle}
+${opts.topic ? `Focus topic: ${opts.topic}` : ""}
+
+Chapter content (use ONLY this as your source — do NOT invent facts):
+"""
+${opts.content.slice(0, 8000)}
+"""
+
+TASK: Generate the RIGHT NUMBER of slides for this specific topic.
+- Simple concept (1-2 ideas): 3-4 slides
+- Medium concept (3-5 ideas): 5-7 slides
+- Complex concept (many ideas/steps): 8-12 slides
+Always start with an introduction slide and end with a summary/recap slide.
+
+RULES:
+1. Each slide narration: 40-60 words of friendly, spoken English — like an enthusiastic teacher.
+2. keyPoints: 2-4 short bullets shown on screen (5-12 words each).
+3. teacherEmotion: pick the most appropriate for the content:
+   - "explaining" → general teaching, definitions
+   - "pointing"   → directing attention to diagram/process
+   - "excited"    → introducing big idea, conclusion, breakthrough
+   - "thinking"   → posing a question, showing cause-effect
+   - "writing"    → introducing formula, writing down rules
+4. visualType + visualData: choose the BEST visual for each slide's content:
+   - "process"    → visualData.steps: 2-5 sequential steps (for how-things-work, cause-effect chains)
+   - "comparison" → visualData.leftLabel, leftItems[], rightLabel, rightItems[] (for vs/differences)
+   - "formula"    → visualData.text (the formula/equation), visualData.subtext (what it means)
+   - "timeline"   → visualData.events[]: [{period, event}] (for historical events, sequences in time)
+   - "highlight"  → visualData.text (big key concept/word), visualData.subtext (brief definition)
+   - "diagram"    → visualData.steps[]: node labels (for systems, cycles, relationships — shown as connected boxes)
+   - "list"       → no visualData needed — keyPoints ARE the visual (for lists of facts/rules)
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "title": "Tutorial title",
+  "estimatedMinutes": 5,
+  "slides": [
+    {
+      "heading": "Slide heading (3-7 words)",
+      "narration": "Natural spoken text, 40-60 words.",
+      "keyPoints": ["Short bullet 1", "Short bullet 2"],
+      "teacherEmotion": "explaining",
+      "visualType": "highlight",
+      "visualData": { "text": "Big Concept", "subtext": "One-line definition" }
+    }
+  ]
+}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+
+  // Strip potential markdown fences
+  const cleaned = text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error("Gemini returned invalid JSON for video script");
+  }
+
+  const script = parsed as VideoScript;
+  if (!script.slides || !Array.isArray(script.slides) || script.slides.length === 0) {
+    throw new Error("Invalid video script structure returned by AI");
+  }
+
+  return script;
+}

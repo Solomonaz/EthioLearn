@@ -15,6 +15,9 @@ import {
   Clock,
   Timer,
   Sparkles,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,6 +131,13 @@ export default function QuizLauncherPage() {
   } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adaptiveInsights, setAdaptiveInsights] = useState<{
+    difficulty: string;
+    weightedAccuracy: number;
+    quizzesAnalyzed: number;
+    reasoning: string;
+    trend: "improving" | "declining" | "stable";
+  } | null>(null);
 
   // Selections
   const [selectedTextbook, setSelectedTextbook] = useState<Textbook | null>(null);
@@ -251,6 +261,9 @@ export default function QuizLauncherPage() {
       }
 
       const data = await res.json();
+      if (data.adaptiveInsights) {
+        setAdaptiveInsights(data.adaptiveInsights);
+      }
       startQuiz(data.quizId, data.questions, data.mode ?? selectedMode);
       router.push(`/student/quiz/${data.quizId}`);
     } catch (err) {
@@ -817,6 +830,48 @@ export default function QuizLauncherPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Adaptive Insights Banner — shown after AI calibration */}
+          {selectedDifficulty === "ADAPTIVE" && !adaptiveInsights && (
+            <div className="flex items-start gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-purple-500 animate-pulse" />
+              <div>
+                <p className="text-sm font-semibold text-purple-800">AI Adaptive Mode</p>
+                <p className="mt-0.5 text-xs text-purple-600">
+                  Your difficulty will be calibrated automatically when the quiz starts.
+                </p>
+              </div>
+            </div>
+          )}
+          {adaptiveInsights && (
+            <div className="flex items-start gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
+              {adaptiveInsights.trend === "improving" ? (
+                <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-purple-500" />
+              ) : adaptiveInsights.trend === "declining" ? (
+                <TrendingDown className="mt-0.5 h-5 w-5 shrink-0 text-purple-500" />
+              ) : (
+                <Minus className="mt-0.5 h-5 w-5 shrink-0 text-purple-500" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-purple-800">
+                  AI Calibrated:{" "}
+                  <span className={cn(
+                    "font-bold",
+                    adaptiveInsights.difficulty === "HARD" ? "text-red-600" :
+                    adaptiveInsights.difficulty === "EASY" ? "text-green-600" : "text-yellow-700"
+                  )}>
+                    {adaptiveInsights.difficulty}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs text-purple-700">{adaptiveInsights.reasoning}</p>
+                {adaptiveInsights.quizzesAnalyzed > 0 && (
+                  <p className="mt-1 text-[10px] text-purple-500">
+                    Based on {adaptiveInsights.quizzesAnalyzed} quiz{adaptiveInsights.quizzesAnalyzed !== 1 ? "zes" : ""} &bull; {adaptiveInsights.weightedAccuracy}% weighted accuracy
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <Button
             size="lg"

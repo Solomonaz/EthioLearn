@@ -370,3 +370,90 @@ ${opts.content.slice(0, 30000)}
 
   return completion.choices[0]?.message?.content ?? "I apologize, but I'm having trouble responding right now.";
 }
+
+// ─── Video Tutorial Script (Groq fallback) ──────────────
+
+import type { VideoScript } from "./gemini";
+
+export async function groqGenerateVideoScript(opts: {
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+  topic?: string;
+}): Promise<VideoScript> {
+  const client = getGroqClient();
+
+  const prompt = `You are an expert educational video script writer for the Ethiopian national curriculum.
+Create a richly animated video tutorial script for a Grade ${opts.grade} student.
+
+Subject: ${opts.subject}
+Chapter: ${opts.chapterTitle}
+${opts.topic ? `Focus topic: ${opts.topic}` : ""}
+
+Chapter content:
+"""
+${opts.content.slice(0, 6000)}
+"""
+
+Generate the RIGHT NUMBER of slides for this topic:
+- Simple concept (1-2 ideas): 3-4 slides
+- Medium concept (3-5 ideas): 5-7 slides
+- Complex concept (many steps): 8-12 slides
+Always start with an introduction slide and end with a summary slide.
+
+Each slide needs: heading, narration (40-60 words spoken English), keyPoints (2-4 bullets),
+teacherEmotion (one of: "explaining","pointing","excited","thinking","writing"),
+visualType (one of: "process","comparison","formula","timeline","highlight","diagram","list"),
+and visualData matching the visualType:
+- "process": {"steps":["step1","step2",...]}
+- "comparison": {"leftLabel":"A","leftItems":["..."],"rightLabel":"B","rightItems":["..."]}
+- "formula": {"text":"F=ma","subtext":"Force equals mass times acceleration"}
+- "timeline": {"events":[{"period":"1900","event":"Discovery of X"},...]}
+- "highlight": {"text":"KEY CONCEPT","subtext":"Brief definition"}
+- "diagram": {"steps":["Node1","Node2","Node3"]}
+- "list": {} (no visualData needed — keyPoints are the visual)
+
+Return ONLY valid JSON, no markdown fences:
+{
+  "title": "Tutorial title",
+  "estimatedMinutes": 5,
+  "slides": [
+    {
+      "heading": "Heading",
+      "narration": "Spoken text 40-60 words.",
+      "keyPoints": ["Bullet 1", "Bullet 2"],
+      "teacherEmotion": "explaining",
+      "visualType": "highlight",
+      "visualData": {"text": "Concept", "subtext": "Definition"}
+    }
+  ]
+}`;
+
+  const completion = await client.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.6,
+    max_tokens: 3000,
+  });
+
+  const text = (completion.choices[0]?.message?.content ?? "").trim();
+
+  // Extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Groq returned no valid JSON for video script");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch {
+    throw new Error("Groq returned invalid JSON for video script");
+  }
+
+  const script = parsed as VideoScript;
+  if (!script.slides || !Array.isArray(script.slides) || script.slides.length === 0) {
+    throw new Error("Invalid video script structure returned by Groq");
+  }
+
+  return script;
+}

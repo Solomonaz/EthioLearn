@@ -97,6 +97,7 @@ interface CreateQuestionBody {
   correctAnswer?: string;
   difficulty?: string;
   explanation?: string;
+  videoUrl?: string;
   type?: string;
 }
 
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { chapterId, questionText, options, correctAnswer, difficulty, explanation, type } = body;
+  const { chapterId, questionText, options, correctAnswer, difficulty, explanation, videoUrl, type } = body;
 
   if (!chapterId || typeof chapterId !== "string" || chapterId.trim() === "") {
     return NextResponse.json({ error: "chapterId is required" }, { status: 400 });
@@ -180,6 +181,7 @@ export async function POST(request: NextRequest) {
           ? (difficulty as Difficulty)
           : Difficulty.MEDIUM,
       explanation: explanation ?? null,
+      videoUrl: videoUrl ?? null,
       type:
         type && validTypes.includes(type) ? (type as QuestionType) : QuestionType.MCQ,
     },

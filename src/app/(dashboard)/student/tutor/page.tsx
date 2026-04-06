@@ -1,22 +1,27 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useSession } from "next-auth/react";
-import { 
-  MessageSquare, 
-  Send, 
-  BookOpen, 
-  Sparkles, 
-  ChevronRight,
+import {
+  MessageSquare,
+  Send,
+  BookOpen,
+  Sparkles,
   Bot,
   User,
   Loader2,
-  Trash2
+  Trash2,
+  Video,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import VideoTutorialPlayer from "@/components/student/video-tutorial-player";
+import type { VideoScript } from "@/lib/ai-provider";
 
 interface Chapter {
   id: string;
@@ -38,19 +43,26 @@ interface Message {
 
 export default function TutorPage() {
   const { data: session } = useSession();
-  
+
   // Selection state
   const [textbooks, setTextbooks] = useState<Textbook[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedTextbook, setSelectedTextbook] = useState<Textbook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
-  
+
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(true);
-  
+
+  // Video tutorial state
+  const [videoScript, setVideoScript] = useState<VideoScript | null>(null);
+  const [videoTopic, setVideoTopic] = useState("");
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [showVideoTopicInput, setShowVideoTopicInput] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Initial load: Fetch Textbooks matching student grade
@@ -104,7 +116,7 @@ export default function TutorPage() {
     const userMessage = input.trim();
     const newMessages: Message[] = [
       ...messages,
-      { role: "user", parts: [{ text: userMessage }] }
+      { role: "user", parts: [{ text: userMessage }] },
     ];
 
     setMessages(newMessages);
@@ -118,7 +130,7 @@ export default function TutorPage() {
         body: JSON.stringify({
           chapterId: selectedChapter.id,
           message: userMessage,
-          history: messages, // Send existing history
+          history: messages,
         }),
       });
 
@@ -127,13 +139,20 @@ export default function TutorPage() {
       const data = await res.json();
       setMessages([
         ...newMessages,
-        { role: "model", parts: [{ text: data.response }] }
+        { role: "model", parts: [{ text: data.response }] },
       ]);
     } catch (err) {
       console.error(err);
       setMessages([
         ...newMessages,
-        { role: "model", parts: [{ text: "❌ I'm sorry, I'm having trouble connecting right now. Please try again in a moment." }] }
+        {
+          role: "model",
+          parts: [
+            {
+              text: "❌ I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
+            },
+          ],
+        },
       ]);
     } finally {
       setIsLoading(false);
@@ -146,11 +165,56 @@ export default function TutorPage() {
     }
   };
 
+  // ── Video tutorial generation ──────────────────────────
+
+  async function handleGenerateVideo() {
+    if (!selectedChapter) return;
+    setGeneratingVideo(true);
+    setVideoError(null);
+    setVideoScript(null);
+    setShowVideoTopicInput(false);
+
+    try {
+      const res = await fetch("/api/ai/tutor/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapterId: selectedChapter.id,
+          topic: videoTopic.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate video");
+
+      setVideoScript(data.script);
+      setVideoTopic("");
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setGeneratingVideo(false);
+    }
+  }
+
   if (fetchingData) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
         <Spinner size="lg" />
         <p className="text-text-muted animate-pulse">Initializing your AI Tutor...</p>
+      </div>
+    );
+  }
+
+  // ── If video tutorial is active, show the player full-screen ──
+  if (videoScript) {
+    return (
+      <div className="h-[calc(100vh-8rem)]">
+        <VideoTutorialPlayer
+          script={videoScript}
+          subject={selectedTextbook?.subject ?? ""}
+          chapterTitle={selectedChapter?.title ?? ""}
+          onClose={() => setVideoScript(null)}
+        />
       </div>
     );
   }
@@ -168,17 +232,21 @@ export default function TutorPage() {
 
             {/* Textbook Select */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase text-text-muted">Select Textbook</label>
-              <select 
+              <label className="text-xs font-semibold uppercase text-text-muted">
+                Select Textbook
+              </label>
+              <select
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 value={selectedTextbook?.id || ""}
                 onChange={(e) => {
-                  const tb = textbooks.find(t => t.id === e.target.value);
+                  const tb = textbooks.find((t) => t.id === e.target.value);
                   setSelectedTextbook(tb || null);
+                  setVideoScript(null);
+                  setVideoError(null);
                 }}
               >
                 <option value="">Choose a book...</option>
-                {textbooks.map(tb => (
+                {textbooks.map((tb) => (
                   <option key={tb.id} value={tb.id}>
                     {tb.subject} Grade {tb.grade}
                   </option>
@@ -188,19 +256,24 @@ export default function TutorPage() {
 
             {/* Chapter Select */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase text-text-muted">Select Chapter</label>
-              <select 
+              <label className="text-xs font-semibold uppercase text-text-muted">
+                Select Chapter
+              </label>
+              <select
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 transition-all"
                 disabled={!selectedTextbook}
                 value={selectedChapter?.id || ""}
                 onChange={(e) => {
-                  const ch = chapters.find(c => c.id === e.target.value);
+                  const ch = chapters.find((c) => c.id === e.target.value);
                   setSelectedChapter(ch || null);
-                  setMessages([]); // Start fresh context for new chapter
+                  setMessages([]);
+                  setVideoScript(null);
+                  setVideoError(null);
+                  setShowVideoTopicInput(false);
                 }}
               >
                 <option value="">Choose a chapter...</option>
-                {chapters.map(ch => (
+                {chapters.map((ch) => (
                   <option key={ch.id} value={ch.id}>
                     Ch {ch.chapterNumber}: {ch.title}
                   </option>
@@ -208,13 +281,97 @@ export default function TutorPage() {
               </select>
             </div>
 
+            {/* ── Video Tutorial Section ────────────────── */}
+            {selectedChapter && (
+              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="flex items-center gap-2 text-primary">
+                  <Video className="h-4 w-4" />
+                  <span className="text-sm font-bold">AI Video Tutorial</span>
+                </div>
+                <p className="text-xs leading-relaxed text-text-secondary">
+                  Generate a narrated video lesson for this chapter — AI creates
+                  slides with spoken explanations.
+                </p>
+
+                {/* Optional topic input */}
+                {showVideoTopicInput ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. Osmosis, Civil War causes…"
+                      value={videoTopic}
+                      onChange={(e) => setVideoTopic(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-text-muted"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleGenerateVideo();
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1 gap-1.5"
+                        onClick={handleGenerateVideo}
+                        isLoading={generatingVideo}
+                        disabled={generatingVideo}
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Generate
+                      </Button>
+                      <button
+                        onClick={() => {
+                          setShowVideoTopicInput(false);
+                          setVideoTopic("");
+                        }}
+                        className="rounded-lg border border-border px-2 text-text-muted hover:text-text-primary transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      size="sm"
+                      className="w-full gap-1.5"
+                      onClick={handleGenerateVideo}
+                      isLoading={generatingVideo}
+                      disabled={generatingVideo}
+                    >
+                      <Video className="h-3.5 w-3.5" />
+                      {generatingVideo ? "Generating…" : "Generate Full Tutorial"}
+                    </Button>
+                    <button
+                      onClick={() => setShowVideoTopicInput(true)}
+                      className="text-center text-xs text-primary hover:underline"
+                    >
+                      Focus on a specific topic →
+                    </button>
+                  </div>
+                )}
+
+                {videoError && (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-error">
+                    {videoError}
+                  </p>
+                )}
+
+                {generatingVideo && (
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>AI is writing your tutorial script…</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mt-auto space-y-4 rounded-xl bg-primary/5 p-4">
               <div className="flex items-center gap-2 text-primary">
                 <Sparkles className="h-4 w-4" />
                 <span className="text-sm font-bold">Pro Tip</span>
               </div>
               <p className="text-xs leading-relaxed text-text-secondary">
-                The tutor stays focused on your selected chapter. Ask about specific concepts, vocabulary, or to summarize a section!
+                Use the chat to ask follow-up questions after watching a video
+                tutorial — the tutor stays focused on your selected chapter!
               </p>
             </div>
           </CardContent>
@@ -237,9 +394,9 @@ export default function TutorPage() {
               </p>
             </div>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="text-text-muted hover:text-error"
             onClick={clearChat}
             disabled={messages.length === 0}
@@ -249,7 +406,7 @@ export default function TutorPage() {
         </div>
 
         {/* Messages List */}
-        <div 
+        <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
         >
@@ -261,33 +418,49 @@ export default function TutorPage() {
               <div className="max-w-xs space-y-2">
                 <h3 className="font-bold text-lg">Start Learning</h3>
                 <p className="text-sm text-text-muted leading-relaxed">
-                  Select a textbook and chapter on the left to begin your personalized tutoring session.
+                  Select a textbook and chapter on the left to begin your
+                  personalized tutoring session. You can also generate an AI
+                  video tutorial!
                 </p>
               </div>
             </div>
           ) : (
             <>
               {messages.map((msg, idx) => (
-                <div 
+                <div
                   key={idx}
                   className={cn(
                     "flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300",
                     msg.role === "user" ? "flex-row-reverse" : "flex-row"
                   )}
                 >
-                  <div className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white",
-                    msg.role === "user" ? "bg-primary" : "bg-text-muted"
-                  )}>
-                    {msg.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                  <div
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white",
+                      msg.role === "user" ? "bg-primary" : "bg-text-muted"
+                    )}
+                  >
+                    {msg.role === "user" ? (
+                      <User className="h-4 w-4" />
+                    ) : (
+                      <Bot className="h-4 w-4" />
+                    )}
                   </div>
-                  <div className={cn(
-                    "max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm",
-                    msg.role === "user" 
-                      ? "bg-primary text-white rounded-tr-none" 
-                      : "bg-surface border border-border text-text-primary rounded-tl-none"
-                  )}>
-                    {msg.parts[0].text}
+                  <div
+                    className={cn(
+                      "max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm overflow-x-auto",
+                      msg.role === "user"
+                        ? "bg-primary text-white rounded-tr-none"
+                        : "bg-surface border border-border text-text-primary rounded-tl-none prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed"
+                    )}
+                  >
+                    {msg.role === "model" ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.parts[0].text}
+                      </ReactMarkdown>
+                    ) : (
+                      msg.parts[0].text
+                    )}
                   </div>
                 </div>
               ))}
@@ -307,18 +480,25 @@ export default function TutorPage() {
 
         {/* Chat Input */}
         <div className="border-t border-border bg-surface/80 p-6">
-          <form 
-            onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
             className="relative flex items-center gap-2"
           >
-            <input 
+            <input
               className="flex-1 rounded-xl border border-border bg-surface/50 px-5 py-4 text-sm outline-none transition-all placeholder:text-text-muted focus:ring-2 focus:ring-primary/20 pr-14 disabled:opacity-50"
-              placeholder={selectedChapter ? "Ask your tutor anything..." : "Please select a chapter first..."}
+              placeholder={
+                selectedChapter
+                  ? "Ask your tutor anything..."
+                  : "Please select a chapter first..."
+              }
               disabled={!selectedChapter || isLoading}
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
-            <Button 
+            <Button
               type="submit"
               size="sm"
               className="absolute right-2 top-1.5 h-10 w-10 rounded-lg shadow-lg shadow-primary/20 transition-transform active:scale-95 disabled:grayscale"
@@ -328,7 +508,8 @@ export default function TutorPage() {
             </Button>
           </form>
           <p className="mt-3 text-[10px] text-center text-text-muted">
-            The tutor follows the official curriculum and focuses on the selected chapter only.
+            The tutor follows the official curriculum and focuses on the
+            selected chapter only.
           </p>
         </div>
       </div>

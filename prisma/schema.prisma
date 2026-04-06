@@ -241,6 +241,7 @@ model Question {
   options       Json           @default("[]")
   correctAnswer String
   explanation   String?
+  videoUrl      String?
   bloomLevel    String?
   qualityScore  Float?
   qualityFlags  String[]       @default([])

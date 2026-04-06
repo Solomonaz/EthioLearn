@@ -11,7 +11,7 @@ import {
   detectChaptersFromContent,
   splitTextByChapters,
 } from "./gemini";
-import { groqGenerateQuestions, groqDetectChapters } from "./groq";
+import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript } from "./groq";
 
 import type {
   GenerateOptions,
@@ -19,6 +19,7 @@ import type {
   DetectChaptersOptions,
   DetectedChapter,
   DetectedChapterWithContent,
+  VideoScript,
 } from "./gemini";
 
 // Re-export types and splitTextByChapters (no AI, purely deterministic)
@@ -28,6 +29,7 @@ export type {
   DetectChaptersOptions,
   DetectedChapter,
   DetectedChapterWithContent,
+  VideoScript,
 };
 export { splitTextByChapters };
 
@@ -131,6 +133,29 @@ export async function chatWithTutor(opts: {
         history: groqHistory,
       });
       return { response, provider: "groq" };
+    }
+    throw err;
+  }
+}
+
+// ─── Video Tutorial Script (Gemini → Groq fallback) ──────
+
+export async function generateVideoTutorial(opts: {
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+  topic?: string;
+}): Promise<{ script: VideoScript; provider: "gemini" | "groq" }> {
+  try {
+    const { generateVideoScript } = await import("./gemini");
+    const script = await generateVideoScript(opts);
+    return { script, provider: "gemini" };
+  } catch (err) {
+    if (isRateLimitError(err) && hasGroqKey()) {
+      console.warn("[AI Provider] Gemini rate-limited (Video), falling back to Groq…");
+      const script = await groqGenerateVideoScript(opts);
+      return { script, provider: "groq" };
     }
     throw err;
   }

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { normalizeOption } from "@/lib/utils";
-import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
+import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -33,10 +33,12 @@ export async function POST(request: Request) {
 
     // Resolve Adaptive Difficulty
     let adaptiveCalibrated: string | undefined = undefined;
+    let adaptiveInsights: AdaptiveInsights | undefined = undefined;
     if (difficulty === "ADAPTIVE") {
-      difficulty = await getRecommendedDifficulty(user.id);
+      adaptiveInsights = await getAdaptiveDifficultyInsights(user.id);
+      difficulty = adaptiveInsights.difficulty;
       adaptiveCalibrated = difficulty;
-      console.log(`[Adaptive Bank] Calibrated difficulty to: ${difficulty}`);
+      console.log(`[Adaptive Engine] Calibrated to ${difficulty} (accuracy=${Math.round(adaptiveInsights.weightedAccuracy * 100)}%, trend=${adaptiveInsights.trend})`);
     }
 
     // Validate question count (1–50)
@@ -148,6 +150,15 @@ export async function POST(request: Request) {
         difficulty: q.difficulty,
       })),
       adaptiveCalibrated,
+      adaptiveInsights: adaptiveInsights
+        ? {
+            difficulty: adaptiveInsights.difficulty,
+            weightedAccuracy: Math.round(adaptiveInsights.weightedAccuracy * 100),
+            quizzesAnalyzed: adaptiveInsights.quizzesAnalyzed,
+            reasoning: adaptiveInsights.reasoning,
+            trend: adaptiveInsights.trend,
+          }
+        : undefined,
     });
   } catch (error) {
     console.error("Quiz generation error:", error);

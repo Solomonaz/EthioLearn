@@ -53,6 +53,7 @@ interface QuestionItem {
   options: string[];
   correctAnswer: string;
   explanation: string | null;
+  videoUrl: string | null;
   usageCount: number;
   avgAccuracy: number | null;
   language: string;
@@ -143,6 +144,7 @@ export default function AdminQuestionsPage() {
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>("MEDIUM");
   const [formType, setFormType] = useState<QuestionType>("MCQ");
   const [formExplanation, setFormExplanation] = useState("");
+  const [formVideoUrl, setFormVideoUrl] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -264,6 +266,7 @@ export default function AdminQuestionsPage() {
     setFormDifficulty("MEDIUM");
     setFormType("MCQ");
     setFormExplanation("");
+    setFormVideoUrl("");
     setFormError(null);
   }
 
@@ -280,6 +283,7 @@ export default function AdminQuestionsPage() {
     setFormDifficulty(question.difficulty);
     setFormType(question.type);
     setFormExplanation(question.explanation ?? "");
+    setFormVideoUrl(question.videoUrl ?? "");
     setFormError(null);
   }
 
@@ -332,6 +336,7 @@ export default function AdminQuestionsPage() {
         difficulty: formDifficulty,
         type: formType,
         explanation: formExplanation.trim() || undefined,
+        videoUrl: formVideoUrl.trim() || undefined,
       };
 
       let res: Response;
@@ -1002,6 +1007,24 @@ export default function AdminQuestionsPage() {
                     rows={3}
                     className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary"
                   />
+                </div>
+
+                {/* Video URL */}
+                <div>
+                  <label className={LABEL_CLASS}>
+                    Video Explanation URL{" "}
+                    <span className="font-normal text-text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={formVideoUrl}
+                    onChange={(e) => setFormVideoUrl(e.target.value)}
+                    placeholder="https://youtube.com/watch?v=… or any video link"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-text-muted">
+                    Paste a YouTube link or any public video URL. Students will see it after the quiz.
+                  </p>
                 </div>
 
                 {/* Status messages */}
