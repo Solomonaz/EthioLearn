@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Trophy, BookOpen, Target, Flame, ArrowRight, Swords, Gift } from "lucide-react";
+import {
+  Trophy,
+  BookOpen,
+  Target,
+  Flame,
+  ArrowRight,
+  Swords,
+  Gift,
+  AlertTriangle,
+  Brain,
+  ChevronRight,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +24,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+// ── Types ────────────────────────────────────────────────────────────────────
+
 interface ChallengeData {
   completed: boolean;
   chapterId: string | null;
@@ -20,6 +33,28 @@ interface ChallengeData {
   subject?: string;
   questionCount?: number;
   pointsEarned?: number;
+}
+
+interface WeakestChapter {
+  id: string;
+  title: string;
+  subject: string;
+  grade: number;
+  avgScore: number;
+  attemptCount: number;
+}
+
+interface StudyRecommendation {
+  chapterId: string;
+  subject: string;
+  chapter: string;
+  avgScore: number;
+  message: string;
+}
+
+interface DailyMessageData {
+  en: string;
+  am: string;
 }
 
 interface DashboardData {
@@ -47,7 +82,20 @@ interface DashboardData {
     totalPointsEarned: number;
     completedAt: string;
   }[];
+  weakestChapters: WeakestChapter[];
+  studyRecommendations: StudyRecommendation[];
+  dailyMessage: DailyMessageData;
 }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function getLocale(): "en" | "am" {
+  if (typeof document === "undefined") return "en";
+  const match = document.cookie.match(/(?:^|;\s*)locale=(\w+)/);
+  return match?.[1] === "am" ? "am" : "en";
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function StudentDashboardPage() {
   const { data: session } = useSession();
@@ -55,6 +103,8 @@ export default function StudentDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<ChallengeData | null>(null);
+
+  const locale = useMemo(() => getLocale(), []);
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -87,20 +137,15 @@ export default function StudentDashboardPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
-        {/* Welcome banner placeholder */}
         <Skeleton className="h-24 w-full rounded-xl" />
-        {/* XP progress placeholder */}
         <Skeleton className="h-20 w-full rounded-xl" />
-        {/* Stats grid */}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </div>
-        {/* Quick actions placeholder */}
         <Skeleton className="h-16 w-full rounded-xl" />
-        {/* Recent quizzes placeholder */}
         <Skeleton className="h-48 w-full rounded-xl" />
       </div>
     );
@@ -117,20 +162,25 @@ export default function StudentDashboardPage() {
     );
   }
 
-  const { user, stats, recentQuizzes } = dashboard;
+  const { user, stats, recentQuizzes, weakestChapters, studyRecommendations, dailyMessage } =
+    dashboard;
   const levelProgress = user.totalPoints % 100;
   const userName = session?.user?.name || user.name;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
-      {/* Welcome Banner */}
+      {/* ── Rotating Motivational Welcome Banner (SRS §4.3.1) ──────────── */}
       <Card className="bg-primary text-white">
         <CardContent className="py-6">
           <h1 className="text-xl font-bold sm:text-2xl">
             Welcome back, {userName}!
           </h1>
           <p className="mt-1 text-sm text-white/80">
-            Keep up the great work. Every quiz brings you closer to mastery.
+            {dailyMessage
+              ? locale === "am"
+                ? dailyMessage.am
+                : dailyMessage.en
+              : "Keep up the great work. Every quiz brings you closer to mastery."}
           </p>
         </CardContent>
       </Card>
@@ -141,9 +191,7 @@ export default function StudentDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-text-secondary">XP Level</p>
-              <p className="text-2xl font-bold text-primary">
-                Level {user.xpLevel}
-              </p>
+              <p className="text-2xl font-bold text-primary">Level {user.xpLevel}</p>
             </div>
             <div className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
               {user.totalPoints} XP
@@ -160,8 +208,8 @@ export default function StudentDashboardPage() {
       </Card>
 
       {/* Daily Challenge Widget */}
-      {challenge && challenge.chapterId !== null && (
-        challenge.completed ? (
+      {challenge && challenge.chapterId !== null &&
+        (challenge.completed ? (
           <Card className="border border-border bg-surface">
             <CardContent className="py-4">
               <p className="text-base font-semibold text-text-primary">
@@ -185,39 +233,137 @@ export default function StudentDashboardPage() {
                 <Link
                   href={`/student/quiz?challenge=true&chapterId=${challenge.chapterId}&count=5`}
                 >
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                  <Button
+                    size="sm"
+                    className="bg-green-600 text-white hover:bg-green-700"
+                  >
                     Start Challenge
                   </Button>
                 </Link>
               </div>
             </CardContent>
           </Card>
-        )
-      )}
+        ))}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatCard
-          label="Total Points"
-          value={stats.totalPoints.toLocaleString()}
-          icon={Trophy}
-        />
-        <StatCard
-          label="Quizzes Taken"
-          value={stats.totalQuizzes}
-          icon={BookOpen}
-        />
-        <StatCard
-          label="Average Score"
-          value={`${stats.averageScore}%`}
-          icon={Target}
-        />
-        <StatCard
-          label="Day Streak"
-          value={stats.streakDays}
-          icon={Flame}
-        />
+        <StatCard label="Total Points" value={stats.totalPoints.toLocaleString()} icon={Trophy} />
+        <StatCard label="Quizzes Taken" value={stats.totalQuizzes} icon={BookOpen} />
+        <StatCard label="Average Score" value={`${stats.averageScore}%`} icon={Target} />
+        <StatCard label="Day Streak" value={stats.streakDays} icon={Flame} />
       </div>
+
+      {/* ── AI Study Recommendations (SRS §4.3.3) ──────────────────────── */}
+      {studyRecommendations.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Brain className="h-5 w-5 text-purple-500" />
+            <h2 className="text-lg font-semibold text-text-primary">
+              Study Recommendations
+            </h2>
+          </div>
+          <div className="space-y-3">
+            {studyRecommendations.map((rec) => (
+              <Card
+                key={rec.chapterId}
+                className="border-purple-200 bg-purple-50/50 transition-colors hover:bg-purple-50"
+              >
+                <CardContent className="flex items-start gap-3 py-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-wider text-purple-600">
+                      {rec.subject}
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium leading-relaxed text-purple-900">
+                      {rec.message}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/student/quiz?chapterId=${rec.chapterId}&count=10`}
+                    className="flex-shrink-0"
+                  >
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-purple-300 text-purple-700 hover:bg-purple-100"
+                    >
+                      Practice
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Weakest Topics (SRS §4.3.3) ────────────────────────────────── */}
+      {weakestChapters.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-text-primary">
+              Weakest Topics
+            </h2>
+            <Badge variant="warning" className="text-xs">
+              Needs attention
+            </Badge>
+          </div>
+          <Card className="overflow-hidden border-amber-200">
+            <div className="divide-y divide-amber-100">
+              {weakestChapters.map((ch) => (
+                <div
+                  key={ch.id}
+                  className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-amber-50/50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-text-primary">
+                      {ch.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-secondary">
+                      {ch.subject} &middot; {ch.attemptCount}{" "}
+                      {ch.attemptCount === 1 ? "attempt" : "attempts"}
+                    </p>
+                  </div>
+                  <div className="ml-4 flex items-center gap-3">
+                    <div className="text-right">
+                      <p
+                        className={cn(
+                          "text-lg font-bold",
+                          ch.avgScore < 40 ? "text-red-600" : "text-amber-600"
+                        )}
+                      >
+                        {ch.avgScore}%
+                      </p>
+                    </div>
+                    <Link
+                      href={`/student/quiz?chapterId=${ch.id}&count=10`}
+                      className="flex-shrink-0"
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                      >
+                        Retry
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-amber-100 bg-amber-50/30 px-4 py-2">
+              <Link
+                href="/student/progress"
+                className="flex items-center justify-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900"
+              >
+                View full progress report
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -238,10 +384,10 @@ export default function StudentDashboardPage() {
       {/* Recent Quizzes */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Recent Quizzes
-          </h2>
-          <Link href="/student/history" className="text-sm text-primary hover:underline">View All</Link>
+          <h2 className="text-lg font-semibold text-text-primary">Recent Quizzes</h2>
+          <Link href="/student/history" className="text-sm text-primary hover:underline">
+            View All
+          </Link>
         </div>
         {recentQuizzes.length === 0 ? (
           <Card>
@@ -264,7 +410,13 @@ export default function StudentDashboardPage() {
                         {quiz.mode} Quiz
                       </p>
                       <Badge
-                        variant={quiz.score >= 70 ? "success" : quiz.score >= 40 ? "warning" : "error"}
+                        variant={
+                          quiz.score >= 70
+                            ? "success"
+                            : quiz.score >= 40
+                              ? "warning"
+                              : "error"
+                        }
                       >
                         {quiz.score}%
                       </Badge>
@@ -291,8 +443,20 @@ export default function StudentDashboardPage() {
   );
 }
 
-function QuickAction({ href, icon: Icon, label, desc, color }: {
-  href: string; icon: any; label: string; desc: string; color: string;
+// ── Sub-component ──────────────────────────────────────────────────────────
+
+function QuickAction({
+  href,
+  icon: Icon,
+  label,
+  desc,
+  color,
+}: {
+  href: string;
+  icon: any;
+  label: string;
+  desc: string;
+  color: string;
 }) {
   return (
     <Link href={href}>
@@ -301,8 +465,8 @@ function QuickAction({ href, icon: Icon, label, desc, color }: {
           <div className={cn("mx-auto mb-2 w-fit rounded-xl p-3", color)}>
             <Icon className="h-6 w-6" />
           </div>
-          <p className="font-semibold text-text-primary text-sm">{label}</p>
-          <p className="text-xs text-text-muted mt-0.5">{desc}</p>
+          <p className="text-sm font-semibold text-text-primary">{label}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{desc}</p>
         </div>
       </Card>
     </Link>

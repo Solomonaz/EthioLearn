@@ -108,6 +108,10 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // Social login identifiers
+  googleId     String?  @unique
+  telegramId   String?  @unique
+
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id])
 
@@ -123,8 +127,31 @@ model User {
   achievements         UserAchievement[]
   studentBooks         StudentBook[]
   createdTournaments   Tournament[]       @relation("TournamentCreator")
+  sessions             UserSession[]
 
   @@map("users")
+}
+
+// ─── User Sessions ────────────────────────────────────────
+
+model UserSession {
+  id          String    @id @default(cuid())
+  userId      String
+  sessionId   String    @unique @default(cuid())
+  deviceName  String?
+  userAgent   String?   @db.Text
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime  @default(now())
+  expiresAt   DateTime
+  isRevoked   Boolean   @default(false)
+  revokedAt   DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@map("user_sessions")
 }
 
 model School {

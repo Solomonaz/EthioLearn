@@ -9,6 +9,11 @@ import {
   Shield,
   LogOut,
   Moon,
+  Monitor,
+  Smartphone,
+  Globe,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
 
@@ -36,36 +41,77 @@ interface UserSettings {
   createdAt: string;
 }
 
+interface ActiveSession {
+  id: string;
+  sessionId: string;
+  deviceName: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+}
 
 const GRADES = [
-  { value: 9, label: "Grade 9" },
+  { value: 9,  label: "Grade 9"  },
   { value: 10, label: "Grade 10" },
   { value: 11, label: "Grade 11" },
   { value: 12, label: "Grade 12" },
 ];
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function DeviceIcon({ deviceName }: { deviceName: string | null }) {
+  const name = (deviceName ?? "").toLowerCase();
+  if (name.includes("android") || name.includes("ios") || name.includes("iphone")) {
+    return <Smartphone className="h-4 w-4 text-text-secondary" />;
+  }
+  return <Monitor className="h-4 w-4 text-text-secondary" />;
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function StudentSettingsPage() {
+  const { data: session } = useSession();
+  const currentSessionId = (session as typeof session & { sessionId?: string })
+    ?.sessionId;
+
   const [userData, setUserData] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [grade, setGrade] = useState<number | "">(""  );
-  const [section, setSection] = useState("");
+  const [name, setName]         = useState("");
+  const [email, setEmail]       = useState("");
+  const [grade, setGrade]       = useState<number | "">("");
+  const [section, setSection]   = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-
-  // Save state
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]     = useState(false);
 
   // Language toggle
   const [isPending, startTransition] = useTransition();
 
   // Dark mode placeholder
   const [darkMode, setDarkMode] = useState(false);
+
+  // Sessions state
+  const [sessions, setSessions]           = useState<ActiveSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingId, setRevokingId]       = useState<string | null>(null);
+  const [revokingAll, setRevokingAll]     = useState(false);
+
+  // ── Fetch profile ────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function fetchSettings() {
@@ -89,20 +135,40 @@ export default function StudentSettingsPage() {
     fetchSettings();
   }, []);
 
+  // ── Fetch sessions ───────────────────────────────────────────────────────
+
+  const fetchSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await fetch("/api/auth/sessions");
+      if (!res.ok) throw new Error("Failed to load sessions");
+      const data = await res.json();
+      setSessions(data.sessions ?? []);
+    } catch {
+      toast.error("Could not load active sessions");
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  // ── Save profile ─────────────────────────────────────────────────────────
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
 
     try {
       const body: Record<string, unknown> = {
-        name: name.trim(),
-        email: email.trim() || "",
-        section: section.trim(),
+        name:      name.trim(),
+        email:     email.trim() || "",
+        section:   section.trim(),
         avatarUrl: avatarUrl.trim(),
       };
-      if (grade !== "") {
-        body.grade = Number(grade);
-      }
+      if (grade !== "") body.grade = Number(grade);
 
       const res = await fetch("/api/students/me/settings", {
         method: "PATCH",
@@ -111,7 +177,6 @@ export default function StudentSettingsPage() {
       });
 
       const data = await res.json();
-
       if (!res.ok) {
         toast.error(data.error || "Failed to save");
         return;
@@ -126,6 +191,43 @@ export default function StudentSettingsPage() {
     }
   };
 
+  // ── Session actions ──────────────────────────────────────────────────────
+
+  const handleRevokeSession = async (sessionDbId: string) => {
+    setRevokingId(sessionDbId);
+    try {
+      const res = await fetch(`/api/auth/sessions/${sessionDbId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error();
+      setSessions((prev) => prev.filter((s) => s.id !== sessionDbId));
+      toast.success("Session revoked");
+    } catch {
+      toast.error("Failed to revoke session");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleRevokeAll = async () => {
+    setRevokingAll(true);
+    try {
+      const res = await fetch("/api/auth/sessions", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setSessions((prev) => prev.filter((s) => s.isCurrent));
+      toast.success(
+        `Signed out of ${data.revokedCount} other session${data.revokedCount !== 1 ? "s" : ""}`
+      );
+    } catch {
+      toast.error("Failed to revoke sessions");
+    } finally {
+      setRevokingAll(false);
+    }
+  };
+
+  // ── Language ─────────────────────────────────────────────────────────────
+
   const switchLocale = (locale: "en" | "am") => {
     startTransition(async () => {
       await fetch("/api/locale", {
@@ -135,6 +237,8 @@ export default function StudentSettingsPage() {
       window.location.reload();
     });
   };
+
+  // ── Render guards ────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -155,6 +259,8 @@ export default function StudentSettingsPage() {
     );
   }
 
+  const otherSessions = sessions.filter((s) => !s.isCurrent);
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
       {/* Header */}
@@ -165,19 +271,17 @@ export default function StudentSettingsPage() {
         </p>
       </div>
 
-      {/* Profile Section */}
+      {/* ── Profile ───────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <User className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold text-text-primary">
-              Profile
-            </h2>
+            <h2 className="text-lg font-semibold text-text-primary">Profile</h2>
           </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-5">
-            {/* Avatar Preview */}
+            {/* Avatar preview */}
             <div className="flex flex-col items-center gap-3">
               <Avatar
                 name={name || userData.name}
@@ -187,7 +291,7 @@ export default function StudentSettingsPage() {
               />
             </div>
 
-            {/* Avatar section */}
+            {/* Avatar picker */}
             <div>
               <p className="mb-2 text-sm font-medium text-text-primary">Avatar</p>
               <div className="grid grid-cols-6 gap-2 sm:grid-cols-12">
@@ -211,7 +315,6 @@ export default function StudentSettingsPage() {
               </div>
             </div>
 
-            {/* Name */}
             <Input
               label="Name"
               placeholder="Your full name"
@@ -222,7 +325,6 @@ export default function StudentSettingsPage() {
               maxLength={50}
             />
 
-            {/* Email */}
             <Input
               label="Email"
               type="email"
@@ -231,7 +333,6 @@ export default function StudentSettingsPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
 
-            {/* Grade */}
             <div className="w-full">
               <label
                 htmlFor="grade"
@@ -256,7 +357,6 @@ export default function StudentSettingsPage() {
               </select>
             </div>
 
-            {/* Section */}
             <Input
               label="Section"
               placeholder='e.g. "A", "B"'
@@ -264,7 +364,6 @@ export default function StudentSettingsPage() {
               onChange={(e) => setSection(e.target.value)}
             />
 
-            {/* Save Button */}
             <Button type="submit" isLoading={saving} className="w-full">
               Save Changes
             </Button>
@@ -272,7 +371,7 @@ export default function StudentSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Account Info Section */}
+      {/* ── Account Info ──────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -292,7 +391,11 @@ export default function StudentSettingsPage() {
             <InfoRow
               icon={<Calendar className="h-4 w-4 text-text-secondary" />}
               label="Member Since"
-              value={formatDate(userData.createdAt, { month: "long", day: "numeric", year: "numeric" })}
+              value={formatDate(userData.createdAt, {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
             />
             <InfoRow
               icon={<Star className="h-4 w-4 text-text-secondary" />}
@@ -308,7 +411,120 @@ export default function StudentSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Preferences Section */}
+      {/* ── Active Sessions (§4.1.2) ──────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">
+                Active Sessions
+              </h2>
+              <Badge variant="default" className="text-xs">
+                {sessions.length}
+              </Badge>
+            </div>
+            <button
+              onClick={fetchSessions}
+              disabled={sessionsLoading}
+              className="rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+              title="Refresh sessions"
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", sessionsLoading && "animate-spin")}
+              />
+            </button>
+          </div>
+          <p className="text-xs text-text-secondary">
+            These are the devices currently signed into your account.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {sessionsLoading && sessions.length === 0 ? (
+            <div className="flex justify-center py-4">
+              <Spinner size="sm" className="text-primary" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="text-sm text-text-secondary">No active sessions found.</p>
+          ) : (
+            <div className="space-y-3">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg border p-3",
+                    s.isCurrent
+                      ? "border-primary/30 bg-primary/5"
+                      : "border-border bg-surface"
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5">
+                      <DeviceIcon deviceName={s.deviceName} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-text-primary">
+                          {s.deviceName ?? "Unknown Device"}
+                        </span>
+                        {s.isCurrent && (
+                          <Badge
+                            variant="default"
+                            className="bg-primary/10 text-xs text-primary"
+                          >
+                            This device
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-text-secondary">
+                        {s.ipAddress && <span>{s.ipAddress}</span>}
+                        <span>Last active {timeAgo(s.lastUsedAt)}</span>
+                        <span>
+                          Signed in{" "}
+                          {formatDate(s.createdAt, {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!s.isCurrent && (
+                    <button
+                      onClick={() => handleRevokeSession(s.id)}
+                      disabled={revokingId === s.id}
+                      className="ml-2 flex-shrink-0 rounded-md p-1.5 text-text-secondary transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      title="Revoke this session"
+                    >
+                      {revokingId === s.id ? (
+                        <Spinner size="sm" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {otherSessions.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-full border-red-200 text-error hover:bg-red-50"
+                  onClick={handleRevokeAll}
+                  isLoading={revokingAll}
+                >
+                  <LogOut className="mr-1.5 h-4 w-4" />
+                  Sign out of all other sessions ({otherSessions.length})
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Preferences ───────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold text-text-primary">
@@ -320,9 +536,7 @@ export default function StudentSettingsPage() {
             {/* Language */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-text-primary">
-                  Language
-                </p>
+                <p className="text-sm font-medium text-text-primary">Language</p>
                 <p className="text-xs text-text-secondary">
                   Switch between English and Amharic
                 </p>
@@ -345,7 +559,7 @@ export default function StudentSettingsPage() {
               </div>
             </div>
 
-            {/* Dark Mode (placeholder) */}
+            {/* Dark mode (placeholder) */}
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -354,9 +568,7 @@ export default function StudentSettingsPage() {
                   </p>
                   <Badge variant="default">Coming Soon</Badge>
                 </div>
-                <p className="text-xs text-text-secondary">
-                  Toggle dark theme
-                </p>
+                <p className="text-xs text-text-secondary">Toggle dark theme</p>
               </div>
               <button
                 onClick={() => setDarkMode(!darkMode)}
@@ -377,7 +589,7 @@ export default function StudentSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Danger Zone */}
+      {/* ── Danger Zone ───────────────────────────────────────────────────── */}
       <Card className="border-red-200">
         <CardHeader>
           <h2 className="text-lg font-semibold text-error">Danger Zone</h2>
@@ -387,7 +599,7 @@ export default function StudentSettingsPage() {
             <div>
               <p className="text-sm font-medium text-text-primary">Sign Out</p>
               <p className="text-xs text-text-secondary">
-                Sign out of your account
+                Sign out of your account on this device
               </p>
             </div>
             <Button

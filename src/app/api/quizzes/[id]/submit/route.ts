@@ -277,6 +277,12 @@ export async function POST(
 
     const newTotal = oldTotal + totalPointsEarned;
 
+    // Get chapter info for retry and achievement checks
+    const firstAnswer = gradedAnswers[0];
+    const firstQuestion = firstAnswer ? questionMap.get(firstAnswer.questionId) : null;
+    const retryChapterId = firstQuestion?.chapterId ?? null;
+    const retryDifficulty = firstQuestion?.difficulty ?? "MEDIUM";
+
     // Award achievements (fire-and-forget)
     checkAndAwardAchievements(user.id, {
       totalQuizzes: totalQuizzesDone,
@@ -288,18 +294,13 @@ export async function POST(
       totalTimeTakenMs,
       questionCount: gradedAnswers.length,
       mode: quiz.mode,
+      chapterId: retryChapterId ?? undefined, // for Subject Champion check
     }).catch(console.error);
 
     // Level-up notification (still fire inline since it's already deduped)
     if (newXPLevel > updatedUser.xpLevel) {
       notifyLevelUp(user.id, newXPLevel).catch(console.error);
     }
-
-    // Get chapter info for retry
-    const firstAnswer = gradedAnswers[0];
-    const firstQuestion = firstAnswer ? questionMap.get(firstAnswer.questionId) : null;
-    const retryChapterId = firstQuestion?.chapterId ?? null;
-    const retryDifficulty = firstQuestion?.difficulty ?? "MEDIUM";
 
     // Return results with explanations
     return NextResponse.json({

@@ -12,23 +12,24 @@ export interface AchievementDef {
 }
 
 export const ACHIEVEMENTS: AchievementDef[] = [
-  { code: "first_quiz",      name: "First Steps",          icon: "🎯", desc: "Complete your first quiz",                    category: "quiz"    },
-  { code: "quiz_10",         name: "Quiz Enthusiast",       icon: "📚", desc: "Complete 10 quizzes",                         category: "quiz"    },
-  { code: "quiz_50",         name: "Knowledge Seeker",      icon: "🧠", desc: "Complete 50 quizzes",                         category: "quiz"    },
-  { code: "quiz_100",        name: "Quiz Master",           icon: "🏆", desc: "Complete 100 quizzes",                        category: "quiz"    },
-  { code: "hard_master",     name: "Difficulty Crusher",    icon: "🔥", desc: "Complete 10 hard-level quizzes",              category: "quiz"    },
-  { code: "speed_demon",     name: "Speed Demon",           icon: "⚡", desc: "Finish a 10-question quiz in under 3 minutes", category: "quiz"   },
-  { code: "perfect_score",   name: "Perfect Score",         icon: "⭐", desc: "Score 100% on a quiz",                        category: "accuracy" },
-  { code: "perfect_5",       name: "Perfectionist",         icon: "🌟", desc: "Score 100% on 5 different quizzes",           category: "accuracy" },
-  { code: "streak_3",        name: "Getting Warmed Up",     icon: "🔥", desc: "Study 3 days in a row",                       category: "streak"  },
-  { code: "streak_7",        name: "Week Warrior",          icon: "⚡", desc: "Study 7 days in a row",                       category: "streak"  },
-  { code: "streak_30",       name: "Iron Student",          icon: "💪", desc: "Study 30 days in a row",                      category: "streak"  },
-  { code: "battle_win",      name: "Battle Victor",         icon: "⚔️", desc: "Win your first battle",                       category: "battle"  },
-  { code: "battle_5_wins",   name: "Battle Commander",      icon: "🛡️", desc: "Win 5 battles",                               category: "battle"  },
-  { code: "social_butterfly",name: "Social Butterfly",      icon: "🦋", desc: "Play 10 group games",                         category: "social"  },
-  { code: "points_500",      name: "Point Collector",       icon: "💰", desc: "Earn 500 total points",                       category: "points"  },
-  { code: "points_1000",     name: "Point Hoarder",         icon: "💎", desc: "Earn 1,000 total points",                     category: "points"  },
-  { code: "points_3000",     name: "Point Master",          icon: "👑", desc: "Earn 3,000 total points",                     category: "points"  },
+  { code: "first_quiz",        name: "First Steps",          icon: "🎯", desc: "Complete your first quiz",                    category: "quiz"     },
+  { code: "quiz_10",           name: "Quiz Enthusiast",       icon: "📚", desc: "Complete 10 quizzes",                         category: "quiz"     },
+  { code: "quiz_50",           name: "Knowledge Seeker",      icon: "🧠", desc: "Complete 50 quizzes",                         category: "quiz"     },
+  { code: "quiz_100",          name: "Quiz Master",           icon: "🏆", desc: "Complete 100 quizzes",                        category: "quiz"     },
+  { code: "hard_master",       name: "Difficulty Crusher",    icon: "🔥", desc: "Complete 10 hard-level quizzes",              category: "quiz"     },
+  { code: "speed_demon",       name: "Speed Demon",           icon: "⚡", desc: "Finish a 10-question quiz in under 3 minutes", category: "quiz"    },
+  { code: "perfect_score",     name: "Perfect Score",         icon: "⭐", desc: "Score 100% on a quiz",                        category: "accuracy" },
+  { code: "perfect_5",         name: "Perfectionist",         icon: "🌟", desc: "Score 100% on 5 different quizzes",           category: "accuracy" },
+  { code: "subject_champion",  name: "Subject Champion",      icon: "🏅", desc: "Master all chapters in one subject",          category: "accuracy" },
+  { code: "streak_3",          name: "Getting Warmed Up",     icon: "🔥", desc: "Study 3 days in a row",                       category: "streak"   },
+  { code: "streak_7",          name: "Week Warrior",          icon: "⚡", desc: "Study 7 days in a row",                       category: "streak"   },
+  { code: "streak_30",         name: "Iron Student",          icon: "💪", desc: "Study 30 days in a row",                      category: "streak"   },
+  { code: "battle_win",        name: "Battle Victor",         icon: "⚔️", desc: "Win your first battle",                       category: "battle"   },
+  { code: "battle_5_wins",     name: "Battle Commander",      icon: "🛡️", desc: "Win 5 battles",                               category: "battle"   },
+  { code: "social_butterfly",  name: "Social Butterfly",      icon: "🦋", desc: "Play 10 group games",                         category: "social"   },
+  { code: "points_500",        name: "Point Collector",       icon: "💰", desc: "Earn 500 total points",                       category: "points"   },
+  { code: "points_1000",       name: "Point Hoarder",         icon: "💎", desc: "Earn 1,000 total points",                     category: "points"   },
+  { code: "points_3000",       name: "Point Master",          icon: "👑", desc: "Earn 3,000 total points",                     category: "points"   },
 ];
 
 export function getAchievement(code: string): AchievementDef | undefined {
@@ -47,6 +48,7 @@ export interface AchievementContext {
   totalTimeTakenMs?: number; // total ms for the whole quiz (for Speed Demon)
   questionCount?: number;    // number of questions in the quiz
   mode?: string;             // "SOLO" | "TIMED" | "GROUP"
+  chapterId?: string;        // chapter tested in this quiz (for Subject Champion)
 }
 
 // ─── Core function ────────────────────────────────────────
@@ -139,6 +141,68 @@ export async function checkAndAwardAchievements(
     if ([3, 7, 14, 30].includes(ctx.streak)) {
       // Only notify if we haven't already today — use a best-effort approach
       await notifyStreak(userId, ctx.streak).catch(() => {});
+    }
+
+    // ── Subject Champion (master all chapters in one subject) ──
+    // Only check when the student scored well (potential mastery) and we know the chapter
+    if (!earnedCodes.has("subject_champion") && ctx.score >= 80 && ctx.chapterId) {
+      try {
+        // 1. Find which textbook/subject this chapter belongs to
+        const chapter = await db.chapter.findUnique({
+          where: { id: ctx.chapterId },
+          select: { textbookId: true, textbook: { select: { subject: true, grade: true } } },
+        });
+
+        if (chapter) {
+          // 2. Get all chapters for this subject+grade
+          const allChapters = await db.chapter.findMany({
+            where: { textbook: { subject: chapter.textbook.subject, grade: chapter.textbook.grade } },
+            select: { id: true },
+          });
+
+          if (allChapters.length > 0) {
+            // 3. For each chapter, check if student has avg score >= 80
+            let allMastered = true;
+            for (const ch of allChapters) {
+              const answers = await db.quizAnswer.findMany({
+                where: {
+                  quiz: { studentId: userId, completedAt: { not: null } },
+                  question: { chapterId: ch.id },
+                },
+                select: { quiz: { select: { score: true, completedAt: true } } },
+              });
+
+              // Deduplicate by quiz completion time
+              const uniqueQuizScores = new Map<string, number>();
+              for (const a of answers) {
+                if (a.quiz.completedAt) {
+                  const key = a.quiz.completedAt.toISOString();
+                  if (!uniqueQuizScores.has(key)) {
+                    uniqueQuizScores.set(key, a.quiz.score);
+                  }
+                }
+              }
+
+              const scores = Array.from(uniqueQuizScores.values());
+              if (scores.length === 0) {
+                allMastered = false;
+                break;
+              }
+              const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+              if (avg < 80) {
+                allMastered = false;
+                break;
+              }
+            }
+
+            if (allMastered) {
+              await award("subject_champion");
+            }
+          }
+        }
+      } catch {
+        // Non-fatal — skip Subject Champion check if queries fail
+      }
     }
 
     // ── Points milestones ─────────────────────────────────
