@@ -70,7 +70,7 @@ function buildPrompt(opts: GenerateOptions): string {
 
   const typeInstruction = `Generate a mix of the following types as requested: ${types.join(", ")}.
 SPECIFIC FORMATTING RULES:
-1. MCQ: questionText (the question), options (4 items), correctAnswer (one of the options).
+1. MCQ: questionText (the question), options (4 items), correctAnswer (one of the options). IMPORTANT: Write the questionText as a complete interrogative sentence (e.g., "What is the capital of Ethiopia?"). STRICTLY DO NOT use fill-in-the-blank formatting with underscores for MCQ (e.g., "The capital of Ethiopia is _______.").
 2. TRUE_FALSE: questionText (the statement), options (["True", "False"]), correctAnswer (either "True" or "False").
 3. FILL_IN_BLANK: questionText must contain exactly one "_______" (at least 7 underscores). correctAnswer must be the exact missing word/phrase. options can be empty [].
 4. MATCH_PAIRS: questionText asks to match items. options must contain all items for Column A followed by all corresponding items for Column B (e.g. [A1, A2, B1, B2]). DO NOT shuffle these in the JSON; the UI will handle shuffling Column B. "correctAnswer" must be a string of pairs separated by pipe, items in pair separated by colon (e.g., "A1:B1|A2:B2").
@@ -192,12 +192,12 @@ export async function generateQuestionsFromContent(
 
   const prompt = buildPrompt(opts);
 
-  // Attempt generation with one retry on parse failure
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
+  const MAX_RETRIES = 50;
+  // Attempt generation with dynamic retries up to 50 times
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
       const parsed = JSON.parse(text);
       const questions = validateQuestions(parsed);
 
@@ -208,16 +208,26 @@ export async function generateQuestionsFromContent(
 
       return questions;
     } catch (e) {
-      if (attempt === 1) {
+      if (attempt < MAX_RETRIES - 1) {
+        const msg = String(e);
+        if (msg.includes("429")) {
+          const match = msg.match(/retry in ([\d.]+)s/i);
+          const sleepMs = match ? Math.ceil(parseFloat(match[1]) * 1000) : 12000;
+          console.warn(`[Gemini] Rate limited. Sleeping for ${sleepMs}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, sleepMs));
+          continue; // retry
+        }
+      }
+      if (attempt === MAX_RETRIES - 1) {
         throw new Error(
-          `Failed to parse Gemini response: ${e instanceof Error ? e.message : String(e)}`
+          `Failed to parse Gemini response after ${MAX_RETRIES} attempts: ${e instanceof Error ? e.message : String(e)}`
         );
       }
       // Retry on first attempt
     }
   }
 
-  throw new Error("Gemini question generation failed after 2 attempts");
+  throw new Error(`Gemini question generation failed after ${MAX_RETRIES} attempts`);
 }
 
 // ─── Chapter Detection ─────────────────────────────────
@@ -300,11 +310,11 @@ export async function detectChaptersFromContent(
 
   const prompt = buildChapterDetectionPrompt(opts);
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
+  const MAX_RETRIES = 50;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
       const parsed = JSON.parse(text);
       const chapters = validateDetectedChapters(parsed);
 
@@ -315,15 +325,26 @@ export async function detectChaptersFromContent(
 
       return chapters;
     } catch (e) {
-      if (attempt === 1) {
+      if (attempt < MAX_RETRIES - 1) {
+        // If it's a 429 rate limit error, parse the suggested delay or sleep 12s
+        const msg = String(e);
+        if (msg.includes("429")) {
+          const match = msg.match(/retry in ([\d.]+)s/i);
+          const sleepMs = match ? Math.ceil(parseFloat(match[1]) * 1000) : 12000;
+          console.warn(`[Gemini] Rate limited. Sleeping for ${sleepMs}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, sleepMs));
+          continue; // retry
+        }
+      }
+      if (attempt === MAX_RETRIES - 1) {
         throw new Error(
-          `Failed to detect chapters: ${e instanceof Error ? e.message : String(e)}`
+          `Failed to detect chapters after ${MAX_RETRIES} attempts: ${e instanceof Error ? e.message : String(e)}`
         );
       }
     }
   }
 
-  throw new Error("Chapter detection failed after 2 attempts");
+  throw new Error(`Chapter detection failed after ${MAX_RETRIES} attempts`);
 }
 
 // ─── Text Splitting ────────────────────────────────────
@@ -332,73 +353,140 @@ export async function detectChaptersFromContent(
  * Split full textbook text into per-chapter content using detected chapter titles.
  * Searches for chapter titles in the text and splits at boundaries.
  */
+/** Normalise a string for fuzzy matching: lowercase, collapse whitespace, strip punctuation */
+function normaliseForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\w\s\u1200-\u137F]/g, " ") // keep Ethiopic & alphanumeric
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Try to locate `title` inside `textLower` (already normalised) using
+ * progressively looser strategies.  Returns the index in the ORIGINAL
+ * `fullText` on success, or -1 on failure.
+ */
+function findTitlePosition(
+  fullText: string,
+  textNorm: string,   // normalised version of fullText
+  title: string
+): number {
+  // Strategy 1 – exact normalised match
+  const normTitle = normaliseForMatch(title);
+  let idx = textNorm.indexOf(normTitle);
+  if (idx >= 0) return idx;
+
+  // Strategy 2 – strip leading "Chapter N / Unit N / ምዕራፍ N" prefix
+  const stripped = normTitle
+    .replace(/^(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)\s*[\d\w]*[.:)]\s*/i, "")
+    .trim();
+  if (stripped.length > 4) {
+    idx = textNorm.indexOf(stripped);
+    if (idx >= 0) return idx;
+  }
+
+  // Strategy 3 – match the first 6+ meaningful words of the title
+  const words = normTitle.split(" ").filter((w) => w.length > 2);
+  const keyPhrase = words.slice(0, 6).join(" ");
+  if (keyPhrase.length > 5) {
+    idx = textNorm.indexOf(keyPhrase);
+    if (idx >= 0) return idx;
+  }
+
+  // Strategy 4 – match first 3 meaningful words (handles slight title shortening)
+  const shortPhrase = words.slice(0, 3).join(" ");
+  if (shortPhrase.length > 4) {
+    idx = textNorm.indexOf(shortPhrase);
+    if (idx >= 0) return idx;
+  }
+
+  // Strategy 5 – scan for any word in the title that is unique-ish (≥8 chars)
+  const longWords = words.filter((w) => w.length >= 8);
+  for (const lw of longWords) {
+    idx = textNorm.indexOf(lw);
+    if (idx >= 0) return idx;
+  }
+
+  return -1;
+}
+
 export function splitTextByChapters(
   fullText: string,
   chapters: DetectedChapter[]
 ): DetectedChapterWithContent[] {
   if (chapters.length === 0) return [];
 
-  const textLower = fullText.toLowerCase();
+  const textNorm = normaliseForMatch(fullText);
 
-  // Find the position of each chapter title in the text
   interface ChapterPosition {
     chapter: DetectedChapter;
-    position: number;
+    position: number; // -1 = not found
   }
 
-  const positions: ChapterPosition[] = [];
+  // 1. Locate each chapter in the text
+  const positions: ChapterPosition[] = chapters.map((ch) => ({
+    chapter: ch,
+    position: findTitlePosition(fullText, textNorm, ch.title),
+  }));
 
-  for (const ch of chapters) {
-    const titleLower = ch.title.toLowerCase();
-
-    // Try exact match first
-    let pos = textLower.indexOf(titleLower);
-
-    // If not found, try with common prefixes removed
-    if (pos === -1) {
-      const stripped = titleLower
-        .replace(/^(chapter|unit|lesson|ምዕራፍ)\s*\d*[.:]\s*/i, "")
-        .trim();
-      if (stripped.length > 5) {
-        pos = textLower.indexOf(stripped);
-      }
-    }
-
-    positions.push({ chapter: ch, position: pos >= 0 ? pos : -1 });
-  }
-
-  // Sort found positions by their location in text
+  // 2. Sort the ones that were found by their location
   const found = positions
     .filter((p) => p.position >= 0)
     .sort((a, b) => a.position - b.position);
 
-  const notFound = positions.filter((p) => p.position < 0);
+  const notFoundChapters = positions
+    .filter((p) => p.position < 0)
+    .map((p) => p.chapter);
 
   const result: DetectedChapterWithContent[] = [];
 
-  // Assign content to chapters with found positions
+  // 3. Slice text between consecutive found chapter positions
   for (let i = 0; i < found.length; i++) {
     const start = found[i].position;
     const end = i + 1 < found.length ? found[i + 1].position : fullText.length;
-    const content = fullText.slice(start, end).trim();
-
-    result.push({
-      ...found[i].chapter,
-      content,
-    });
+    result.push({ ...found[i].chapter, content: fullText.slice(start, end).trim() });
   }
 
-  // Chapters not found in text get empty content
-  for (const p of notFound) {
-    result.push({
-      ...p.chapter,
-      content: "",
-    });
+  // 4. For chapters whose titles weren't found, try to infer position from
+  //    chapter number and distribute content from the surrounding found chapters.
+  if (notFoundChapters.length > 0) {
+    // Build a sorted result array by chapter number so we can insert
+    result.sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+    for (const ch of notFoundChapters) {
+      // Find the predecessor and successor in the already-found set
+      const prev = result
+        .filter((r) => r.chapterNumber < ch.chapterNumber && r.content.length > 0)
+        .at(-1);
+      const next = result
+        .filter((r) => r.chapterNumber > ch.chapterNumber && r.content.length > 0)
+        .at(0);
+
+      let inferredContent = "";
+
+      if (prev && next) {
+        // Steal the second half of the predecessor's content
+        const mid = Math.floor(prev.content.length / 2);
+        inferredContent = prev.content.slice(mid).trim();
+        // Shrink the predecessor so it doesn't double-count
+        const prevEntry = result.find((r) => r.chapterNumber === prev.chapterNumber);
+        if (prevEntry) prevEntry.content = prev.content.slice(0, mid).trim();
+      } else if (prev && prev.content.length > 200) {
+        // No successor found – take the tail of the predecessor
+        const mid = Math.floor(prev.content.length * 0.6);
+        inferredContent = prev.content.slice(mid).trim();
+        const prevEntry = result.find((r) => r.chapterNumber === prev.chapterNumber);
+        if (prevEntry) prevEntry.content = prev.content.slice(0, mid).trim();
+      }
+      // else leave as empty — genuinely missing content
+
+      result.push({ ...ch, content: inferredContent });
+    }
   }
 
-  // Re-sort by chapter number
+  // 5. Re-sort by chapter number for clean output
   result.sort((a, b) => a.chapterNumber - b.chapterNumber);
-
   return result;
 }
 export async function tutorResponseFromContent(opts: {

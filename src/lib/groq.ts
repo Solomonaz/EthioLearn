@@ -34,7 +34,7 @@ function buildPrompt(opts: GenerateOptions): string {
 
   const typeInstruction = `Generate a mix of the following types as requested: ${types.join(", ")}.
 SPECIFIC FORMATTING RULES:
-1. MCQ: questionText (the question), options (4 items), correctAnswer (one of the options).
+1. MCQ: questionText (the question), options (4 items), correctAnswer (one of the options). IMPORTANT: Write the questionText as a complete interrogative sentence (e.g., "What is the capital of Ethiopia?"). STRICTLY DO NOT use fill-in-the-blank formatting with underscores for MCQ (e.g., "The capital of Ethiopia is _______.").
 2. TRUE_FALSE: questionText (the statement), options (["True", "False"]), correctAnswer (either "True" or "False").
 3. FILL_IN_BLANK: questionText must contain exactly one "_______" (at least 7 underscores). correctAnswer must be the exact missing word/phrase. options can be empty [].
 4. MATCH_PAIRS: questionText asks to match items. options must contain all items for Column A followed by all corresponding items for Column B (e.g. [A1, A2, B1, B2]). DO NOT shuffle these in the JSON; the UI will handle shuffling Column B for the student. "correctAnswer" must be a string of pairs separated by pipe, items in pair separated by colon (e.g., "A1:B1|A2:B2").

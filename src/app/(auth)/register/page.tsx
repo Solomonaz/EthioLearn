@@ -8,19 +8,13 @@ type Role = "STUDENT" | "SCHOOL_ADMIN";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"role" | "phone" | "otp" | "profile">("role");
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [step, setStep] = useState<"phone" | "otp" | "profile">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const roles: { value: Role; label: string; description: string }[] = [
-    { value: "STUDENT", label: "Student", description: "Take quizzes and compete" },
-    { value: "SCHOOL_ADMIN", label: "School Admin", description: "Manage your school" },
-  ];
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +73,8 @@ export default function RegisterPage() {
         body: JSON.stringify({
           phoneNumber: "+251" + phoneNumber,
           name,
-          role: selectedRole,
-          grade: selectedRole === "STUDENT" ? grade : undefined,
+          role: "STUDENT",
+          grade: grade,
         }),
       });
       const data = await res.json();
@@ -109,45 +103,17 @@ export default function RegisterPage() {
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
           {/* Step indicator */}
           <div className="mb-6 flex justify-center gap-2">
-            {["role", "phone", "otp", "profile"].map((s, i) => (
+            {["phone", "otp", "profile"].map((s, i) => (
               <div
                 key={s}
                 className={`h-2 w-8 rounded-full ${
-                  ["role", "phone", "otp", "profile"].indexOf(step) >= i
+                  ["phone", "otp", "profile"].indexOf(step) >= i
                     ? "bg-primary"
                     : "bg-border"
                 }`}
               />
             ))}
           </div>
-
-          {step === "role" && (
-            <div>
-              <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                I am a...
-              </h2>
-              <div className="space-y-3">
-                {roles.map((role) => (
-                  <button
-                    key={role.value}
-                    onClick={() => {
-                      setSelectedRole(role.value);
-                      setStep("phone");
-                      setError("");
-                    }}
-                    className={`w-full rounded-lg border p-4 text-left transition hover:border-primary ${
-                      selectedRole === role.value
-                        ? "border-primary bg-primary/5"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className="font-medium text-text-primary">{role.label}</div>
-                    <div className="text-sm text-text-secondary">{role.description}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {step === "phone" && (
             <form onSubmit={handleSendOtp}>
@@ -178,17 +144,6 @@ export default function RegisterPage() {
                 className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? "Sending..." : "Send OTP"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("role");
-                  setError("");
-                }}
-                className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
-                disabled={isLoading}
-              >
-                Back
               </button>
             </form>
           )}
@@ -256,7 +211,6 @@ export default function RegisterPage() {
                     disabled={isLoading}
                   />
                 </div>
-                {selectedRole === "STUDENT" && (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-text-primary">
                       Grade
@@ -276,7 +230,6 @@ export default function RegisterPage() {
                       ))}
                     </select>
                   </div>
-                )}
               </div>
               {error && (
                 <p className="mt-3 text-sm text-red-600">{error}</p>

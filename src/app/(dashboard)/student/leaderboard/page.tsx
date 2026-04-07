@@ -29,17 +29,8 @@ interface LeaderboardResponse {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const SUBJECTS = [
-  { value: "", label: "All Subjects" },
-  { value: "Mathematics", label: "Mathematics" },
-  { value: "Biology", label: "Biology" },
-  { value: "Chemistry", label: "Chemistry" },
-  { value: "Physics", label: "Physics" },
-  { value: "English", label: "English" },
-  { value: "Amharic", label: "Amharic" },
-  { value: "History", label: "History" },
-  { value: "Geography", label: "Geography" },
-];
+// Subjects will be fetched dynamically via the API
+
 
 // ── Medal helpers ──────────────────────────────────────────────────────────────
 
@@ -85,10 +76,34 @@ function rowBackground(rank: number, isCurrentUser: boolean) {
 export default function LeaderboardPage() {
   const [period, setPeriod] = useState<"alltime" | "weekly">("alltime");
   const [subject, setSubject] = useState("");
+  const [subjectsList, setSubjectsList] = useState<{ value: string; label: string }[]>([
+    { value: "", label: "All Subjects" },
+  ]);
   const [subjectOpen, setSubjectOpen] = useState(false);
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchSubjects() {
+      try {
+        const res = await fetch("/api/subjects");
+        if (res.ok) {
+          const data = await res.json();
+          setSubjectsList([
+            { value: "", label: "All Subjects" },
+            ...(data.subjects as { id: string; name: string }[]).map((s) => ({
+              value: s.name,
+              label: s.name,
+            })),
+          ]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subjects", err);
+      }
+    }
+    fetchSubjects();
+  }, []);
 
   const fetchLeaderboard = useCallback(async () => {
     setLoading(true);
@@ -131,7 +146,7 @@ export default function LeaderboardPage() {
     !currentUserInList && currentUserRank !== null;
 
   const selectedSubjectLabel =
-    SUBJECTS.find((s) => s.value === subject)?.label ?? "All Subjects";
+    subjectsList.find((s) => s.value === subject)?.label ?? "All Subjects";
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
@@ -195,7 +210,7 @@ export default function LeaderboardPage() {
                   className="absolute right-0 top-full z-10 mt-1 w-48 rounded-xl border border-border bg-white py-1 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {SUBJECTS.map((s) => (
+                  {subjectsList.map((s) => (
                     <button
                       key={s.value}
                       onClick={() => {

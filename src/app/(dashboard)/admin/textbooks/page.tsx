@@ -69,19 +69,6 @@ interface DetectedChapter {
 
 // ─── Constants ────────────────────────────────────────────
 
-const SUBJECTS = [
-  "Biology",
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "English",
-  "History",
-  "Geography",
-  "Civics",
-  "Amharic",
-  "ICT",
-];
-
 const JSON_EXAMPLE = `{
   "title": "Grade 9 Physics",
   "subject": "Physics",
@@ -133,6 +120,7 @@ function totalQuestions(textbook: TextbookListItem): number {
 
 export default function AdminTextbooksPage() {
   const [textbooks, setTextbooks] = useState<TextbookListItem[]>([]);
+  const [subjectsList, setSubjectsList] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -188,10 +176,18 @@ export default function AdminTextbooksPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch("/api/admin/textbooks");
+      const [res, subRes] = await Promise.all([
+        fetch("/api/admin/textbooks"),
+        fetch("/api/subjects")
+      ]);
       if (!res.ok) throw new Error("Failed to load textbooks");
       const data = await res.json();
       setTextbooks(data.textbooks ?? []);
+      
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        setSubjectsList(subData.subjects ?? []);
+      }
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -844,8 +840,8 @@ export default function AdminTextbooksPage() {
                           className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
                         >
                           <option value="">Select…</option>
-                          {SUBJECTS.map((s) => (
-                            <option key={s} value={s}>{s}</option>
+                          {subjectsList.map((s) => (
+                            <option key={s.id} value={s.name}>{s.name}</option>
                           ))}
                         </select>
                       </div>
@@ -1113,9 +1109,9 @@ export default function AdminTextbooksPage() {
                       className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
                     >
                       <option value="">Select subject…</option>
-                      {SUBJECTS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
+                      {subjectsList.map((s) => (
+                        <option key={s.id} value={s.name}>
+                          {s.name}
                         </option>
                       ))}
                     </select>

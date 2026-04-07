@@ -39,7 +39,7 @@ interface BattleQuestion {
 
 type ActiveTab = "create" | "join";
 
-const SUBJECTS = ["Biology", "Mathematics", "Physics", "Chemistry", "English"];
+// Subjects fetched dynamically
 const GRADES = [9, 10, 11, 12];
 const QUESTION_COUNTS = [5, 10, 15];
 
@@ -51,6 +51,7 @@ export default function BattleLobbyPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("create");
 
   // Create room state
+  const [subjectsList, setSubjectsList] = useState<string[]>(["Biology", "Mathematics", "Physics", "Chemistry", "English"]);
   const [selectedSubject, setSelectedSubject] = useState<string>("Biology");
   const [selectedGrade, setSelectedGrade] = useState<number>(9);
   const [questionCount, setQuestionCount] = useState<number>(10);
@@ -58,6 +59,24 @@ export default function BattleLobbyPage() {
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
+
+  useEffect(() => {
+    async function fetchSubjects() {
+      try {
+        const res = await fetch("/api/subjects");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.subjects && data.subjects.length > 0) {
+             setSubjectsList((data.subjects as { id: string; name: string }[]).map((s) => s.name));
+             setSelectedSubject(data.subjects[0].name);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch subjects", err);
+      }
+    }
+    fetchSubjects();
+  }, []);
 
   // Join room state
   const [joinCode, setJoinCode] = useState("");
@@ -320,7 +339,7 @@ export default function BattleLobbyPage() {
               Subject
             </label>
             <div className="flex flex-wrap gap-2">
-              {SUBJECTS.map((s) => (
+              {subjectsList.map((s) => (
                 <button
                   key={s}
                   onClick={() => setSelectedSubject(s)}

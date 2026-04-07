@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
       content: content || undefined,
       fileUrl: "",
       processingStatus: "COMPLETED",
-      uploadedById: user.id,
+      uploadedById: user.id === "env_super_admin" ? undefined : user.id,
       schoolId: user.schoolId ?? undefined,
       chapterCount: chapters.length,
       chapters: {

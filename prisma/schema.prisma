@@ -139,6 +139,17 @@ model User {
   @@map("users")
 }
 
+// ─── Subjects ───────────────────────────────────────────────
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subjects")
+}
+
 // ─── User Sessions ────────────────────────────────────────
 
 model UserSession {
@@ -198,8 +209,8 @@ model Textbook {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  uploadedById String
-  uploadedBy   User   @relation("TextbookUploader", fields: [uploadedById], references: [id])
+  uploadedById String?
+  uploadedBy   User?  @relation("TextbookUploader", fields: [uploadedById], references: [id])
 
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id])
@@ -430,8 +441,8 @@ model StudentBook {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  uploadedById String
-  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+  uploadedById String?
+  uploadedBy   User?  @relation(fields: [uploadedById], references: [id])
 
   @@map("student_books")
 }

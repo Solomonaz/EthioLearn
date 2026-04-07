@@ -26,7 +26,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
+  // Strict Mode causes Server Components to double-render in dev, which
+  // triggers repeated DB calls in layouts that call getCurrentUser().
+  // Enable only when explicitly debugging side-effect purity.
+  reactStrictMode: false,
   async headers() {
     return [
       {

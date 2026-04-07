@@ -12,6 +12,7 @@
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
 
 // ─── Types ──────────────────────────────────────────────
@@ -112,122 +113,109 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
   return flags;
 }
 
-// ─── 3. Difficulty Verification via AI ─────────────────
+// ─── 3. Consolidated AI Text Quality Check ───────────────
 
-async function verifyDifficulties(
+async function verifyAITextQuality(
   questions: GeneratedQuestion[],
   subject: string,
   grade: number
-): Promise<Map<number, { aiDifficulty: string; match: boolean }>> {
-  const result = new Map<number, { aiDifficulty: string; match: boolean }>();
+): Promise<{
+  difficulties: Map<number, { aiDifficulty: string; match: boolean }>;
+  grammarIssues: Map<number, string>;
+}> {
+  const result = {
+    difficulties: new Map<number, { aiDifficulty: string; match: boolean }>(),
+    grammarIssues: new Map<number, string>(),
+  };
 
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return result;
+  const questionList = questions
+    .slice(0, 20)
+    .map((q, i) => `Q${i}: [${q.type}] difficulty: ${q.difficulty}\n${q.questionText.slice(0, 300)}`)
+    .join("\n");
 
-    const client = new GoogleGenerativeAI(apiKey);
-    const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-        maxOutputTokens: 2048,
-      },
-    });
+  const prompt = `You are an expert at reviewing exam questions for Grade ${grade} ${subject} in the Ethiopian curriculum.
 
-    const questionList = questions
-      .slice(0, 20) // Limit batch size
-      .map(
-        (q, i) =>
-          `Q${i}: [${q.type}] ${q.questionText.slice(0, 200)}`
-      )
-      .join("\n");
-
-    const prompt = `You are an expert at rating exam question difficulty for Grade ${grade} ${subject} in the Ethiopian curriculum.
-
-Rate each question's difficulty as EASY, MEDIUM, or HARD based on:
+TASK 1: RATING DIFFICULTY
+Rate each question's difficulty as EASY, MEDIUM, or HARD:
 - EASY: Direct recall, simple facts, basic definitions
 - MEDIUM: Comprehension, application of learned concepts
 - HARD: Analysis, synthesis, multi-step reasoning
 
+TASK 2: GRAMMAR AND CLARITY
+Flag ONLY questions with clear structural/grammatical issues or extreme ambiguity. DO NOT flag grammatically correct questions.
+
 QUESTIONS:
 ${questionList}
 
-Return JSON: { "ratings": [{ "index": 0, "difficulty": "EASY|MEDIUM|HARD" }, ...] }`;
+Return JSON only:
+{
+  "ratings": [{ "index": 0, "difficulty": "EASY|MEDIUM|HARD" }, ...],
+  "issues": [{ "index": 0, "issue": "description of the grammar problem" } ...]
+}
+If there are no grammar issues, leave the issues array empty.`;
 
-    const aiResult = await model.generateContent(prompt);
-    const parsed = JSON.parse(aiResult.response.text());
+  let rawText = "";
+
+  try {
+    // Try Groq first
+    const groqKey = process.env.GROQ_API_KEY;
+    if (groqKey) {
+      const groq = new Groq({ apiKey: groqKey });
+      const res = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        max_tokens: 1536,
+        response_format: { type: "json_object" },
+      });
+      rawText = res.choices[0]?.message?.content ?? "";
+    } else {
+      throw new Error("No Groq key");
+    }
+  } catch (error) {
+    // Fallback to Gemini
+    try {
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (!geminiKey) return result;
+      const client = new GoogleGenerativeAI(geminiKey);
+      const model = client.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 1536 },
+      });
+      const aiResult = await model.generateContent(prompt);
+      rawText = aiResult.response.text();
+    } catch (fallbackError) {
+      console.warn("[Quality Pipeline] Both AI providers failed the text quality check:", fallbackError instanceof Error ? fallbackError.message : "Unknown Error");
+      return result;
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(rawText);
+    
+    // Parse difficulty ratings
     const ratings = Array.isArray(parsed.ratings) ? parsed.ratings : [];
-
     for (const r of ratings) {
       const idx = Number(r.index);
       const aiDiff = String(r.difficulty).toUpperCase();
       if (idx >= 0 && idx < questions.length && ["EASY", "MEDIUM", "HARD"].includes(aiDiff)) {
-        result.set(idx, {
-          aiDifficulty: aiDiff,
-          match: aiDiff === questions[idx].difficulty.toUpperCase(),
-        });
+        result.difficulties.set(idx, { aiDifficulty: aiDiff, match: aiDiff === questions[idx].difficulty.toUpperCase() });
       }
     }
-  } catch (error) {
-    console.error("[Quality Pipeline] Difficulty verification failed:", error);
+
+    // Parse grammar issues
+    const issues = Array.isArray(parsed.issues) ? parsed.issues : [];
+    for (const item of issues) {
+      const idx = Number(item.index);
+      if (idx >= 0 && idx < questions.length && typeof item.issue === "string") {
+        result.grammarIssues.set(idx, item.issue);
+      }
+    }
+  } catch {
+    // JSON parse failed — skip check silently
   }
 
   return result;
-}
-
-// ─── 4. Grammar/Language Check via AI ──────────────────
-
-async function checkGrammar(
-  questions: GeneratedQuestion[]
-): Promise<Map<number, string>> {
-  const issues = new Map<number, string>();
-
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return issues;
-
-    const client = new GoogleGenerativeAI(apiKey);
-    const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-        maxOutputTokens: 2048,
-      },
-    });
-
-    const questionList = questions
-      .slice(0, 20)
-      .map((q, i) => `Q${i}: ${q.questionText.slice(0, 300)}`)
-      .join("\n");
-
-    const prompt = `Review these exam questions for grammar, clarity, and language quality.
-Flag ONLY questions with clear issues (grammatical errors, unclear phrasing, ambiguity).
-Do NOT flag questions that are grammatically correct.
-
-QUESTIONS:
-${questionList}
-
-Return JSON: { "issues": [{ "index": 0, "issue": "description of the problem" }, ...] }
-If no issues are found, return: { "issues": [] }`;
-
-    const result = await model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text());
-
-    if (Array.isArray(parsed.issues)) {
-      for (const item of parsed.issues) {
-        const idx = Number(item.index);
-        if (idx >= 0 && idx < questions.length && typeof item.issue === "string") {
-          issues.set(idx, item.issue);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("[Quality Pipeline] Grammar check failed:", error);
-  }
-
-  return issues;
 }
 
 // ─── 5. Semantic Duplicate Detection ───────────────────
@@ -305,13 +293,15 @@ export async function runQualityPipeline(
   grade: number
 ): Promise<QualityPipelineResult> {
   // Run all checks in parallel
-  const [difficultyMap, grammarMap, duplicateResult, relevanceMap] =
+  const [aiTextQuality, duplicateResult, relevanceMap] =
     await Promise.all([
-      verifyDifficulties(questions, subject, grade),
-      checkGrammar(questions),
+      verifyAITextQuality(questions, subject, grade),
       detectDuplicates(questions),
       checkRelevance(questions, sourceContent),
     ]);
+
+  const difficultyMap = aiTextQuality.difficulties;
+  const grammarMap = aiTextQuality.grammarIssues;
 
   const duplicateIndices = new Set(
     duplicateResult.duplicatePairs.flat()

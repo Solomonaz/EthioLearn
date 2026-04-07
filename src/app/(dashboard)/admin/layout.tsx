@@ -9,7 +9,7 @@ export default async function AdminLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?callbackUrl=/admin");
+    redirect("/admin_ethiolearn");
   }
 
   if (user.role !== "SUPER_ADMIN" && user.role !== "SCHOOL_ADMIN") {

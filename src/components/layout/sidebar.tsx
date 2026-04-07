@@ -42,6 +42,7 @@ const adminNavItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
   { label: "Students", href: "/admin/students", icon: Users },
   { label: "Textbooks", href: "/admin/textbooks", icon: Library },
+  { label: "Subjects", href: "/admin/subjects", icon: BookMarked },
   { label: "Questions", href: "/admin/questions", icon: HelpCircle },
   { label: "Rewards", href: "/admin/rewards", icon: Gift },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart2 },

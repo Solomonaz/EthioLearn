@@ -40,14 +40,59 @@ function getClient() {
   return new GoogleGenerativeAI(apiKey);
 }
 
+// ─── Fallback: character n-gram fingerprint ─────────────
+// Used when the embedding API is unavailable. Produces a deterministic
+// dense vector so cosine similarity still detects near-duplicates.
+
+function ngramFingerprint(text: string, dims: number): number[] {
+  const vec = new Array(dims).fill(0);
+  const t = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const n = 3; // trigrams
+  for (let i = 0; i <= t.length - n; i++) {
+    let h = 0;
+    for (let k = 0; k < n; k++) h = (Math.imul(31, h) + t.charCodeAt(i + k)) >>> 0;
+    vec[h % dims] += 1;
+  }
+  // L2-normalise
+  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0)) || 1;
+  return vec.map((v) => v / norm);
+}
+
+// ─── Runtime capability flag ────────────────────────────
+// Many Gemini API keys (free tier / newer keys) don't have access to
+// `text-embedding-004` / `embedding-001` on the v1beta endpoint. Rather than
+// spamming the log with 404s on every batch, we try **once** per process and
+// cache the result. On failure we silently use the local n-gram fingerprint.
+let geminiEmbeddingsAvailable: boolean | null = null;
+
+async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
+  if (geminiEmbeddingsAvailable === false) return null;
+  if (!process.env.GEMINI_API_KEY) {
+    geminiEmbeddingsAvailable = false;
+    return null;
+  }
+  try {
+    const client = getClient();
+    const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
+    const result = await model.embedContent(text);
+    geminiEmbeddingsAvailable = true;
+    return result.embedding.values;
+  } catch {
+    if (geminiEmbeddingsAvailable === null) {
+      console.warn(
+        `[Embeddings] Gemini embedding model "${EMBEDDING_MODEL}" unavailable on this API key — using local fingerprint fallback for the rest of this process.`
+      );
+    }
+    geminiEmbeddingsAvailable = false;
+    return null;
+  }
+}
+
 // ─── Single Embedding ───────────────────────────────────
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const client = getClient();
-  const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
-
-  const result = await model.embedContent(text);
-  return result.embedding.values;
+  const remote = await tryGeminiEmbedding(text);
+  return remote ?? ngramFingerprint(text, EMBEDDING_DIMENSIONS);
 }
 
 // ─── Batch Embeddings ───────────────────────────────────
@@ -55,9 +100,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 export async function generateEmbeddings(
   texts: string[]
 ): Promise<EmbeddingResult[]> {
-  const client = getClient();
-  const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
-
   const results: EmbeddingResult[] = [];
 
   // Process in batches
@@ -66,17 +108,11 @@ export async function generateEmbeddings(
 
     const batchResults = await Promise.all(
       batch.map(async (text) => {
-        try {
-          const result = await model.embedContent(text);
-          return { text, embedding: result.embedding.values };
-        } catch (error) {
-          console.error(
-            `[Embeddings] Failed to embed text (${text.slice(0, 50)}...):`,
-            error
-          );
-          // Return zero vector on failure — will be flagged
-          return { text, embedding: new Array(EMBEDDING_DIMENSIONS).fill(0) };
-        }
+        const remote = await tryGeminiEmbedding(text);
+        return {
+          text,
+          embedding: remote ?? ngramFingerprint(text, EMBEDDING_DIMENSIONS),
+        };
       })
     );
 

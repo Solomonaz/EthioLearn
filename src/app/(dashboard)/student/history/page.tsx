@@ -52,19 +52,7 @@ interface QuizHistoryData {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-
-const SUBJECTS = [
-  "All Subjects",
-  "Biology",
-  "Chemistry",
-  "Physics",
-  "Mathematics",
-  "English",
-  "Amharic",
-  "History",
-  "Geography",
-  "Civics",
-];
+// Subjects will be fetched dynamically via the API
 
 const SORT_OPTIONS = [
   { value: "date", label: "Recent First" },
@@ -81,7 +69,26 @@ export default function QuizHistoryPage() {
 
   const [page, setPage] = useState(1);
   const [subject, setSubject] = useState("");
+  const [subjectsList, setSubjectsList] = useState<string[]>(["All Subjects"]);
   const [sortBy, setSortBy] = useState("date");
+
+  useEffect(() => {
+    async function fetchSubjects() {
+      try {
+        const res = await fetch("/api/subjects");
+        if (res.ok) {
+          const data = await res.json();
+          setSubjectsList([
+            "All Subjects",
+            ...(data.subjects as { id: string; name: string }[]).map((s) => s.name),
+          ]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch subjects", err);
+      }
+    }
+    fetchSubjects();
+  }, []);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -189,7 +196,7 @@ export default function QuizHistoryPage() {
             onChange={(e) => setSubject(e.target.value)}
             className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           >
-            {SUBJECTS.map((s) => (
+            {subjectsList.map((s) => (
               <option key={s} value={s === "All Subjects" ? "" : s}>
                 {s}
               </option>

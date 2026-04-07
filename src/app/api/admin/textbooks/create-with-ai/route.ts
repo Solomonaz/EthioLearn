@@ -110,15 +110,25 @@ export async function POST(request: NextRequest) {
 
     // 2. Detect chapters via AI (Gemini → Groq fallback)
     const language = (formData.get("language") as string) || "en";
-    const { chapters: detectedChapters, provider } = await detectChapters({
-      content: extraction.text,
-      subject: subject.trim(),
-      grade,
-      language,
-    });
-    console.log(`[Create With AI] Chapter detection used: ${provider}`);
+    let detectedChapters: any[] = [];
+    let provider = "fallback";
 
-    // 3. Split text by chapter boundaries
+    try {
+      const result = await detectChapters({
+        content: extraction.text,
+        subject: subject.trim(),
+        grade,
+        language,
+      });
+      detectedChapters = result.chapters;
+      provider = result.provider;
+      console.log(`[Create With AI] Chapter detection used: ${provider}`);
+    } catch (aiError) {
+      console.warn("[Create With AI] AI Chapter detection failed. Falling back to single chapter.", aiError);
+      detectedChapters = [{ chapterNumber: 1, title: "Full Textbook Content" }];
+    }
+
+    // 3. Split text by chapter boundaries (if fallback, returns the whole text)
     const chaptersWithContent = splitTextByChapters(
       extraction.text,
       detectedChapters

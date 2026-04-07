@@ -148,8 +148,10 @@ export async function tagChunksWithBloomLevel(
     },
   });
 
-  const BATCH_SIZE = 15;
+  const BATCH_SIZE = 50;
   const allResults: BloomTagResult[] = [];
+
+  const MAX_RETRIES = 50;
 
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
     const batch = chunks.slice(i, i + BATCH_SIZE);
@@ -157,7 +159,7 @@ export async function tagChunksWithBloomLevel(
 
     const prompt = buildBloomTaggingPrompt(batch, subject, grade);
 
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         const result = await model.generateContent(prompt);
         const text = result.response.text();
@@ -165,12 +167,22 @@ export async function tagChunksWithBloomLevel(
         const tags = validateBloomTags(parsed, expectedIndices);
 
         allResults.push(...tags);
-        break;
+        break; // Success, break out of retry loop
       } catch (error) {
-        if (attempt === 1) {
-          console.error(
-            `[Bloom Tagger] Failed to tag batch starting at chunk ${i}:`,
-            error
+        if (attempt < MAX_RETRIES - 1) {
+          const msg = String(error);
+          if (msg.includes("429")) {
+            const match = msg.match(/retry in ([\d.]+)s/i);
+            const sleepMs = match ? Math.ceil(parseFloat(match[1]) * 1000) : 12000;
+            console.warn(`[Bloom Tagger] Rate limited. Sleeping for ${sleepMs}ms before retry...`);
+            await new Promise((resolve) => setTimeout(resolve, sleepMs));
+            continue; // retry
+          }
+        }
+        
+        if (attempt === MAX_RETRIES - 1) {
+          console.warn(
+            `[Bloom Tagger] Failed to tag batch starting at chunk ${i} after ${MAX_RETRIES} attempts. Falling back to default.`
           );
           // Assign default "Understand" for failed chunks
           for (const chunk of batch) {

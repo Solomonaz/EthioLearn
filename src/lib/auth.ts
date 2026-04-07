@@ -48,11 +48,33 @@ const providers: NextAuthOptions["providers"] = [
     async authorize(credentials) {
       if (!credentials?.phoneNumber || !credentials?.otp) return null;
 
-      const isValid = verifyOTP(credentials.phoneNumber, credentials.otp);
+      // Ensure proper type assertions
+      const phoneVal = credentials.phoneNumber;
+      const otpVal = credentials.otp;
+
+      // Special check for .env configured Super Admin
+      if (
+        process.env.SUPER_ADMIN_PHONE && 
+        process.env.SUPER_ADMIN_OTP && 
+        phoneVal === process.env.SUPER_ADMIN_PHONE &&
+        otpVal === process.env.SUPER_ADMIN_OTP
+      ) {
+        return {
+          id: "env_super_admin",
+          name: "System Super Admin",
+          phone: phoneVal,
+          role: "SUPER_ADMIN",
+          grade: null,
+          xpLevel: 0,
+          totalPoints: 0,
+        };
+      }
+
+      const isValid = verifyOTP(phoneVal, otpVal);
       if (!isValid) return null;
 
       const user = await db.user.findUnique({
-        where: { phoneNumber: credentials.phoneNumber },
+        where: { phoneNumber: phoneVal },
       });
       if (!user || !user.isActive || user.suspendedAt) return null;
 
@@ -104,7 +126,7 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
           // 3. Look up our user by Telegram ID
           const telegramId = String(data.id);
           const user = await db.user.findFirst({
-            where: { telegramId },
+            where: { telegramId } as any,
           });
 
           if (!user || !user.isActive || user.suspendedAt) return null;
@@ -157,9 +179,9 @@ export const authOptions: NextAuthOptions = {
 
         // Lazily save the Google ID (sub) for future sign-ins
         const sub = (profile as { sub?: string }).sub ?? account.providerAccountId;
-        if (sub && !existingUser.googleId) {
+        if (sub && !(existingUser as any).googleId) {
           await db.user
-            .update({ where: { id: existingUser.id }, data: { googleId: sub } })
+            .update({ where: { id: existingUser.id }, data: { googleId: sub } as any })
             .catch(() => {});
         }
       }
