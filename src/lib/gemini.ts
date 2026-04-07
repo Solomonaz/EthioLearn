@@ -192,8 +192,7 @@ export async function generateQuestionsFromContent(
 
   const prompt = buildPrompt(opts);
 
-  const MAX_RETRIES = 50;
-  // Attempt generation with dynamic retries up to 50 times
+  const MAX_RETRIES = 3;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent(prompt);
@@ -208,22 +207,21 @@ export async function generateQuestionsFromContent(
 
       return questions;
     } catch (e) {
-      if (attempt < MAX_RETRIES - 1) {
-        const msg = String(e);
-        if (msg.includes("429")) {
-          const match = msg.match(/retry in ([\d.]+)s/i);
-          const sleepMs = match ? Math.ceil(parseFloat(match[1]) * 1000) : 12000;
-          console.warn(`[Gemini] Rate limited. Sleeping for ${sleepMs}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, sleepMs));
-          continue; // retry
-        }
+      const msg = String(e);
+      const isRateLimit = msg.includes("429");
+
+      if (isRateLimit) {
+        // Re-throw rate limit errors immediately so ai-provider.ts can handle fallback.
+        // Retrying here is pointless when the daily quota is exhausted.
+        throw e;
       }
+
       if (attempt === MAX_RETRIES - 1) {
         throw new Error(
-          `Failed to parse Gemini response after ${MAX_RETRIES} attempts: ${e instanceof Error ? e.message : String(e)}`
+          `Gemini question generation failed after ${MAX_RETRIES} attempts: ${e instanceof Error ? e.message : msg}`
         );
       }
-      // Retry on first attempt
+      // Retry parse/validation errors once more
     }
   }
 
@@ -310,7 +308,7 @@ export async function detectChaptersFromContent(
 
   const prompt = buildChapterDetectionPrompt(opts);
 
-  const MAX_RETRIES = 50;
+  const MAX_RETRIES = 3;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent(prompt);
@@ -325,20 +323,13 @@ export async function detectChaptersFromContent(
 
       return chapters;
     } catch (e) {
-      if (attempt < MAX_RETRIES - 1) {
-        // If it's a 429 rate limit error, parse the suggested delay or sleep 12s
-        const msg = String(e);
-        if (msg.includes("429")) {
-          const match = msg.match(/retry in ([\d.]+)s/i);
-          const sleepMs = match ? Math.ceil(parseFloat(match[1]) * 1000) : 12000;
-          console.warn(`[Gemini] Rate limited. Sleeping for ${sleepMs}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, sleepMs));
-          continue; // retry
-        }
+      const msg = String(e);
+      if (msg.includes("429")) {
+        throw e; // propagate immediately — quota exhausted, retrying won't help
       }
       if (attempt === MAX_RETRIES - 1) {
         throw new Error(
-          `Failed to detect chapters after ${MAX_RETRIES} attempts: ${e instanceof Error ? e.message : String(e)}`
+          `Chapter detection failed after ${MAX_RETRIES} attempts: ${e instanceof Error ? e.message : msg}`
         );
       }
     }

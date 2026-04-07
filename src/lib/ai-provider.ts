@@ -1,5 +1,5 @@
 /**
- * Unified AI provider: tries Groq first, falls back to Gemini on rate-limit (429) errors.
+ * Unified AI provider: Groq → Gemini → Ollama Mistral fallback chain.
  *
  * Usage:
  *   import { generateQuestions, detectChapters } from "@/lib/ai-provider";
@@ -12,6 +12,7 @@ import {
   splitTextByChapters,
 } from "./gemini";
 import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript } from "./groq";
+import { ollamaGenerateQuestions, ollamaDetectChapters } from "./ollama";
 
 import type {
   GenerateOptions,
@@ -64,50 +65,95 @@ function hasGeminiKey(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
-// ─── Generate Questions (Groq → Gemini fallback) ───────
+// ─── Generate Questions (Groq → Gemini → Ollama) ────────
 
 export async function generateQuestions(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "groq" }> {
-  // Try Groq first
+): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "groq" | "ollama" }> {
+  // 1. Groq
   if (hasGroqKey()) {
     try {
       const questions = await groqGenerateQuestions(opts);
       return { questions, provider: "groq" };
     } catch (err) {
-      if (isRateLimitError(err) && hasGeminiKey()) {
+      if (isRateLimitError(err)) {
         console.warn("[AI Provider] Groq rate-limited, falling back to Gemini…");
       } else {
         throw err;
       }
     }
   }
-  // Gemini fallback
-  const questions = await generateQuestionsFromContent(opts);
-  return { questions, provider: "gemini" };
+
+  // 2. Gemini
+  if (hasGeminiKey()) {
+    try {
+      const questions = await generateQuestionsFromContent(opts);
+      return { questions, provider: "gemini" };
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        console.warn("[AI Provider] Gemini rate-limited, falling back to Ollama Mistral…");
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // 3. Ollama Mistral (local, no quota)
+  try {
+    const questions = await ollamaGenerateQuestions(opts);
+    console.info("[AI Provider] Used Ollama Mistral for question generation.");
+    return { questions, provider: "ollama" };
+  } catch (err) {
+    throw new Error(
+      `All AI providers failed. Groq and Gemini are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
+      "Ensure Ollama is running with 'mistral' model pulled (ollama pull mistral)."
+    );
+  }
 }
 
-// ─── Detect Chapters (Groq → Gemini fallback) ──────────
+// ─── Detect Chapters (Groq → Gemini → Ollama) ───────────
 
 export async function detectChapters(
   opts: DetectChaptersOptions
-): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "groq" }> {
-  // Try Groq first
+): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "groq" | "ollama" }> {
+  // 1. Groq
   if (hasGroqKey()) {
     try {
       const chapters = await groqDetectChapters(opts);
       return { chapters, provider: "groq" };
     } catch (err) {
-      if (isRateLimitError(err) && hasGeminiKey()) {
+      if (isRateLimitError(err)) {
         console.warn("[AI Provider] Groq rate-limited (Chapters), falling back to Gemini…");
       } else {
         throw err;
       }
     }
   }
-  // Gemini fallback
-  const chapters = await detectChaptersFromContent(opts);
-  return { chapters, provider: "gemini" };
+
+  // 2. Gemini
+  if (hasGeminiKey()) {
+    try {
+      const chapters = await detectChaptersFromContent(opts);
+      return { chapters, provider: "gemini" };
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        console.warn("[AI Provider] Gemini rate-limited (Chapters), falling back to Ollama Mistral…");
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // 3. Ollama Mistral
+  try {
+    const chapters = await ollamaDetectChapters(opts);
+    console.info("[AI Provider] Used Ollama Mistral for chapter detection.");
+    return { chapters, provider: "ollama" };
+  } catch (err) {
+    throw new Error(
+      `All AI providers failed for chapter detection: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 }
 
 // ─── AI Tutor Chat (Groq → Gemini fallback) ─────────────

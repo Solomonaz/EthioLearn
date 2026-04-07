@@ -14,6 +14,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
+import { ollamaChat } from "./ollama";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -156,11 +157,32 @@ If there are no grammar issues, leave the issues array empty.`;
 
   let rawText = "";
 
+  // 1. Ollama Mistral (local, no quota)
   try {
-    // Try Groq first
-    const groqKey = process.env.GROQ_API_KEY;
-    if (groqKey) {
-      const groq = new Groq({ apiKey: groqKey });
+    const raw = await ollamaChat(prompt);
+    if (raw) rawText = raw;
+  } catch {
+    // fall through
+  }
+
+  // 2. Gemini
+  if (!rawText && process.env.GEMINI_API_KEY) {
+    try {
+      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = client.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 1536 },
+      });
+      rawText = (await model.generateContent(prompt)).response.text();
+    } catch (err) {
+      if (String(err).includes("429")) console.warn("[Quality Pipeline] Gemini rate-limited.");
+    }
+  }
+
+  // 3. Groq
+  if (!rawText && process.env.GROQ_API_KEY) {
+    try {
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
       const res = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
@@ -169,26 +191,13 @@ If there are no grammar issues, leave the issues array empty.`;
         response_format: { type: "json_object" },
       });
       rawText = res.choices[0]?.message?.content ?? "";
-    } else {
-      throw new Error("No Groq key");
-    }
-  } catch (error) {
-    // Fallback to Gemini
-    try {
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey) return result;
-      const client = new GoogleGenerativeAI(geminiKey);
-      const model = client.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 1536 },
-      });
-      const aiResult = await model.generateContent(prompt);
-      rawText = aiResult.response.text();
     } catch (fallbackError) {
-      console.warn("[Quality Pipeline] Both AI providers failed the text quality check:", fallbackError instanceof Error ? fallbackError.message : "Unknown Error");
+      console.warn("[Quality Pipeline] All providers failed text quality check:", fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
       return result;
     }
   }
+
+  if (!rawText) return result;
 
   try {
     const parsed = JSON.parse(rawText);
@@ -220,34 +229,25 @@ If there are no grammar issues, leave the issues array empty.`;
 
 // ─── 5. Semantic Duplicate Detection ───────────────────
 
-async function detectDuplicates(
-  questions: GeneratedQuestion[]
-): Promise<{ duplicatePairs: [number, number][]; similarities: Map<string, number> }> {
+function detectDuplicates(
+  questions: GeneratedQuestion[],
+  questionEmbeddings: number[][]
+): { duplicatePairs: [number, number][]; similarities: Map<string, number> } {
   const duplicatePairs: [number, number][] = [];
   const similarities = new Map<string, number>();
 
-  if (questions.length < 2) return { duplicatePairs, similarities };
+  if (questions.length < 2 || questionEmbeddings.length < 2) {
+    return { duplicatePairs, similarities };
+  }
 
-  try {
-    // Generate embeddings for all question texts
-    const texts = questions.map((q) => q.questionText);
-    const embeddingResults = await generateEmbeddings(texts);
-    const embeddings = embeddingResults.map((r) => r.embedding);
-
-    // Pairwise comparison
-    for (let i = 0; i < embeddings.length; i++) {
-      for (let j = i + 1; j < embeddings.length; j++) {
-        const sim = cosineSimilarity(embeddings[i], embeddings[j]);
-        const key = `${i}-${j}`;
-        similarities.set(key, sim);
-
-        if (sim >= DUPLICATE_THRESHOLD) {
-          duplicatePairs.push([i, j]);
-        }
+  for (let i = 0; i < questionEmbeddings.length; i++) {
+    for (let j = i + 1; j < questionEmbeddings.length; j++) {
+      const sim = cosineSimilarity(questionEmbeddings[i], questionEmbeddings[j]);
+      similarities.set(`${i}-${j}`, sim);
+      if (sim >= DUPLICATE_THRESHOLD) {
+        duplicatePairs.push([i, j]);
       }
     }
-  } catch (error) {
-    console.error("[Quality Pipeline] Duplicate detection failed:", error);
   }
 
   return { duplicatePairs, similarities };
@@ -255,26 +255,17 @@ async function detectDuplicates(
 
 // ─── 6. Relevance Check (question vs source content) ───
 
-async function checkRelevance(
+function checkRelevance(
   questions: GeneratedQuestion[],
-  sourceContent: string
-): Promise<Map<number, number>> {
+  sourceEmbedding: number[],
+  questionEmbeddings: number[][]
+): Map<number, number> {
   const relevanceScores = new Map<number, number>();
 
-  try {
-    // Embed the source content (use first 5000 chars as representative)
-    const sourceSnippet = sourceContent.slice(0, 5000);
-    const allTexts = [sourceSnippet, ...questions.map((q) => q.questionText)];
-
-    const embeddingResults = await generateEmbeddings(allTexts);
-    const sourceEmbedding = embeddingResults[0].embedding;
-
-    for (let i = 1; i < embeddingResults.length; i++) {
-      const sim = cosineSimilarity(sourceEmbedding, embeddingResults[i].embedding);
-      relevanceScores.set(i - 1, sim);
+  for (let i = 0; i < questions.length; i++) {
+    if (questionEmbeddings[i]) {
+      relevanceScores.set(i, cosineSimilarity(sourceEmbedding, questionEmbeddings[i]));
     }
-  } catch (error) {
-    console.error("[Quality Pipeline] Relevance check failed:", error);
   }
 
   return relevanceScores;
@@ -292,13 +283,26 @@ export async function runQualityPipeline(
   subject: string,
   grade: number
 ): Promise<QualityPipelineResult> {
-  // Run all checks in parallel
-  const [aiTextQuality, duplicateResult, relevanceMap] =
-    await Promise.all([
-      verifyAITextQuality(questions, subject, grade),
-      detectDuplicates(questions),
-      checkRelevance(questions, sourceContent),
-    ]);
+  // Pre-compute all embeddings in a single batch (source + all questions).
+  // This avoids making 2N+1 separate embedding calls by sharing one N+1 call
+  // between duplicate detection and relevance scoring.
+  const sourceSnippet = sourceContent.slice(0, 5000);
+  const allTexts = [sourceSnippet, ...questions.map((q) => q.questionText)];
+  let sourceEmbedding: number[] = [];
+  let questionEmbeddings: number[][] = [];
+
+  try {
+    const embeddingResults = await generateEmbeddings(allTexts);
+    sourceEmbedding = embeddingResults[0].embedding;
+    questionEmbeddings = embeddingResults.slice(1).map((r) => r.embedding);
+  } catch (error) {
+    console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
+  }
+
+  // Run AI text quality check in parallel with the (now synchronous) similarity checks
+  const aiTextQuality = await verifyAITextQuality(questions, subject, grade);
+  const duplicateResult = detectDuplicates(questions, questionEmbeddings);
+  const relevanceMap = checkRelevance(questions, sourceEmbedding, questionEmbeddings);
 
   const difficultyMap = aiTextQuality.difficulties;
   const grammarMap = aiTextQuality.grammarIssues;

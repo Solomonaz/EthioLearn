@@ -5,10 +5,11 @@
  *   Remember → Understand → Apply → Analyze → Evaluate → Create
  *
  * Batch processes multiple chunks in a single AI call for efficiency.
- * Uses Gemini with Groq fallback.
+ * Provider priority: Ollama Mistral → Gemini → default "Understand".
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ollamaChat } from "./ollama";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -125,11 +126,60 @@ function validateBloomTags(raw: unknown, expectedChunks: number[]): BloomTagResu
   return validated;
 }
 
+// ─── Per-batch AI call with provider chain ──────────────
+
+async function tagBatch(
+  batch: { chunkIndex: number; content: string }[],
+  subject: string,
+  grade: number
+): Promise<BloomTagResult[]> {
+  const expectedIndices = batch.map((c) => c.chunkIndex);
+  const prompt = buildBloomTaggingPrompt(batch, subject, grade);
+
+  // 1. Ollama Mistral (local, no quota)
+  try {
+    const raw = await ollamaChat(prompt);
+    if (raw) {
+      const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
+      if (tags.length > 0) {
+        console.info("[Bloom Tagger] Used Ollama Mistral.");
+        return tags;
+      }
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2. Gemini
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const client = getClient();
+      const model = client.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 4096 },
+      });
+      const result = await model.generateContent(prompt);
+      const tags = validateBloomTags(JSON.parse(result.response.text()), expectedIndices);
+      if (tags.length > 0) return tags;
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes("429")) {
+        console.warn("[Bloom Tagger] Gemini rate-limited.");
+      }
+    }
+  }
+
+  // 3. Default fallback
+  console.warn("[Bloom Tagger] All providers failed — assigning default 'Understand'.");
+  return batch.map((c) => ({ chunkIndex: c.chunkIndex, bloomLevel: "Understand" as BloomLevel, confidence: 0 }));
+}
+
 // ─── Main: Tag Chunks with Bloom's Levels ───────────────
 
 /**
  * Tag multiple chunks with Bloom's Taxonomy levels in a single AI call.
- * Processes in batches of 15 chunks to stay within token limits.
+ * Provider priority: Ollama Mistral → Gemini → default "Understand".
+ * Processes in batches of 50 chunks.
  */
 export async function tagChunksWithBloomLevel(
   chunks: { chunkIndex: number; content: string }[],
@@ -138,68 +188,13 @@ export async function tagChunksWithBloomLevel(
 ): Promise<BloomTagResult[]> {
   if (chunks.length === 0) return [];
 
-  const client = getClient();
-  const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2,
-      maxOutputTokens: 4096,
-    },
-  });
-
   const BATCH_SIZE = 50;
   const allResults: BloomTagResult[] = [];
 
-  const MAX_RETRIES = 50;
-
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
     const batch = chunks.slice(i, i + BATCH_SIZE);
-    const expectedIndices = batch.map((c) => c.chunkIndex);
-
-    const prompt = buildBloomTaggingPrompt(batch, subject, grade);
-
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      try {
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const parsed = JSON.parse(text);
-        const tags = validateBloomTags(parsed, expectedIndices);
-
-        allResults.push(...tags);
-        break; // Success, break out of retry loop
-      } catch (error) {
-        if (attempt < MAX_RETRIES - 1) {
-          const msg = String(error);
-          if (msg.includes("429")) {
-            const match = msg.match(/retry in ([\d.]+)s/i);
-            const sleepMs = match ? Math.ceil(parseFloat(match[1]) * 1000) : 12000;
-            console.warn(`[Bloom Tagger] Rate limited. Sleeping for ${sleepMs}ms before retry...`);
-            await new Promise((resolve) => setTimeout(resolve, sleepMs));
-            continue; // retry
-          }
-        }
-        
-        if (attempt === MAX_RETRIES - 1) {
-          console.warn(
-            `[Bloom Tagger] Failed to tag batch starting at chunk ${i} after ${MAX_RETRIES} attempts. Falling back to default.`
-          );
-          // Assign default "Understand" for failed chunks
-          for (const chunk of batch) {
-            allResults.push({
-              chunkIndex: chunk.chunkIndex,
-              bloomLevel: "Understand",
-              confidence: 0,
-            });
-          }
-        }
-      }
-    }
-
-    // Small delay between batches
-    if (i + BATCH_SIZE < chunks.length) {
-      await new Promise((r) => setTimeout(r, 300));
-    }
+    const tags = await tagBatch(batch, subject, grade);
+    allResults.push(...tags);
   }
 
   return allResults;

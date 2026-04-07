@@ -14,6 +14,10 @@ const EMBEDDING_MODEL = "text-embedding-004";
 const EMBEDDING_DIMENSIONS = 768;
 const BATCH_SIZE = 50; // Gemini supports up to 100, use 50 for safety
 
+// ─── Ollama config ───────────────────────────────────────
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+const OLLAMA_EMBEDDING_MODEL = "bge-m3";
+
 // ─── Types ──────────────────────────────────────────────
 
 export interface EmbeddingResult {
@@ -58,12 +62,11 @@ function ngramFingerprint(text: string, dims: number): number[] {
   return vec.map((v) => v / norm);
 }
 
-// ─── Runtime capability flag ────────────────────────────
-// Many Gemini API keys (free tier / newer keys) don't have access to
-// `text-embedding-004` / `embedding-001` on the v1beta endpoint. Rather than
-// spamming the log with 404s on every batch, we try **once** per process and
-// cache the result. On failure we silently use the local n-gram fingerprint.
+// ─── Runtime capability flags ────────────────────────────
+// Try each provider once per process and cache the result to avoid
+// spamming logs or wasting time on known-unavailable providers.
 let geminiEmbeddingsAvailable: boolean | null = null;
+let ollamaEmbeddingsAvailable: boolean | null = null;
 
 async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
   if (geminiEmbeddingsAvailable === false) return null;
@@ -80,7 +83,7 @@ async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
   } catch {
     if (geminiEmbeddingsAvailable === null) {
       console.warn(
-        `[Embeddings] Gemini embedding model "${EMBEDDING_MODEL}" unavailable on this API key — using local fingerprint fallback for the rest of this process.`
+        `[Embeddings] Gemini embedding model "${EMBEDDING_MODEL}" unavailable — trying Ollama ${OLLAMA_EMBEDDING_MODEL} fallback.`
       );
     }
     geminiEmbeddingsAvailable = false;
@@ -88,40 +91,104 @@ async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
   }
 }
 
+// Ollama /api/embed supports batching — send all texts in one request.
+// BGE-M3 outputs 1024 dims; we slice to EMBEDDING_DIMENSIONS (768) and
+// re-normalise so vectors are compatible with the existing pgvector schema.
+async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> {
+  if (ollamaEmbeddingsAvailable === false) return null;
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/embed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: OLLAMA_EMBEDDING_MODEL, input: texts }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!response.ok) {
+      ollamaEmbeddingsAvailable = false;
+      return null;
+    }
+
+    const data = await response.json() as { embeddings?: number[][] };
+    const embeddings = data.embeddings;
+
+    if (!Array.isArray(embeddings) || embeddings.length !== texts.length) {
+      ollamaEmbeddingsAvailable = false;
+      return null;
+    }
+
+    if (ollamaEmbeddingsAvailable === null) {
+      console.info(`[Embeddings] Using Ollama ${OLLAMA_EMBEDDING_MODEL} for embeddings.`);
+    }
+    ollamaEmbeddingsAvailable = true;
+
+    // Slice to EMBEDDING_DIMENSIONS and L2-normalise
+    return embeddings.map((emb) => {
+      const sliced = emb.slice(0, EMBEDDING_DIMENSIONS);
+      const norm = Math.sqrt(sliced.reduce((s, v) => s + v * v, 0)) || 1;
+      return sliced.map((v) => v / norm);
+    });
+  } catch {
+    if (ollamaEmbeddingsAvailable === null) {
+      console.warn(
+        `[Embeddings] Ollama (${OLLAMA_EMBEDDING_MODEL}) unavailable — falling back to local n-gram fingerprint.`
+      );
+    }
+    ollamaEmbeddingsAvailable = false;
+    return null;
+  }
+}
+
 // ─── Single Embedding ───────────────────────────────────
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const remote = await tryGeminiEmbedding(text);
-  return remote ?? ngramFingerprint(text, EMBEDDING_DIMENSIONS);
+  const ollama = await tryOllamaEmbeddings([text]);
+  if (ollama) return ollama[0];
+
+  const gemini = await tryGeminiEmbedding(text);
+  if (gemini) return gemini;
+
+  return ngramFingerprint(text, EMBEDDING_DIMENSIONS);
 }
 
 // ─── Batch Embeddings ───────────────────────────────────
+// Priority: Ollama BGE-M3 (one batch request) → Gemini (parallel per-text)
+// → n-gram fingerprint.
 
 export async function generateEmbeddings(
   texts: string[]
 ): Promise<EmbeddingResult[]> {
+  if (texts.length === 0) return [];
+
   const results: EmbeddingResult[] = [];
 
-  // Process in batches
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
     const batch = texts.slice(i, i + BATCH_SIZE);
 
-    const batchResults = await Promise.all(
-      batch.map(async (text) => {
-        const remote = await tryGeminiEmbedding(text);
-        return {
-          text,
-          embedding: remote ?? ngramFingerprint(text, EMBEDDING_DIMENSIONS),
-        };
-      })
-    );
-
-    results.push(...batchResults);
-
-    // Small delay between batches to avoid rate limits
-    if (i + BATCH_SIZE < texts.length) {
-      await new Promise((r) => setTimeout(r, 200));
+    // 1. Ollama BGE-M3 (single batched request — no per-item quota)
+    const ollamaResults = await tryOllamaEmbeddings(batch);
+    if (ollamaResults) {
+      results.push(...batch.map((text, j) => ({ text, embedding: ollamaResults[j] })));
+      continue;
     }
+
+    // 2. Gemini (parallel per-text)
+    if (geminiEmbeddingsAvailable !== false) {
+      const geminiResults = await Promise.all(
+        batch.map(async (text) => ({ text, embedding: await tryGeminiEmbedding(text) }))
+      );
+
+      if (geminiResults.every((r) => r.embedding !== null)) {
+        results.push(...geminiResults.map((r) => ({ text: r.text, embedding: r.embedding! })));
+        if (i + BATCH_SIZE < texts.length) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        continue;
+      }
+    }
+
+    // 3. n-gram fingerprint (always works, fully offline)
+    results.push(...batch.map((text) => ({ text, embedding: ngramFingerprint(text, EMBEDDING_DIMENSIONS) })));
   }
 
   return results;
