@@ -1,11 +1,13 @@
+import "dotenv/config";
 import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { Server as SocketServer } from "socket.io";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { checkBattleAchievements } from "./src/lib/achievements";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();
