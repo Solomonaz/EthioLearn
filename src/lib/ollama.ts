@@ -170,8 +170,8 @@ export async function ollamaDetectChapters(
   const arr = Array.isArray(parsed)
     ? parsed
     : Array.isArray((parsed as Record<string, unknown>)?.chapters)
-    ? (parsed as Record<string, unknown>).chapters
-    : [];
+      ? (parsed as Record<string, unknown>).chapters
+      : [];
 
   const validated: DetectedChapter[] = (arr as unknown[])
     .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
