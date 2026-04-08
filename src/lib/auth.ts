@@ -3,8 +3,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import crypto from "crypto";
 import { db } from "./db";
-import { verifyOTP } from "./otp-store";
-import { createUserSession, touchSession } from "./session-store";
+import { peekOTP, consumeOTP } from "./otp-store";
+import { createUserSession, touchSession, revokeSessionByToken } from "./session-store";
 
 // ── Telegram Auth Validation ─────────────────────────────────────────────────
 
@@ -70,13 +70,18 @@ const providers: NextAuthOptions["providers"] = [
         };
       }
 
-      const isValid = verifyOTP(phoneVal, otpVal);
+      // Validate OTP without consuming it yet — so that a DB failure
+      // doesn't silently waste the user's only attempt.
+      const isValid = peekOTP(phoneVal, otpVal);
       if (!isValid) return null;
 
       const user = await db.user.findUnique({
         where: { phoneNumber: phoneVal },
       });
       if (!user || !user.isActive || user.suspendedAt) return null;
+
+      // Only consume the OTP after the user is confirmed valid.
+      consumeOTP(phoneVal);
 
       return {
         id: user.id,
@@ -161,6 +166,17 @@ export const authOptions: NextAuthOptions = {
     newUser: "/register",
   },
   providers,
+
+  events: {
+    // Revoke the DB session record when the user signs out so that any
+    // in-flight token-refresh attempts are rejected immediately.
+    async signOut({ token }: { token: any }) {
+      const sessionId = token?.sessionId as string | undefined;
+      if (sessionId) {
+        await revokeSessionByToken(sessionId);
+      }
+    },
+  },
 
   callbacks: {
     // ── signIn ───────────────────────────────────────────────────────────────

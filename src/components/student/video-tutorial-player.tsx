@@ -42,149 +42,109 @@ interface Props {
 
 // ─── Accent palette (cycles per slide) ───────────────────
 
+// Futuristic holographic palette: neon cyan, deep violet, gold
 const ACCENTS = [
-  { from: "from-violet-600",  to: "to-indigo-700",  hex: "#7c3aed", light: "#ede9fe" },
-  { from: "from-emerald-500", to: "to-teal-600",    hex: "#059669", light: "#d1fae5" },
-  { from: "from-rose-500",    to: "to-pink-600",    hex: "#e11d48", light: "#ffe4e6" },
-  { from: "from-amber-500",   to: "to-orange-600",  hex: "#d97706", light: "#fef3c7" },
-  { from: "from-sky-500",     to: "to-blue-600",    hex: "#0284c7", light: "#e0f2fe" },
-  { from: "from-lime-500",    to: "to-green-600",   hex: "#16a34a", light: "#dcfce7" },
+  { from: "from-cyan-400",   to: "to-violet-600", hex: "#22d3ee", light: "#a5f3fc" },
+  { from: "from-violet-500", to: "to-fuchsia-600", hex: "#8b5cf6", light: "#ddd6fe" },
+  { from: "from-amber-300",  to: "to-amber-500",  hex: "#fbbf24", light: "#fde68a" },
+  { from: "from-cyan-300",   to: "to-blue-600",   hex: "#67e8f9", light: "#cffafe" },
+  { from: "from-fuchsia-400",to: "to-violet-700", hex: "#e879f9", light: "#f5d0fe" },
+  { from: "from-amber-400",  to: "to-orange-500", hex: "#f59e0b", light: "#fef3c7" },
 ];
 
-// ─── Teacher Character ────────────────────────────────────
+// ─── Holographic AI Avatar ────────────────────────────────
 
-const TEACHER_COLORS = ["#6366f1","#10b981","#f43f5e","#f59e0b","#0ea5e9","#22c55e"];
+const HOLO_COLORS = ["#22d3ee","#8b5cf6","#fbbf24","#67e8f9","#e879f9","#f59e0b"];
 
 function TeacherCharacter({ emotion = "explaining", colorIdx = 0 }: {
   emotion?: TeacherEmotion;
   colorIdx?: number;
 }) {
-  const shirtColor = TEACHER_COLORS[colorIdx % TEACHER_COLORS.length];
+  const c = HOLO_COLORS[colorIdx % HOLO_COLORS.length];
+  const accent = HOLO_COLORS[(colorIdx + 1) % HOLO_COLORS.length];
 
-  // Arm rotation angles (degrees) from shoulder pivot
-  const leftArm  = { explaining: 30, pointing: 10, excited: -150, thinking: 30,  writing: 40  }[emotion] ?? 30;
-  const rightArm = { explaining: -30, pointing: -110, excited: -30, thinking: -65, writing: -50 }[emotion] ?? -30;
-  const bodyAnim = emotion === "excited"  ? "animate-bounce"
-                 : emotion === "pointing" ? ""
-                 : "animate-[teacherSway_4s_ease-in-out_infinite]";
+  // Pulse intensity per emotion
+  const pulse = {
+    explaining: 1,
+    pointing:   1.1,
+    excited:    1.4,
+    thinking:   0.7,
+    writing:    1.0,
+  }[emotion] ?? 1;
 
   return (
-    <div className={cn("relative flex flex-col items-center select-none", bodyAnim)}
-         style={{ width: 88, minHeight: 170 }}>
+    <div className="relative flex flex-col items-center select-none"
+         style={{ width: 96, minHeight: 130 }}>
 
-      {/* ── Head ── */}
-      <div className="relative z-10" style={{ width: 52, height: 52 }}>
-        <div className="absolute inset-0 rounded-full" style={{ background: "#FDDBB4" }} />
-        {/* Hair */}
-        <div className="absolute top-0 left-0 right-0 h-5 rounded-t-full" style={{ background: "#4B2E0E" }} />
-        {/* Eyes */}
-        <div className="absolute flex gap-2.5" style={{ top: 17, left: 10 }}>
-          <div className="relative" style={{ width: 10, height: 11, borderRadius: "50%", background: "white" }}>
-            <div className={cn("absolute rounded-full bg-gray-900", emotion === "excited" ? "animate-ping" : "")}
-                 style={{ width: 6, height: 6, top: 2, left: 2 }} />
-          </div>
-          <div className="relative" style={{ width: 10, height: 11, borderRadius: "50%", background: "white" }}>
-            <div className="absolute rounded-full bg-gray-900"
-                 style={{ width: 6, height: 6, top: 2, left: 2 }} />
-          </div>
-        </div>
-        {/* Eyebrows */}
-        <div className="absolute flex gap-3" style={{ top: 11, left: 9 }}>
-          <div className="h-1 w-7 rounded-full"
-               style={{ background: "#4B2E0E", transform: emotion === "thinking" ? "rotate(-8deg)" : emotion === "excited" ? "rotate(-15deg)" : "rotate(0deg)" }} />
-        </div>
-        {/* Mouth */}
-        <div className="absolute" style={{ bottom: 9, left: "50%", transform: "translateX(-50%)" }}>
-          {emotion === "excited" ? (
-            <div style={{ width: 20, height: 10, borderRadius: "0 0 14px 14px", background: "#c2410c", border: "2px solid #9a3412" }} />
-          ) : emotion === "thinking" ? (
-            <div style={{ width: 14, height: 4, borderRadius: 4, background: "#c2410c" }} />
-          ) : (
-            <div style={{ width: 18, height: 6, borderRadius: "0 0 12px 12px", border: "2px solid #c2410c", borderTop: "none" }} />
-          )}
-        </div>
-        {/* Cheeks */}
-        <div className="absolute rounded-full opacity-40"
-             style={{ width: 10, height: 7, background: "#f87171", bottom: 12, left: 4 }} />
-        <div className="absolute rounded-full opacity-40"
-             style={{ width: 10, height: 7, background: "#f87171", bottom: 12, right: 4 }} />
-      </div>
-
-      {/* ── Neck ── */}
-      <div style={{ width: 14, height: 8, background: "#FDDBB4", zIndex: 9 }} />
-
-      {/* ── Body + arms row ── */}
-      <div className="relative flex items-start" style={{ width: 88, height: 60 }}>
-
-        {/* Left arm (originates from left shoulder) */}
-        <div className="absolute"
+      {/* Outer rotating ring */}
+      <div className="relative" style={{ width: 92, height: 92 }}>
+        <div className="absolute inset-0 rounded-full border border-dashed opacity-60"
              style={{
-               left: 0, top: 6,
-               transformOrigin: "right center",
-               transform: `rotate(${leftArm}deg)`,
-               transition: "transform 0.5s ease",
-               width: 22, height: 11,
-               borderRadius: 8,
-               background: shirtColor,
-             }}>
-          {/* Hand */}
-          <div className="absolute rounded-full"
-               style={{ width: 13, height: 13, background: "#FDDBB4", left: -6, top: -1 }} />
-        </div>
-
-        {/* Body */}
-        <div className="mx-auto rounded-2xl"
-             style={{ width: 44, height: 56, background: shirtColor, zIndex: 10 }}>
-          {/* Shirt detail */}
-          <div className="mx-auto mt-2 rounded-full opacity-30"
-               style={{ width: 10, height: 10, background: "white" }} />
-        </div>
-
-        {/* Right arm (originates from right shoulder) */}
-        <div className="absolute"
+               borderColor: c,
+               animation: "holoSpin 9s linear infinite",
+               boxShadow: `0 0 24px ${c}55, inset 0 0 18px ${c}33`,
+             }} />
+        {/* Mid ring (counter) */}
+        <div className="absolute inset-2 rounded-full border opacity-40"
              style={{
-               right: 0, top: 6,
-               transformOrigin: "left center",
-               transform: `rotate(${rightArm}deg)`,
-               transition: "transform 0.5s ease",
-               width: 22, height: 11,
-               borderRadius: 8,
-               background: shirtColor,
+               borderColor: accent,
+               animation: "holoSpin 6s linear infinite reverse",
+             }} />
+
+        {/* Core orb */}
+        <div className="absolute inset-4 rounded-full"
+             style={{
+               background: `radial-gradient(circle at 35% 30%, #ffffff 0%, ${c} 35%, ${accent} 75%, transparent 100%)`,
+               boxShadow: `0 0 ${20 * pulse}px ${c}, 0 0 ${40 * pulse}px ${c}77`,
+               animation: `holoPulse ${2.4 / pulse}s ease-in-out infinite`,
              }}>
-          {/* Hand — pointer finger for "pointing" */}
-          <div className="absolute rounded-full"
-               style={{ width: 13, height: 13, background: "#FDDBB4", right: -6, top: -1 }} />
-          {emotion === "pointing" && (
+          {/* Inner glint */}
+          <div className="absolute rounded-full bg-white/70"
+               style={{ width: 10, height: 10, top: "22%", left: "26%", filter: "blur(1px)" }} />
+        </div>
+
+        {/* Orbiting particles */}
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="absolute inset-0"
+               style={{ animation: `holoSpin ${4 + i}s linear infinite`, animationDelay: `${i * -1}s` }}>
             <div className="absolute rounded-full"
-                 style={{ width: 5, height: 10, background: "#FDDBB4", right: -8, top: -4 }} />
-          )}
-          {emotion === "writing" && (
-            <div className="absolute"
-                 style={{ width: 3, height: 14, background: "#fbbf24", right: -5, top: -4,
-                          borderRadius: 2,
-                          animation: "writingPen 0.8s ease-in-out infinite alternate" }} />
-          )}
-        </div>
+                 style={{
+                   width: 5, height: 5,
+                   left: "50%", top: i % 2 ? "8%" : "88%",
+                   transform: "translateX(-50%)",
+                   background: i === 1 ? "#fbbf24" : c,
+                   boxShadow: `0 0 8px ${i === 1 ? "#fbbf24" : c}`,
+                 }} />
+          </div>
+        ))}
       </div>
 
-      {/* ── Legs ── */}
-      <div className="flex gap-1 mt-0.5">
-        <div className="rounded-b-full" style={{ width: 16, height: 38, background: "#1e3a5f" }} />
-        <div className="rounded-b-full" style={{ width: 16, height: 38, background: "#1e3a5f" }} />
+      {/* Holo-base pedestal */}
+      <div className="mt-1 flex flex-col items-center gap-0.5">
+        <div className="rounded-full"
+             style={{
+               width: 60, height: 4,
+               background: `linear-gradient(90deg, transparent, ${c}, transparent)`,
+               boxShadow: `0 0 12px ${c}`,
+             }} />
+        <div className="rounded-full opacity-60"
+             style={{
+               width: 44, height: 2,
+               background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+             }} />
+        <div className="rounded-full opacity-30"
+             style={{ width: 28, height: 1.5, background: c }} />
       </div>
 
-      {/* ── Shoes ── */}
-      <div className="flex gap-1 -mt-1">
-        <div className="rounded-full" style={{ width: 22, height: 10, background: "#111" }} />
-        <div className="rounded-full" style={{ width: 22, height: 10, background: "#111" }} />
-      </div>
-
-      {/* ── Shadow ── */}
-      <div className="rounded-full opacity-20 mt-0.5"
-           style={{ width: 50, height: 8, background: "#000" }} />
+      {/* Status label */}
+      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.18em]"
+         style={{ color: c, textShadow: `0 0 6px ${c}99` }}>
+        AI · {emotion}
+      </p>
     </div>
   );
 }
+
 
 // ─── Visual: Process ─────────────────────────────────────
 
@@ -602,10 +562,17 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
   const progressPct = ((slideIdx + 1) / totalSlides) * 100;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-gray-950 text-white shadow-2xl">
+    <div
+      className="relative flex h-full flex-col overflow-hidden rounded-2xl text-white shadow-2xl"
+      style={{
+        background:
+          "radial-gradient(ellipse at 20% 0%, #1e1b4b 0%, #0a0a1f 45%, #050510 100%)",
+        boxShadow:
+          "0 0 0 1px rgba(34,211,238,0.15), 0 30px 80px -10px rgba(139,92,246,0.35), inset 0 0 120px rgba(34,211,238,0.04)",
+      }}>
 
       {/* ── Header ─────────────────────────────────── */}
-      <div className="flex items-center gap-3 border-b border-white/10 bg-gray-900/80 px-5 py-3">
+      <div className="relative z-20 flex items-center gap-3 border-b border-cyan-400/20 bg-white/[0.03] px-5 py-3 backdrop-blur-xl">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-white/30">
             {subject} · {chapterTitle}
@@ -629,12 +596,101 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
       {/* ── Main slide area ────────────────────────── */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
 
-        {/* Background glow blob */}
+        {/* ── Holographic background stage ── */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full opacity-10 blur-3xl transition-colors duration-700"
+          {/* Soft depth blur orbs */}
+          <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full opacity-30 blur-[90px] transition-colors duration-700"
                style={{ background: accent.hex }} />
-          <div className="absolute -bottom-20 -left-10 h-48 w-48 rounded-full opacity-10 blur-2xl transition-colors duration-700"
-               style={{ background: accent.hex }} />
+          <div className="absolute -bottom-24 -left-16 h-72 w-72 rounded-full opacity-25 blur-[100px] transition-colors duration-700"
+               style={{ background: "#8b5cf6" }} />
+          <div className="absolute right-1/3 bottom-1/4 h-40 w-40 rounded-full opacity-20 blur-[70px]"
+               style={{ background: "#fbbf24" }} />
+
+          {/* Perspective grid floor */}
+          <div className="absolute inset-x-0 bottom-0 h-1/2 opacity-25"
+               style={{
+                 backgroundImage:
+                   "linear-gradient(rgba(34,211,238,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.35) 1px, transparent 1px)",
+                 backgroundSize: "40px 40px",
+                 transform: "perspective(500px) rotateX(60deg)",
+                 transformOrigin: "bottom",
+                 maskImage: "linear-gradient(to top, black, transparent)",
+                 WebkitMaskImage: "linear-gradient(to top, black, transparent)",
+               }} />
+
+          {/* Pulsing data lines (horizontal scans) */}
+          <div className="absolute inset-x-0 top-1/4 h-px"
+               style={{
+                 background: "linear-gradient(90deg, transparent, #22d3ee, transparent)",
+                 boxShadow: "0 0 10px #22d3ee",
+                 animation: "dataScan 6s ease-in-out infinite",
+               }} />
+          <div className="absolute inset-x-0 top-2/3 h-px"
+               style={{
+                 background: "linear-gradient(90deg, transparent, #fbbf24, transparent)",
+                 boxShadow: "0 0 10px #fbbf24",
+                 animation: "dataScan 7.5s ease-in-out infinite 1.2s",
+               }} />
+
+          {/* Floating holo cube — top right */}
+          <svg className="absolute" style={{
+                 top: "12%", right: "8%", width: 70, height: 70,
+                 animation: "holoFloat 7s ease-in-out infinite",
+                 filter: "drop-shadow(0 0 10px #22d3ee)",
+               }} viewBox="0 0 100 100" fill="none">
+            <g stroke="#22d3ee" strokeWidth="1.5" opacity="0.85">
+              <path d="M20 30 L50 15 L80 30 L80 70 L50 85 L20 70 Z" />
+              <path d="M20 30 L50 45 L80 30" />
+              <path d="M50 45 L50 85" />
+            </g>
+          </svg>
+
+          {/* Floating holo sphere — mid left */}
+          <svg className="absolute" style={{
+                 bottom: "22%", left: "6%", width: 60, height: 60,
+                 animation: "holoFloat 9s ease-in-out infinite 1.5s",
+                 filter: "drop-shadow(0 0 12px #8b5cf6)",
+               }} viewBox="0 0 100 100" fill="none">
+            <g stroke="#a78bfa" strokeWidth="1.5" opacity="0.85">
+              <circle cx="50" cy="50" r="35" />
+              <ellipse cx="50" cy="50" rx="35" ry="12" />
+              <ellipse cx="50" cy="50" rx="12" ry="35" />
+              <line x1="15" y1="50" x2="85" y2="50" />
+            </g>
+          </svg>
+
+          {/* Floating gold octahedron — top left */}
+          <svg className="absolute" style={{
+                 top: "20%", left: "10%", width: 46, height: 46,
+                 animation: "holoFloat 8s ease-in-out infinite 0.7s",
+                 filter: "drop-shadow(0 0 10px #fbbf24)",
+               }} viewBox="0 0 100 100" fill="none">
+            <g stroke="#fbbf24" strokeWidth="1.5" opacity="0.9">
+              <path d="M50 10 L90 50 L50 90 L10 50 Z" />
+              <path d="M10 50 L90 50" />
+              <path d="M50 10 L50 90" />
+            </g>
+          </svg>
+
+          {/* Particle field */}
+          {Array.from({ length: 18 }).map((_, i) => {
+            const colors = ["#22d3ee", "#8b5cf6", "#fbbf24"];
+            const color = colors[i % 3];
+            const left = (i * 53) % 100;
+            const top = (i * 37) % 100;
+            const dur = 4 + (i % 5);
+            return (
+              <span key={i} className="absolute rounded-full"
+                style={{
+                  left: `${left}%`, top: `${top}%`,
+                  width: 3, height: 3,
+                  background: color,
+                  boxShadow: `0 0 6px ${color}`,
+                  opacity: 0.7,
+                  animation: `holoFloat ${dur}s ease-in-out infinite ${i * 0.2}s, holoTwinkle 2.${i % 9}s ease-in-out infinite`,
+                }} />
+            );
+          })}
         </div>
 
         {/* ── Content grid: visual (left) + teacher (right) ── */}
@@ -642,7 +698,8 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
 
           {/* Slide heading */}
           <h2 key={`heading-${slideIdx}`}
-              className="mb-4 text-xl font-black leading-tight text-white sm:text-2xl animate-in fade-in slide-in-from-left-4 duration-500">
+              className="mb-4 text-xl font-black leading-tight tracking-tight text-white sm:text-2xl animate-in fade-in slide-in-from-left-4 duration-500"
+              style={{ textShadow: `0 0 20px ${accent.hex}66, 0 0 40px ${accent.hex}33` }}>
             {slide.heading}
           </h2>
 
@@ -651,8 +708,13 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
 
             {/* Visual area */}
             <div key={`visual-${slideIdx}`}
-                 className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/5 py-3"
-                 style={{ minHeight: 140 }}>
+                 className="relative min-w-0 flex-1 overflow-hidden rounded-2xl py-3 backdrop-blur-md"
+                 style={{
+                   minHeight: 140,
+                   border: `1px solid ${accent.hex}55`,
+                   background: "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))",
+                   boxShadow: `0 0 30px ${accent.hex}22, inset 0 0 30px rgba(255,255,255,0.02)`,
+                 }}>
               <SlideVisual slide={slide} active={isPlaying} />
             </div>
 
@@ -702,7 +764,7 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
       </div>
 
       {/* ── Slide chips ──────────────────────────── */}
-      <div className="flex gap-1.5 overflow-x-auto bg-gray-900/60 px-4 py-2 scrollbar-none">
+      <div className="relative z-20 flex gap-1.5 overflow-x-auto border-t border-cyan-400/10 bg-white/[0.02] px-4 py-2 backdrop-blur-xl scrollbar-none">
         {script.slides.map((s, i) => (
           <button key={i} onClick={() => goTo(i)}
                   className={cn(
@@ -718,7 +780,7 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
       </div>
 
       {/* ── Controls ─────────────────────────────── */}
-      <div className="flex items-center justify-between border-t border-white/10 bg-gray-900/80 px-5 py-3">
+      <div className="relative z-20 flex items-center justify-between border-t border-cyan-400/20 bg-white/[0.03] px-5 py-3 backdrop-blur-xl">
         {/* Mute */}
         <button onClick={toggleMute}
                 disabled={!speechSupported}
@@ -755,6 +817,28 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
 
       {/* ── CSS animations ───────────────────────── */}
       <style>{`
+        @keyframes holoSpin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes holoPulse {
+          0%,100% { transform: scale(1);    filter: brightness(1); }
+          50%     { transform: scale(1.06); filter: brightness(1.25); }
+        }
+        @keyframes holoFloat {
+          0%,100% { transform: translateY(0) rotate(0deg); }
+          50%     { transform: translateY(-12px) rotate(8deg); }
+        }
+        @keyframes holoTwinkle {
+          0%,100% { opacity: 0.25; }
+          50%     { opacity: 0.95; }
+        }
+        @keyframes dataScan {
+          0%,100% { transform: translateX(-100%); opacity: 0; }
+          10%     { opacity: 1; }
+          50%     { transform: translateX(0%);    opacity: 1; }
+          90%     { opacity: 1; }
+        }
         @keyframes teacherSway {
           0%,100% { transform: rotate(-1.5deg); }
           50%      { transform: rotate(1.5deg);  }

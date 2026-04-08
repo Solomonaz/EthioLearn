@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, Suspense } from "react";
-import { signIn, getSession } from "next-auth/react";
+import { useState, Suspense, useEffect } from "react";
+import { signIn, getSession, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -37,6 +37,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
 
 function LoginForm() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get("registered") === "true";
   const callbackUrl = searchParams.get("callbackUrl") ?? "";
@@ -44,6 +45,15 @@ function LoginForm() {
   // Surface NextAuth error codes passed via ?error=
   const errorCode = searchParams.get("error") ?? "";
   const initialError = AUTH_ERROR_MESSAGES[errorCode] ?? "";
+
+  // If the user is already authenticated, redirect them to their dashboard.
+  useEffect(() => {
+    if (status === "authenticated") {
+      const role = (session?.user as { role?: string } | undefined)?.role;
+      const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
+      router.replace(isAdmin ? "/admin" : "/student");
+    }
+  }, [status, session, router]);
 
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");

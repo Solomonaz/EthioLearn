@@ -1,13 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 type Role = "STUDENT" | "SCHOOL_ADMIN";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
+
+  // If already authenticated, send the user to their dashboard instead of
+  // showing the registration form (handles stale-cookie / incomplete-logout cases).
+  useEffect(() => {
+    if (status === "authenticated") {
+      const role = (session?.user as { role?: string } | undefined)?.role;
+      const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
+      router.replace(isAdmin ? "/admin" : "/student");
+    }
+  }, [status, session, router]);
+
   const [step, setStep] = useState<"phone" | "otp" | "profile">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");

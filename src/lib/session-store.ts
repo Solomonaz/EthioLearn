@@ -111,6 +111,18 @@ export async function rotateSession(
 }
 
 /**
+ * Revoke a session by its sessionId UUID (used during sign-out).
+ */
+export async function revokeSessionByToken(sessionId: string) {
+  await db.userSession
+    .update({
+      where: { sessionId },
+      data: { isRevoked: true, revokedAt: new Date() },
+    })
+    .catch(() => {}); // Non-fatal
+}
+
+/**
  * Revoke a specific session by its DB id (must belong to userId).
  */
 export async function revokeSession(id: string, userId: string) {

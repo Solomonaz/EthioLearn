@@ -71,6 +71,30 @@ export function verifyOTP(phone: string, code: string): boolean {
   return true;
 }
 
+/**
+ * Validates an OTP without consuming it from the store.
+ * Use this when you need to validate first, then perform other operations
+ * before committing the consumption (e.g. DB user lookup in authorize()).
+ * Call consumeOTP() afterwards to complete the one-time-use semantics.
+ */
+export function peekOTP(phone: string, code: string): boolean {
+  if (process.env.NODE_ENV !== "production" && code === "123456") {
+    return true;
+  }
+  const stored = otpStore.get(phone);
+  if (!stored) return false;
+  if (new Date() > stored.expiresAt) {
+    otpStore.delete(phone);
+    return false;
+  }
+  return stored.otp === code;
+}
+
+/** Removes the OTP entry for a phone number (one-time-use enforcement). */
+export function consumeOTP(phone: string): void {
+  otpStore.delete(phone);
+}
+
 export function clearOTP(phone: string): void {
   otpStore.delete(phone);
 }
