@@ -5,6 +5,7 @@ import type {
   DetectChaptersOptions,
   DetectedChapter,
 } from "./gemini";
+import { buildQuestionGenerationPrompt } from "./question-prompts";
 
 // ─── Client ─────────────────────────────────────────────
 
@@ -21,59 +22,9 @@ function getGroqClient() {
 // ─── Prompt builders (reuse same prompts as Gemini) ─────
 
 function buildPrompt(opts: GenerateOptions): string {
-  const count = opts.count ?? 10;
-  const types = opts.questionTypes ?? ["MCQ"];
-  const lang = opts.language ?? "en";
-
-  let difficultyInstruction: string;
-  if (opts.difficulty && opts.difficulty !== "MIXED") {
-    difficultyInstruction = `All questions must be ${opts.difficulty} difficulty.`;
-  } else {
-    difficultyInstruction = `Mix difficulties: roughly 30% EASY, 40% MEDIUM, 30% HARD.`;
-  }
-
-  const typeInstruction = `Generate a mix of the following types as requested: ${types.join(", ")}.
-SPECIFIC FORMATTING RULES:
-1. MCQ: questionText (the question), options (4 items), correctAnswer (one of the options). IMPORTANT: Write the questionText as a complete interrogative sentence (e.g., "What is the capital of Ethiopia?"). STRICTLY DO NOT use fill-in-the-blank formatting with underscores for MCQ (e.g., "The capital of Ethiopia is _______.").
-2. TRUE_FALSE: questionText (the statement), options (["True", "False"]), correctAnswer (either "True" or "False").
-3. FILL_IN_BLANK: questionText must contain exactly one "_______" (at least 7 underscores). correctAnswer must be the exact missing word/phrase. options can be empty [].
-4. MATCH_PAIRS: questionText asks to match items. options must contain all items for Column A followed by all corresponding items for Column B (e.g. [A1, A2, B1, B2]). DO NOT shuffle these in the JSON; the UI will handle shuffling Column B for the student. "correctAnswer" must be a string of pairs separated by pipe, items in pair separated by colon (e.g., "A1:B1|A2:B2").
-5. ORDERING: questionText asks to arrange in sequence. options must contain all items in random order. correctAnswer must be the items in correct order separated by pipe (e.g., "Event A|Event B|Event C").`;
-
-  return `You are an expert educational content creator specializing in the Ethiopian curriculum.
-
-TASK: Generate exactly ${count} exam questions based on the textbook chapter content provided below.
-
-SUBJECT: ${opts.subject}
-GRADE: Grade ${opts.grade}
-CHAPTER: ${opts.chapterTitle}
-LANGUAGE: ${lang === "en" ? "English" : lang}
-
-RULES:
-1. ${difficultyInstruction}
-2. ${typeInstruction}
-3. Every question MUST be directly based on the chapter content provided — do NOT invent facts.
-4. For all types, the "correctAnswer" property must be formatted exactly as requested.
-5. Include a clear, educational explanation for each answer.
-6. Questions should test comprehension, application, and analysis — not just recall.
-7. Use Bloom's Taxonomy: mix questions that test Remembering, Understanding, Applying, and Analyzing.
-8. Avoid ambiguous or trick questions.
-
-OUTPUT FORMAT: Return a JSON object with a single key "questions" containing an array of exactly ${count} question objects.
-Each object must have:
-- "questionText": string
-- "type": "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING"
-- "options": string[]
-- "correctAnswer": string (Exactly as formatted in specific rules!)
-- "difficulty": "EASY" | "MEDIUM" | "HARD"
-- "explanation": string
-
-CHAPTER CONTENT:
-"""
-${opts.content.slice(0, 30000)}
-"""
-
-Generate exactly ${count} questions now as a JSON object with a "questions" array. No preamble or markdown.`;
+  // Delegate to the shared prompt builder so every provider uses the
+  // same Bloom-aligned difficulty rubric and quality rules.
+  return buildQuestionGenerationPrompt(opts, 30000);
 }
 
 function buildChapterDetectionPrompt(opts: DetectChaptersOptions): string {

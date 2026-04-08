@@ -20,6 +20,7 @@ export async function GET() {
       totalPoints: user.totalPoints,
       xpLevel: user.xpLevel,
       createdAt: user.createdAt,
+      telegramLinked: !!(user as any).telegramId,
     },
   });
 }

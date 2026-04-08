@@ -9,6 +9,7 @@ import type {
   DetectChaptersOptions,
   DetectedChapter,
 } from "./gemini";
+import { buildQuestionGenerationPrompt } from "./question-prompts";
 
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 export const OLLAMA_CHAT_MODEL = "mistral";
@@ -48,42 +49,9 @@ export async function ollamaChat(prompt: string): Promise<string | null> {
 // ─── Question Generation ─────────────────────────────────
 
 function buildQuestionPrompt(opts: GenerateOptions): string {
-  const count = opts.count ?? 10;
-  const types = opts.questionTypes ?? ["MCQ"];
-  const lang = opts.language ?? "en";
-  const difficultyInstruction =
-    opts.difficulty && opts.difficulty !== "MIXED"
-      ? `All questions must be ${opts.difficulty} difficulty.`
-      : `Mix difficulties: roughly 30% EASY, 40% MEDIUM, 30% HARD.`;
-
-  return `You are an expert educational content creator specializing in the Ethiopian curriculum.
-
-TASK: Generate exactly ${count} exam questions based on the textbook chapter content provided below.
-
-SUBJECT: ${opts.subject}
-GRADE: Grade ${opts.grade}
-CHAPTER: ${opts.chapterTitle}
-LANGUAGE: ${lang === "en" ? "English" : lang}
-
-RULES:
-1. ${difficultyInstruction}
-2. Generate a mix of the following types: ${types.join(", ")}.
-   - MCQ: complete interrogative questionText, 4 options, correctAnswer = one of the options.
-   - TRUE_FALSE: statement as questionText, options=["True","False"], correctAnswer="True" or "False".
-   - FILL_IN_BLANK: questionText contains exactly one "_______", correctAnswer = missing word/phrase, options=[].
-   - MATCH_PAIRS: options=[A1,A2,B1,B2], correctAnswer="A1:B1|A2:B2".
-   - ORDERING: options in random order, correctAnswer="Item1|Item2|Item3".
-3. Every question MUST be directly based on the chapter content — do NOT invent facts.
-4. Include a clear educational explanation for each answer.
-5. Avoid ambiguous or trick questions.
-
-OUTPUT FORMAT: Return ONLY a JSON object with key "questions" containing an array of exactly ${count} objects.
-Each object: { "questionText": string, "type": string, "options": string[], "correctAnswer": string, "difficulty": "EASY"|"MEDIUM"|"HARD", "explanation": string }
-
-CHAPTER CONTENT:
-"""
-${opts.content.slice(0, 30000)}
-"""`;
+  // Delegate to the shared prompt builder so every provider uses the
+  // same Bloom-aligned difficulty rubric and quality rules.
+  return buildQuestionGenerationPrompt(opts, 30000);
 }
 
 function validateQuestions(raw: unknown): GeneratedQuestion[] {

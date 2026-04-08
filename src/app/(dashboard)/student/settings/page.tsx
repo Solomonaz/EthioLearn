@@ -14,7 +14,16 @@ import {
   Globe,
   Trash2,
   RefreshCw,
+  Link2,
+  Unlink,
+  CheckCircle2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const TelegramLinkButton = dynamic(
+  () => import("@/components/auth/telegram-link-button").then((m) => m.TelegramLinkButton),
+  { ssr: false, loading: () => <div className="h-10" /> },
+);
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +48,11 @@ interface UserSettings {
   totalPoints: number;
   xpLevel: number;
   createdAt: string;
+  telegramLinked: boolean;
 }
+
+const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
+const TELEGRAM_ENABLED = TELEGRAM_BOT_USERNAME.length > 0;
 
 interface ActiveSession {
   id: string;
@@ -105,6 +118,10 @@ export default function StudentSettingsPage() {
   // Dark mode placeholder
   const [darkMode, setDarkMode] = useState(false);
 
+  // Telegram link state
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [telegramLoading, setTelegramLoading] = useState(false);
+
   // Sessions state
   const [sessions, setSessions]           = useState<ActiveSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -126,6 +143,7 @@ export default function StudentSettingsPage() {
         setGrade(user.grade ?? "");
         setSection(user.section || "");
         setAvatarUrl(user.avatarUrl || "");
+        setTelegramLinked(user.telegramLinked);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -223,6 +241,54 @@ export default function StudentSettingsPage() {
       toast.error("Failed to revoke sessions");
     } finally {
       setRevokingAll(false);
+    }
+  };
+
+  // ── Telegram link / unlink ───────────────────────────────────────────────
+
+  const handleTelegramAuth = async (telegramUser: {
+    id: number;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+    auth_date: number;
+    hash: string;
+  }) => {
+    setTelegramLoading(true);
+    try {
+      const res = await fetch("/api/students/me/link-telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegramData: JSON.stringify(telegramUser) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to link Telegram");
+        return;
+      }
+      setTelegramLinked(true);
+      toast.success(`Telegram linked${data.displayName ? ` as ${data.displayName}` : ""}!`);
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
+
+  const handleTelegramUnlink = async () => {
+    setTelegramLoading(true);
+    try {
+      const res = await fetch("/api/students/me/link-telegram", { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Failed to unlink Telegram");
+        return;
+      }
+      setTelegramLinked(false);
+      toast.success("Telegram account unlinked");
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setTelegramLoading(false);
     }
   };
 
@@ -410,6 +476,72 @@ export default function StudentSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Connected Accounts ────────────────────────────────────────────── */}
+      {TELEGRAM_ENABLED && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">
+                Connected Accounts
+              </h2>
+            </div>
+            <p className="text-xs text-text-secondary">
+              Link social accounts to sign in faster.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-lg border border-border p-4">
+              <div className="flex items-center gap-3">
+                {/* Telegram logo */}
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#229ED9]/10">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5 fill-[#229ED9]"
+                    aria-hidden="true"
+                  >
+                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Telegram</p>
+                  <p className="text-xs text-text-secondary">
+                    {telegramLinked ? "Account linked" : "Not connected"}
+                  </p>
+                </div>
+                {telegramLinked && (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+
+              <div className="flex-shrink-0">
+                {telegramLinked ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-red-200 text-error hover:bg-red-50"
+                    onClick={handleTelegramUnlink}
+                    isLoading={telegramLoading}
+                  >
+                    <Unlink className="mr-1.5 h-3.5 w-3.5" />
+                    Unlink
+                  </Button>
+                ) : telegramLoading ? (
+                  <div className="flex h-10 items-center px-2 text-sm text-text-secondary">
+                    Linking…
+                  </div>
+                ) : (
+                  <TelegramLinkButton
+                    botUsername={TELEGRAM_BOT_USERNAME}
+                    onAuth={handleTelegramAuth}
+                  />
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Active Sessions (§4.1.2) ──────────────────────────────────────── */}
       <Card>
