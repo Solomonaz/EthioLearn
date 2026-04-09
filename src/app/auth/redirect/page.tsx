@@ -23,7 +23,7 @@ export default function AuthRedirectPage() {
       return;
     }
 
-    const user = session?.user as typeof session.user & { profileIncomplete?: boolean };
+    const user = session?.user as (typeof session.user & { profileIncomplete?: boolean }) | undefined;
 
     if (user?.profileIncomplete) {
       router.replace("/complete-profile");
