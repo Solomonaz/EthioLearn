@@ -29,6 +29,10 @@ export async function POST(
     return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 
+  if (!student.phoneNumber) {
+    return NextResponse.json({ error: "Student has no phone number" }, { status: 400 });
+  }
+
   // Clear rate limits and OTP for this student's phone
   clearRateLimit(`otp:send:${student.phoneNumber}`);
   clearRateLimit(`otp:verify:${student.phoneNumber}`);
