@@ -75,3 +75,21 @@ export const getCurrentUser = cache(async () => {
 
   return user;
 });
+
+/**
+ * Like getCurrentUser but also returns null when the user's profile is
+ * incomplete (no phoneNumber yet — Telegram-registered, mid-onboarding).
+ * Use this in all student data API routes so half-created accounts can't
+ * access app content before finishing registration.
+ */
+export async function requireCompleteProfile() {
+  const user = await getCurrentUser();
+  if (!user) return null;
+  // env_super_admin is a virtual user with no DB row — always complete
+  if (user.id === "env_super_admin") return user;
+  // Profile is complete when the user has selected a grade.
+  // Phone-registered users always have a grade (set during registration).
+  // Social/Telegram users pick a grade on the complete-profile page.
+  if (!(user as any).grade) return null;
+  return user;
+}

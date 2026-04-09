@@ -7,10 +7,12 @@ declare module "next-auth" {
     user: {
       id: string;
       role: string;
-      phone: string;
+      phone: string | null;
       grade: number | null;
       xpLevel: number;
       totalPoints: number;
+      /** True when a Telegram-registered user hasn't completed their profile yet */
+      profileIncomplete?: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -19,11 +21,13 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: string;
-    phone: string;
+    phone: string | null;
     grade: number | null;
     xpLevel: number;
     totalPoints: number;
     /** DB session ID used for revocation tracking (§4.1.2) */
     sessionId?: string;
+    /** True when a Telegram-registered user hasn't completed their profile yet */
+    profileIncomplete?: boolean;
   }
 }

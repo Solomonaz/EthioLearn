@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/get-session";
+import { requireCompleteProfile } from "@/lib/get-session";
+import { revokeAllUserSessions } from "@/lib/session-store";
 
 function validateTelegramAuth(data: Record<string, string>): boolean {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -29,7 +30,7 @@ function validateTelegramAuth(data: Record<string, string>): boolean {
 // Links a Telegram account to the current user after HMAC validation.
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
+  const user = await requireCompleteProfile();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: Record<string, unknown>;
@@ -88,15 +89,32 @@ export async function POST(req: Request) {
 
 // ── DELETE /api/students/me/link-telegram ────────────────────────────────────
 // Removes the Telegram link from the current user's account.
+// If Telegram is the user's ONLY login method (no phone, no email), all sessions
+// are revoked and the response signals the client to sign out immediately.
 
 export async function DELETE() {
-  const user = await getCurrentUser();
+  const user = await requireCompleteProfile();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Determine whether Telegram is the only way this user can log in.
+  // Phone-registered users have a phoneNumber; Google/Facebook users have an email.
+  // Telegram-only users have neither — removing telegramId leaves them with no auth method.
+  const isTelegramOnly =
+    !(user as any).phoneNumber &&
+    !(user as any).email &&
+    !!(user as any).telegramId;
+
+  // Unlink Telegram
   await db.user.update({
     where: { id: user.id },
     data: { telegramId: null } as any,
   });
 
-  return NextResponse.json({ success: true });
+  if (isTelegramOnly) {
+    // Revoke all active sessions so the JWT is rejected on the next request
+    await revokeAllUserSessions(user.id);
+    return NextResponse.json({ success: true, requireSignOut: true });
+  }
+
+  return NextResponse.json({ success: true, requireSignOut: false });
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/get-session";
+import { requireCompleteProfile } from "@/lib/get-session";
 
 function getTodayRange() {
   const today = new Date();
@@ -11,7 +11,7 @@ function getTodayRange() {
 }
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -63,7 +63,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser();
+  const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

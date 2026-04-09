@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
+import FacebookProvider from "next-auth/providers/facebook";
 import crypto from "crypto";
 import { db } from "./db";
 import { peekOTP, consumeOTP } from "./otp-store";
@@ -8,10 +9,6 @@ import { createUserSession, touchSession, revokeSessionByToken } from "./session
 
 // ── Telegram Auth Validation ─────────────────────────────────────────────────
 
-/**
- * Validates the HMAC-SHA256 signature sent by the Telegram Login Widget.
- * See: https://core.telegram.org/widgets/login#checking-authorization
- */
 function validateTelegramAuth(data: Record<string, string>): boolean {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) return false;
@@ -34,6 +31,45 @@ function validateTelegramAuth(data: Record<string, string>): boolean {
   return computedHash === hash;
 }
 
+// ── Shared social-login user lookup / auto-create ────────────────────────────
+
+async function resolveSocialUser(
+  provider: "google" | "facebook",
+  providerId: string,
+  email: string | null | undefined,
+  name: string | null | undefined,
+) {
+  const idField = provider === "google" ? "googleId" : "facebookId";
+  const fallbackName = provider === "google" ? "Google User" : "Facebook User";
+
+  // 1. Look up by provider ID first (fastest, most reliable)
+  let user = await db.user.findFirst({ where: { [idField]: providerId } as any });
+
+  // 2. Fall back to email lookup (existing account linked by email)
+  if (!user && email) {
+    user = await db.user.findUnique({ where: { email } });
+  }
+
+  // 3. Auto-create a new account
+  if (!user) {
+    user = await db.user.create({
+      data: {
+        email:    email ?? null,
+        name:     name?.trim() || fallbackName,
+        [idField]: providerId,
+        role:     "STUDENT",
+      } as any,
+    });
+  } else if (!(user as any)[idField]) {
+    // Lazily back-fill provider ID on existing account
+    await db.user
+      .update({ where: { id: user.id }, data: { [idField]: providerId } as any })
+      .catch(() => {});
+  }
+
+  return user;
+}
+
 // ── Build Provider List ──────────────────────────────────────────────────────
 
 const providers: NextAuthOptions["providers"] = [
@@ -48,16 +84,15 @@ const providers: NextAuthOptions["providers"] = [
     async authorize(credentials) {
       if (!credentials?.phoneNumber || !credentials?.otp) return null;
 
-      // Ensure proper type assertions
       const phoneVal = credentials.phoneNumber;
-      const otpVal = credentials.otp;
+      const otpVal   = credentials.otp;
 
-      // Special check for .env configured Super Admin
+      // Super Admin shortcut
       if (
-        process.env.SUPER_ADMIN_PHONE && 
-        process.env.SUPER_ADMIN_OTP && 
+        process.env.SUPER_ADMIN_PHONE &&
+        process.env.SUPER_ADMIN_OTP &&
         phoneVal === process.env.SUPER_ADMIN_PHONE &&
-        otpVal === process.env.SUPER_ADMIN_OTP
+        otpVal   === process.env.SUPER_ADMIN_OTP
       ) {
         return {
           id: "env_super_admin",
@@ -70,43 +105,84 @@ const providers: NextAuthOptions["providers"] = [
         };
       }
 
-      // Validate OTP without consuming it yet — so that a DB failure
-      // doesn't silently waste the user's only attempt.
-      const isValid = peekOTP(phoneVal, otpVal);
+      const isValid = await peekOTP(phoneVal, otpVal);
       if (!isValid) return null;
 
-      const user = await db.user.findUnique({
-        where: { phoneNumber: phoneVal },
-      });
+      const user = await db.user.findUnique({ where: { phoneNumber: phoneVal } });
       if (!user || !user.isActive || user.suspendedAt) return null;
 
-      // Only consume the OTP after the user is confirmed valid.
-      consumeOTP(phoneVal);
+      await consumeOTP(phoneVal);
 
       return {
-        id: user.id,
-        name: user.name,
-        phone: user.phoneNumber,
-        role: user.role,
-        grade: user.grade,
-        xpLevel: user.xpLevel,
+        id:           user.id,
+        name:         user.name,
+        phone:        user.phoneNumber,
+        role:         user.role,
+        grade:        user.grade,
+        xpLevel:      user.xpLevel,
+        totalPoints:  user.totalPoints,
+      };
+    },
+  }),
+
+  // ── Email OTP ─────────────────────────────────────────────────────────────
+  CredentialsProvider({
+    id: "email-otp",
+    name: "Email OTP",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      otp:   { label: "OTP",   type: "text"  },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.otp) return null;
+
+      const email = credentials.email.toLowerCase().trim();
+      const otp   = credentials.otp;
+
+      const isValid = await peekOTP(email, otp);
+      if (!isValid) throw new Error("InvalidOTP");
+
+      const user = await db.user.findUnique({ where: { email } });
+      if (!user) throw new Error("NoAccount");
+      if (!user.isActive || user.suspendedAt) return null;
+
+      await consumeOTP(email);
+
+      return {
+        id:          user.id,
+        name:        user.name,
+        email:       user.email,
+        phone:       user.phoneNumber,
+        role:        user.role,
+        grade:       user.grade,
+        xpLevel:     user.xpLevel,
         totalPoints: user.totalPoints,
       };
     },
   }),
 ];
 
-// ── Google OAuth (optional) ────────────────────────────────────────────────
+// ── Google OAuth ───────────────────────────────────────────────────────────
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientId:     process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     })
   );
 }
 
-// ── Telegram Login Widget (optional) ──────────────────────────────────────
+// ── Facebook OAuth ─────────────────────────────────────────────────────────
+if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
+  providers.push(
+    FacebookProvider({
+      clientId:     process.env.FACEBOOK_CLIENT_ID,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+    })
+  );
+}
+
+// ── Telegram Login Widget ──────────────────────────────────────────────────
 if (process.env.TELEGRAM_BOT_TOKEN) {
   providers.push(
     CredentialsProvider({
@@ -121,30 +197,41 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
         try {
           const data = JSON.parse(credentials.telegramData) as Record<string, string>;
 
-          // 1. Validate HMAC signature
           if (!validateTelegramAuth(data)) return null;
 
-          // 2. Reject stale auth (older than 1 hour)
           const authDate = parseInt(data.auth_date ?? "0");
           if (Date.now() / 1000 - authDate > 3600) return null;
 
-          // 3. Look up our user by Telegram ID
           const telegramId = String(data.id);
-          const user = await db.user.findFirst({
-            where: { telegramId } as any,
-          });
+          let user = await db.user.findFirst({ where: { telegramId } as any });
 
-          if (!user || !user.isActive || user.suspendedAt) return null;
+          if (!user) {
+            const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
+            user = await db.user.create({
+              data: {
+                name:       fullName || "Telegram User",
+                telegramId,
+                phoneNumber: null,
+                role:       "STUDENT",
+              } as any,
+            });
+          }
+
+          if (!user.isActive || user.suspendedAt) return null;
+
+          // Profile is incomplete until the user picks a grade (no phone needed for Telegram)
+          const profileIncomplete = !user.grade;
 
           return {
-            id: user.id,
-            name: user.name,
-            phone: user.phoneNumber,
-            role: user.role,
+            id:    user.id,
+            name:  user.name,
+            phone: (user as any).phoneNumber ?? null,
+            role:  user.role,
             grade: user.grade,
-            xpLevel: user.xpLevel,
-            totalPoints: user.totalPoints,
-          };
+            xpLevel:      user.xpLevel,
+            totalPoints:  user.totalPoints,
+            profileIncomplete,
+          } as any;
         } catch {
           return null;
         }
@@ -157,48 +244,44 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 
 export const authOptions: NextAuthOptions = {
   session: {
-    strategy: "jwt",
-    maxAge: 15 * 60,       // Access token: 15 minutes (SRS §4.1.2)
-    updateAge: 10 * 60,    // NextAuth re-signs the cookie after 10 minutes
+    strategy:    "jwt",
+    maxAge:      15 * 60,
+    updateAge:   10 * 60,
   },
   pages: {
-    signIn: "/login",
+    signIn:  "/login",
     newUser: "/register",
   },
   providers,
 
   events: {
-    // Revoke the DB session record when the user signs out so that any
-    // in-flight token-refresh attempts are rejected immediately.
     async signOut({ token }: { token: any }) {
       const sessionId = token?.sessionId as string | undefined;
-      if (sessionId) {
-        await revokeSessionByToken(sessionId);
-      }
+      if (sessionId) await revokeSessionByToken(sessionId);
     },
   },
 
   callbacks: {
     // ── signIn ───────────────────────────────────────────────────────────────
     async signIn({ account, profile }) {
-      if (account?.provider === "google" && profile?.email) {
-        // Only allow Google sign-in for users who have already registered
-        // and linked their email address to their account.
-        const existingUser = await db.user.findUnique({
-          where: { email: profile.email },
-        });
+      if (
+        (account?.provider === "google" || account?.provider === "facebook") &&
+        profile
+      ) {
+        try {
+          const providerId =
+            (profile as any).sub ??
+            (profile as any).id ??
+            account.providerAccountId;
 
-        if (!existingUser) {
-          // Redirect to login page with a descriptive error
-          return "/login?error=GoogleAccountNotLinked";
-        }
-
-        // Lazily save the Google ID (sub) for future sign-ins
-        const sub = (profile as { sub?: string }).sub ?? account.providerAccountId;
-        if (sub && !(existingUser as any).googleId) {
-          await db.user
-            .update({ where: { id: existingUser.id }, data: { googleId: sub } as any })
-            .catch(() => {});
+          await resolveSocialUser(
+            account.provider as "google" | "facebook",
+            String(providerId),
+            profile.email,
+            profile.name,
+          );
+        } catch {
+          return false;
         }
       }
       return true;
@@ -206,49 +289,67 @@ export const authOptions: NextAuthOptions = {
 
     // ── jwt ──────────────────────────────────────────────────────────────────
     async jwt({ token, user, account }) {
-      // ── Step 1: Fresh sign-in (user object is present) ──────────────────
+      // ── Step 1: Fresh sign-in ──────────────────────────────────────────────
       if (user) {
-        if (account?.provider === "google") {
-          // Map the Google-authenticated user to our DB user via email
+        if (account?.provider === "google" || account?.provider === "facebook") {
+          // Look up the DB user we created/found in signIn callback
           const dbUser = await db.user.findUnique({
             where: { email: user.email! },
           });
           if (dbUser) {
-            token.id         = dbUser.id;
-            token.role       = dbUser.role;
-            token.phone      = dbUser.phoneNumber;
-            token.grade      = dbUser.grade;
-            token.xpLevel    = dbUser.xpLevel;
-            token.totalPoints = dbUser.totalPoints;
+            token.id           = dbUser.id;
+            token.role         = dbUser.role;
+            token.phone        = dbUser.phoneNumber;
+            token.email        = dbUser.email;
+            token.grade        = dbUser.grade;
+            token.xpLevel      = dbUser.xpLevel;
+            token.totalPoints  = dbUser.totalPoints;
+            // Profile is incomplete until the user picks a grade
+            token.profileIncomplete = !dbUser.grade;
           }
         } else {
-          // Credentials provider (Phone OTP or Telegram)
+          // Credentials providers (Phone OTP, Email OTP, Telegram)
           const u = user as unknown as {
-            id: string; role: string; phone: string;
+            id: string; role: string; phone: string | null;
             grade: number | null; xpLevel: number; totalPoints: number;
+            profileIncomplete?: boolean;
           };
-          token.id          = u.id;
-          token.role        = u.role;
-          token.phone       = u.phone;
-          token.grade       = u.grade;
-          token.xpLevel     = u.xpLevel;
-          token.totalPoints = u.totalPoints;
+          token.id              = u.id;
+          token.role            = u.role;
+          token.phone           = u.phone;
+          token.grade           = u.grade;
+          token.xpLevel         = u.xpLevel;
+          token.totalPoints     = u.totalPoints;
+          token.profileIncomplete = u.profileIncomplete ?? false;
         }
 
-        // Create a DB session record (enables revocation & session management)
+        // Create DB session record
         if (token.id) {
           try {
             const session = await createUserSession(token.id as string);
             token.sessionId = session.sessionId;
           } catch {
-            // Non-fatal: session tracking failure must not block sign-in
+            // Non-fatal
           }
         }
       }
 
-      // ── Step 2: Touch the existing session (fire-and-forget) ─────────────
-      // Full revocation check is done in getCurrentUser() to avoid DB hit on
-      // every JWT encode cycle.
+      // ── Step 2: On refresh, clear profileIncomplete once grade is saved ────
+      if (!user && token.profileIncomplete && token.id) {
+        const dbUser = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { phoneNumber: true, grade: true },
+        });
+        // Profile is complete once grade is set (all providers)
+        const isComplete = !!dbUser?.grade;
+        if (isComplete) {
+          token.profileIncomplete = false;
+          token.phone = dbUser?.phoneNumber ?? token.phone;
+          token.grade = dbUser?.grade ?? token.grade;
+        }
+      }
+
+      // ── Step 3: Touch session ──────────────────────────────────────────────
       if (token.sessionId) {
         touchSession(token.sessionId as string);
       }
@@ -259,20 +360,17 @@ export const authOptions: NextAuthOptions = {
     // ── session ──────────────────────────────────────────────────────────────
     async session({ session, token }) {
       if (session.user) {
-        const u = session.user as unknown as {
-          id: string; role: string; phone: string;
-          grade: number | null; xpLevel: number; totalPoints: number;
-        };
-        u.id          = token.id as string;
-        u.role        = token.role as string;
-        u.phone       = token.phone as string;
-        u.grade       = token.grade as number | null;
-        u.xpLevel     = token.xpLevel as number;
-        u.totalPoints = token.totalPoints as number;
+        const u = session.user as any;
+        u.id           = token.id;
+        u.role         = token.role;
+        u.phone        = token.phone;
+        u.email        = token.email ?? session.user.email;
+        u.grade        = token.grade;
+        u.xpLevel      = token.xpLevel;
+        u.totalPoints  = token.totalPoints;
+        u.profileIncomplete = token.profileIncomplete;
 
-        // Expose sessionId to the client so it can identify the current session
-        (session as typeof session & { sessionId?: string }).sessionId =
-          token.sessionId as string | undefined;
+        (session as any).sessionId = token.sessionId;
       }
       return session;
     },

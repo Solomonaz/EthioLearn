@@ -65,12 +65,10 @@ interface ActiveSession {
   isCurrent: boolean;
 }
 
-const GRADES = [
-  { value: 9,  label: "Grade 9"  },
-  { value: 10, label: "Grade 10" },
-  { value: 11, label: "Grade 11" },
-  { value: 12, label: "Grade 12" },
-];
+const GRADES = Array.from({ length: 12 }, (_, i) => ({
+  value: i + 1,
+  label: `Grade ${i + 1}`,
+}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -279,12 +277,20 @@ export default function StudentSettingsPage() {
     setTelegramLoading(true);
     try {
       const res = await fetch("/api/students/me/link-telegram", { method: "DELETE" });
+      const data = await res.json();
       if (!res.ok) {
         toast.error("Failed to unlink Telegram");
         return;
       }
       setTelegramLinked(false);
-      toast.success("Telegram account unlinked");
+
+      if (data.requireSignOut) {
+        // Telegram was the only login method — sign the user out immediately
+        toast.success("Telegram unlinked. Signing you out…");
+        await signOut({ callbackUrl: "/login" });
+      } else {
+        toast.success("Telegram account unlinked");
+      }
     } catch {
       toast.error("Network error. Please try again.");
     } finally {

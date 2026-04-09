@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ─── Enums ───────────────────────────────────────────────
@@ -97,7 +98,7 @@ enum TournamentStatus {
 
 model User {
   id           String   @id @default(cuid())
-  phoneNumber  String   @unique
+  phoneNumber  String?  @unique
   email        String?  @unique
   name         String
   role         UserRole @default(STUDENT)
@@ -116,6 +117,7 @@ model User {
 
   // Social login identifiers
   googleId     String?  @unique
+  facebookId   String?  @unique
   telegramId   String?  @unique
 
   schoolId String?
@@ -147,6 +149,18 @@ model Subject {
   updatedAt DateTime @updatedAt
 
   @@map("subjects")
+}
+
+// ─── OTP Codes ────────────────────────────────────────────
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  key       String   @unique   // phone number
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("otp_codes")
 }
 
 // ─── User Sessions ────────────────────────────────────────

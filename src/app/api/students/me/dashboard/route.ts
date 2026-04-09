@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/get-session";
+import { requireCompleteProfile } from "@/lib/get-session";
 import { getDailyMessage } from "@/lib/motivational-messages";
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

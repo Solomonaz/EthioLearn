@@ -1,5 +1,5 @@
-// In-memory OTP store: phone -> { otp, expiresAt }
-const otpStore = new Map<string, { otp: string; expiresAt: Date }>();
+import { db } from "./db";
+import { Resend } from "resend";
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -10,91 +10,116 @@ async function sendSMS(phone: string, message: string): Promise<void> {
   const username = process.env.AFRICASTALKING_USERNAME;
 
   if (!apiKey || !username || process.env.NODE_ENV !== "production") {
-    // Dev mode: just log
-    console.log(`[DEV OTP] Phone: ${phone}, Message: ${message}`);
+    console.log(`[DEV OTP] ${phone} → ${message}`);
     return;
   }
 
-  // Use africastalking SDK
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const AfricasTalking = require("africastalking");
   const at = AfricasTalking({ apiKey, username });
-  const sms = at.SMS;
-
-  await sms.send({
+  await at.SMS.send({
     to: [phone],
     message,
     from: process.env.AFRICASTALKING_SENDER_ID || "EthioLearn",
   });
 }
 
-export async function storeOTP(phone: string): Promise<string> {
-  // Dev mode: always return 123456
-  if (process.env.NODE_ENV !== "production") {
-    const otp = "123456";
-    otpStore.set(phone, {
-      otp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    });
-    return otp;
+async function sendEmail(to: string, otp: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey || process.env.NODE_ENV !== "production") {
+    console.log(`[DEV OTP] ${to} → ${otp}`);
+    return;
   }
 
-  const otp = generateOTP();
-  otpStore.set(phone, {
-    otp,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  const resend = new Resend(apiKey);
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || "EthioLearn <noreply@ethiolearn.com>",
+    to,
+    subject: "Your EthioLearn verification code",
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#1a6b2e;margin-bottom:8px">EthioLearn</h2>
+        <p style="color:#374151">Your verification code is:</p>
+        <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1a6b2e;margin:16px 0">${otp}</div>
+        <p style="color:#6b7280;font-size:14px">This code expires in 10 minutes. Do not share it with anyone.</p>
+      </div>
+    `,
   });
+}
 
-  await sendSMS(
-    phone,
-    `Your EthioLearn verification code is: ${otp}. Valid for 10 minutes.`
-  );
+// ── Core store/retrieve helpers ──────────────────────────────────────────────
 
+async function upsertOTP(key: string, otp: string): Promise<void> {
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await db.otpCode.upsert({
+    where:  { key },
+    create: { key, code: otp, expiresAt },
+    update: { code: otp, expiresAt },
+  });
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Generates a real OTP, stores it in the DB, and delivers it via SMS.
+ * In dev mode the OTP is logged to the console instead of sent.
+ */
+export async function storeOTP(phone: string): Promise<string> {
+  const otp = generateOTP();
+  await upsertOTP(phone, otp);
+  await sendSMS(phone, `Your EthioLearn verification code is: ${otp}. Valid for 10 minutes.`);
   return otp;
 }
 
-export function verifyOTP(phone: string, code: string): boolean {
-  // Dev mode: always accept 123456
-  if (process.env.NODE_ENV !== "production" && code === "123456") {
-    return true;
-  }
-
-  const stored = otpStore.get(phone);
-  if (!stored) return false;
-  if (new Date() > stored.expiresAt) {
-    otpStore.delete(phone);
-    return false;
-  }
-  if (stored.otp !== code) return false;
-
-  otpStore.delete(phone); // one-time use
-  return true;
+/**
+ * Generates an OTP and stores it in the DB without sending it anywhere.
+ * The caller is responsible for delivering it (e.g. via Telegram Bot API).
+ */
+export async function createOTP(key: string): Promise<string> {
+  const otp = generateOTP();
+  await upsertOTP(key, otp);
+  return otp;
 }
 
 /**
- * Validates an OTP without consuming it from the store.
- * Use this when you need to validate first, then perform other operations
- * before committing the consumption (e.g. DB user lookup in authorize()).
- * Call consumeOTP() afterwards to complete the one-time-use semantics.
+ * Checks an OTP without consuming it.
+ * Use before a DB write so a failure doesn't waste the user's code.
  */
-export function peekOTP(phone: string, code: string): boolean {
-  if (process.env.NODE_ENV !== "production" && code === "123456") {
-    return true;
-  }
-  const stored = otpStore.get(phone);
+export async function peekOTP(key: string, code: string): Promise<boolean> {
+  const stored = await db.otpCode.findUnique({ where: { key } });
   if (!stored) return false;
   if (new Date() > stored.expiresAt) {
-    otpStore.delete(phone);
+    await db.otpCode.delete({ where: { key } }).catch(() => {});
     return false;
   }
-  return stored.otp === code;
+  return stored.code === code;
 }
 
-/** Removes the OTP entry for a phone number (one-time-use enforcement). */
-export function consumeOTP(phone: string): void {
-  otpStore.delete(phone);
+/** Consumes (deletes) the OTP entry — call after a successful peekOTP. */
+export async function consumeOTP(key: string): Promise<void> {
+  await db.otpCode.delete({ where: { key } }).catch(() => {});
 }
 
-export function clearOTP(phone: string): void {
-  otpStore.delete(phone);
+/** Validates and consumes in one step. */
+export async function verifyOTP(key: string, code: string): Promise<boolean> {
+  const valid = await peekOTP(key, code);
+  if (valid) await consumeOTP(key);
+  return valid;
+}
+
+/** Removes the OTP entry without checking it. */
+export async function clearOTP(key: string): Promise<void> {
+  await db.otpCode.delete({ where: { key } }).catch(() => {});
+}
+
+/**
+ * Generates an OTP, stores it in the DB, and delivers it via email.
+ * In dev mode the OTP is logged to the console instead of sent.
+ */
+export async function storeEmailOTP(email: string): Promise<string> {
+  const otp = generateOTP();
+  await upsertOTP(email, otp);
+  await sendEmail(email, otp);
+  return otp;
 }

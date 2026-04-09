@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Navbar } from "./navbar";
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
@@ -11,6 +13,16 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "loading") return;
+    const user = session?.user as { profileIncomplete?: boolean } | undefined;
+    if (user?.profileIncomplete) {
+      router.replace("/complete-profile");
+    }
+  }, [status, session, router]);
 
   return (
     <div className="min-h-screen bg-background">

@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
   // triggers repeated DB calls in layouts that call getCurrentUser().
   // Enable only when explicitly debugging side-effect purity.
   reactStrictMode: false,
+  images: {
+    remotePatterns: [
+      // Telegram user profile photos
+      { protocol: "https", hostname: "t.me" },
+      { protocol: "https", hostname: "**.t.me" },
+      { protocol: "https", hostname: "telegram.org" },
+      { protocol: "https", hostname: "**.telegram.org" },
+    ],
+  },
   async headers() {
     return [
       {

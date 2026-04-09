@@ -174,6 +174,16 @@ export function touchSession(sessionId: string) {
 }
 
 /**
+ * Revoke ALL active sessions for a user (e.g. when their only auth method is removed).
+ */
+export async function revokeAllUserSessions(userId: string) {
+  await db.userSession.updateMany({
+    where: { userId, isRevoked: false },
+    data: { isRevoked: true, revokedAt: new Date() },
+  });
+}
+
+/**
  * Delete expired sessions older than 30 days (housekeeping).
  */
 export async function cleanExpiredSessions() {

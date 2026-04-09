@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/get-session";
+import { requireCompleteProfile } from "@/lib/get-session";
 
 type MasteryLevel = "NOT_STARTED" | "IN_PROGRESS" | "PROFICIENT" | "MASTERED";
 
@@ -12,7 +12,7 @@ function getMasteryLevel(avgScore: number, attemptCount: number): MasteryLevel {
 }
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

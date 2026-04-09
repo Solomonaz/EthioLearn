@@ -18,7 +18,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -43,7 +43,7 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
           </Link>
         </div>
 
-        {session ? (
+        {status === "loading" ? null : session ? (
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <LanguageSwitcher />
@@ -101,7 +101,7 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
       </div>
 
       {/* Mobile dropdown for unauthenticated users */}
-      {!session && mobileMenuOpen && (
+      {status !== "loading" && !session && mobileMenuOpen && (
         <div className="border-t border-border px-4 py-3 sm:hidden">
           <Link
             href="/login"
