@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
 const TelegramLoginButton = dynamic(
@@ -17,9 +17,15 @@ const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "
 const TELEGRAM_ENABLED      = TELEGRAM_BOT_USERNAME.length > 0;
 const SOCIAL_ENABLED        = GOOGLE_ENABLED || FACEBOOK_ENABLED || TELEGRAM_ENABLED;
 
-export default function RegisterPage() {
-  const router = useRouter();
+function RegisterForm() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
+
+  const tgError = searchParams.get("tg_error") ?? "";
+  const tgErrorMsg = tgError === "no_account"
+    ? "No Telegram account found. Please register with your Telegram below."
+    : "";
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -135,6 +141,12 @@ export default function RegisterPage() {
           <p className="mt-2 text-text-secondary">Create your account</p>
         </div>
 
+        {tgErrorMsg && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-center text-sm text-blue-700">
+            {tgErrorMsg}
+          </div>
+        )}
+
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
 
           {/* ── Social sign-up buttons ───────────────────────────────────── */}
@@ -172,7 +184,7 @@ export default function RegisterPage() {
               )}
 
               {TELEGRAM_ENABLED && (
-                <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} callbackUrl="/auth/redirect" />
+                <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} callbackUrl="/auth/redirect" action="register" />
               )}
 
               <div className="flex items-center gap-3 pt-1">
@@ -338,5 +350,13 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   );
 }

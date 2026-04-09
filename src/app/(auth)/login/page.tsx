@@ -32,7 +32,12 @@ function LoginForm() {
   const justRegistered = searchParams.get("registered") === "true";
   const callbackUrl    = searchParams.get("callbackUrl") ?? "";
   const errorCode      = searchParams.get("error") ?? "";
-  const initialError   = AUTH_ERROR_MESSAGES[errorCode] ?? (errorCode ? AUTH_ERROR_MESSAGES.Default : "");
+  const tgError        = searchParams.get("tg_error") ?? "";
+  const tgErrorMsg     = tgError === "already_exists"
+    ? "This Telegram account is already registered. Please sign in."
+    : "";
+  const initialError   = tgErrorMsg ||
+    (AUTH_ERROR_MESSAGES[errorCode] ?? (errorCode ? AUTH_ERROR_MESSAGES.Default : ""));
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -174,7 +179,7 @@ function LoginForm() {
               )}
 
               {TELEGRAM_ENABLED && (
-                <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} callbackUrl="/auth/redirect" />
+                <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} callbackUrl="/auth/redirect" action="login" />
               )}
 
               <div className="flex items-center gap-3 pt-1">

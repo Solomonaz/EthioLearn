@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, Suspense } from "react";
 import {
   User,
   Phone,
@@ -32,6 +32,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { signOut, useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
 
@@ -93,10 +94,11 @@ function timeAgo(dateStr: string): string {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function StudentSettingsPage() {
+function StudentSettingsInner() {
   const { data: session } = useSession();
   const currentSessionId = (session as typeof session & { sessionId?: string })
     ?.sessionId;
+  const searchParams = useSearchParams();
 
   const [userData, setUserData] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,6 +127,24 @@ export default function StudentSettingsPage() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [revokingId, setRevokingId]       = useState<string | null>(null);
   const [revokingAll, setRevokingAll]     = useState(false);
+
+  // ── Handle Telegram link callback ───────────────────────────────────────
+  useEffect(() => {
+    const linked    = searchParams.get("tg_linked");
+    const linkError = searchParams.get("tg_link_error");
+    if (linked === "true") {
+      setTelegramLinked(true);
+      toast.success("Telegram account linked!");
+      // Clean the URL
+      window.history.replaceState({}, "", "/student/settings");
+    } else if (linkError) {
+      const msg = linkError === "network"
+        ? "Network error linking Telegram. Please try again."
+        : decodeURIComponent(linkError);
+      toast.error(msg);
+      window.history.replaceState({}, "", "/student/settings");
+    }
+  }, [searchParams]);
 
   // ── Fetch profile ────────────────────────────────────────────────────────
 
@@ -242,36 +262,7 @@ export default function StudentSettingsPage() {
     }
   };
 
-  // ── Telegram link / unlink ───────────────────────────────────────────────
-
-  const handleTelegramAuth = async (telegramUser: {
-    id: number;
-    first_name: string;
-    last_name?: string;
-    username?: string;
-    auth_date: number;
-    hash: string;
-  }) => {
-    setTelegramLoading(true);
-    try {
-      const res = await fetch("/api/students/me/link-telegram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ telegramData: JSON.stringify(telegramUser) }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Failed to link Telegram");
-        return;
-      }
-      setTelegramLinked(true);
-      toast.success(`Telegram linked${data.displayName ? ` as ${data.displayName}` : ""}!`);
-    } catch {
-      toast.error("Network error. Please try again.");
-    } finally {
-      setTelegramLoading(false);
-    }
-  };
+  // ── Telegram unlink ──────────────────────────────────────────────────────
 
   const handleTelegramUnlink = async () => {
     setTelegramLoading(true);
@@ -285,9 +276,11 @@ export default function StudentSettingsPage() {
       setTelegramLinked(false);
 
       if (data.requireSignOut) {
-        // Telegram was the only login method — sign the user out immediately
-        toast.success("Telegram unlinked. Signing you out…");
-        await signOut({ callbackUrl: "/login" });
+        // Telegram was the only login method — sign the user out and send
+        // them to /register so they start fresh (not /login which would just
+        // show a "no account found" error if they try Telegram again).
+        toast.success("Telegram unlinked. Please register again to continue.");
+        await signOut({ callbackUrl: "/register" });
       } else {
         toast.success("Telegram account unlinked");
       }
@@ -540,7 +533,6 @@ export default function StudentSettingsPage() {
                 ) : (
                   <TelegramLinkButton
                     botUsername={TELEGRAM_BOT_USERNAME}
-                    onAuth={handleTelegramAuth}
                   />
                 )}
               </div>
@@ -753,6 +745,15 @@ export default function StudentSettingsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary in the page tree
+export default function StudentSettingsPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <StudentSettingsInner />
+    </Suspense>
   );
 }
 

@@ -190,9 +190,16 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
       name: "Telegram",
       credentials: {
         telegramData: { label: "Telegram Data", type: "text" },
+        // "login"    → only find existing account, throw NoAccount if not found
+        // "register" → only create new account, throw AlreadyExists if found
+        action: { label: "Action", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.telegramData) return null;
+
+        const action = (credentials.action as string) === "register"
+          ? "register"
+          : "login"; // default to login (safe: no auto-creation)
 
         try {
           const data = JSON.parse(credentials.telegramData) as Record<string, string>;
@@ -203,36 +210,54 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
           if (Date.now() / 1000 - authDate > 3600) return null;
 
           const telegramId = String(data.id);
-          let user = await db.user.findFirst({ where: { telegramId } as any });
+          const existing = await db.user.findFirst({ where: { telegramId } as any });
 
-          if (!user) {
-            const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
-            user = await db.user.create({
-              data: {
-                name:       fullName || "Telegram User",
-                telegramId,
-                phoneNumber: null,
-                role:       "STUDENT",
-              } as any,
-            });
+          if (action === "login") {
+            // ── Login path: account must already exist ─────────────────────
+            if (!existing) throw new Error("NoAccount");
+            if (!existing.isActive || existing.suspendedAt) return null;
+
+            const profileIncomplete = !existing.grade;
+            return {
+              id:    existing.id,
+              name:  existing.name,
+              phone: (existing as any).phoneNumber ?? null,
+              role:  existing.role,
+              grade: existing.grade,
+              xpLevel:      existing.xpLevel,
+              totalPoints:  existing.totalPoints,
+              profileIncomplete,
+            } as any;
           }
 
-          if (!user.isActive || user.suspendedAt) return null;
+          // ── Register path: account must NOT already exist ──────────────
+          if (existing) throw new Error("AlreadyExists");
 
-          // Profile is incomplete until the user picks a grade (no phone needed for Telegram)
-          const profileIncomplete = !user.grade;
+          const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
+          const newUser = await db.user.create({
+            data: {
+              name:        fullName || "Telegram User",
+              telegramId,
+              phoneNumber: null,
+              role:        "STUDENT",
+            } as any,
+          });
 
           return {
-            id:    user.id,
-            name:  user.name,
-            phone: (user as any).phoneNumber ?? null,
-            role:  user.role,
-            grade: user.grade,
-            xpLevel:      user.xpLevel,
-            totalPoints:  user.totalPoints,
-            profileIncomplete,
+            id:    newUser.id,
+            name:  newUser.name,
+            phone: null,
+            role:  newUser.role,
+            grade: null,
+            xpLevel:          0,
+            totalPoints:      0,
+            profileIncomplete: true, // new user always needs grade
           } as any;
-        } catch {
+        } catch (err: any) {
+          // Re-throw known errors so NextAuth passes them to the client
+          if (err?.message === "NoAccount" || err?.message === "AlreadyExists") {
+            throw err;
+          }
           return null;
         }
       },
