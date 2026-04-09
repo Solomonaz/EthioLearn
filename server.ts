@@ -4,7 +4,36 @@ import next from "next";
 import { Server as SocketServer } from "socket.io";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { decode } from "next-auth/jwt";
 import { checkBattleAchievements } from "./src/lib/achievements";
+
+function parseCookies(cookieHeader: string): Record<string, string> {
+  return cookieHeader.split(";").reduce((acc, pair) => {
+    const [key, ...val] = pair.trim().split("=");
+    if (key) acc[key.trim()] = decodeURIComponent(val.join("=").trim());
+    return acc;
+  }, {} as Record<string, string>);
+}
+
+function getSessionToken(cookieHeader: string): string | null {
+  const cookies = parseCookies(cookieHeader);
+  return (
+    cookies["next-auth.session-token"] ??
+    cookies["__Secure-next-auth.session-token"] ??
+    null
+  );
+}
+
+async function verifyAdminToken(cookieHeader: string): Promise<boolean> {
+  try {
+    const rawToken = getSessionToken(cookieHeader);
+    if (!rawToken) return false;
+    const token = await decode({ token: rawToken, secret: process.env.NEXTAUTH_SECRET! });
+    return !!token && ["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(String(token.role ?? ""));
+  } catch {
+    return false;
+  }
+}
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
 const dev = process.env.NODE_ENV !== "production";
@@ -48,13 +77,18 @@ function serializePlayers(room: RoomState) {
 }
 
 app.prepare().then(() => {
-  const httpServer = createServer((req, res) => {
+  const httpServer = createServer(async (req, res) => {
     const parsedUrl = parse(req.url!, true);
     if (parsedUrl.pathname === "/api/admin/games/live" && req.method === "GET") {
+      const isAdmin = await verifyAdminToken(req.headers.cookie ?? "");
+      if (!isAdmin) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
+        return;
+      }
       const roomList = Array.from(rooms.values()).map((room) => ({
         roomCode: room.roomCode,
         status: room.status,
-        hostId: room.hostId,
         playerCount: room.players.size,
         currentQuestion: room.currentQuestion,
         totalQuestions: room.questions.length,
@@ -67,16 +101,39 @@ app.prepare().then(() => {
     handle(req, res, parsedUrl);
   });
 
+  const allowedOrigins = process.env.NEXTAUTH_URL
+    ? [process.env.NEXTAUTH_URL.replace(/\/$/, "")]
+    : ["http://localhost:3001"];
+
   const io = new SocketServer(httpServer, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: { origin: allowedOrigins, methods: ["GET", "POST"], credentials: true },
+  });
+
+  // ── Socket.io auth middleware ─────────────────────────────────────────────
+  io.use(async (socket, next) => {
+    try {
+      const cookieHeader = socket.handshake.headers.cookie ?? "";
+      const rawToken = getSessionToken(cookieHeader);
+      if (!rawToken) return next(new Error("Authentication required"));
+
+      const token = await decode({ token: rawToken, secret: process.env.NEXTAUTH_SECRET! });
+      if (!token?.id) return next(new Error("Authentication required"));
+
+      socket.data.userId = String(token.id);
+      socket.data.role = String(token.role ?? "STUDENT");
+      next();
+    } catch {
+      next(new Error("Authentication failed"));
+    }
   });
 
   const rooms = new Map<string, RoomState>();
 
   io.on("connection", (socket) => {
-    console.log("Socket connected:", socket.id);
+    if (dev) console.log("Socket connected:", socket.id, "user:", socket.data.userId);
 
-    socket.on("join_room", ({ roomCode, userId, name }: { roomCode: string; userId: string; name: string }) => {
+    socket.on("join_room", ({ roomCode, name }: { roomCode: string; name: string }) => {
+      const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
       if (!room) { socket.emit("error", { message: "Room not found" }); return; }
 
@@ -102,10 +159,11 @@ app.prepare().then(() => {
       io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: room.status, hostId: room.hostId });
     });
 
-    socket.on("create_room", ({ roomCode, hostId, hostName, questions }: {
-      roomCode: string; hostId: string; hostName: string;
+    socket.on("create_room", ({ roomCode, hostName, questions }: {
+      roomCode: string; hostName: string;
       questions: Array<{ question: string; options: string[]; correctIndex: number }>;
     }) => {
+      const hostId = socket.data.userId as string;
       rooms.set(roomCode, {
         roomCode, hostId,
         players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0 }]]),
@@ -116,7 +174,8 @@ app.prepare().then(() => {
       io.to(roomCode).emit("room_updated", { players: serializePlayers(rooms.get(roomCode)!), status: "waiting", hostId });
     });
 
-    socket.on("start_game", ({ roomCode, userId }: { roomCode: string; userId: string }) => {
+    socket.on("start_game", ({ roomCode }: { roomCode: string }) => {
+      const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
       if (!room || room.hostId !== userId || room.players.size < 1) return;
       room.status = "countdown";
@@ -124,9 +183,10 @@ app.prepare().then(() => {
       setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
     });
 
-    socket.on("submit_answer", ({ roomCode, userId, questionIndex, answerIndex, timeLeft }: {
-      roomCode: string; userId: string; questionIndex: number; answerIndex: number; timeLeft: number;
+    socket.on("submit_answer", ({ roomCode, questionIndex, answerIndex, timeLeft }: {
+      roomCode: string; questionIndex: number; answerIndex: number; timeLeft: number;
     }) => {
+      const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
       if (!room || room.status !== "in_progress") return;
       if (questionIndex !== room.currentQuestion) return;
@@ -158,7 +218,8 @@ app.prepare().then(() => {
     });
 
     // ── Rematch (with New Questions) ──────────────────────────────────────────
-    socket.on("request_rematch", async ({ roomCode, userId }: { roomCode: string; userId: string }) => {
+    socket.on("request_rematch", async ({ roomCode }: { roomCode: string }) => {
+      const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
       if (!room || room.status !== "finished") return;
       room.rematchRequesters.add(userId);

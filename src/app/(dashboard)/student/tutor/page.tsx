@@ -455,7 +455,21 @@ export default function TutorPage() {
                     )}
                   >
                     {msg.role === "model" ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        allowedElements={[
+                          "p","strong","em","b","i","code","pre","ul","ol","li",
+                          "h1","h2","h3","h4","h5","h6","blockquote","br","hr",
+                          "a","table","thead","tbody","tr","th","td",
+                        ]}
+                        unwrapDisallowed
+                        components={{
+                          a: ({ href, children }) => {
+                            const safeHref = /^(https?:|\/|#)/.test(href ?? "") ? href : "#";
+                            return <a href={safeHref} target="_blank" rel="noopener noreferrer">{children}</a>;
+                          },
+                        }}
+                      >
                         {msg.parts[0].text}
                       </ReactMarkdown>
                     ) : (

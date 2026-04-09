@@ -1,5 +1,9 @@
-// In-memory sliding window rate limiter
-// Note: resets on server restart — acceptable for dev/single-instance prod
+// In-memory sliding window rate limiter.
+// LIMITATION: State is per-process and resets on server restart.
+// In a multi-instance deployment this means each replica enforces limits
+// independently, so an attacker can bypass limits by rotating through
+// server instances. For production multi-instance deployments, replace
+// `store` with a shared Redis-backed store (e.g. ioredis + sliding window).
 
 interface RateLimitEntry {
   count: number;

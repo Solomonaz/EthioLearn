@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { ACHIEVEMENTS } from "@/lib/achievements";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -229,6 +230,10 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -247,8 +252,8 @@ export async function PATCH(request: Request) {
   if (name !== undefined && (typeof name !== "string" || name.trim().length < 2)) {
     return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 });
   }
-  if (grade !== undefined && (typeof grade !== "number" || grade < 1 || grade > 12)) {
-    return NextResponse.json({ error: "Grade must be between 1 and 12" }, { status: 400 });
+  if (grade !== undefined && (!Number.isInteger(grade) || grade < 1 || grade > 12)) {
+    return NextResponse.json({ error: "Grade must be an integer between 1 and 12" }, { status: 400 });
   }
   if (section !== undefined && typeof section !== "string") {
     return NextResponse.json({ error: "Invalid section" }, { status: 400 });

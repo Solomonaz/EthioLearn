@@ -209,7 +209,6 @@ export default function BattleLobbyPage() {
       // Emit create_room to socket server
       socketRef.current.emit("create_room", {
         roomCode: data.roomCode,
-        hostId: userId,
         hostName: userName,
         questions: data.questions,
       });
@@ -246,7 +245,6 @@ export default function BattleLobbyPage() {
       // Join via socket
       socketRef.current?.emit("join_room", {
         roomCode: code,
-        userId,
         name: userName,
       });
 
@@ -263,10 +261,7 @@ export default function BattleLobbyPage() {
   function handleStartGame() {
     if (!currentRoomCode || !userId) return;
     setStartingGame(true);
-    socketRef.current?.emit("start_game", {
-      roomCode: currentRoomCode,
-      userId,
-    });
+    socketRef.current?.emit("start_game", { roomCode: currentRoomCode });
   }
 
   function handleCopyCode() {

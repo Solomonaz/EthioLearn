@@ -1,9 +1,20 @@
+import crypto from "crypto";
 import { db } from "./db";
 import { Resend } from "resend";
 
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // Use cryptographically secure random bytes
+  const bytes = crypto.randomBytes(3);
+  const num = (bytes.readUIntBE(0, 3) % 900000) + 100000;
+  return num.toString();
 }
+
+function hashOTP(otp: string): string {
+  return crypto.createHash("sha256").update(otp).digest("hex");
+}
+
+// Exponential back-off tracker for failed OTP attempts (in-memory, per process)
+const failedAttempts = new Map<string, { count: number; blockedUntil: number }>();
 
 async function sendSMS(phone: string, message: string): Promise<void> {
   const apiKey = process.env.AFRICASTALKING_API_KEY;
@@ -52,10 +63,13 @@ async function sendEmail(to: string, otp: string): Promise<void> {
 
 async function upsertOTP(key: string, otp: string): Promise<void> {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const hashed = hashOTP(otp);
+  // Reset failed attempts when a new OTP is issued
+  failedAttempts.delete(key);
   await db.otpCode.upsert({
     where:  { key },
-    create: { key, code: otp, expiresAt },
-    update: { code: otp, expiresAt },
+    create: { key, code: hashed, expiresAt },
+    update: { code: hashed, expiresAt },
   });
 }
 
@@ -85,15 +99,37 @@ export async function createOTP(key: string): Promise<string> {
 /**
  * Checks an OTP without consuming it.
  * Use before a DB write so a failure doesn't waste the user's code.
+ * Applies exponential back-off after repeated failures.
  */
 export async function peekOTP(key: string, code: string): Promise<boolean> {
+  const now = Date.now();
+
+  // Check exponential back-off
+  const attempt = failedAttempts.get(key);
+  if (attempt && now < attempt.blockedUntil) {
+    return false;
+  }
+
   const stored = await db.otpCode.findUnique({ where: { key } });
   if (!stored) return false;
   if (new Date() > stored.expiresAt) {
     await db.otpCode.delete({ where: { key } }).catch(() => {});
     return false;
   }
-  return stored.code === code;
+
+  const isValid = stored.code === hashOTP(code);
+
+  if (!isValid) {
+    const current = failedAttempts.get(key) ?? { count: 0, blockedUntil: 0 };
+    current.count += 1;
+    // Back-off: 30s × 2^(n-1), capped at 10 minutes
+    current.blockedUntil = now + Math.min(30_000 * Math.pow(2, current.count - 1), 600_000);
+    failedAttempts.set(key, current);
+    return false;
+  }
+
+  failedAttempts.delete(key);
+  return true;
 }
 
 /** Consumes (deletes) the OTP entry — call after a successful peekOTP. */

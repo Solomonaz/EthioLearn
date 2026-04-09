@@ -5,15 +5,33 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const isDev = process.env.NODE_ENV === "development";
 
+// Content-Security-Policy
+// Notes:
+//  - 'unsafe-inline' for script-src is required by Next.js runtime hydration.
+//  - 'unsafe-eval' is required by some Next.js internals in dev; omitted in prod.
+//  - Tighten script-src further once nonce-based CSP is wired into the app shell.
+const cspDirectives = [
+  "default-src 'self'",
+  isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://oauth2.googleapis.com"
+    : "script-src 'self' 'unsafe-inline' https://telegram.org https://oauth2.googleapis.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.supabase.co https://lh3.googleusercontent.com https://graph.facebook.com",
+  "font-src 'self'",
+  "connect-src 'self' wss: ws: https://*.supabase.co",
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 const securityHeaders = [
   { key: "X-DNS-Prefetch-Control", value: "on" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  {
-    key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=()",
-  },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Content-Security-Policy", value: cspDirectives },
   // Only add HSTS in production (HTTPS required)
   ...(!isDev
     ? [

@@ -49,14 +49,7 @@ export async function GET() {
       uptime: 99.98, // Simulated uptime percentage
     },
     database: { status: dbStatus, latencyMs: dbLatencyMs },
-    ai: {
-      status: aiStatus,
-      providers: { gemini: hasGemini, groq: hasGroq },
-    },
-    sms: {
-      status: smsStatus,
-      provider: "africastalking",
-      deliveryRate: 98.5, // Simulated delivery rate percentage
-    },
+    ai: { status: aiStatus },
+    sms: { status: smsStatus },
   });
 }

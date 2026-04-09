@@ -207,7 +207,9 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
           if (!validateTelegramAuth(data)) return null;
 
           const authDate = parseInt(data.auth_date ?? "0");
-          if (Date.now() / 1000 - authDate > 3600) return null;
+          const nowSecs = Date.now() / 1000;
+          // Reject if missing, NaN, in the future (>60s tolerance), or older than 1 hour
+          if (!authDate || isNaN(authDate) || authDate > nowSecs + 60 || nowSecs - authDate > 3600) return null;
 
           const telegramId = String(data.id);
           const existing = await db.user.findFirst({ where: { telegramId } as any });

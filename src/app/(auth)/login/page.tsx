@@ -98,9 +98,11 @@ function LoginForm() {
         const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
 
         if (callbackUrl) {
+          // Only allow safe relative paths — no open redirects
+          const isSafeRelative = /^\/[^/]/.test(callbackUrl) && !callbackUrl.includes(":");
           const isAdminCb   = callbackUrl.startsWith("/admin");
           const isStudentCb = callbackUrl.startsWith("/student");
-          if ((isAdmin && isAdminCb) || (!isAdmin && isStudentCb)) {
+          if (isSafeRelative && ((isAdmin && isAdminCb) || (!isAdmin && isStudentCb))) {
             router.push(callbackUrl);
             return;
           }

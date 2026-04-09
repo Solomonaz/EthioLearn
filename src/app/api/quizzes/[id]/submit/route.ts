@@ -6,6 +6,7 @@ import { Difficulty } from "@prisma/client";
 import { notifyLevelUp } from "@/lib/notifications";
 import { checkAndAwardAchievements } from "@/lib/achievements";
 import { normalizeOption } from "@/lib/utils";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 interface SubmittedAnswer {
   questionId: string;
@@ -17,6 +18,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -25,7 +30,7 @@ export async function POST(
   try {
     const { id: quizId } = await params;
     const body = await request.json();
-    const { answers }: { answers: SubmittedAnswer[] } = body;
+    let { answers }: { answers: SubmittedAnswer[] } = body;
 
     if (!answers || !Array.isArray(answers)) {
       return NextResponse.json(
@@ -33,6 +38,13 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // Sanitize client-supplied timeTakenMs: clamp to [0, 30s] per answer
+    const MAX_TIME_PER_QUESTION_MS = 30_000;
+    answers = answers.map((a) => ({
+      ...a,
+      timeTakenMs: Math.max(0, Math.min(Number(a.timeTakenMs) || 0, MAX_TIME_PER_QUESTION_MS)),
+    }));
 
     // Verify quiz belongs to user and is not completed
     const quiz = await db.quiz.findUnique({

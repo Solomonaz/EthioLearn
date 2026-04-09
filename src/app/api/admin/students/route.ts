@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  // Rate-limit per admin user: 60 requests per minute
+  const rl = rateLimit(`admin:students:${user.id}`, 60, 60_000);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
+
+  // SCHOOL_ADMIN must have an assigned school — reject unconfigured accounts
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
+    return NextResponse.json({ error: "School admin account not configured" }, { status: 403 });
   }
 
   const { searchParams } = req.nextUrl;

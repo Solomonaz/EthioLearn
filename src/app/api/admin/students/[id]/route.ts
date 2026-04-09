@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 export async function GET(
   _req: NextRequest,
@@ -13,6 +14,11 @@ export async function GET(
 
   const { id } = await params;
   const schoolId = user.schoolId;
+
+  // SCHOOL_ADMIN must have an assigned school — reject unconfigured accounts
+  if (user.role === "SCHOOL_ADMIN" && !schoolId) {
+    return NextResponse.json({ error: "School admin account not configured" }, { status: 403 });
+  }
 
   const student = await db.user.findFirst({
     where: {
@@ -166,6 +172,10 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const user = await getCurrentUser();
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
@@ -173,6 +183,10 @@ export async function PATCH(
 
   const { id } = await params;
   const schoolId = user.schoolId;
+
+  if (user.role === "SCHOOL_ADMIN" && !schoolId) {
+    return NextResponse.json({ error: "School admin account not configured" }, { status: 403 });
+  }
 
   // Verify the student belongs to admin's school
   const student = await db.user.findFirst({

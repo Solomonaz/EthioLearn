@@ -149,8 +149,8 @@ export default function BattleRoomPage() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      // Join/rejoin the room on connect
-      socket.emit("join_room", { roomCode, userId, name: userName });
+      // Join/rejoin the room on connect — userId comes from server-side JWT auth
+      socket.emit("join_room", { roomCode, name: userName });
     });
 
     socket.on(
@@ -286,7 +286,6 @@ export default function BattleRoomPage() {
 
     socketRef.current?.emit("submit_answer", {
       roomCode,
-      userId,
       questionIndex: currentQuestion.index,
       answerIndex: index,
       timeLeft,
@@ -296,7 +295,7 @@ export default function BattleRoomPage() {
   function handleRematch() {
     if (!userId || rematchRequested) return;
     setRematchRequested(true);
-    socketRef.current?.emit("request_rematch", { roomCode, userId });
+    socketRef.current?.emit("request_rematch", { roomCode });
   }
 
   const myScore = players.find((p) => p.userId === userId);
