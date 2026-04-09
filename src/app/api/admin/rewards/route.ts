@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { RewardTier } from "@prisma/client";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -58,6 +59,10 @@ export async function POST(request: NextRequest) {
 
   if (!user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
+  }
+
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   let body: CreateRewardBody;

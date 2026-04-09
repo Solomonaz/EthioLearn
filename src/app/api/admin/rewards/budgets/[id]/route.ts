@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -11,6 +12,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   if (!user.schoolId) {
@@ -109,6 +114,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(_request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   if (!user.schoolId) {

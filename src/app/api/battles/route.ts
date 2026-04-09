@@ -119,6 +119,7 @@ export async function POST(request: Request) {
           grade,
           questionCount: questionsWithIndex.length,
           textbookId: textbook.id,
+          questions: questionsWithIndex,
         },
       },
     });
@@ -132,12 +133,13 @@ export async function POST(request: Request) {
       },
     });
 
-    // Return questions WITH correctIndex (for socket server use)
-    // Client should only use this to pass to socket, not display answers
+    // Return questions WITHOUT correctIndex — answers stay server-side only.
+    // The socket server loads questions (with correctIndex) directly from the
+    // DB when the host calls create_room, so the client never sees answers.
     return NextResponse.json({
       roomCode,
       roomId: gameRoom.id,
-      questions: questionsWithIndex,
+      questions: questionsWithIndex.map(({ correctIndex: _, ...q }) => q),
       subject,
       grade,
       questionCount: questionsWithIndex.length,

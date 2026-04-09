@@ -119,6 +119,17 @@ app.prepare().then(() => {
       const token = await decode({ token: rawToken, secret: process.env.NEXTAUTH_SECRET! });
       if (!token?.id) return next(new Error("Authentication required"));
 
+      // Session revocation check — reject if session was signed out elsewhere
+      if (token.sessionId) {
+        const session = await prisma.userSession.findUnique({
+          where: { sessionId: token.sessionId as string },
+          select: { isRevoked: true, expiresAt: true },
+        });
+        if (!session || session.isRevoked || session.expiresAt < new Date()) {
+          return next(new Error("Session revoked"));
+        }
+      }
+
       socket.data.userId = String(token.id);
       socket.data.role = String(token.role ?? "STUDENT");
       next();
@@ -159,19 +170,45 @@ app.prepare().then(() => {
       io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: room.status, hostId: room.hostId });
     });
 
-    socket.on("create_room", ({ roomCode, hostName, questions }: {
+    socket.on("create_room", async ({ roomCode, hostName }: {
       roomCode: string; hostName: string;
-      questions: Array<{ question: string; options: string[]; correctIndex: number }>;
+      questions?: unknown; // Client may still send these — they are ignored
     }) => {
       const hostId = socket.data.userId as string;
-      rooms.set(roomCode, {
-        roomCode, hostId,
-        players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0 }]]),
-        questions, currentQuestion: 0, status: "waiting", questionStartedAt: 0, rematchRequesters: new Set(),
-      });
-      socket.join(roomCode);
-      socket.emit("room_created", { roomCode });
-      io.to(roomCode).emit("room_updated", { players: serializePlayers(rooms.get(roomCode)!), status: "waiting", hostId });
+
+      try {
+        // Load questions from DB (server-authoritative — never trust client)
+        const dbRoom = await prisma.gameRoom.findUnique({ where: { roomCode } });
+        if (!dbRoom?.quizConfig) {
+          socket.emit("error", { message: "Room not found" });
+          return;
+        }
+
+        // Verify the requesting user is the room host
+        if (dbRoom.hostUserId !== hostId) {
+          socket.emit("error", { message: "Only the host can initialize the room" });
+          return;
+        }
+
+        const config = dbRoom.quizConfig as any;
+        const questions = config.questions as Array<{ question: string; options: string[]; correctIndex: number }>;
+        if (!questions?.length) {
+          socket.emit("error", { message: "No questions available" });
+          return;
+        }
+
+        rooms.set(roomCode, {
+          roomCode, hostId,
+          players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0 }]]),
+          questions, currentQuestion: 0, status: "waiting", questionStartedAt: 0, rematchRequesters: new Set(),
+        });
+        socket.join(roomCode);
+        socket.emit("room_created", { roomCode });
+        io.to(roomCode).emit("room_updated", { players: serializePlayers(rooms.get(roomCode)!), status: "waiting", hostId });
+      } catch (err) {
+        console.error("Error creating room:", err);
+        socket.emit("error", { message: "Failed to create room" });
+      }
     });
 
     socket.on("start_game", ({ roomCode }: { roomCode: string }) => {

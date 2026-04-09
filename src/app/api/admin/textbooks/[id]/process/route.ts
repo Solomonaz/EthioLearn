@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { chunkContent } from "@/lib/content-chunker";
 import { generateEmbeddings, storeChunkEmbeddings, enablePgvector, isPgvectorAvailable } from "@/lib/embeddings";
 import { tagChunksWithBloomLevel } from "@/lib/bloom-tagger";
@@ -24,6 +25,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   const user = await getCurrentUser();
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(_request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   const { id: textbookId } = await params;

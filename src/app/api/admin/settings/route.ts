@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -63,6 +64,10 @@ export async function PATCH(request: NextRequest) {
 
   if (!user.schoolId) {
     return NextResponse.json({ error: "No school assigned" }, { status: 400 });
+  }
+
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   let body: any;

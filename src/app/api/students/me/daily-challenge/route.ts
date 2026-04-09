@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 function getTodayRange() {
   const today = new Date();
@@ -66,6 +67,10 @@ export async function POST(request: Request) {
   const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   const { today, tomorrow } = getTodayRange();

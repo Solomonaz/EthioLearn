@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { revokeAllUserSessions } from "@/lib/session-store";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 function validateTelegramAuth(data: Record<string, string>): boolean {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -32,6 +33,10 @@ function validateTelegramAuth(data: Record<string, string>): boolean {
 export async function POST(req: Request) {
   const user = await requireCompleteProfile();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -92,9 +97,13 @@ export async function POST(req: Request) {
 // If Telegram is the user's ONLY login method (no phone, no email), all sessions
 // are revoked and the response signals the client to sign out immediately.
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
   const user = await requireCompleteProfile();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
 
   // Determine whether Telegram is the only way this user can log in.
   // Phone-registered users have a phoneNumber; Google/Facebook users have an email.

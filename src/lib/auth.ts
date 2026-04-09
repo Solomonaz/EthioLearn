@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { db } from "./db";
 import { peekOTP, consumeOTP } from "./otp-store";
 import { createUserSession, touchSession, revokeSessionByToken } from "./session-store";
+import { rateLimit } from "./rate-limit";
 
 // ── Telegram Auth Validation ─────────────────────────────────────────────────
 
@@ -86,6 +87,10 @@ const providers: NextAuthOptions["providers"] = [
 
       const phoneVal = credentials.phoneNumber;
       const otpVal   = credentials.otp;
+
+      // Rate limit: 5 attempts per 5 minutes per phone number
+      const rl = rateLimit(`auth:credentials:${phoneVal}`, 5, 5 * 60 * 1000);
+      if (!rl.success) return null;
 
       // Super Admin shortcut
       if (
@@ -208,8 +213,8 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 
           const authDate = parseInt(data.auth_date ?? "0");
           const nowSecs = Date.now() / 1000;
-          // Reject if missing, NaN, in the future (>60s tolerance), or older than 1 hour
-          if (!authDate || isNaN(authDate) || authDate > nowSecs + 60 || nowSecs - authDate > 3600) return null;
+          // Reject if missing, NaN, in the future (>5s clock-skew tolerance), or older than 5 minutes
+          if (!authDate || isNaN(authDate) || authDate > nowSecs + 5 || nowSecs - authDate > 300) return null;
 
           const telegramId = String(data.id);
           const existing = await db.user.findFirst({ where: { telegramId } as any });

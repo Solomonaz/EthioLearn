@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { Difficulty, QuestionType } from "@prisma/client";
 
 async function getQuestionForUser(id: string, userId: string, userRole: string, userSchoolId: string | null | undefined) {
@@ -52,6 +53,10 @@ export async function PATCH(
 
   if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -171,6 +176,10 @@ export async function DELETE(
 
   if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(_request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   const { id } = await params;

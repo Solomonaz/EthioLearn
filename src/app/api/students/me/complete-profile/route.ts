@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { peekOTP, consumeOTP } from "@/lib/otp-store";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 // POST /api/students/me/complete-profile
 // Two paths:
@@ -11,6 +12,10 @@ import { peekOTP, consumeOTP } from "@/lib/otp-store";
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
 
   let body: Record<string, unknown>;
   try {

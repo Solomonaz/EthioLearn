@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 const MAX_FILE_SIZE = 52428800; // 50 MB
 const MAX_STORAGE = 209715200; // 200 MB
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
   const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   let body: { title?: string; description?: string; fileSize?: number };

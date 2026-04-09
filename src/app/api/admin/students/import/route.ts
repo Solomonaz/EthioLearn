@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import Papa from "papaparse";
 import { Prisma } from "@prisma/client";
 
@@ -38,6 +39,10 @@ export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   let body: { csvData?: string };

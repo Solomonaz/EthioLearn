@@ -5,7 +5,9 @@ import { rateLimit } from "@/lib/rate-limit";
 export async function POST(request: Request) {
   try {
     // 3 registrations per IP per 10 minutes
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    // Use the rightmost IP from X-Forwarded-For — that's the one added by
+    // the trusted load balancer (Railway). The leftmost can be spoofed by the client.
+    const ip = request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ?? "unknown";
     const rl = rateLimit(`register:${ip}`, 3, 10 * 60 * 1000);
     if (!rl.success) {
       return NextResponse.json(

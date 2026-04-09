@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { Difficulty, QuestionType } from "@prisma/client";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -110,6 +111,10 @@ export async function POST(request: NextRequest) {
 
   if (!["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   let body: CreateQuestionBody;

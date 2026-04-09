@@ -1,17 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/get-session";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
+    return NextResponse.json({ error: "No school assigned" }, { status: 400 });
+  }
+
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "SCHOOL_ADMIN")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
     const { name } = await req.json();
-    if (!name || typeof name !== "string") {
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
@@ -21,7 +29,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ subject });
   } catch (error: any) {
-    console.error("Failed to create subject:", error);
     if (error.code === "P2002") {
       return NextResponse.json({ error: "Subject already exists" }, { status: 400 });
     }

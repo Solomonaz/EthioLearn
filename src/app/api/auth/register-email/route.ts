@@ -4,7 +4,8 @@ import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    // Use the rightmost IP — the one added by the trusted proxy (Railway LB)
+    const ip = request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ?? "unknown";
     const rl = rateLimit(`register:email:${ip}`, 3, 10 * 60 * 1000);
     if (!rl.success) {
       return NextResponse.json(

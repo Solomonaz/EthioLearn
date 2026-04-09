@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   if (sessionId) {
     const userAgent = req.headers.get("user-agent") ?? undefined;
     const ipAddress =
-      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+      req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ??
       req.headers.get("x-real-ip") ??
       undefined;
 
