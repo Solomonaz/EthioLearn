@@ -16,6 +16,7 @@ const GOOGLE_ENABLED        = process.env.NEXT_PUBLIC_GOOGLE_ENABLED === "true";
 const FACEBOOK_ENABLED      = process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === "true";
 const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
 const TELEGRAM_ENABLED      = TELEGRAM_BOT_USERNAME.length > 0;
+const PHONE_ENABLED         = process.env.NEXT_PUBLIC_PHONE_ENABLED !== "false"; // default on
 const SOCIAL_ENABLED        = GOOGLE_ENABLED || FACEBOOK_ENABLED || TELEGRAM_ENABLED;
 
 // ── Error messages ───────────────────────────────────────────────────────────
@@ -184,16 +185,18 @@ function LoginForm() {
                 <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} callbackUrl="/auth/redirect" action="login" />
               )}
 
-              <div className="flex items-center gap-3 pt-1">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-text-secondary">or sign in with phone</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
+              {PHONE_ENABLED && (
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-text-secondary">or sign in with phone</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
             </div>
           )}
 
           {/* ── Phone OTP ────────────────────────────────────────────────── */}
-          {step === "input" ? (
+          {PHONE_ENABLED && (step === "input" ? (
             <form onSubmit={handleSendOtp}>
               <label className="mb-2 block text-sm font-medium text-text-primary">
                 Phone Number
@@ -262,6 +265,13 @@ function LoginForm() {
                 Change phone number
               </button>
             </form>
+          ))}
+
+          {/* ── Fallback: nothing enabled ────────────────────────────────── */}
+          {!PHONE_ENABLED && !SOCIAL_ENABLED && (
+            <p className="text-center text-sm text-text-secondary">
+              No sign-in methods are currently enabled. Please contact support.
+            </p>
           )}
         </div>
 

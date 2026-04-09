@@ -75,7 +75,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <nav className="flex flex-col gap-1 p-4">
+        <nav className="flex h-full flex-col gap-1 overflow-y-auto p-4 pb-6">
           {/* Section label */}
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             {isAdmin ? "Administration" : "Student"}

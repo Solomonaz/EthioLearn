@@ -15,6 +15,7 @@ const GOOGLE_ENABLED        = process.env.NEXT_PUBLIC_GOOGLE_ENABLED === "true";
 const FACEBOOK_ENABLED      = process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === "true";
 const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
 const TELEGRAM_ENABLED      = TELEGRAM_BOT_USERNAME.length > 0;
+const PHONE_ENABLED         = process.env.NEXT_PUBLIC_PHONE_ENABLED !== "false"; // default on
 const SOCIAL_ENABLED        = GOOGLE_ENABLED || FACEBOOK_ENABLED || TELEGRAM_ENABLED;
 
 function RegisterForm() {
@@ -187,158 +188,172 @@ function RegisterForm() {
                 <TelegramLoginButton botUsername={TELEGRAM_BOT_USERNAME} callbackUrl="/auth/redirect" action="register" />
               )}
 
-              <div className="flex items-center gap-3 pt-1">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-text-secondary">or register with phone</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
+              {PHONE_ENABLED && (
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-text-secondary">or register with phone</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
             </div>
           )}
 
-          {/* Step indicator */}
-          <div className="mb-6 flex justify-center gap-2">
-            {steps.map((s, i) => (
-              <div
-                key={s}
-                className={`h-2 w-8 rounded-full ${
-                  steps.indexOf(step) >= i ? "bg-primary" : "bg-border"
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* ── Step 1: Phone ─────────────────────────────────────────────── */}
-          {step === "phone" && (
-            <form onSubmit={handleSendOtp}>
-              <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                Your phone number
-              </h2>
-              <div className="flex gap-2">
-                <span className="flex items-center rounded-lg border border-border bg-gray-50 px-3 text-sm text-text-secondary">
-                  +251
-                </span>
-                <input
-                  type="tel"
-                  placeholder="9XXXXXXXX"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
-                  className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  maxLength={9}
-                  minLength={9}
-                  pattern="[0-9]{9}"
-                  title="Enter exactly 9 digits (e.g. 912345678)"
-                  required
-                  disabled={isLoading}
-                />
+          {/* ── Phone registration steps (only when PHONE_ENABLED) ────────── */}
+          {PHONE_ENABLED && (
+            <>
+              {/* Step indicator */}
+              <div className="mb-6 flex justify-center gap-2">
+                {steps.map((s, i) => (
+                  <div
+                    key={s}
+                    className={`h-2 w-8 rounded-full ${
+                      steps.indexOf(step) >= i ? "bg-primary" : "bg-border"
+                    }`}
+                  />
+                ))}
               </div>
-              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isLoading ? "Sending..." : "Send OTP"}
-              </button>
-            </form>
-          )}
 
-          {/* ── Step 2: OTP ───────────────────────────────────────────────── */}
-          {step === "otp" && (
-            <form onSubmit={handleVerifyOtp}>
-              <h2 className="mb-2 text-lg font-semibold text-text-primary">
-                Verify your number
-              </h2>
-              <p className="mb-4 text-sm text-text-secondary">
-                Enter the 6-digit code sent to{" "}
-                <span className="font-medium text-text-primary">+251{phoneNumber}</span>
-              </p>
-              <input
-                type="text"
-                placeholder="000000"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="w-full rounded-lg border border-border px-4 py-3 text-center text-2xl tracking-widest text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                maxLength={6}
-                required
-                disabled={isLoading}
-              />
-              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isLoading ? "Verifying..." : "Verify"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStep("phone"); setError(""); setOtp(""); }}
-                className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
-                disabled={isLoading}
-              >
-                Back
-              </button>
-            </form>
-          )}
+              {/* ── Step 1: Phone ─────────────────────────────────────────── */}
+              {step === "phone" && (
+                <form onSubmit={handleSendOtp}>
+                  <h2 className="mb-4 text-lg font-semibold text-text-primary">
+                    Your phone number
+                  </h2>
+                  <div className="flex gap-2">
+                    <span className="flex items-center rounded-lg border border-border bg-gray-50 px-3 text-sm text-text-secondary">
+                      +251
+                    </span>
+                    <input
+                      type="tel"
+                      placeholder="9XXXXXXXX"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
+                      className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                      maxLength={9}
+                      minLength={9}
+                      pattern="[0-9]{9}"
+                      title="Enter exactly 9 digits (e.g. 912345678)"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                  {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Sending..." : "Send OTP"}
+                  </button>
+                </form>
+              )}
 
-          {/* ── Step 3: Profile ───────────────────────────────────────────── */}
-          {step === "profile" && (
-            <form onSubmit={handleCreateAccount}>
-              <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                Complete your profile
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-primary">
-                    Full Name
-                  </label>
+              {/* ── Step 2: OTP ───────────────────────────────────────────── */}
+              {step === "otp" && (
+                <form onSubmit={handleVerifyOtp}>
+                  <h2 className="mb-2 text-lg font-semibold text-text-primary">
+                    Verify your number
+                  </h2>
+                  <p className="mb-4 text-sm text-text-secondary">
+                    Enter the 6-digit code sent to{" "}
+                    <span className="font-medium text-text-primary">+251{phoneNumber}</span>
+                  </p>
                   <input
                     type="text"
-                    placeholder="Enter your name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    placeholder="000000"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    className="w-full rounded-lg border border-border px-4 py-3 text-center text-2xl tracking-widest text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    maxLength={6}
                     required
                     disabled={isLoading}
                   />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-primary">
-                    Grade
-                  </label>
-                  <select
-                    value={grade}
-                    onChange={(e) => setGrade(e.target.value)}
-                    className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                    required
+                  {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Verifying..." : "Verify"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStep("phone"); setError(""); setOtp(""); }}
+                    className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
                     disabled={isLoading}
                   >
-                    <option value="">Select your grade</option>
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        Grade {i + 1}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isLoading ? "Creating Account..." : "Create Account"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStep("otp"); setError(""); }}
-                className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
-                disabled={isLoading}
-              >
-                Back
-              </button>
-            </form>
+                    Back
+                  </button>
+                </form>
+              )}
+
+              {/* ── Step 3: Profile ───────────────────────────────────────── */}
+              {step === "profile" && (
+                <form onSubmit={handleCreateAccount}>
+                  <h2 className="mb-4 text-lg font-semibold text-text-primary">
+                    Complete your profile
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-text-primary">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Enter your name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-text-primary">
+                        Grade
+                      </label>
+                      <select
+                        value={grade}
+                        onChange={(e) => setGrade(e.target.value)}
+                        className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        required
+                        disabled={isLoading}
+                      >
+                        <option value="">Select your grade</option>
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            Grade {i + 1}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? "Creating Account..." : "Create Account"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStep("otp"); setError(""); }}
+                    className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
+                    disabled={isLoading}
+                  >
+                    Back
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+
+          {/* ── Fallback: nothing enabled ──────────────────────────────────── */}
+          {!PHONE_ENABLED && !SOCIAL_ENABLED && (
+            <p className="text-center text-sm text-text-secondary">
+              No registration methods are currently enabled. Please contact support.
+            </p>
           )}
         </div>
 

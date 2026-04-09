@@ -62,7 +62,7 @@ export default function AdminLoginPage() {
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 className="w-full rounded-lg border border-gray-700 bg-black px-4 py-3 text-white outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                maxLength={9}
+                maxLength={10}
                 required
                 disabled={isLoading}
               />
