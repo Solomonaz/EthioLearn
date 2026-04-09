@@ -38,9 +38,9 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
               )}
             </button>
           )}
-          <Link href="/" className="text-xl font-bold text-primary">
+          <span className="text-xl font-bold text-primary">
             EthioLearn
-          </Link>
+          </span>
         </div>
 
         {status === "loading" ? null : session ? (

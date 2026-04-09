@@ -40,8 +40,8 @@ export default function HomePage() {
         <div className="mt-16 grid grid-cols-3 gap-8 border-t border-border pt-12">
           {[
             { label: "Questions", value: "10,000+" },
-            { label: "Subjects", value: "8+" },
-            { label: "Grades", value: "9–12" },
+            { label: "Subjects", value: "10+" },
+            { label: "Grades", value: "7-12" },
           ].map((s) => (
             <div key={s.label}>
               <div className="text-3xl font-black text-primary">{s.value}</div>
@@ -55,7 +55,7 @@ export default function HomePage() {
       <section className="bg-surface py-16">
         <div className="mx-auto max-w-6xl px-4">
           <h2 className="mb-2 text-center text-3xl font-bold text-text-primary">Everything you need to excel</h2>
-          <p className="mb-12 text-center text-text-secondary">Built for Ethiopian students, Grade 9–12</p>
+          <p className="mb-12 text-center text-text-secondary">Built for Ethiopian students, Grade 7-12</p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: BookOpen, title: "Curriculum-Aligned Quizzes", desc: "MCQ questions mapped to Biology, Mathematics, Physics, Chemistry, and more — written for the Ethiopian curriculum." },
@@ -82,7 +82,7 @@ export default function HomePage() {
         <h2 className="mb-12 text-center text-3xl font-bold text-text-primary">How it works</h2>
         <div className="grid gap-8 sm:grid-cols-3">
           {[
-            { step: "1", title: "Register with your phone", desc: "Sign up using your Ethiopian phone number. No email needed — just a 6-digit OTP." },
+            { step: "1", title: "Create your account", desc: "Sign up with Google, Telegram, or your Ethiopian phone number — quick and easy." },
             { step: "2", title: "Take quizzes & battle", desc: "Pick a subject, chapter, and difficulty. Answer questions to earn points and beat your classmates." },
             { step: "3", title: "Earn rewards", desc: "Accumulate points, level up, and redeem them for real prizes offered by your school." },
           ].map((s) => (
