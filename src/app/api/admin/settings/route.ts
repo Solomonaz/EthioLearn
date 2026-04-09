@@ -28,11 +28,13 @@ export async function GET() {
       schoolId = newSchool.id;
     }
 
-    // Link the user to the school for future requests
-    await db.user.update({
-      where: { id: user.id },
-      data: { schoolId },
-    });
+    // Link the user to the school for future requests (skip for env_super_admin — no DB row)
+    if (user.id !== "env_super_admin") {
+      await db.user.update({
+        where: { id: user.id },
+        data: { schoolId },
+      });
+    }
   }
 
   const school = await db.school.findUnique({
@@ -62,8 +64,14 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
-    return NextResponse.json({ error: "No school assigned" }, { status: 400 });
+  // For env_super_admin, resolve schoolId the same way GET does
+  let schoolId = user.schoolId;
+  if (!schoolId) {
+    const existingSchool = await db.school.findFirst();
+    if (!existingSchool) {
+      return NextResponse.json({ error: "No school exists yet. Visit Settings to create one." }, { status: 400 });
+    }
+    schoolId = existingSchool.id;
   }
 
   if (!validateCsrfOrigin(request)) {
@@ -93,7 +101,7 @@ export async function PATCH(request: NextRequest) {
   // Use a transaction or separate updates
   const [updatedSchool] = await db.$transaction([
     db.school.update({
-      where: { id: user.schoolId },
+      where: { id: schoolId },
       data: {
         ...(name && { name }),
         ...(region && { region: String(region) }),
@@ -102,14 +110,14 @@ export async function PATCH(request: NextRequest) {
       },
     }),
     db.gameConfig.upsert({
-      where: { schoolId: user.schoolId },
+      where: { schoolId: schoolId },
       update: {
         ...(maxPlayersPerRoom !== undefined && { maxPlayersPerRoom: Number(maxPlayersPerRoom) }),
         ...(timePerQuestion !== undefined && { timePerQuestion: Number(timePerQuestion) }),
         ...(defaultDifficulty !== undefined && { defaultDifficulty: defaultDifficulty as any }),
       },
       create: {
-        schoolId: user.schoolId,
+        schoolId: schoolId,
         maxPlayersPerRoom: Number(maxPlayersPerRoom) || 20,
         timePerQuestion: Number(timePerQuestion) || 20,
         defaultDifficulty: (defaultDifficulty as any) || "MEDIUM",
