@@ -15,7 +15,6 @@ import {
   Trash2,
   RefreshCw,
   Link2,
-  Unlink,
   CheckCircle2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -120,7 +119,7 @@ function StudentSettingsInner() {
 
   // Telegram link state
   const [telegramLinked, setTelegramLinked] = useState(false);
-  const [telegramLoading, setTelegramLoading] = useState(false);
+  const [telegramLoading, setTelegramLoading] = useState(false); // used for link flow only
 
   // Sessions state
   const [sessions, setSessions]           = useState<ActiveSession[]>([]);
@@ -259,35 +258,6 @@ function StudentSettingsInner() {
       toast.error("Failed to revoke sessions");
     } finally {
       setRevokingAll(false);
-    }
-  };
-
-  // ── Telegram unlink ──────────────────────────────────────────────────────
-
-  const handleTelegramUnlink = async () => {
-    setTelegramLoading(true);
-    try {
-      const res = await fetch("/api/students/me/link-telegram", { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error("Failed to unlink Telegram");
-        return;
-      }
-      setTelegramLinked(false);
-
-      if (data.requireSignOut) {
-        // Telegram was the only login method — sign the user out and send
-        // them to /register so they start fresh (not /login which would just
-        // show a "no account found" error if they try Telegram again).
-        toast.success("Telegram unlinked. Please register again to continue.");
-        await signOut({ callbackUrl: "/register" });
-      } else {
-        toast.success("Telegram account unlinked");
-      }
-    } catch {
-      toast.error("Network error. Please try again.");
-    } finally {
-      setTelegramLoading(false);
     }
   };
 
@@ -451,7 +421,11 @@ function StudentSettingsInner() {
             <InfoRow
               icon={<Phone className="h-4 w-4 text-text-secondary" />}
               label="Phone Number"
-              value={userData.phoneNumber}
+              value={
+                userData.phoneNumber?.startsWith("telegram@")
+                  ? "—"
+                  : userData.phoneNumber || "—"
+              }
             />
             <InfoRow
               icon={<Calendar className="h-4 w-4 text-text-secondary" />}
@@ -514,28 +488,19 @@ function StudentSettingsInner() {
                 )}
               </div>
 
-              <div className="flex-shrink-0">
-                {telegramLinked ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-red-200 text-error hover:bg-red-50"
-                    onClick={handleTelegramUnlink}
-                    isLoading={telegramLoading}
-                  >
-                    <Unlink className="mr-1.5 h-3.5 w-3.5" />
-                    Unlink
-                  </Button>
-                ) : telegramLoading ? (
-                  <div className="flex h-10 items-center px-2 text-sm text-text-secondary">
-                    Linking…
-                  </div>
-                ) : (
-                  <TelegramLinkButton
-                    botUsername={TELEGRAM_BOT_USERNAME}
-                  />
-                )}
-              </div>
+              {!telegramLinked && (
+                <div className="flex-shrink-0">
+                  {telegramLoading ? (
+                    <div className="flex h-10 items-center px-2 text-sm text-text-secondary">
+                      Linking…
+                    </div>
+                  ) : (
+                    <TelegramLinkButton
+                      botUsername={TELEGRAM_BOT_USERNAME}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

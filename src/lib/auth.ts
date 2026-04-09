@@ -234,11 +234,21 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
           if (existing) throw new Error("AlreadyExists");
 
           const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
+
+          // Build an internal phone-number-slot identifier from the Telegram
+          // username (globally unique on Telegram).  Falls back to the numeric
+          // Telegram ID when the user has no username set.
+          // Format: "telegram@solomon"  or  "telegram@id874952384"
+          // This value is NEVER displayed to users — it is for DB uniqueness only.
+          const tgIdentifier = data.username
+            ? `telegram@${data.username.toLowerCase()}`
+            : `telegram@id${telegramId}`;
+
           const newUser = await db.user.create({
             data: {
               name:        fullName || "Telegram User",
               telegramId,
-              phoneNumber: null,
+              phoneNumber: tgIdentifier,
               role:        "STUDENT",
             } as any,
           });

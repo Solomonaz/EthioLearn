@@ -204,7 +204,8 @@ export async function GET() {
     user: {
       id: user.id,
       name: user.name,
-      phone: user.phoneNumber,
+      // Hide internal telegram@ identifiers from the client
+      phone: user.phoneNumber?.startsWith("telegram@") ? null : user.phoneNumber,
       grade: user.grade,
       section: user.section,
       totalPoints: user.totalPoints,
