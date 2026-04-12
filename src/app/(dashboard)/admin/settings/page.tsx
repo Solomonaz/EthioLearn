@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ interface UserData {
 }
 
 export default function AdminSettingsPage() {
+  const basePath = useAdminBasePath();
   const [school, setSchool] = useState<SchoolData | null>(null);
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -375,7 +377,7 @@ export default function AdminSettingsPage() {
               <Download className="h-4 w-4" />
               Export Student Data
             </Button>
-            <Link href="/admin/textbooks">
+            <Link href={`${basePath}/textbooks`}>
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Library className="h-4 w-4" />
                 Manage Textbooks

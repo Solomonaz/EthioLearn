@@ -12,8 +12,16 @@ export default async function StudentLayout({
     redirect("/login?callbackUrl=/student");
   }
 
-  if (user.role !== "STUDENT") {
+  if (user.role === "SUPER_ADMIN") {
     redirect("/admin");
+  }
+
+  if (user.role === "SCHOOL_ADMIN") {
+    redirect("/school-admin");
+  }
+
+  if (user.role !== "STUDENT") {
+    redirect("/login");
   }
 
   return <>{children}</>;

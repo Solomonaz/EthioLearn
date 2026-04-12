@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
+import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import Papa from "papaparse";
 import {
   Users,
@@ -351,6 +352,7 @@ function AdminStudentsContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const basePath = useAdminBasePath();
 
   const [data, setData] = useState<StudentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -682,7 +684,7 @@ function AdminStudentsContent() {
 
                     {/* Actions */}
                     <td className="px-4 py-3 text-right">
-                      <Link href={`/admin/students/${student.id}`}>
+                      <Link href={`${basePath}/students/${student.id}`}>
                         <Button size="sm" variant="outline" className="gap-1.5">
                           <Eye className="h-3.5 w-3.5" />
                           View
@@ -719,7 +721,7 @@ function AdminStudentsContent() {
                       </div>
                     </div>
 
-                    <Link href={`/admin/students/${student.id}`}>
+                    <Link href={`${basePath}/students/${student.id}`}>
                       <Button size="sm" variant="outline">
                         View
                       </Button>

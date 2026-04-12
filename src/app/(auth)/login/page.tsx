@@ -42,9 +42,10 @@ function LoginForm() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      const role    = (session?.user as any)?.role;
-      const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
-      router.replace(isAdmin ? "/admin" : "/student");
+      const role = (session?.user as any)?.role;
+      if (role === "SUPER_ADMIN") router.replace("/admin");
+      else if (role === "SCHOOL_ADMIN") router.replace("/school-admin");
+      else router.replace("/student");
     }
   }, [status, session, router]);
 
@@ -94,21 +95,29 @@ function LoginForm() {
       }
 
       if (result?.ok) {
-        const sess    = await getSession();
-        const role    = (sess?.user as any)?.role;
-        const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
+        const sess = await getSession();
+        const role = (sess?.user as any)?.role;
+        const isSuperAdmin = role === "SUPER_ADMIN";
+        const isSchoolAdmin = role === "SCHOOL_ADMIN";
 
         if (callbackUrl) {
           // Only allow safe relative paths — no open redirects
           const isSafeRelative = /^\/[^/]/.test(callbackUrl) && !callbackUrl.includes(":");
           const isAdminCb   = callbackUrl.startsWith("/admin");
+          const isSchoolAdminCb = callbackUrl.startsWith("/school-admin");
           const isStudentCb = callbackUrl.startsWith("/student");
-          if (isSafeRelative && ((isAdmin && isAdminCb) || (!isAdmin && isStudentCb))) {
+          if (isSafeRelative && (
+            (isSuperAdmin && isAdminCb) ||
+            (isSchoolAdmin && isSchoolAdminCb) ||
+            (!isSuperAdmin && !isSchoolAdmin && isStudentCb)
+          )) {
             router.push(callbackUrl);
             return;
           }
         }
-        router.push(isAdmin ? "/admin" : "/student");
+        if (isSuperAdmin) router.push("/admin");
+        else if (isSchoolAdmin) router.push("/school-admin");
+        else router.push("/student");
       }
     } catch {
       setError("Network error. Please check your connection and try again.");

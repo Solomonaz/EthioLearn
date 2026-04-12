@@ -25,8 +25,13 @@ export default function AuthRedirectPage() {
     }
 
     const role = (session?.user as { role?: string } | undefined)?.role;
-    const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
-    router.replace(isAdmin ? "/admin" : "/student");
+    if (role === "SUPER_ADMIN") {
+      router.replace("/admin");
+    } else if (role === "SCHOOL_ADMIN") {
+      router.replace("/school-admin");
+    } else {
+      router.replace("/student");
+    }
   }, [session, status, router]);
 
   return (

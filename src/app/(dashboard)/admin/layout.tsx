@@ -12,7 +12,12 @@ export default async function AdminLayout({
     redirect("/admin_ethiolearn");
   }
 
-  if (user.role !== "SUPER_ADMIN" && user.role !== "SCHOOL_ADMIN") {
+  // SCHOOL_ADMIN has its own dashboard at /school-admin
+  if (user.role === "SCHOOL_ADMIN") {
+    redirect("/school-admin");
+  }
+
+  if (user.role !== "SUPER_ADMIN") {
     redirect("/student");
   }
 

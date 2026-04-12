@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 
@@ -28,7 +28,10 @@ export default function AdminLoginPage() {
       if (result?.error) {
         setError("Invalid credentials. Enter the master phone and OTP.");
       } else {
-        router.push("/admin");
+        const sess = await getSession();
+        const role = (sess?.user as any)?.role;
+        if (role === "SCHOOL_ADMIN") router.push("/school-admin");
+        else router.push("/admin");
       }
     } catch {
       setError("Network error. Please try again.");

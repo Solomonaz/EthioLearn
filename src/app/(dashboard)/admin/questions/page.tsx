@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import {
   HelpCircle,
   Pencil,
@@ -114,6 +115,8 @@ const LABEL_CLASS = "mb-1.5 block text-sm font-medium text-text-primary";
 // ─── Main Component ───────────────────────────────────────
 
 export default function AdminQuestionsPage() {
+  const basePath = useAdminBasePath();
+
   // ── Filter state ─────────────────────────────────────────
   const [filterTextbookId, setFilterTextbookId] = useState("");
   const [filterChapterId, setFilterChapterId] = useState("");
@@ -1209,7 +1212,7 @@ export default function AdminQuestionsPage() {
                       </p>
                       <p className="text-xs text-amber-700 mb-3">
                         Add a textbook first from the{" "}
-                        <a href="/admin/textbooks" className="font-medium underline hover:text-amber-900">
+                        <a href={`${basePath}/textbooks`} className="font-medium underline hover:text-amber-900">
                           Textbook Management
                         </a>{" "}
                         page, then come back here to generate questions.
@@ -1243,7 +1246,7 @@ export default function AdminQuestionsPage() {
                       {aiChapters.length === 0 ? (
                         <p className="rounded-lg bg-background p-3 text-sm text-text-secondary">
                           No chapters found. Add chapters via the{" "}
-                          <a href="/admin/textbooks" className="font-medium text-primary underline">
+                          <a href={`${basePath}/textbooks`} className="font-medium text-primary underline">
                             Textbook Management
                           </a>{" "}
                           page.

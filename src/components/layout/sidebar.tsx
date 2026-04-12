@@ -20,7 +20,9 @@ import {
   Bell,
   TrendingUp,
   BookMarked,
+  Building2,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 const studentNavItems = [
@@ -38,8 +40,10 @@ const studentNavItems = [
   { label: "Settings", href: "/student/settings", icon: Settings },
 ];
 
-const adminNavItems = [
+/** SUPER_ADMIN sidebar — includes Schools and all system-level features */
+const superAdminNavItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
+  { label: "Schools", href: "/admin/schools", icon: Building2 },
   { label: "Students", href: "/admin/students", icon: Users },
   { label: "Textbooks", href: "/admin/textbooks", icon: Library },
   { label: "Subjects", href: "/admin/subjects", icon: BookMarked },
@@ -49,6 +53,18 @@ const adminNavItems = [
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
+/** SCHOOL_ADMIN sidebar — no Schools, no system-level features */
+const schoolAdminNavItems = [
+  { label: "Dashboard", href: "/school-admin", icon: LayoutDashboard, exact: true },
+  { label: "Students", href: "/school-admin/students", icon: Users },
+  { label: "Textbooks", href: "/school-admin/textbooks", icon: Library },
+  { label: "Subjects", href: "/school-admin/subjects", icon: BookMarked },
+  { label: "Questions", href: "/school-admin/questions", icon: HelpCircle },
+  { label: "Rewards", href: "/school-admin/rewards", icon: Gift },
+  { label: "Analytics", href: "/school-admin/analytics", icon: BarChart2 },
+  { label: "Settings", href: "/school-admin/settings", icon: Settings },
+];
+
 interface SidebarProps {
   isOpen: boolean;
   onClose?: () => void;
@@ -56,8 +72,26 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role as string | undefined;
+
+  const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
-  const navItems = isAdmin ? adminNavItems : studentNavItems;
+
+  // Pick the correct nav items based on route
+  let navItems;
+  let sectionLabel: string;
+
+  if (isSchoolAdmin) {
+    navItems = schoolAdminNavItems;
+    sectionLabel = "School Management";
+  } else if (isAdmin) {
+    navItems = superAdminNavItems;
+    sectionLabel = "Administration";
+  } else {
+    navItems = studentNavItems;
+    sectionLabel = "Student";
+  }
 
   return (
     <>
@@ -78,7 +112,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex h-full flex-col gap-1 overflow-y-auto p-4 pb-6">
           {/* Section label */}
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
-            {isAdmin ? "Administration" : "Student"}
+            {sectionLabel}
           </p>
 
           {navItems.map((item) => {

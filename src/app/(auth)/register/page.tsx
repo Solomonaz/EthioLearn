@@ -30,9 +30,10 @@ function RegisterForm() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      const role    = (session?.user as { role?: string } | undefined)?.role;
-      const isAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
-      router.replace(isAdmin ? "/admin" : "/student");
+      const role = (session?.user as { role?: string } | undefined)?.role;
+      if (role === "SUPER_ADMIN") router.replace("/admin");
+      else if (role === "SCHOOL_ADMIN") router.replace("/school-admin");
+      else router.replace("/student");
     }
   }, [status, session, router]);
 
