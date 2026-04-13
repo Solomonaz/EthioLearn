@@ -41,15 +41,16 @@ const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy
            chapter", "the text", "the content", or "the passage":
            • "A [specific named concept or entity] is placed in [novel
              scenario not described verbatim]. Based on [specific named
-             principle or process], what would most likely happen and why?"
+             principle or process], what would most likely happen?"
+           • "Why would [specific outcome] occur when [specific scenario]?"
            • "Given that [specific Fact A] and [specific Fact B] are both
              true, which conclusion is best supported by both?"
            • "A student claims [a specific misconception]. Which of the
              following BEST refutes this claim?"
            • "Which of the following would MOST LIKELY result if [specific
-             named process or rule] were disrupted, and what is the reason?"
-           • "Compare [Concept A] and [Concept B]. In what situation would
-             [A] be more appropriate or correct than [B], and why?"
+             named process or rule] were disrupted?"
+           • "In what situation would [Concept A] be more appropriate or
+             correct than [Concept B]?"
 
 SELF-CHECK: Before labelling a question HARD, confirm it satisfies AT LEAST ONE of:
   (a) requires combining two or more distinct facts from different parts of the content,
@@ -74,6 +75,12 @@ Q2. DISTRACTOR QUALITY (MCQ): All 3 wrong options must be PLAUSIBLE,
     belong to the same category/domain as the correct answer, and represent
     realistic student misconceptions. No joke options, no obviously-out-of-scope
     options, no options from a different time period / subject / unit.
+    CRITICALLY: Before finalizing, verify each wrong option is DEFINITIVELY
+    FALSE — not just less likely. If a knowledgeable student could defend any
+    wrong option as also correct, discard that distractor and write a new one.
+    Also ensure no two options say the same thing from opposite angles
+    (e.g. "A is more rigid" and "B is more flexible" are logically equivalent
+    and must not both appear as options).
 Q3. TOPIC DIVERSITY: Across the whole batch, cover DIFFERENT subtopics from the
     chapter. Do not generate multiple questions testing the exact same fact.
     Aim for broad coverage of the chapter content.
@@ -109,6 +116,15 @@ Q10. NO GENERIC QUESTIONS: Every question must be specific to named facts,
     LITMUS TEST: mentally remove the chapter content — if the correct answer is
     still obvious, the question is too generic. Rewrite it to reference a specific
     term, value, mechanism, or scenario that only appears in this chapter.
+Q12. NO COMPOUND QUESTIONS (MCQ / TRUE_FALSE only): The questionText must ask
+    exactly ONE thing. Do NOT append "and why?", "and what is the reason?",
+    "and how?", "and explain", or any second question after the main question.
+    The options must be able to fully answer the COMPLETE question on their own.
+    If you want to test reasoning, make the ENTIRE question about the reason.
+    WRONG: "What would happen to the cell, and why?"
+    WRONG: "Which of the following would result, and what is the reason?"
+    RIGHT: "What would happen to the cell?"
+    RIGHT: "Why does the cell swell when placed in a hypotonic solution?"
 Q11. NO META-REFERENCES: The questionText must NEVER contain phrases such as
     "this chapter", "the chapter", "the text", "the passage", "the content",
     "the textbook", "according to the book", "based on the reading", "from the
@@ -199,6 +215,11 @@ For each candidate question, verify:
   ✓ The correct answer is scientifically accurate, not just plausible (Q9).
   ✓ The question cannot be answered by common sense alone — it requires
     knowing specific content from this chapter (Q10).
+  ✓ For MCQ/TRUE_FALSE: the questionText asks exactly ONE thing — no "and
+    why?", "and what is the reason?", or any appended second question (Q12).
+  ✓ For MCQ: every wrong option is definitively false — no distractor could
+    be defended as correct by a knowledgeable student (Q2).
+  ✓ No two options say the same thing from opposite angles (Q2).
   ✓ The questionText contains no phrase like "this chapter", "the text",
     "from the chapter", "according to the book", or similar (Q11).
   ✓ If labelled HARD: it combines ≥2 facts, applies a concept to a new

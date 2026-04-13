@@ -22,13 +22,14 @@ export type QualityFlag =
   | "LOW_RELEVANCE"        // Cosine similarity to source < 0.5
   | "INVALID_ANSWER"       // correctAnswer not in options, wrong format
   | "DIFFICULTY_MISMATCH"  // AI-rated difficulty differs from declared
-  | "DUPLICATE_QUESTION"   // Semantically similar to another question (>0.85)
+  | "DUPLICATE_QUESTION"   // Semantically similar to another question (>0.75)
   | "GRAMMAR_ISSUE"        // Grammar/clarity problems
   | "EMPTY_EXPLANATION"    // Missing explanation
   | "TOO_SHORT"            // Question text suspiciously short
   | "AMBIGUOUS"            // Potentially ambiguous question
   | "FACTUAL_ERROR"        // Correct answer or premise is factually wrong
-  | "META_REFERENCE";      // Question text references "the chapter / the text"
+  | "META_REFERENCE"       // Question text references "the chapter / the text"
+  | "COMPOUND_QUESTION";   // MCQ/TRUE_FALSE asks two things ("…and why?")
 
 export interface QualityResult {
   questionIndex: number;
@@ -59,8 +60,17 @@ interface GeneratedQuestion {
 
 const QUALITY_PASS_THRESHOLD = 0.6;
 const RELEVANCE_THRESHOLD = 0.5;
-const DUPLICATE_THRESHOLD = 0.85;
+const DUPLICATE_THRESHOLD = 0.75; // Lowered from 0.85 to catch near-duplicates
 const MIN_QUESTION_LENGTH = 15;
+
+// Compound question endings that are invalid for MCQ / TRUE_FALSE (Q12)
+const COMPOUND_QUESTION_PATTERNS = [
+  /,\s*and\s+why\?$/i,
+  /,\s*and\s+what\s+is\s+the\s+reason\?$/i,
+  /,\s*and\s+how\?$/i,
+  /,\s*and\s+explain\.?$/i,
+  /\?\s+and\s+why\?$/i,
+];
 
 // Phrases that must not appear in question text (Q11 enforcement)
 const META_REF_PATTERNS = [
@@ -129,6 +139,14 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
 
   if (META_REF_PATTERNS.some((p) => p.test(q.questionText))) {
     flags.push("META_REFERENCE");
+  }
+
+  const type = q.type.toUpperCase();
+  if (
+    (type === "MCQ" || type === "TRUE_FALSE") &&
+    COMPOUND_QUESTION_PATTERNS.some((p) => p.test(q.questionText.trim()))
+  ) {
+    flags.push("COMPOUND_QUESTION");
   }
 
   return flags;
@@ -273,13 +291,16 @@ async function factCheckQuestions(
 
   const prompt = `You are a strict fact-checker for Grade ${grade} ${subject} exam questions.
 
-For EACH question verify ALL THREE of the following:
+For EACH question verify ALL FOUR of the following:
 1. Is the question stem/premise itself factually accurate?
-2. Is the marked correct answer genuinely the ONLY correct answer among the options?
-3. Are there any other options that could also be considered correct (ambiguous)?
+2. Is the marked correct answer genuinely correct according to established ${subject} knowledge?
+3. Is the marked correct answer the ONLY defensible answer — could a knowledgeable
+   student reasonably argue that any wrong option is also correct or partially correct?
+4. Do any two options say logically equivalent things from opposite angles
+   (e.g. "A is more rigid" vs "B is more flexible" — these are the same conclusion)?
 
-Respond PASS only when all three checks pass with full confidence.
-Respond FAIL with a concise reason whenever any check fails.
+Respond PASS only when ALL four checks pass with full confidence.
+Respond FAIL with a concise reason whenever ANY check fails — be strict.
 
 QUESTIONS:
 ${questionList}
@@ -467,6 +488,10 @@ export async function runQualityPipeline(
       if (flag === "META_REFERENCE") {
         details["META_REFERENCE"] = "Question references 'the chapter', 'the text', or similar — must be rewritten as a standalone item";
         penalty += 0.1;
+      }
+      if (flag === "COMPOUND_QUESTION") {
+        details["COMPOUND_QUESTION"] = "MCQ/TRUE_FALSE asks two things (e.g. '…and why?') — options cannot answer both; split into a single focused question";
+        penalty += 0.25;
       }
     }
 
