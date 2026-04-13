@@ -1,5 +1,7 @@
 /**
- * Unified AI provider: Groq → Gemini → Ollama Mistral fallback chain.
+ * Unified AI provider: Gemini → Groq fallback chain (production).
+ * Ollama Mistral is available as a local-dev-only tertiary fallback when
+ * OLLAMA_BASE_URL is set to a non-localhost address.
  *
  * Usage:
  *   import { generateQuestions, detectChapters } from "@/lib/ai-provider";
@@ -65,6 +67,16 @@ function hasGeminiKey(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
+// Mirrors the same guard in embeddings.ts and quality-pipeline.ts.
+// Ollama is only enabled in local dev when OLLAMA_BASE_URL is explicitly set
+// to a non-localhost address. In production this always returns false.
+function hasOllama(): boolean {
+  return (
+    !!process.env.OLLAMA_BASE_URL &&
+    process.env.OLLAMA_BASE_URL !== "http://localhost:11434"
+  );
+}
+
 // ─── Generate Questions (Gemini → Groq → Ollama) ────────
 //
 // Gemini is primary because its free tier allows 1,000,000 TPM — a single
@@ -104,17 +116,23 @@ export async function generateQuestions(
     }
   }
 
-  // 3. Ollama Mistral (local, no quota)
-  try {
-    const questions = await ollamaGenerateQuestions(opts);
-    console.info("[AI Provider] Used Ollama Mistral for question generation.");
-    return { questions, provider: "ollama" };
-  } catch (err) {
-    throw new Error(
-      `All AI providers failed. Gemini and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
-      "Ensure Ollama is running with 'mistral' model pulled (ollama pull mistral)."
-    );
+  // 3. Ollama Mistral — local dev only, skipped in production
+  if (hasOllama()) {
+    try {
+      const questions = await ollamaGenerateQuestions(opts);
+      console.info("[AI Provider] Used Ollama Mistral for question generation.");
+      return { questions, provider: "ollama" };
+    } catch (err) {
+      throw new Error(
+        `All AI providers failed. Gemini and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
+        "Ensure Ollama is running with 'mistral' model pulled (ollama pull mistral)."
+      );
+    }
   }
+
+  throw new Error(
+    "All AI providers failed. Gemini and Groq are both rate-limited. Please wait a moment and try again."
+  );
 }
 
 // ─── Detect Chapters (Gemini → Groq → Ollama) ───────────
@@ -154,16 +172,22 @@ export async function detectChapters(
     }
   }
 
-  // 3. Ollama Mistral
-  try {
-    const chapters = await ollamaDetectChapters(opts);
-    console.info("[AI Provider] Used Ollama Mistral for chapter detection.");
-    return { chapters, provider: "ollama" };
-  } catch (err) {
-    throw new Error(
-      `All AI providers failed for chapter detection: ${err instanceof Error ? err.message : String(err)}`
-    );
+  // 3. Ollama Mistral — local dev only, skipped in production
+  if (hasOllama()) {
+    try {
+      const chapters = await ollamaDetectChapters(opts);
+      console.info("[AI Provider] Used Ollama Mistral for chapter detection.");
+      return { chapters, provider: "ollama" };
+    } catch (err) {
+      throw new Error(
+        `All AI providers failed for chapter detection: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
+
+  throw new Error(
+    "All AI providers failed for chapter detection. Gemini and Groq are both rate-limited. Please wait a moment and try again."
+  );
 }
 
 // ─── AI Tutor Chat (Groq → Gemini fallback) ─────────────
