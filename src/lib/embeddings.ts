@@ -1,7 +1,7 @@
 /**
  * Embedding Generation & Vector DB Operations — §4.4.2
  *
- * Uses Gemini text-embedding-004 for embedding generation
+ * Uses Gemini gemini-embedding-001 for embedding generation
  * and pgvector for storage and semantic similarity search.
  */
 
@@ -10,7 +10,7 @@ import { db } from "./db";
 
 // ─── Constants ──────────────────────────────────────────
 
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODEL = "gemini-embedding-001";
 const EMBEDDING_DIMENSIONS = 768;
 const BATCH_SIZE = 50; // Gemini supports up to 100, use 50 for safety
 
@@ -62,11 +62,22 @@ function ngramFingerprint(text: string, dims: number): number[] {
   return vec.map((v) => v / norm);
 }
 
+// ─── Provider priority ───────────────────────────────────
+// Production: no Ollama → Gemini is primary.
+// Local dev:  set OLLAMA_BASE_URL to restore Ollama as primary.
+// Override:   set EMBEDDING_PROVIDER=gemini|ollama|auto (default: auto)
+const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER ?? "auto";
+const ollamaEnabled =
+  EMBEDDING_PROVIDER === "ollama" ||
+  (EMBEDDING_PROVIDER === "auto" &&
+    !!process.env.OLLAMA_BASE_URL &&
+    process.env.OLLAMA_BASE_URL !== "http://localhost:11434");
+
 // ─── Runtime capability flags ────────────────────────────
 // Try each provider once per process and cache the result to avoid
 // spamming logs or wasting time on known-unavailable providers.
 let geminiEmbeddingsAvailable: boolean | null = null;
-let ollamaEmbeddingsAvailable: boolean | null = null;
+let ollamaEmbeddingsAvailable: boolean | null = ollamaEnabled ? null : false;
 
 async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
   if (geminiEmbeddingsAvailable === false) return null;
@@ -101,7 +112,7 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: OLLAMA_EMBEDDING_MODEL, input: texts }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(5_000), // fail fast if Ollama is unreachable
     });
 
     if (!response.ok) {
@@ -142,11 +153,13 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
 // ─── Single Embedding ───────────────────────────────────
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const ollama = await tryOllamaEmbeddings([text]);
-  if (ollama) return ollama[0];
-
+  // Gemini first (available in all environments with GEMINI_API_KEY)
   const gemini = await tryGeminiEmbedding(text);
   if (gemini) return gemini;
+
+  // Ollama second (local dev only, skipped in production unless OLLAMA_BASE_URL set)
+  const ollama = await tryOllamaEmbeddings([text]);
+  if (ollama) return ollama[0];
 
   return ngramFingerprint(text, EMBEDDING_DIMENSIONS);
 }
@@ -165,14 +178,7 @@ export async function generateEmbeddings(
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
     const batch = texts.slice(i, i + BATCH_SIZE);
 
-    // 1. Ollama BGE-M3 (single batched request — no per-item quota)
-    const ollamaResults = await tryOllamaEmbeddings(batch);
-    if (ollamaResults) {
-      results.push(...batch.map((text, j) => ({ text, embedding: ollamaResults[j] })));
-      continue;
-    }
-
-    // 2. Gemini (parallel per-text)
+    // 1. Gemini — primary in all environments (uses GEMINI_API_KEY)
     if (geminiEmbeddingsAvailable !== false) {
       const geminiResults = await Promise.all(
         batch.map(async (text) => ({ text, embedding: await tryGeminiEmbedding(text) }))
@@ -181,13 +187,20 @@ export async function generateEmbeddings(
       if (geminiResults.every((r) => r.embedding !== null)) {
         results.push(...geminiResults.map((r) => ({ text: r.text, embedding: r.embedding! })));
         if (i + BATCH_SIZE < texts.length) {
-          await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 200)); // respect rate limits between batches
         }
         continue;
       }
     }
 
-    // 3. n-gram fingerprint (always works, fully offline)
+    // 2. Ollama BGE-M3 — local dev fallback (skipped in production unless OLLAMA_BASE_URL set)
+    const ollamaResults = await tryOllamaEmbeddings(batch);
+    if (ollamaResults) {
+      results.push(...batch.map((text, j) => ({ text, embedding: ollamaResults[j] })));
+      continue;
+    }
+
+    // 3. n-gram fingerprint — always works, fully offline, zero cost
     results.push(...batch.map((text) => ({ text, embedding: ngramFingerprint(text, EMBEDDING_DIMENSIONS) })));
   }
 
