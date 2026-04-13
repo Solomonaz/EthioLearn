@@ -34,18 +34,22 @@ const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy
            non-trivial problem. A well-prepared student should still need to
            think carefully. A question is NOT HARD just because it's labelled HARD.
 
-           HARD question templates — use these as structural models:
-           • "A [cell/organism/system] is exposed to [novel scenario from chapter].
-             Based on [specific process named in chapter], what would most likely
-             happen and why?"
-           • "Given that [Fact A from chapter] and [Fact B from chapter] are both
-             true, which conclusion is best supported by both?"
+           HARD question templates — use these as structural models,
+           adapting the placeholders to the actual subject and chapter:
+           • "A [concept/entity/system from this chapter] is placed in
+             [novel scenario not explicitly described in the text]. Based on
+             [specific principle or process from the chapter], what would
+             most likely happen and why?"
+           • "Given that [Fact A from the chapter] and [Fact B from the chapter]
+             are both true, which conclusion is best supported by both?"
            • "A student claims [common misconception about a chapter concept].
              Which evidence from the chapter BEST refutes this claim?"
-           • "Which of the following would MOST LIKELY result if [specific process
-             from chapter] were disrupted, and what is the reason?"
+           • "Which of the following would MOST LIKELY result if [specific
+             process or rule from the chapter] were changed or disrupted,
+             and what is the reason?"
            • "Compare [Concept A] and [Concept B] from the chapter. In what
-             situation would [A] be more appropriate than [B], and why?"
+             situation would [A] be more appropriate or correct than [B],
+             and why?"
 
 SELF-CHECK: Before labelling a question HARD, confirm it satisfies AT LEAST ONE of:
   (a) requires combining two or more distinct facts from different parts of the content,
@@ -88,12 +92,16 @@ Q8. EXPLANATION QUALITY: Each explanation must cite the concept from the
     main distractor is wrong (for MCQ).
 Q9. FACTUAL ACCURACY: Before emitting each question, independently verify that
     the correct answer is (a) supported by the chapter content AND (b) consistent
-    with established, universally accepted science. If any doubt exists about the
-    scientific accuracy of the answer, discard the question and generate a
-    different one. Do NOT trust a plausible-sounding answer — confirm it.
-    EXAMPLE OF ERROR TO AVOID: marking "The cell is the lowest level of biological
-    organization" as correct, when atoms, molecules, and organelles are all lower
-    levels. The cell is the basic unit of LIFE, not the lowest level of organization.
+    with established, universally accepted knowledge for this subject and grade.
+    If any doubt exists about the accuracy of the answer, discard the question
+    and generate a different one. Do NOT trust a plausible-sounding answer —
+    confirm it is correct.
+    COMMON ERROR PATTERN TO AVOID (applies to any subject): selecting an answer
+    that sounds authoritative but is only partially true, oversimplified, or
+    contradicts standard curriculum — e.g. confusing the "basic unit" of
+    something with the "smallest/lowest level", misattributing a discovery,
+    stating an approximation as an exact value, or reversing a cause-effect
+    relationship. When in doubt, choose a different question entirely.
 Q10. NO GENERIC QUESTIONS: Every question must be specific to named facts,
     processes, numbers, or terminology from THIS chapter. Reject any question
     that a student could answer correctly using only general common sense or
