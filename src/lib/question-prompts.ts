@@ -34,12 +34,29 @@ const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy
            non-trivial problem. A well-prepared student should still need to
            think carefully. A question is NOT HARD just because it's labelled HARD.
 
+           HARD question templates — use these as structural models:
+           • "A [cell/organism/system] is exposed to [novel scenario from chapter].
+             Based on [specific process named in chapter], what would most likely
+             happen and why?"
+           • "Given that [Fact A from chapter] and [Fact B from chapter] are both
+             true, which conclusion is best supported by both?"
+           • "A student claims [common misconception about a chapter concept].
+             Which evidence from the chapter BEST refutes this claim?"
+           • "Which of the following would MOST LIKELY result if [specific process
+             from chapter] were disrupted, and what is the reason?"
+           • "Compare [Concept A] and [Concept B] from the chapter. In what
+             situation would [A] be more appropriate than [B], and why?"
+
 SELF-CHECK: Before labelling a question HARD, confirm it satisfies AT LEAST ONE of:
-  (a) requires combining two or more facts from the content,
+  (a) requires combining two or more distinct facts from different parts of the content,
   (b) requires a calculation, derivation, or multi-step inference,
   (c) requires evaluating or justifying why one option is better than another,
-  (d) requires applying a concept to a novel scenario not stated verbatim.
-If none apply, downgrade it to MEDIUM.`;
+  (d) requires applying a concept to a novel scenario not stated verbatim in the text.
+If none apply, downgrade it to MEDIUM.
+ADDITIONALLY: A question is NOT HARD if a student can answer it by:
+  - reading a single sentence from the chapter,
+  - eliminating obviously wrong options without knowing the content,
+  - using general common sense without having studied the chapter.`;
 
 // ─── Universal quality rules ───────────────────────────────────────────────
 
@@ -68,7 +85,22 @@ Q7. GROUNDED IN CONTENT: Every question must be answerable from the chapter
     content below. Do NOT invent facts, dates, or names not present in the text.
 Q8. EXPLANATION QUALITY: Each explanation must cite the concept from the
     chapter and briefly state WHY the correct answer is right AND why the
-    main distractor is wrong (for MCQ).`;
+    main distractor is wrong (for MCQ).
+Q9. FACTUAL ACCURACY: Before emitting each question, independently verify that
+    the correct answer is (a) supported by the chapter content AND (b) consistent
+    with established, universally accepted science. If any doubt exists about the
+    scientific accuracy of the answer, discard the question and generate a
+    different one. Do NOT trust a plausible-sounding answer — confirm it.
+    EXAMPLE OF ERROR TO AVOID: marking "The cell is the lowest level of biological
+    organization" as correct, when atoms, molecules, and organelles are all lower
+    levels. The cell is the basic unit of LIFE, not the lowest level of organization.
+Q10. NO GENERIC QUESTIONS: Every question must be specific to named facts,
+    processes, numbers, or terminology from THIS chapter. Reject any question
+    that a student could answer correctly using only general common sense or
+    background domain knowledge, without having read this specific chapter.
+    LITMUS TEST: mentally remove the chapter content — if the correct answer is
+    still obvious, the question is too generic. Rewrite it to reference a specific
+    term, value, mechanism, or scenario that only appears in this chapter.`;
 
 // ─── Format rules per question type ────────────────────────────────────────
 
@@ -144,9 +176,15 @@ For each candidate question, verify:
   ✓ MCQ distractors are all plausible and same-domain (Q2).
   ✓ This subtopic has not already been covered in this batch (Q3).
   ✓ If TRUE_FALSE, difficulty is not HARD (Q4).
-  ✓ Difficulty label matches the rubric.
+  ✓ Difficulty label truly matches the Bloom's rubric — not just claimed.
   ✓ The question is answerable from the chapter content (Q7).
-If a question fails any check, REWRITE it before emitting.
+  ✓ The correct answer is scientifically accurate, not just plausible (Q9).
+  ✓ The question cannot be answered by common sense alone — it requires
+    knowing specific content from this chapter (Q10).
+  ✓ If labelled HARD: it combines ≥2 facts, applies a concept to a new
+    scenario, or requires evaluating competing claims — NOT single-fact recall.
+If a question fails ANY check, REWRITE it before emitting. Do not lower
+the bar — rewrite until all checks pass or replace with a different question.
 
 OUTPUT FORMAT: Return ONLY a valid JSON object (no markdown, no code fences,
 no commentary) with a single key "questions" containing an array of EXACTLY
