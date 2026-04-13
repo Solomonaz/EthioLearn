@@ -306,49 +306,88 @@ function normaliseForMatch(s: string): string {
 }
 
 /**
- * Try to locate `title` inside `textLower` (already normalised) using
+ * Build a normalised version of fullText AND an index map so each position
+ * in the normalised string can be translated back to its position in fullText.
+ * This is equivalent to normaliseForMatch but without losing position info.
+ */
+function buildNormWithMap(fullText: string): { normText: string; indexMap: number[] } {
+  const indexMap: number[] = [];
+  let normText = "";
+  let lastWasSpace = true; // treat start as space to skip leading whitespace
+
+  for (let i = 0; i < fullText.length; i++) {
+    const ch = fullText[i];
+    if (/[\w\u1200-\u137F]/.test(ch)) {
+      normText += ch.toLowerCase();
+      indexMap.push(i);
+      lastWasSpace = false;
+    } else {
+      // Non-word char → single collapsed space
+      if (!lastWasSpace) {
+        normText += " ";
+        indexMap.push(i);
+        lastWasSpace = true;
+      }
+    }
+  }
+
+  // Remove trailing space
+  if (normText.endsWith(" ")) {
+    normText = normText.slice(0, -1);
+    indexMap.pop();
+  }
+
+  return { normText, indexMap };
+}
+
+/**
+ * Try to locate `title` inside `normText` (already normalised) using
  * progressively looser strategies.  Returns the index in the ORIGINAL
  * `fullText` on success, or -1 on failure.
  */
 function findTitlePosition(
   fullText: string,
-  textNorm: string,   // normalised version of fullText
+  normText: string,   // normalised version of fullText
+  indexMap: number[], // maps normText positions → fullText positions
   title: string
 ): number {
+  const translate = (normIdx: number) =>
+    normIdx >= 0 && normIdx < indexMap.length ? indexMap[normIdx] : -1;
+
   // Strategy 1 – exact normalised match
   const normTitle = normaliseForMatch(title);
-  let idx = textNorm.indexOf(normTitle);
-  if (idx >= 0) return idx;
+  let idx = normText.indexOf(normTitle);
+  if (idx >= 0) return translate(idx);
 
   // Strategy 2 – strip leading "Chapter N / Unit N / ምዕራፍ N" prefix
   const stripped = normTitle
     .replace(/^(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)\s*[\d\w]*[.:)]\s*/i, "")
     .trim();
   if (stripped.length > 4) {
-    idx = textNorm.indexOf(stripped);
-    if (idx >= 0) return idx;
+    idx = normText.indexOf(stripped);
+    if (idx >= 0) return translate(idx);
   }
 
   // Strategy 3 – match the first 6+ meaningful words of the title
   const words = normTitle.split(" ").filter((w) => w.length > 2);
   const keyPhrase = words.slice(0, 6).join(" ");
   if (keyPhrase.length > 5) {
-    idx = textNorm.indexOf(keyPhrase);
-    if (idx >= 0) return idx;
+    idx = normText.indexOf(keyPhrase);
+    if (idx >= 0) return translate(idx);
   }
 
   // Strategy 4 – match first 3 meaningful words (handles slight title shortening)
   const shortPhrase = words.slice(0, 3).join(" ");
   if (shortPhrase.length > 4) {
-    idx = textNorm.indexOf(shortPhrase);
-    if (idx >= 0) return idx;
+    idx = normText.indexOf(shortPhrase);
+    if (idx >= 0) return translate(idx);
   }
 
   // Strategy 5 – scan for any word in the title that is unique-ish (≥8 chars)
   const longWords = words.filter((w) => w.length >= 8);
   for (const lw of longWords) {
-    idx = textNorm.indexOf(lw);
-    if (idx >= 0) return idx;
+    idx = normText.indexOf(lw);
+    if (idx >= 0) return translate(idx);
   }
 
   return -1;
@@ -360,7 +399,7 @@ export function splitTextByChapters(
 ): DetectedChapterWithContent[] {
   if (chapters.length === 0) return [];
 
-  const textNorm = normaliseForMatch(fullText);
+  const { normText, indexMap } = buildNormWithMap(fullText);
 
   interface ChapterPosition {
     chapter: DetectedChapter;
@@ -370,7 +409,7 @@ export function splitTextByChapters(
   // 1. Locate each chapter in the text
   const positions: ChapterPosition[] = chapters.map((ch) => ({
     chapter: ch,
-    position: findTitlePosition(fullText, textNorm, ch.title),
+    position: findTitlePosition(fullText, normText, indexMap, ch.title),
   }));
 
   // 2. Sort the ones that were found by their location
