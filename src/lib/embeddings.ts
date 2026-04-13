@@ -148,7 +148,20 @@ async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
     const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
     const result = await model.embedContent(text);
     geminiEmbeddingsAvailable = true;
-    return result.embedding.values;
+
+    const values = result.embedding.values;
+
+    // gemini-embedding-001 defaults to 3072 dimensions. Slice to
+    // EMBEDDING_DIMENSIONS (768) and re-normalise. This is safe because Gemini
+    // uses Matryoshka Representation Learning — the first N dimensions are
+    // always a complete, meaningful embedding at that smaller size.
+    if (values.length > EMBEDDING_DIMENSIONS) {
+      const sliced = values.slice(0, EMBEDDING_DIMENSIONS);
+      const norm = Math.sqrt(sliced.reduce((s, v) => s + v * v, 0)) || 1;
+      return sliced.map((v) => v / norm);
+    }
+
+    return values;
   } catch {
     if (geminiEmbeddingsAvailable === null) {
       console.warn(
@@ -162,7 +175,7 @@ async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
 
 // Ollama /api/embed supports batching — send all texts in one request.
 // BGE-M3 outputs 1024 dims; we slice to EMBEDDING_DIMENSIONS (768) and
-// re-normalise so vectors are compatible with the existing pgvector schema.
+// re-normalise. Same Matryoshka truncation strategy used for Gemini above.
 async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> {
   if (ollamaEmbeddingsAvailable === false) return null;
   try {
