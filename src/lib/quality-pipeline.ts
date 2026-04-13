@@ -26,7 +26,9 @@ export type QualityFlag =
   | "GRAMMAR_ISSUE"        // Grammar/clarity problems
   | "EMPTY_EXPLANATION"    // Missing explanation
   | "TOO_SHORT"            // Question text suspiciously short
-  | "AMBIGUOUS";           // Potentially ambiguous question
+  | "AMBIGUOUS"            // Potentially ambiguous question
+  | "FACTUAL_ERROR"        // Correct answer or premise is factually wrong
+  | "META_REFERENCE";      // Question text references "the chapter / the text"
 
 export interface QualityResult {
   questionIndex: number;
@@ -59,6 +61,20 @@ const QUALITY_PASS_THRESHOLD = 0.6;
 const RELEVANCE_THRESHOLD = 0.5;
 const DUPLICATE_THRESHOLD = 0.85;
 const MIN_QUESTION_LENGTH = 15;
+
+// Phrases that must not appear in question text (Q11 enforcement)
+const META_REF_PATTERNS = [
+  /\bthis chapter\b/i,
+  /\bthe chapter\b/i,
+  /\bfrom the chapter\b/i,
+  /\bthe text\b/i,
+  /\bfrom the text\b/i,
+  /\bthe passage\b/i,
+  /\bthe content\b/i,
+  /\bthe textbook\b/i,
+  /\baccording to the book\b/i,
+  /\bbased on the reading\b/i,
+];
 
 // ─── 1. Answer Validation ──────────────────────────────
 
@@ -109,6 +125,10 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
 
   if (!q.explanation || q.explanation.trim().length === 0) {
     flags.push("EMPTY_EXPLANATION");
+  }
+
+  if (META_REF_PATTERNS.some((p) => p.test(q.questionText))) {
+    flags.push("META_REFERENCE");
   }
 
   return flags;
@@ -227,6 +247,110 @@ If there are no grammar issues, leave the issues array empty.`;
   return result;
 }
 
+// ─── 4b. Factual Accuracy Check ────────────────────────
+
+/**
+ * Ask an AI model to verify that each question's premise and marked correct
+ * answer are factually accurate. Runs in a single batched call for efficiency.
+ * Returns a map of question index → { passed, reason }.
+ */
+async function factCheckQuestions(
+  questions: GeneratedQuestion[],
+  subject: string,
+  grade: number
+): Promise<Map<number, { passed: boolean; reason: string }>> {
+  const result = new Map<number, { passed: boolean; reason: string }>();
+
+  const questionList = questions
+    .slice(0, 20)
+    .map((q, i) => {
+      const opts = q.options
+        .map((o, j) => `  ${String.fromCharCode(65 + j)}. ${o}`)
+        .join("\n");
+      return `Q${i} [${q.type}]:\nQuestion: ${q.questionText}\nOptions:\n${opts}\nMarked correct: ${q.correctAnswer}`;
+    })
+    .join("\n\n");
+
+  const prompt = `You are a strict fact-checker for Grade ${grade} ${subject} exam questions.
+
+For EACH question verify ALL THREE of the following:
+1. Is the question stem/premise itself factually accurate?
+2. Is the marked correct answer genuinely the ONLY correct answer among the options?
+3. Are there any other options that could also be considered correct (ambiguous)?
+
+Respond PASS only when all three checks pass with full confidence.
+Respond FAIL with a concise reason whenever any check fails.
+
+QUESTIONS:
+${questionList}
+
+Return JSON only — no markdown:
+{
+  "checks": [
+    { "index": 0, "passed": true, "reason": "" },
+    { "index": 1, "passed": false, "reason": "Premise is wrong: primary sexual characteristics are present from birth, not developed during puberty." }
+  ]
+}`;
+
+  let rawText = "";
+
+  // Provider fallback: Ollama → Gemini → Groq (same order as rest of pipeline)
+  try {
+    const raw = await ollamaChat(prompt);
+    if (raw) rawText = raw;
+  } catch { /* fall through */ }
+
+  if (!rawText && process.env.GEMINI_API_KEY) {
+    try {
+      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = client.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 2048 },
+      });
+      rawText = (await model.generateContent(prompt)).response.text();
+    } catch (err) {
+      if (String(err).includes("429")) console.warn("[Quality Pipeline] Gemini rate-limited (fact-check).");
+    }
+  }
+
+  if (!rawText && process.env.GROQ_API_KEY) {
+    try {
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+      const res = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        max_tokens: 2048,
+        response_format: { type: "json_object" },
+      });
+      rawText = res.choices[0]?.message?.content ?? "";
+    } catch (e) {
+      console.warn("[Quality Pipeline] All providers failed fact-check:", e instanceof Error ? e.message : String(e));
+      return result;
+    }
+  }
+
+  if (!rawText) return result;
+
+  try {
+    const parsed = JSON.parse(rawText);
+    const checks = Array.isArray(parsed.checks) ? parsed.checks : [];
+    for (const c of checks) {
+      const idx = Number(c.index);
+      if (idx >= 0 && idx < questions.length && typeof c.passed === "boolean") {
+        result.set(idx, {
+          passed: c.passed,
+          reason: typeof c.reason === "string" ? c.reason : "",
+        });
+      }
+    }
+  } catch {
+    // JSON parse failed — skip silently, questions proceed without factual flag
+  }
+
+  return result;
+}
+
 // ─── 5. Semantic Duplicate Detection ───────────────────
 
 function detectDuplicates(
@@ -299,8 +423,11 @@ export async function runQualityPipeline(
     console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
   }
 
-  // Run AI text quality check in parallel with the (now synchronous) similarity checks
-  const aiTextQuality = await verifyAITextQuality(questions, subject, grade);
+  // Run AI checks in parallel: text quality + factual accuracy
+  const [aiTextQuality, factCheckMap] = await Promise.all([
+    verifyAITextQuality(questions, subject, grade),
+    factCheckQuestions(questions, subject, grade),
+  ]);
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
   const relevanceMap = checkRelevance(questions, sourceEmbedding, questionEmbeddings);
 
@@ -337,6 +464,10 @@ export async function runQualityPipeline(
         details["EMPTY_EXPLANATION"] = "Missing explanation for the answer";
         penalty += 0.1;
       }
+      if (flag === "META_REFERENCE") {
+        details["META_REFERENCE"] = "Question references 'the chapter', 'the text', or similar — must be rewritten as a standalone item";
+        penalty += 0.1;
+      }
     }
 
     // 3. Relevance check
@@ -371,6 +502,14 @@ export async function runQualityPipeline(
       flags.push("GRAMMAR_ISSUE");
       details["GRAMMAR_ISSUE"] = grammarIssue;
       penalty += 0.15;
+    }
+
+    // 7. Factual accuracy
+    const factCheck = factCheckMap.get(idx);
+    if (factCheck && !factCheck.passed) {
+      flags.push("FACTUAL_ERROR");
+      details["FACTUAL_ERROR"] = factCheck.reason || "Factual accuracy check failed";
+      penalty += 0.45; // Severe — a wrong correct answer directly harms students
     }
 
     const qualityScore = Math.max(0, Math.round((1 - penalty) * 100) / 100);

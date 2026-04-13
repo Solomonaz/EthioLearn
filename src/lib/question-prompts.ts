@@ -34,22 +34,22 @@ const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy
            non-trivial problem. A well-prepared student should still need to
            think carefully. A question is NOT HARD just because it's labelled HARD.
 
-           HARD question templates — use these as structural models,
-           adapting the placeholders to the actual subject and chapter:
-           • "A [concept/entity/system from this chapter] is placed in
-             [novel scenario not explicitly described in the text]. Based on
-             [specific principle or process from the chapter], what would
-             most likely happen and why?"
-           • "Given that [Fact A from the chapter] and [Fact B from the chapter]
-             are both true, which conclusion is best supported by both?"
-           • "A student claims [common misconception about a chapter concept].
-             Which evidence from the chapter BEST refutes this claim?"
+           HARD question templates — use these as structural models.
+           Replace ALL bracketed placeholders with actual names, terms, and
+           facts drawn from the chapter content. The final questionText must
+           NEVER contain placeholder brackets or phrases like "from the
+           chapter", "the text", "the content", or "the passage":
+           • "A [specific named concept or entity] is placed in [novel
+             scenario not described verbatim]. Based on [specific named
+             principle or process], what would most likely happen and why?"
+           • "Given that [specific Fact A] and [specific Fact B] are both
+             true, which conclusion is best supported by both?"
+           • "A student claims [a specific misconception]. Which of the
+             following BEST refutes this claim?"
            • "Which of the following would MOST LIKELY result if [specific
-             process or rule from the chapter] were changed or disrupted,
-             and what is the reason?"
-           • "Compare [Concept A] and [Concept B] from the chapter. In what
-             situation would [A] be more appropriate or correct than [B],
-             and why?"
+             named process or rule] were disrupted, and what is the reason?"
+           • "Compare [Concept A] and [Concept B]. In what situation would
+             [A] be more appropriate or correct than [B], and why?"
 
 SELF-CHECK: Before labelling a question HARD, confirm it satisfies AT LEAST ONE of:
   (a) requires combining two or more distinct facts from different parts of the content,
@@ -108,7 +108,17 @@ Q10. NO GENERIC QUESTIONS: Every question must be specific to named facts,
     background domain knowledge, without having read this specific chapter.
     LITMUS TEST: mentally remove the chapter content — if the correct answer is
     still obvious, the question is too generic. Rewrite it to reference a specific
-    term, value, mechanism, or scenario that only appears in this chapter.`;
+    term, value, mechanism, or scenario that only appears in this chapter.
+Q11. NO META-REFERENCES: The questionText must NEVER contain phrases such as
+    "this chapter", "the chapter", "the text", "the passage", "the content",
+    "the textbook", "according to the book", "based on the reading", "from the
+    chapter", or any phrase that reveals the question's source. Questions must
+    read as fully standalone exam items — a student should not be reminded
+    they are reading from a textbook.
+    WRONG: "According to the chapter, what triggers the menstrual cycle?"
+    WRONG: "Which evidence from the chapter best refutes this claim?"
+    RIGHT: "What is the primary hormonal trigger for the menstrual cycle?"
+    RIGHT: "Which of the following best refutes the claim that X occurs in Y?"`;
 
 // ─── Format rules per question type ────────────────────────────────────────
 
@@ -189,6 +199,8 @@ For each candidate question, verify:
   ✓ The correct answer is scientifically accurate, not just plausible (Q9).
   ✓ The question cannot be answered by common sense alone — it requires
     knowing specific content from this chapter (Q10).
+  ✓ The questionText contains no phrase like "this chapter", "the text",
+    "from the chapter", "according to the book", or similar (Q11).
   ✓ If labelled HARD: it combines ≥2 facts, applies a concept to a new
     scenario, or requires evaluating competing claims — NOT single-fact recall.
 If a question fails ANY check, REWRITE it before emitting. Do not lower
