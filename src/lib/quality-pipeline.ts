@@ -56,12 +56,27 @@ interface GeneratedQuestion {
   explanation: string;
 }
 
+// ─── Private AI check result type ───────────────────────
+
+interface AIQualityCheck {
+  difficulty: string;          // "EASY" | "MEDIUM" | "HARD" | "" (empty = unparseable)
+  grammarIssue: string | null; // null = no issue detected
+  factualPassed: boolean;
+  factualReason: string;
+}
+
 // ─── Constants ──────────────────────────────────────────
 
 const QUALITY_PASS_THRESHOLD = 0.6;
 const RELEVANCE_THRESHOLD = 0.5;
 const DUPLICATE_THRESHOLD = 0.75; // Lowered from 0.85 to catch near-duplicates
 const MIN_QUESTION_LENGTH = 15;
+
+// Skip Ollama chat in production when OLLAMA_BASE_URL is absent or still localhost.
+// Mirrors the same guard used in embeddings.ts.
+const ollamaChatEnabled =
+  !!process.env.OLLAMA_BASE_URL &&
+  process.env.OLLAMA_BASE_URL !== "http://localhost:11434";
 
 // Compound question endings that are invalid for MCQ / TRUE_FALSE (Q12)
 const COMPOUND_QUESTION_PATTERNS = [
@@ -152,132 +167,19 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
   return flags;
 }
 
-// ─── 3. Consolidated AI Text Quality Check ───────────────
+// ─── 3. Combined AI Quality Checks (difficulty + grammar + factual) ──────────
+//
+// Replaces the former verifyAITextQuality + factCheckQuestions pair.
+// Merging into one call halves API usage and eliminates the parallel
+// rate-limit collision that occurred when both ran against Gemini simultaneously.
+// Provider order: Groq (production primary) → Gemini → Ollama (local dev only).
 
-async function verifyAITextQuality(
+async function runAIQualityChecks(
   questions: GeneratedQuestion[],
   subject: string,
   grade: number
-): Promise<{
-  difficulties: Map<number, { aiDifficulty: string; match: boolean }>;
-  grammarIssues: Map<number, string>;
-}> {
-  const result = {
-    difficulties: new Map<number, { aiDifficulty: string; match: boolean }>(),
-    grammarIssues: new Map<number, string>(),
-  };
-
-  const questionList = questions
-    .slice(0, 20)
-    .map((q, i) => `Q${i}: [${q.type}] difficulty: ${q.difficulty}\n${q.questionText.slice(0, 300)}`)
-    .join("\n");
-
-  const prompt = `You are an expert at reviewing exam questions for Grade ${grade} ${subject} in the Ethiopian curriculum.
-
-TASK 1: RATING DIFFICULTY
-Rate each question's difficulty as EASY, MEDIUM, or HARD:
-- EASY: Direct recall, simple facts, basic definitions
-- MEDIUM: Comprehension, application of learned concepts
-- HARD: Analysis, synthesis, multi-step reasoning
-
-TASK 2: GRAMMAR AND CLARITY
-Flag ONLY questions with clear structural/grammatical issues or extreme ambiguity. DO NOT flag grammatically correct questions.
-
-QUESTIONS:
-${questionList}
-
-Return JSON only:
-{
-  "ratings": [{ "index": 0, "difficulty": "EASY|MEDIUM|HARD" }, ...],
-  "issues": [{ "index": 0, "issue": "description of the grammar problem" } ...]
-}
-If there are no grammar issues, leave the issues array empty.`;
-
-  let rawText = "";
-
-  // 1. Ollama Mistral (local, no quota)
-  try {
-    const raw = await ollamaChat(prompt);
-    if (raw) rawText = raw;
-  } catch {
-    // fall through
-  }
-
-  // 2. Gemini
-  if (!rawText && process.env.GEMINI_API_KEY) {
-    try {
-      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = client.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 1536 },
-      });
-      rawText = (await model.generateContent(prompt)).response.text();
-    } catch (err) {
-      if (String(err).includes("429")) console.warn("[Quality Pipeline] Gemini rate-limited.");
-    }
-  }
-
-  // 3. Groq
-  if (!rawText && process.env.GROQ_API_KEY) {
-    try {
-      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-      const res = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        max_tokens: 1536,
-        response_format: { type: "json_object" },
-      });
-      rawText = res.choices[0]?.message?.content ?? "";
-    } catch (fallbackError) {
-      console.warn("[Quality Pipeline] All providers failed text quality check:", fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
-      return result;
-    }
-  }
-
-  if (!rawText) return result;
-
-  try {
-    const parsed = JSON.parse(rawText);
-    
-    // Parse difficulty ratings
-    const ratings = Array.isArray(parsed.ratings) ? parsed.ratings : [];
-    for (const r of ratings) {
-      const idx = Number(r.index);
-      const aiDiff = String(r.difficulty).toUpperCase();
-      if (idx >= 0 && idx < questions.length && ["EASY", "MEDIUM", "HARD"].includes(aiDiff)) {
-        result.difficulties.set(idx, { aiDifficulty: aiDiff, match: aiDiff === questions[idx].difficulty.toUpperCase() });
-      }
-    }
-
-    // Parse grammar issues
-    const issues = Array.isArray(parsed.issues) ? parsed.issues : [];
-    for (const item of issues) {
-      const idx = Number(item.index);
-      if (idx >= 0 && idx < questions.length && typeof item.issue === "string") {
-        result.grammarIssues.set(idx, item.issue);
-      }
-    }
-  } catch {
-    // JSON parse failed — skip check silently
-  }
-
-  return result;
-}
-
-// ─── 4b. Factual Accuracy Check ────────────────────────
-
-/**
- * Ask an AI model to verify that each question's premise and marked correct
- * answer are factually accurate. Runs in a single batched call for efficiency.
- * Returns a map of question index → { passed, reason }.
- */
-async function factCheckQuestions(
-  questions: GeneratedQuestion[],
-  subject: string,
-  grade: number
-): Promise<Map<number, { passed: boolean; reason: string }>> {
-  const result = new Map<number, { passed: boolean; reason: string }>();
+): Promise<Map<number, AIQualityCheck>> {
+  const result = new Map<number, AIQualityCheck>();
 
   const questionList = questions
     .slice(0, 20)
@@ -285,56 +187,50 @@ async function factCheckQuestions(
       const opts = q.options
         .map((o, j) => `  ${String.fromCharCode(65 + j)}. ${o}`)
         .join("\n");
-      return `Q${i} [${q.type}]:\nQuestion: ${q.questionText}\nOptions:\n${opts}\nMarked correct: ${q.correctAnswer}`;
+      return (
+        `Q${i} [${q.type}] difficulty: ${q.difficulty}\n` +
+        `Question: ${q.questionText.slice(0, 300)}\n` +
+        `Options:\n${opts}\n` +
+        `Marked correct: ${q.correctAnswer}`
+      );
     })
     .join("\n\n");
 
-  const prompt = `You are a strict fact-checker for Grade ${grade} ${subject} exam questions.
+  const prompt = `You are a strict quality-checker for Grade ${grade} ${subject} exam questions.
 
-For EACH question verify ALL FOUR of the following:
-1. Is the question stem/premise itself factually accurate?
-2. Is the marked correct answer genuinely correct according to established ${subject} knowledge?
-3. Is the marked correct answer the ONLY defensible answer — could a knowledgeable
-   student reasonably argue that any wrong option is also correct or partially correct?
-4. Do any two options say logically equivalent things from opposite angles
-   (e.g. "A is more rigid" vs "B is more flexible" — these are the same conclusion)?
+For EACH question perform THREE checks:
 
-Respond PASS only when ALL four checks pass with full confidence.
-Respond FAIL with a concise reason whenever ANY check fails — be strict.
+CHECK 1 — DIFFICULTY: Rate as EASY, MEDIUM, or HARD.
+- EASY: Direct recall, simple facts, basic definitions.
+- MEDIUM: Comprehension, application of learned concepts.
+- HARD: Analysis, synthesis, multi-step reasoning.
+
+CHECK 2 — GRAMMAR: Return the grammatical or structural issue as a short string,
+or null if the question is grammatically correct. Do NOT flag correct questions.
+
+CHECK 3 — FACTUAL ACCURACY: Verify all four:
+(a) The question premise is factually accurate.
+(b) The marked correct answer is genuinely correct.
+(c) No wrong option could also be defended as correct by a knowledgeable student.
+(d) No two options say logically equivalent things from opposite angles
+    (e.g. "A is more rigid" vs "B is more flexible" are the same conclusion).
+Return factualPassed: false with a concise reason if ANY sub-check fails.
 
 QUESTIONS:
 ${questionList}
 
-Return JSON only — no markdown:
+Return JSON only — no markdown, no code fences:
 {
   "checks": [
-    { "index": 0, "passed": true, "reason": "" },
-    { "index": 1, "passed": false, "reason": "Premise is wrong: primary sexual characteristics are present from birth, not developed during puberty." }
+    { "index": 0, "difficulty": "MEDIUM", "grammarIssue": null, "factualPassed": true, "factualReason": "" },
+    { "index": 1, "difficulty": "HARD", "grammarIssue": null, "factualPassed": false, "factualReason": "Premise wrong: primary sexual characteristics are present from birth, not developed during puberty." }
   ]
 }`;
 
   let rawText = "";
 
-  // Provider fallback: Ollama → Gemini → Groq (same order as rest of pipeline)
-  try {
-    const raw = await ollamaChat(prompt);
-    if (raw) rawText = raw;
-  } catch { /* fall through */ }
-
-  if (!rawText && process.env.GEMINI_API_KEY) {
-    try {
-      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = client.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 2048 },
-      });
-      rawText = (await model.generateContent(prompt)).response.text();
-    } catch (err) {
-      if (String(err).includes("429")) console.warn("[Quality Pipeline] Gemini rate-limited (fact-check).");
-    }
-  }
-
-  if (!rawText && process.env.GROQ_API_KEY) {
+  // 1. Groq — fast, high rate limits, always available in production
+  if (process.env.GROQ_API_KEY) {
     try {
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
       const res = await groq.chat.completions.create({
@@ -345,28 +241,63 @@ Return JSON only — no markdown:
         response_format: { type: "json_object" },
       });
       rawText = res.choices[0]?.message?.content ?? "";
-    } catch (e) {
-      console.warn("[Quality Pipeline] All providers failed fact-check:", e instanceof Error ? e.message : String(e));
-      return result;
+      if (rawText) console.info("[Quality Pipeline] AI checks via groq");
+    } catch (err) {
+      console.warn("[Quality Pipeline] Groq failed AI checks:", err instanceof Error ? err.message : String(err));
     }
+  }
+
+  // 2. Gemini — fallback (lower free-tier rate limits than Groq)
+  if (!rawText && process.env.GEMINI_API_KEY) {
+    try {
+      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = client.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 2048 },
+      });
+      rawText = (await model.generateContent(prompt)).response.text();
+      if (rawText) console.info("[Quality Pipeline] AI checks via gemini");
+    } catch (err) {
+      if (String(err).includes("429")) {
+        console.warn("[Quality Pipeline] Gemini rate-limited.");
+      } else {
+        console.warn("[Quality Pipeline] Gemini failed AI checks:", err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+
+  // 3. Ollama — local dev only, skipped in production (ollamaChatEnabled guard)
+  if (!rawText && ollamaChatEnabled) {
+    try {
+      const raw = await ollamaChat(prompt);
+      if (raw) {
+        rawText = raw;
+        console.info("[Quality Pipeline] AI checks via ollama");
+      }
+    } catch { /* fall through */ }
   }
 
   if (!rawText) return result;
 
   try {
     const parsed = JSON.parse(rawText);
-    const checks = Array.isArray(parsed.checks) ? parsed.checks : [];
-    for (const c of checks) {
+    for (const c of (Array.isArray(parsed.checks) ? parsed.checks : [])) {
       const idx = Number(c.index);
-      if (idx >= 0 && idx < questions.length && typeof c.passed === "boolean") {
-        result.set(idx, {
-          passed: c.passed,
-          reason: typeof c.reason === "string" ? c.reason : "",
-        });
-      }
+      if (idx < 0 || idx >= questions.length) continue;
+      const aiDiff = String(c.difficulty ?? "").toUpperCase();
+      result.set(idx, {
+        difficulty: ["EASY", "MEDIUM", "HARD"].includes(aiDiff) ? aiDiff : "",
+        grammarIssue:
+          typeof c.grammarIssue === "string" && c.grammarIssue.trim().length > 0
+            ? c.grammarIssue.trim()
+            : null,
+        // Default factualPassed to true on parse failure — no false positives
+        factualPassed: typeof c.factualPassed === "boolean" ? c.factualPassed : true,
+        factualReason: typeof c.factualReason === "string" ? c.factualReason : "",
+      });
     }
   } catch {
-    // JSON parse failed — skip silently, questions proceed without factual flag
+    // JSON parse failed — return empty map; questions proceed without AI flags
   }
 
   return result;
@@ -444,16 +375,12 @@ export async function runQualityPipeline(
     console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
   }
 
-  // Run AI checks in parallel: text quality + factual accuracy
-  const [aiTextQuality, factCheckMap] = await Promise.all([
-    verifyAITextQuality(questions, subject, grade),
-    factCheckQuestions(questions, subject, grade),
-  ]);
+  // Single combined AI check (difficulty + grammar + factual accuracy).
+  // Groq-first provider order prevents the Gemini rate-limit collisions
+  // that occurred when two parallel AI calls hit the same endpoint.
+  const aiChecksMap = await runAIQualityChecks(questions, subject, grade);
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
   const relevanceMap = checkRelevance(questions, sourceEmbedding, questionEmbeddings);
-
-  const difficultyMap = aiTextQuality.difficulties;
-  const grammarMap = aiTextQuality.grammarIssues;
 
   const duplicateIndices = new Set(
     duplicateResult.duplicatePairs.flat()
@@ -503,11 +430,12 @@ export async function runQualityPipeline(
       penalty += 0.25;
     }
 
-    // 4. Difficulty mismatch
-    const diffCheck = difficultyMap.get(idx);
-    if (diffCheck && !diffCheck.match) {
+    // 4. AI checks (difficulty + grammar + factual) — single map lookup
+    const aiCheck = aiChecksMap.get(idx);
+
+    if (aiCheck?.difficulty && aiCheck.difficulty !== q.difficulty.toUpperCase()) {
       flags.push("DIFFICULTY_MISMATCH");
-      details["DIFFICULTY_MISMATCH"] = `Declared: ${q.difficulty}, AI rated: ${diffCheck.aiDifficulty}`;
+      details["DIFFICULTY_MISMATCH"] = `Declared: ${q.difficulty}, AI rated: ${aiCheck.difficulty}`;
       penalty += 0.1;
     }
 
@@ -522,18 +450,16 @@ export async function runQualityPipeline(
     }
 
     // 6. Grammar
-    const grammarIssue = grammarMap.get(idx);
-    if (grammarIssue) {
+    if (aiCheck?.grammarIssue) {
       flags.push("GRAMMAR_ISSUE");
-      details["GRAMMAR_ISSUE"] = grammarIssue;
+      details["GRAMMAR_ISSUE"] = aiCheck.grammarIssue;
       penalty += 0.15;
     }
 
     // 7. Factual accuracy
-    const factCheck = factCheckMap.get(idx);
-    if (factCheck && !factCheck.passed) {
+    if (aiCheck && !aiCheck.factualPassed) {
       flags.push("FACTUAL_ERROR");
-      details["FACTUAL_ERROR"] = factCheck.reason || "Factual accuracy check failed";
+      details["FACTUAL_ERROR"] = aiCheck.factualReason || "Factual accuracy check failed";
       penalty += 0.45; // Severe — a wrong correct answer directly harms students
     }
 
