@@ -44,6 +44,64 @@ function getClient() {
   return new GoogleGenerativeAI(apiKey);
 }
 
+// ─── Self-healing: Auto-fix vector column dimension ─────
+// The production DB may have been provisioned with vector(1024) (from the
+// original Ollama BGE-M3 setup) while Gemini embedding-001 outputs 768 dims.
+// Rather than requiring a manual ALTER TABLE, we detect the mismatch once per
+// process and rebuild the column automatically on the next embedding store.
+
+let vectorColumnVerified = false;
+
+async function ensureCorrectVectorDimension(): Promise<void> {
+  if (vectorColumnVerified) return;
+  try {
+    // pg_catalog.format_type returns e.g. "vector(1024)" for pgvector columns
+    const rows: { type_name: string }[] = await db.$queryRaw`
+      SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS type_name
+      FROM   pg_attribute a
+      JOIN   pg_class     c ON c.oid = a.attrelid
+      WHERE  c.relname = 'content_chunks'
+        AND  a.attname = 'embedding'
+        AND  a.attnum  > 0
+      LIMIT 1
+    `;
+
+    const actualType   = rows[0]?.type_name ?? "";
+    const expectedType = `vector(${EMBEDDING_DIMENSIONS})`;
+
+    if (actualType && actualType !== expectedType) {
+      console.warn(
+        `[Embeddings] Vector column dimension mismatch: DB has ${actualType}, ` +
+        `code expects ${expectedType}. Rebuilding column (existing embeddings cleared)…`
+      );
+      // Drop index first — required before altering the column
+      await db.$executeRawUnsafe(
+        `DROP INDEX IF EXISTS content_chunks_embedding_idx`
+      );
+      await db.$executeRawUnsafe(
+        `ALTER TABLE content_chunks DROP COLUMN IF EXISTS embedding`
+      );
+      await db.$executeRawUnsafe(
+        `ALTER TABLE content_chunks ADD COLUMN embedding vector(${EMBEDDING_DIMENSIONS})`
+      );
+      // Recreate HNSW index for cosine similarity search
+      await db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS content_chunks_embedding_idx
+         ON content_chunks USING hnsw (embedding vector_cosine_ops)`
+      );
+      console.info(
+        `[Embeddings] Vector column rebuilt as ${expectedType}. ` +
+        `Re-upload textbooks to regenerate embeddings.`
+      );
+    }
+
+    vectorColumnVerified = true;
+  } catch (err) {
+    // Non-fatal: log and continue — the insert will surface the real error if needed
+    console.warn("[Embeddings] Could not verify vector column dimension:", err);
+  }
+}
+
 // ─── Fallback: character n-gram fingerprint ─────────────
 // Used when the embedding API is unavailable. Produces a deterministic
 // dense vector so cosine similarity still detects near-duplicates.
@@ -165,8 +223,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 // ─── Batch Embeddings ───────────────────────────────────
-// Priority: Ollama BGE-M3 (one batch request) → Gemini (parallel per-text)
-// → n-gram fingerprint.
+// Priority: Gemini (primary, all environments) → Ollama BGE-M3 (local dev only)
+// → n-gram fingerprint (fully offline fallback).
 
 export async function generateEmbeddings(
   texts: string[]
@@ -217,6 +275,11 @@ export async function storeChunkEmbeddings(
   if (chunks.length !== embeddings.length) {
     throw new Error("Chunks and embeddings arrays must have the same length");
   }
+
+  // Ensure the vector column has the correct dimension before inserting.
+  // Fixes the case where the DB was provisioned with vector(1024) (Ollama/BGE-M3)
+  // but Gemini embedding-001 produces 768-dim vectors.
+  await ensureCorrectVectorDimension();
 
   // Delete existing chunks for this chapter (use raw SQL since model has Unsupported vector type)
   await db.$executeRawUnsafe(
@@ -380,9 +443,12 @@ export async function isPgvectorAvailable(): Promise<boolean> {
 
 export async function enablePgvector(): Promise<boolean> {
   try {
-    await db.$executeRawUnsafe(
-      `CREATE EXTENSION IF NOT EXISTS vector`
-    );
+    await db.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
+
+    // Fix dimension mismatch if the column was created with a different size
+    // (e.g. originally set up with Ollama BGE-M3 → vector(1024))
+    await ensureCorrectVectorDimension();
+
     // Create HNSW index if not exists
     await db.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS content_chunks_embedding_idx
