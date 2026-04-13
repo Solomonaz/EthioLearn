@@ -65,33 +65,39 @@ function hasGeminiKey(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
-// ─── Generate Questions (Groq → Gemini → Ollama) ────────
+// ─── Generate Questions (Gemini → Groq → Ollama) ────────
+//
+// Gemini is primary because its free tier allows 1,000,000 TPM — a single
+// generation request (~7,500 input + ~2,000 output tokens) is trivial.
+// Groq's free tier is only 6,000 TPM, which a single large-chapter request
+// can exceed on its own, causing the rate-limit cascade seen in production.
+// Groq remains a fast fallback for when Gemini's 15 RPM ceiling is hit.
 
 export async function generateQuestions(
   opts: GenerateOptions
 ): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "groq" | "ollama" }> {
-  // 1. Groq
-  if (hasGroqKey()) {
-    try {
-      const questions = await groqGenerateQuestions(opts);
-      return { questions, provider: "groq" };
-    } catch (err) {
-      if (isRateLimitError(err)) {
-        console.warn("[AI Provider] Groq rate-limited, falling back to Gemini…");
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  // 2. Gemini
+  // 1. Gemini — 1M TPM free tier handles large chapter content without rate limits
   if (hasGeminiKey()) {
     try {
       const questions = await generateQuestionsFromContent(opts);
       return { questions, provider: "gemini" };
     } catch (err) {
       if (isRateLimitError(err)) {
-        console.warn("[AI Provider] Gemini rate-limited, falling back to Ollama Mistral…");
+        console.warn("[AI Provider] Gemini rate-limited, falling back to Groq…");
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // 2. Groq — fast fallback; may hit 6K TPM with very large chapter content
+  if (hasGroqKey()) {
+    try {
+      const questions = await groqGenerateQuestions(opts);
+      return { questions, provider: "groq" };
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        console.warn("[AI Provider] Groq rate-limited, falling back to Ollama Mistral…");
       } else {
         throw err;
       }
@@ -105,39 +111,43 @@ export async function generateQuestions(
     return { questions, provider: "ollama" };
   } catch (err) {
     throw new Error(
-      `All AI providers failed. Groq and Gemini are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
+      `All AI providers failed. Gemini and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
       "Ensure Ollama is running with 'mistral' model pulled (ollama pull mistral)."
     );
   }
 }
 
-// ─── Detect Chapters (Groq → Gemini → Ollama) ───────────
+// ─── Detect Chapters (Gemini → Groq → Ollama) ───────────
+//
+// Same reasoning as generateQuestions: chapter detection sends up to 50K chars
+// of content (~12,500 tokens), which alone exceeds Groq's 6K TPM free tier.
+// Gemini's 1M TPM handles this comfortably.
 
 export async function detectChapters(
   opts: DetectChaptersOptions
 ): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "groq" | "ollama" }> {
-  // 1. Groq
-  if (hasGroqKey()) {
-    try {
-      const chapters = await groqDetectChapters(opts);
-      return { chapters, provider: "groq" };
-    } catch (err) {
-      if (isRateLimitError(err)) {
-        console.warn("[AI Provider] Groq rate-limited (Chapters), falling back to Gemini…");
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  // 2. Gemini
+  // 1. Gemini — 1M TPM handles large textbook content without rate limits
   if (hasGeminiKey()) {
     try {
       const chapters = await detectChaptersFromContent(opts);
       return { chapters, provider: "gemini" };
     } catch (err) {
       if (isRateLimitError(err)) {
-        console.warn("[AI Provider] Gemini rate-limited (Chapters), falling back to Ollama Mistral…");
+        console.warn("[AI Provider] Gemini rate-limited (Chapters), falling back to Groq…");
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // 2. Groq — fast fallback
+  if (hasGroqKey()) {
+    try {
+      const chapters = await groqDetectChapters(opts);
+      return { chapters, provider: "groq" };
+    } catch (err) {
+      if (isRateLimitError(err)) {
+        console.warn("[AI Provider] Groq rate-limited (Chapters), falling back to Ollama Mistral…");
       } else {
         throw err;
       }
