@@ -29,39 +29,105 @@ const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy
            identifying cause-and-effect, or interpreting a short scenario.
            Cannot be answered by copy-pasting a single sentence.
 • HARD   → Bloom levels 5–6 (Evaluate / Create).
-           Requires multi-step reasoning, synthesis across multiple paragraphs,
-           evaluating competing claims, justifying a conclusion, or solving a
-           non-trivial problem. A well-prepared student should still need to
-           think carefully. A question is NOT HARD just because it's labelled HARD.
+           Multi-step reasoning that CANNOT be completed with a single remembered
+           fact. The correct answer requires the student to do ONE OR MORE of:
+           (a) Combine ≥2 separate mechanisms or facts from different parts of
+               the content to reach a conclusion neither fact alone supports,
+           (b) Detect the specific flaw in a plausible but incorrect student claim
+               that mixes real facts incorrectly,
+           (c) Predict the net effect of two simultaneous or competing processes,
+           (d) Choose which of two valid principles applies to a novel scenario,
+               and explain why the other does NOT apply.
 
-           HARD question templates — use these as structural models.
-           Replace ALL bracketed placeholders with actual names, terms, and
-           facts drawn from the chapter content. The final questionText must
-           NEVER contain placeholder brackets or phrases like "from the
-           chapter", "the text", "the content", or "the passage":
-           • "A [specific named concept or entity] is placed in [novel
-             scenario not described verbatim]. Based on [specific named
-             principle or process], what would most likely happen?"
-           • "Why would [specific outcome] occur when [specific scenario]?"
-           • "Given that [specific Fact A] and [specific Fact B] are both
-             true, which conclusion is best supported by both?"
-           • "A student claims [a specific misconception]. Which of the
-             following BEST refutes this claim?"
-           • "Which of the following would MOST LIKELY result if [specific
-             named process or rule] were disrupted?"
-           • "In what situation would [Concept A] be more appropriate or
-             correct than [Concept B]?"
+           ─── HARD QUESTION TEMPLATES ─────────────────────────────────────────
+           Use these as structural models. Replace ALL brackets with real names,
+           values, and terms from the chapter content. The final questionText must
+           NEVER contain placeholder brackets or phrases like "from the chapter",
+           "the text", "the content", or "the passage".
 
-SELF-CHECK: Before labelling a question HARD, confirm it satisfies AT LEAST ONE of:
-  (a) requires combining two or more distinct facts from different parts of the content,
-  (b) requires a calculation, derivation, or multi-step inference,
-  (c) requires evaluating or justifying why one option is better than another,
-  (d) requires applying a concept to a novel scenario not stated verbatim in the text.
-If none apply, downgrade it to MEDIUM.
-ADDITIONALLY: A question is NOT HARD if a student can answer it by:
-  - reading a single sentence from the chapter,
-  - eliminating obviously wrong options without knowing the content,
-  - using general common sense without having studied the chapter.`;
+           TEMPLATE 1 — Misconception Refutation:
+           "A student claims that [specific plausible-but-wrong statement that
+           blends two real chapter facts incorrectly]. Which of the following
+           BEST identifies the flaw in this reasoning?"
+           HOW: The 4 options are 4 different diagnoses of what went wrong.
+           Only one correctly identifies which fact was misapplied and why.
+           Student must know BOTH facts to distinguish the correct diagnosis
+           from the other plausible ones.
+
+           TEMPLATE 2 — Competing Processes:
+           "If [Process A — use actual chapter name] and [Process B — use
+           actual chapter name] were both active simultaneously in [named
+           cell/system], which outcome would dominate?"
+           HOW: Options propose 4 different net outcomes with different
+           mechanistic reasons. Student must understand BOTH processes to
+           decide which wins under the stated conditions.
+
+           TEMPLATE 3 — Evidence Evaluation:
+           "Which of the following observations would MOST STRONGLY support
+           the conclusion that [specific named principle from the chapter] is
+           the primary mechanism at work?"
+           HOW: Options are 4 experimental observations. Three are consistent
+           with alternative explanations; only one uniquely confirms the named
+           principle. Student must evaluate each observation, not just recall.
+
+           TEMPLATE 4 — Consequence of Disruption:
+           "Which of the following would be the PRIMARY consequence if [specific
+           named structure or process] were permanently disabled, given that
+           [a supporting fact that makes the cascade non-obvious]?"
+           HOW: Options are 4 plausible cascading effects. Student must know
+           what the structure does AND trace how its loss propagates — not just
+           state its normal function.
+
+           TEMPLATE 5 — Cross-concept Synthesis:
+           "Given that [Fact A about Concept X] and [Fact B about Concept Y],
+           which conclusion is supported by BOTH facts combined but NOT by
+           either fact alone?"
+           HOW: Each wrong option can be defended using only ONE of the two
+           facts. The correct answer requires both to be known simultaneously.
+
+           ─── ANTI-PATTERNS — these are NOT HARD — do not generate them ────────
+           The following structural types look like HARD questions but are NOT,
+           regardless of the subject (Biology, History, Physics, Math, etc.):
+
+           ✗ STEM-IMPLIES-ANSWER: "Why does [single process] cause [outcome]?"
+             The question already contains the causal relationship; the student
+             only needs to confirm it. Any subject is vulnerable to this:
+             "Why does heating a metal cause it to expand?"
+             "Why did inflation rise when more currency was printed?"
+             → Fix: make the student CHOOSE which mechanism among competing
+               alternatives is responsible, or compare two scenarios where
+               the outcome differs unexpectedly.
+
+           ✗ SINGLE-FACT PREMISE: "Given that [one fact about X], which
+             consequence follows?"
+             One fact → one inference. No synthesis across concepts required.
+             → Fix: add a second independent fact and require a conclusion
+               that depends on BOTH simultaneously.
+
+           ✗ ABSTRACT FAILURE: "What would happen if [broad system] could no
+             longer perform its main function?"
+             Too vague — any of many consequences is defensible. Options
+             become arbitrary because no specific mechanism is constrained.
+             → Fix: name the SPECIFIC sub-process that fails and a specific
+               observable outcome to evaluate.
+
+           ✗ DEFINITION RECALL DRESSED AS REASONING: "Given that [textbook
+             definition], which of the following is a consequence?"
+             Restating the textbook definition as a premise and asking for
+             its implication is still recall — the answer is inside the premise.
+             → Fix: use the principle in a NON-TEXTBOOK scenario where its
+               application is non-obvious.
+
+HARD SELF-CHECK: Before labelling a question HARD, it must pass ALL four:
+  ✓ DUAL-FACT TEST: A student who knows only ONE fact from this chapter
+    cannot answer it. The correct answer depends on knowing ≥2 facts together.
+  ✓ MECHANISM TEST: The correct answer requires a multi-step inference, a flaw
+    evaluation, or a competing-process resolution — not a single definition.
+  ✓ OPTION COHERENCE: All 4 options are direct logical responses to the SAME
+    question premise. No option introduces an unrelated topic or mechanism.
+  ✓ DISTRACTOR PLAUSIBILITY: Wrong options are believable to a student who
+    knows PART of the content but not the full picture.
+If any check fails, rewrite the question or downgrade it to MEDIUM.`;
 
 // ─── Universal quality rules ───────────────────────────────────────────────
 
@@ -134,7 +200,26 @@ Q11. NO META-REFERENCES: The questionText must NEVER contain phrases such as
     WRONG: "According to the chapter, what triggers the menstrual cycle?"
     WRONG: "Which evidence from the chapter best refutes this claim?"
     RIGHT: "What is the primary hormonal trigger for the menstrual cycle?"
-    RIGHT: "Which of the following best refutes the claim that X occurs in Y?"`;
+    RIGHT: "Which of the following best refutes the claim that X occurs in Y?"
+Q13. DISTRACTOR COHERENCE (MCQ only): Every option must be a DIRECT LOGICAL
+    RESPONSE to the exact question being asked — not a fact about a related but
+    different topic. The question premise defines the domain; all 4 options must
+    stay inside that domain.
+    HOW TO CHECK: Read the question stem. Identify the category of answer it
+    calls for (e.g. "a consequence", "a cause", "an observation", "a year").
+    Then verify all 4 options belong to that same category. This rule applies
+    to every subject — Biology, History, Physics, Chemistry, Mathematics, etc.
+    WRONG PATTERN: Question asks about consequence of [Mechanism A] → some
+           options answer a different question about [unrelated Mechanism B].
+           Example: "What happens to X under condition Y?" but options C and D
+           are about what happens to X under a completely different condition Z.
+    RIGHT PATTERN: All 4 options are valid candidates for the same answer
+           slot — they differ in their claim, not in the question they answer.
+           Example: Question asks "what is the PRIMARY cause of [event]?" →
+           all 4 options must be plausible causes of that event, not a mix
+           of causes, effects, definitions, and dates.
+    If any option answers a question other than the one being asked, replace it
+    with an option that stays in the same logical domain as the other three.`;
 
 // ─── Format rules per question type ────────────────────────────────────────
 
@@ -205,27 +290,49 @@ DIFFICULTY TARGET FOR THIS BATCH:
 ${difficultyInstruction}
 
 FINAL SELF-AUDIT (do this silently before producing the JSON):
-For each candidate question, verify:
-  ✓ The answer does not appear verbatim in the question (Q1).
-  ✓ MCQ distractors are all plausible and same-domain (Q2).
-  ✓ This subtopic has not already been covered in this batch (Q3).
-  ✓ If TRUE_FALSE, difficulty is not HARD (Q4).
-  ✓ Difficulty label truly matches the Bloom's rubric — not just claimed.
-  ✓ The question is answerable from the chapter content (Q7).
-  ✓ The correct answer is scientifically accurate, not just plausible (Q9).
-  ✓ The question cannot be answered by common sense alone — it requires
-    knowing specific content from this chapter (Q10).
-  ✓ For MCQ/TRUE_FALSE: the questionText asks exactly ONE thing — no "and
-    why?", "and what is the reason?", or any appended second question (Q12).
-  ✓ For MCQ: every wrong option is definitively false — no distractor could
-    be defended as correct by a knowledgeable student (Q2).
-  ✓ No two options say the same thing from opposite angles (Q2).
-  ✓ The questionText contains no phrase like "this chapter", "the text",
-    "from the chapter", "according to the book", or similar (Q11).
-  ✓ If labelled HARD: it combines ≥2 facts, applies a concept to a new
-    scenario, or requires evaluating competing claims — NOT single-fact recall.
-If a question fails ANY check, REWRITE it before emitting. Do not lower
-the bar — rewrite until all checks pass or replace with a different question.
+For each candidate question, verify ALL of the following:
+
+  CONTENT CHECKS:
+  ✓ [Q1]  The answer does not appear verbatim in the question stem.
+  ✓ [Q7]  The question is answerable from the chapter content provided.
+  ✓ [Q9]  The correct answer is factually accurate — not just plausible.
+  ✓ [Q10] The question CANNOT be answered by common sense alone; it requires
+          knowing specific content from this chapter.
+
+  FORMAT CHECKS:
+  ✓ [Q4]  If TRUE_FALSE, difficulty is EASY or MEDIUM — never HARD.
+  ✓ [Q11] The questionText contains NO phrase like "this chapter", "the text",
+          "from the chapter", "the passage", "according to the book", or similar.
+  ✓ [Q12] The questionText asks exactly ONE thing — no "and why?", "and how?",
+          "and what is the reason?", or any second question appended.
+
+  DISTRACTOR CHECKS (MCQ only):
+  ✓ [Q2]  Every wrong option is definitively false — a knowledgeable student
+          cannot defend it as correct.
+  ✓ [Q2]  No two options say the same thing from opposite angles.
+  ✓ [Q2]  All 3 wrong options belong to the same category/domain as the answer.
+  ✓ [Q13] Every option is a direct logical response to the question being asked.
+          Read the stem → identify the category of answer it calls for → verify
+          all 4 options stay inside that category. If any option answers a
+          DIFFERENT question, replace it.
+
+  DIVERSITY CHECK:
+  ✓ [Q3]  This subtopic has not already been covered in this batch.
+
+  HARD-SPECIFIC CHECKS (only if difficulty = HARD):
+  ✓ DUAL-FACT: A student who knows only ONE fact from the chapter cannot
+    answer this question correctly.
+  ✓ MECHANISM: The question requires multi-step inference, flaw detection,
+    competing-process reasoning, or cross-concept synthesis — not a single
+    definition lookup.
+  ✓ ANTI-PATTERN: This question does NOT match any of the banned anti-patterns
+    in the HARD ANTI-PATTERNS list above (single-consequence, abstract-failure,
+    or recall-disguised-as-reasoning).
+  ✓ If the question fails the HARD bar → rewrite using one of the 5 templates
+    OR downgrade to MEDIUM. Do NOT keep a weak question labelled HARD.
+
+If a question fails ANY check, REWRITE it before emitting. Do not lower the bar —
+rewrite until all checks pass or replace with an entirely different question.
 
 OUTPUT FORMAT: Return ONLY a valid JSON object (no markdown, no code fences,
 no commentary) with a single key "questions" containing an array of EXACTLY
