@@ -8,6 +8,10 @@ import { checkAndAwardAchievements } from "@/lib/achievements";
 import { normalizeOption } from "@/lib/utils";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
+// ── Anti-gaming constants (SRS §4.9.2) ───────────────────────────────────────
+const MAX_SCORED_QUIZZES_PER_DAY = 20;
+const MIN_SCORE_FOR_POINTS = 30; // below 30% → no leaderboard points
+
 interface SubmittedAnswer {
   questionId: string;
   studentAnswer: string;
@@ -66,6 +70,20 @@ export async function POST(
       );
     }
 
+    // ── Anti-gaming: daily scored quiz cap (SRS §4.9.2) ──────────────────────
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+    const todayCompletedCount = await db.quiz.count({
+      where: {
+        studentId: user.id,
+        completedAt: { gte: todayStart, lt: tomorrowStart },
+      },
+    });
+    const exceedsDailyLimit = todayCompletedCount >= MAX_SCORED_QUIZZES_PER_DAY;
+
     // Fetch all questions for grading
     const questionIds = answers.map((a) => a.questionId);
     const questions = await db.question.findMany({
@@ -108,25 +126,19 @@ export async function POST(
       let isCorrect = false;
 
       if (question.type === "FILL_IN_BLANK") {
-        // More intelligent subjective grading:
-        // 1. Exact match (case-insensitive, trimmed)
         const c = normalizedCorrect.toLowerCase().replace(/[.,!?;:]/g, "").trim();
         const s = studentAns.toLowerCase().replace(/[.,!?;:]/g, "").trim();
-
         if (s === c) {
           isCorrect = true;
         } else if (s.length >= 4 && (c.includes(s) || s.includes(c))) {
-          // Partial match for longer key terms (e.g. "Lalibela" in "Rock Hewn Church of Lalibela")
           isCorrect = true;
         }
       } else if (question.type === "MATCH_PAIRS") {
-        // Unordered pair comparison (A:1|B:2 should equal B:2|A:1)
         const correctPairs = new Set(normalizedCorrect.split("|").filter(Boolean).map(p => p.trim()));
         const studentPairs = studentAns.split("|").filter(Boolean).map(p => p.trim());
-        isCorrect = studentPairs.length === correctPairs.size && 
+        isCorrect = studentPairs.length === correctPairs.size &&
                     studentPairs.every(p => correctPairs.has(p));
       } else {
-        // Standard comparison for MCQ, TRUE_FALSE, ORDERING
         isCorrect = studentAns === normalizedCorrect;
       }
 
@@ -152,9 +164,6 @@ export async function POST(
     const totalTimeTakenMs = answers.reduce((sum, a) => sum + (a.timeTakenMs ?? 0), 0);
 
     // Calculate streak before points (need it for streak bonus)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -177,15 +186,23 @@ export async function POST(
       }
     }
 
-    const { total: totalPointsEarned, breakdown, speedBonus, streakBonus } =
+    const correctCount = gradedAnswers.filter((a) => a.isCorrect).length;
+    const score = Math.round((correctCount / gradedAnswers.length) * 100);
+
+    // ── Anti-gaming: accuracy & daily cap checks (SRS §4.9.2) ───────────────
+    const pointsBlocked = exceedsDailyLimit || score < MIN_SCORE_FOR_POINTS;
+
+    const { total: rawPointsEarned, breakdown, speedBonus, streakBonus } =
       calculateQuizPoints(pointsInput, {
         totalTimeTakenMs,
         questionCount: gradedAnswers.length,
         streakDays: newStreak,
       });
 
-    const correctCount = gradedAnswers.filter((a) => a.isCorrect).length;
-    const score = Math.round((correctCount / gradedAnswers.length) * 100);
+    // Zero out points if anti-gaming rules triggered
+    const totalPointsEarned = pointsBlocked ? 0 : rawPointsEarned;
+    const effectiveSpeedBonus = pointsBlocked ? 0 : speedBonus;
+    const effectiveStreakBonus = pointsBlocked ? 0 : streakBonus;
 
     // Save quiz answers
     await db.quizAnswer.createMany({
@@ -195,7 +212,7 @@ export async function POST(
         studentAnswer: a.studentAnswer,
         isCorrect: a.isCorrect,
         timeTakenMs: a.timeTakenMs,
-        pointsEarned: breakdown[i],
+        pointsEarned: pointsBlocked ? 0 : (breakdown[i] ?? 0),
       })),
     });
 
@@ -209,13 +226,12 @@ export async function POST(
         completedAt: new Date(),
       },
     });
- 
+
     // If it's a Daily Challenge, award extra points only for 60%+ performance
     let challengePoints = 0;
     const quizAny = quiz as any;
-    if (quizAny.isDailyChallenge && correctCount >= 3) {
-      // Check if already completed today
-      const { today, tomorrow } = (() => {
+    if (!pointsBlocked && quizAny.isDailyChallenge && correctCount >= 3) {
+      const { today: dStart, tomorrow } = (() => {
         const d = new Date();
         d.setHours(0, 0, 0, 0);
         const next = new Date(d);
@@ -227,7 +243,7 @@ export async function POST(
         where: {
           userId: user.id,
           actionType: "DAILY_CHALLENGE",
-          createdAt: { gte: today, lt: tomorrow },
+          createdAt: { gte: dStart, lt: tomorrow },
         },
       });
 
@@ -242,8 +258,6 @@ export async function POST(
             description: "Daily challenge performance bonus",
           },
         });
-        
-        // Final point update (challenge points included)
         await db.user.update({
           where: { id: user.id },
           data: { totalPoints: { increment: challengePoints } },
@@ -251,7 +265,7 @@ export async function POST(
       }
     }
 
-    // Create point ledger entry
+    // Create point ledger entry for quiz completion
     if (totalPointsEarned > 0) {
       await db.pointLedger.create({
         data: {
@@ -264,8 +278,31 @@ export async function POST(
       });
     }
 
+    // Credit 7-day streak bonus to ledger (only once per day when streak hits 7+)
+    // SRS §4.7.1: "7-Day Login Streak +100 — Resets on miss"
+    if (!pointsBlocked && effectiveStreakBonus > 0) {
+      // Only credit once per day (check if already credited today)
+      const streakBonusToday = await db.pointLedger.findFirst({
+        where: {
+          userId: user.id,
+          actionType: "STREAK_BONUS",
+          createdAt: { gte: todayStart, lt: tomorrowStart },
+        },
+      });
+      if (!streakBonusToday) {
+        await db.pointLedger.create({
+          data: {
+            userId: user.id,
+            actionType: "STREAK_BONUS",
+            points: effectiveStreakBonus,
+            quizId,
+            description: `${newStreak}-day login streak bonus`,
+          },
+        });
+      }
+    }
+
     // Update user total points and XP level
-    const oldStreak = user.streakDays || 0;
     const oldTotal = user.totalPoints;
 
     const updatedUser = await db.user.update({
@@ -290,12 +327,11 @@ export async function POST(
       data: { streakDays: newStreak },
     });
 
-    // Achievement: quiz count milestones
+    // Achievement counts
     const totalQuizzesDone = await db.quiz.count({
       where: { studentId: user.id, completedAt: { not: null } },
     });
 
-    // Count total hard quizzes for achievements
     const firstQuestionDiff = gradedAnswers[0]
       ? questionMap.get(gradedAnswers[0].questionId)?.difficulty
       : undefined;
@@ -319,10 +355,10 @@ export async function POST(
       totalTimeTakenMs,
       questionCount: gradedAnswers.length,
       mode: quiz.mode,
-      chapterId: retryChapterId ?? undefined, // for Subject Champion check
+      chapterId: retryChapterId ?? undefined,
     }).catch(console.error);
 
-    // Level-up notification (still fire inline since it's already deduped)
+    // Level-up notification
     if (newXPLevel > updatedUser.xpLevel) {
       notifyLevelUp(user.id, newXPLevel).catch(console.error);
     }
@@ -334,8 +370,14 @@ export async function POST(
       totalQuestions: gradedAnswers.length,
       correctAnswers: correctCount,
       totalPointsEarned,
-      speedBonus,
-      streakBonus,
+      speedBonus: effectiveSpeedBonus,
+      streakBonus: effectiveStreakBonus,
+      pointsBlocked,
+      pointsBlockedReason: pointsBlocked
+        ? exceedsDailyLimit
+          ? "Daily quiz limit reached (20 scored quizzes/day)"
+          : "Score below 30% threshold"
+        : undefined,
       newTotalPoints: updatedUser.totalPoints,
       newXPLevel,
       retryChapterId,
@@ -350,7 +392,7 @@ export async function POST(
         isCorrect: a.isCorrect,
         explanation: a.explanation,
         videoUrl: a.videoUrl,
-        pointsEarned: breakdown[i],
+        pointsEarned: pointsBlocked ? 0 : (breakdown[i] ?? 0),
       })),
     });
   } catch (error) {

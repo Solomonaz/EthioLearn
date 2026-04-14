@@ -23,6 +23,7 @@ import {
   TrendingUp,
   CheckCircle,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,13 @@ interface Summary {
   completionRate: number;
 }
 
+interface SubjectDifficultyCell {
+  subject: string;
+  easy: number;   // accuracy % or -1 if no data
+  medium: number;
+  hard: number;
+}
+
 interface AnalyticsData {
   period: string;
   summary: Summary;
@@ -81,6 +89,7 @@ interface AnalyticsData {
   difficultyStats: DifficultyStat[];
   scoreDistribution: ScoreBucket[];
   gradeStats: GradeStat[];
+  subjectDifficultyMatrix: SubjectDifficultyCell[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -267,6 +276,74 @@ function DifficultyCard({ stat }: { stat: DifficultyStat }) {
   );
 }
 
+// ─── Subject × Difficulty Heatmap ────────────────────────────────────────────
+
+interface HeatmapProps {
+  data: SubjectDifficultyCell[];
+}
+
+function cellColor(value: number): string {
+  if (value < 0) return "bg-gray-50 text-gray-400"; // no data
+  if (value >= 70) return "bg-green-100 text-green-800";
+  if (value >= 40) return "bg-yellow-100 text-yellow-800";
+  return "bg-red-100 text-red-700";
+}
+
+function SubjectDifficultyHeatmap({ data }: HeatmapProps) {
+  if (data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <BarChart2 className="h-5 w-5 text-[#1B5E20]" />
+          <h2 className="font-semibold text-gray-900">Subject × Difficulty Accuracy</h2>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          How accurately students answer questions by subject and difficulty level
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-4 py-3 text-left font-medium text-gray-600">Subject</th>
+                <th className="px-4 py-3 text-center font-medium text-green-700">Easy</th>
+                <th className="px-4 py-3 text-center font-medium text-yellow-700">Medium</th>
+                <th className="px-4 py-3 text-center font-medium text-red-700">Hard</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {data.map((row) => (
+                <tr key={row.subject} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3 font-medium text-gray-800">{row.subject}</td>
+                  {([row.easy, row.medium, row.hard] as const).map((val, i) => (
+                    <td key={i} className="px-4 py-3 text-center">
+                      <span
+                        className={`inline-block min-w-[52px] rounded-full px-2 py-1 text-xs font-bold ${cellColor(val)}`}
+                      >
+                        {val < 0 ? "—" : `${val}%`}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 px-4 py-3">
+          <span className="text-xs text-gray-500">Legend:</span>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">≥70% Good</span>
+          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">40–69% Fair</span>
+          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">&lt;40% Needs Work</span>
+          <span className="rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-400">— No Data</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Page Component ──────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
@@ -312,7 +389,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  const { summary, activityByDay, subjectStats, difficultyStats, scoreDistribution, gradeStats } = data;
+  const { summary, activityByDay, subjectStats, difficultyStats, scoreDistribution, gradeStats, subjectDifficultyMatrix } = data;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -326,21 +403,33 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        {/* Period selector */}
-        <div className="flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
-          {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
-                period === p
-                  ? "bg-[#1B5E20] text-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {PERIOD_LABELS[p]}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Period selector */}
+          <div className="flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
+                  period === p
+                    ? "bg-[#1B5E20] text-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
+          </div>
+
+          {/* Export CSV */}
+          <a
+            href={`/api/admin/analytics/export?period=${period}`}
+            download
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </a>
         </div>
       </div>
 
@@ -726,6 +815,11 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Subject × Difficulty Heatmap ── */}
+      {subjectDifficultyMatrix && subjectDifficultyMatrix.length > 0 && (
+        <SubjectDifficultyHeatmap data={subjectDifficultyMatrix} />
+      )}
 
       {/* ── Subject Detail Table (if subjects available) ── */}
       {subjectStats.length > 0 && (

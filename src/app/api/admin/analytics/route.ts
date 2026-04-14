@@ -158,6 +158,51 @@ function computeDifficultyStats(
   ];
 }
 
+function computeSubjectDifficultyMatrix(
+  quizzes: QuizWithDetails[]
+): { subject: string; easy: number; medium: number; hard: number }[] {
+  // subject → difficulty → { count, correct }
+  const map = new Map<
+    string,
+    Record<"EASY" | "MEDIUM" | "HARD", { count: number; correct: number }>
+  >();
+
+  for (const quiz of quizzes) {
+    for (const answer of quiz.answers) {
+      const subject = answer.question.chapter.textbook.subject;
+      const diff = answer.question.difficulty;
+      if (!map.has(subject)) {
+        map.set(subject, {
+          EASY: { count: 0, correct: 0 },
+          MEDIUM: { count: 0, correct: 0 },
+          HARD: { count: 0, correct: 0 },
+        });
+      }
+      const entry = map.get(subject)![diff];
+      entry.count++;
+      if (answer.isCorrect) entry.correct++;
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([subject, stats]) => ({
+      subject,
+      easy:
+        stats.EASY.count > 0
+          ? Math.round((stats.EASY.correct / stats.EASY.count) * 100)
+          : -1, // -1 = no data
+      medium:
+        stats.MEDIUM.count > 0
+          ? Math.round((stats.MEDIUM.correct / stats.MEDIUM.count) * 100)
+          : -1,
+      hard:
+        stats.HARD.count > 0
+          ? Math.round((stats.HARD.correct / stats.HARD.count) * 100)
+          : -1,
+    }))
+    .sort((a, b) => a.subject.localeCompare(b.subject));
+}
+
 function computeScoreDistribution(
   quizzes: QuizWithDetails[]
 ): { range: string; count: number }[] {
@@ -266,6 +311,7 @@ export async function GET(req: NextRequest) {
   const subjectStats = computeSubjectStats(quizzes);
   const difficultyStats = computeDifficultyStats(quizzes);
   const scoreDistribution = computeScoreDistribution(quizzes);
+  const subjectDifficultyMatrix = computeSubjectDifficultyMatrix(quizzes);
 
   const totalQuizzes = quizzes.length;
   const avgScore =
@@ -307,5 +353,6 @@ export async function GET(req: NextRequest) {
     difficultyStats,
     scoreDistribution,
     gradeStats: formattedGradeStats,
+    subjectDifficultyMatrix,
   });
 }

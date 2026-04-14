@@ -218,6 +218,7 @@ model Textbook {
   fileUrl          String
   processingStatus ProcessingStatus @default(PENDING)
   chunkingStatus   ChunkingStatus   @default(PENDING)
+  ocrFlaggedPages  Json?            // array of { page, confidence } for pages below 80% OCR confidence
   chapterCount     Int              @default(0)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -446,10 +447,12 @@ model StudentBook {
   title            String
   description      String?
   fileUrl          String
+  content          String?          @db.Text   // extracted text from the uploaded file
   processingStatus ProcessingStatus @default(PENDING)
   isPublic         Boolean          @default(false)
   storageBytes     Int              @default(0)
   quizCount        Int              @default(0)
+  pointsAwarded    Boolean          @default(false) // true once +300 pts credited
   approvedAt       DateTime?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Trophy, Medal, Crown, Star, ChevronDown } from "lucide-react";
+import { Trophy, Medal, Crown, Star, ChevronDown, Users, GraduationCap, School } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -27,10 +27,7 @@ interface LeaderboardResponse {
   currentUserRank: number | null;
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-// Subjects will be fetched dynamically via the API
-
+type ScopeType = "school" | "grade" | "class";
 
 // ── Medal helpers ──────────────────────────────────────────────────────────────
 
@@ -71,9 +68,18 @@ function rowBackground(rank: number, isCurrentUser: boolean) {
   return "";
 }
 
+// ── Scope config ───────────────────────────────────────────────────────────────
+
+const SCOPE_OPTIONS: { value: ScopeType; label: string; icon: React.ElementType; desc: string }[] = [
+  { value: "school", label: "School",  icon: School,        desc: "All students in your school" },
+  { value: "grade",  label: "Grade",   icon: GraduationCap, desc: "Students in your grade" },
+  { value: "class",  label: "Class",   icon: Users,         desc: "Students in your class/section" },
+];
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function LeaderboardPage() {
+  const [scope, setScope] = useState<ScopeType>("school");
   const [period, setPeriod] = useState<"alltime" | "weekly">("alltime");
   const [subject, setSubject] = useState("");
   const [subjectsList, setSubjectsList] = useState<{ value: string; label: string }[]>([
@@ -89,10 +95,10 @@ export default function LeaderboardPage() {
       try {
         const res = await fetch("/api/subjects");
         if (res.ok) {
-          const data = await res.json();
+          const json = await res.json();
           setSubjectsList([
             { value: "", label: "All Subjects" },
-            ...(data.subjects as { id: string; name: string }[]).map((s) => ({
+            ...(json.subjects as { id: string; name: string }[]).map((s) => ({
               value: s.name,
               label: s.name,
             })),
@@ -109,11 +115,7 @@ export default function LeaderboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        type: "school",
-        period,
-        subject,
-      });
+      const params = new URLSearchParams({ type: scope, period, subject });
       const res = await fetch(`/api/leaderboard?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load leaderboard");
       const json = await res.json();
@@ -123,13 +125,13 @@ export default function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [period, subject]);
+  }, [scope, period, subject]);
 
   useEffect(() => {
     fetchLeaderboard();
   }, [fetchLeaderboard]);
 
-  // Close dropdown when clicking outside
+  // Close subject dropdown when clicking outside
   useEffect(() => {
     if (!subjectOpen) return;
     const handler = () => setSubjectOpen(false);
@@ -140,13 +142,9 @@ export default function LeaderboardPage() {
   const leaderboard = data?.leaderboard ?? [];
   const currentUserRank = data?.currentUserRank ?? null;
   const currentUserInList = leaderboard.some((e) => e.isCurrentUser);
-
-  // Show stub row at bottom when user is ranked but not in the displayed top 50
-  const showCurrentUserFooter =
-    !currentUserInList && currentUserRank !== null;
-
-  const selectedSubjectLabel =
-    subjectsList.find((s) => s.value === subject)?.label ?? "All Subjects";
+  const showCurrentUserFooter = !currentUserInList && currentUserRank !== null;
+  const selectedSubjectLabel = subjectsList.find((s) => s.value === subject)?.label ?? "All Subjects";
+  const activeScopeOption = SCOPE_OPTIONS.find((s) => s.value === scope)!;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
@@ -157,13 +155,29 @@ export default function LeaderboardPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-text-primary">Leaderboard</h1>
-          <p className="text-sm text-text-secondary">
-            See how you rank among your schoolmates
-          </p>
+          <p className="text-sm text-text-secondary">{activeScopeOption.desc}</p>
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Scope tabs (SRS §4.9.1) */}
+      <div className="flex gap-1 rounded-xl border border-border bg-gray-50 p-1">
+        {SCOPE_OPTIONS.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            onClick={() => setScope(value)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+              scope === value
+                ? "bg-white text-primary shadow-sm"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Period + Subject controls */}
       <Card>
         <CardContent className="py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -213,14 +227,9 @@ export default function LeaderboardPage() {
                   {subjectsList.map((s) => (
                     <button
                       key={s.value}
-                      onClick={() => {
-                        setSubject(s.value);
-                        setSubjectOpen(false);
-                      }}
+                      onClick={() => { setSubject(s.value); setSubjectOpen(false); }}
                       className={`w-full px-4 py-2 text-left text-sm transition-colors hover:bg-gray-50 ${
-                        subject === s.value
-                          ? "font-semibold text-primary"
-                          : "text-text-primary"
+                        subject === s.value ? "font-semibold text-primary" : "text-text-primary"
                       }`}
                     >
                       {s.label}
@@ -233,31 +242,31 @@ export default function LeaderboardPage() {
         </CardContent>
       </Card>
 
-      {/* Top 3 podium — only shown when not loading and we have data */}
+      {/* Top 3 podium */}
       {!loading && !error && leaderboard.length >= 3 && (
         <div className="grid grid-cols-3 gap-3">
-          {/* 2nd place */}
           <PodiumCard entry={leaderboard[1]} medal="silver" />
-          {/* 1st place */}
           <PodiumCard entry={leaderboard[0]} medal="gold" />
-          {/* 3rd place */}
           <PodiumCard entry={leaderboard[2]} medal="bronze" />
         </div>
       )}
 
-      {/* List */}
+      {/* Rankings list */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-text-primary">
               Rankings
+              {period === "weekly" && (
+                <span className="ml-2 text-xs font-normal text-text-secondary">
+                  (resets every Monday)
+                </span>
+              )}
             </h2>
             {currentUserRank !== null && (
               <span className="text-xs text-text-secondary">
                 Your rank:{" "}
-                <span className="font-semibold text-primary">
-                  #{currentUserRank}
-                </span>
+                <span className="font-semibold text-primary">#{currentUserRank}</span>
               </span>
             )}
           </div>
@@ -265,22 +274,18 @@ export default function LeaderboardPage() {
         <CardContent className="pb-4 pt-2">
           {loading ? (
             <div className="space-y-0">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <SkeletonRow key={i} />
-              ))}
+              {Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} />)}
             </div>
           ) : error ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <p className="text-sm text-text-secondary">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchLeaderboard}>
-                Try Again
-              </Button>
+              <Button variant="outline" size="sm" onClick={fetchLeaderboard}>Try Again</Button>
             </div>
           ) : leaderboard.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12">
               <Trophy className="h-10 w-10 text-text-secondary/30" />
               <p className="text-sm text-text-secondary">
-                No rankings yet for this period
+                No rankings yet for this {scope} / {period === "weekly" ? "week" : "period"}
               </p>
               <p className="text-xs text-text-secondary/60">
                 Complete quizzes to appear on the leaderboard
@@ -288,18 +293,12 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             <div className="space-y-1.5">
-              {leaderboard.map((entry) => (
-                <LeaderboardRow key={entry.userId} entry={entry} />
-              ))}
-
-              {/* Separator + current user if outside top 50 */}
+              {leaderboard.map((entry) => <LeaderboardRow key={entry.userId} entry={entry} />)}
               {showCurrentUserFooter && (
                 <>
                   <div className="flex items-center gap-2 py-1">
                     <div className="flex-1 border-t border-dashed border-border" />
-                    <span className="text-xs text-text-secondary">
-                      your position
-                    </span>
+                    <span className="text-xs text-text-secondary">your position</span>
                     <div className="flex-1 border-t border-dashed border-border" />
                   </div>
                   <CurrentUserStubRow rank={currentUserRank!} />
@@ -315,32 +314,11 @@ export default function LeaderboardPage() {
 
 // ── Podium card ────────────────────────────────────────────────────────────────
 
-function PodiumCard({
-  entry,
-  medal,
-}: {
-  entry: LeaderboardEntry;
-  medal: "gold" | "silver" | "bronze";
-}) {
+function PodiumCard({ entry, medal }: { entry: LeaderboardEntry; medal: "gold" | "silver" | "bronze" }) {
   const colors = {
-    gold: {
-      ring: "ring-2 ring-yellow-400",
-      bg: "bg-yellow-400",
-      text: "text-yellow-600",
-      label: "1st",
-    },
-    silver: {
-      ring: "ring-2 ring-gray-300",
-      bg: "bg-gray-300",
-      text: "text-gray-500",
-      label: "2nd",
-    },
-    bronze: {
-      ring: "ring-2 ring-amber-600",
-      bg: "bg-amber-600",
-      text: "text-amber-700",
-      label: "3rd",
-    },
+    gold:   { ring: "ring-2 ring-yellow-400", bg: "bg-yellow-400", text: "text-yellow-600", label: "1st" },
+    silver: { ring: "ring-2 ring-gray-300",   bg: "bg-gray-300",   text: "text-gray-500",   label: "2nd" },
+    bronze: { ring: "ring-2 ring-amber-600",  bg: "bg-amber-600",  text: "text-amber-700",  label: "3rd" },
   }[medal];
 
   return (
@@ -350,21 +328,11 @@ function PodiumCard({
       } ${medal === "gold" ? "order-2" : medal === "silver" ? "order-1" : "order-3"}`}
     >
       <div className={`mb-2 rounded-full p-1 ${colors.ring}`}>
-        <Avatar
-          name={entry.name}
-          src={entry.avatarUrl}
-          size={medal === "gold" ? "lg" : "md"}
-        />
+        <Avatar name={entry.name} src={entry.avatarUrl} size={medal === "gold" ? "lg" : "md"} />
       </div>
-      <p className="line-clamp-1 w-full text-xs font-semibold text-text-primary">
-        {entry.name}
-      </p>
-      {entry.grade && (
-        <p className="text-[10px] text-text-secondary">Grade {entry.grade}</p>
-      )}
-      <div
-        className={`mt-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.bg} text-white`}
-      >
+      <p className="line-clamp-1 w-full text-xs font-semibold text-text-primary">{entry.name}</p>
+      {entry.grade && <p className="text-[10px] text-text-secondary">Grade {entry.grade}</p>}
+      <div className={`mt-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${colors.bg} text-white`}>
         {colors.label}
       </div>
       <p className={`mt-1 text-xs font-semibold ${colors.text}`}>
@@ -378,27 +346,16 @@ function PodiumCard({
 
 function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
   return (
-    <div
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${rowBackground(entry.rank, entry.isCurrentUser)}`}
-    >
+    <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${rowBackground(entry.rank, entry.isCurrentUser)}`}>
       <RankBadge rank={entry.rank} />
-
       <Avatar name={entry.name} src={entry.avatarUrl} size="sm" />
-
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <p
-            className={`truncate text-sm font-medium ${entry.isCurrentUser ? "text-primary" : "text-text-primary"}`}
-          >
+          <p className={`truncate text-sm font-medium ${entry.isCurrentUser ? "text-primary" : "text-text-primary"}`}>
             {entry.name}
           </p>
           {entry.isCurrentUser && (
-            <Badge
-              variant="info"
-              className="shrink-0 px-1.5 py-0 text-[10px]"
-            >
-              You
-            </Badge>
+            <Badge variant="info" className="shrink-0 px-1.5 py-0 text-[10px]">You</Badge>
           )}
         </div>
         <p className="text-xs text-text-secondary">
@@ -407,7 +364,6 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
           {!entry.grade && !entry.section ? "Student" : ""}
         </p>
       </div>
-
       <div className="flex shrink-0 flex-col items-end gap-0.5">
         <div className="flex items-center gap-1">
           <Star className="h-3 w-3 text-yellow-400" />
@@ -415,15 +371,13 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
             {entry.totalPoints.toLocaleString()}
           </span>
         </div>
-        <Badge variant="default" className="px-1.5 py-0 text-[10px]">
-          Lv {entry.xpLevel}
-        </Badge>
+        <Badge variant="default" className="px-1.5 py-0 text-[10px]">Lv {entry.xpLevel}</Badge>
       </div>
     </div>
   );
 }
 
-// ── Current user stub row (outside top 50) ─────────────────────────────────────
+// ── Current user stub row ─────────────────────────────────────────────────────
 
 function CurrentUserStubRow({ rank }: { rank: number }) {
   return (
@@ -437,9 +391,7 @@ function CurrentUserStubRow({ rank }: { rank: number }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-medium text-primary">You</p>
-          <Badge variant="info" className="shrink-0 px-1.5 py-0 text-[10px]">
-            You
-          </Badge>
+          <Badge variant="info" className="shrink-0 px-1.5 py-0 text-[10px]">You</Badge>
         </div>
         <p className="text-xs text-text-secondary">Keep going to climb up!</p>
       </div>

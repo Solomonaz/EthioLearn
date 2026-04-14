@@ -63,7 +63,14 @@ export function calculateQuizPoints(
     }
   }
 
-  return { total, breakdown, speedBonus, streakBonus: 0 };
+  // 7-day login streak bonus: +100 pts (SRS §4.7.1)
+  let streakBonus = 0;
+  if (opts?.streakDays !== undefined && opts.streakDays >= 7) {
+    streakBonus = 100;
+    total += streakBonus;
+  }
+
+  return { total, breakdown, speedBonus, streakBonus };
 }
 
 export function calculateXPLevel(totalPoints: number): number {

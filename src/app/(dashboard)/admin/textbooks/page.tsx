@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert } from "lucide-react";
+import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert, ArrowUp, ArrowDown, Merge, ChevronRight, ScanEye } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -170,6 +170,21 @@ export default function AdminTextbooksPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Chapter management state
+  const [expandedTextbookId, setExpandedTextbookId] = useState<string | null>(null);
+  const [reorderingChapter, setReorderingChapter] = useState<string | null>(null);
+  // merge: null | { textbookId, sourceChapterId, choosing: bool }
+  const [mergeState, setMergeState] = useState<{
+    textbookId: string;
+    sourceChapterId: string;
+    sourceTitle: string;
+    targetChapterId: string | null;
+  } | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
+
+  // OCR review queue
+  const [showOcrQueue, setShowOcrQueue] = useState(false);
+
   // ── Fetch textbooks ──────────────────────────────────────
 
   const fetchTextbooks = useCallback(async () => {
@@ -232,6 +247,68 @@ export default function AdminTextbooksPage() {
     } finally {
       setDeletingId(null);
       setConfirmDeleteId(null);
+    }
+  }
+
+  // ── Chapter Reorder ─────────────────────────────────────
+
+  async function handleMoveChapter(
+    textbookId: string,
+    chapterId: string,
+    action: "move_up" | "move_down"
+  ) {
+    setReorderingChapter(chapterId);
+    try {
+      const res = await fetch(
+        `/api/admin/textbooks/${textbookId}/chapters/${chapterId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to reorder chapter");
+        return;
+      }
+      await fetchTextbooks();
+    } catch {
+      toast.error("Failed to reorder chapter");
+    } finally {
+      setReorderingChapter(null);
+    }
+  }
+
+  // ── Chapter Merge ────────────────────────────────────────
+
+  async function handleMergeChapters() {
+    if (!mergeState || !mergeState.targetChapterId) return;
+    setIsMerging(true);
+    try {
+      const res = await fetch(
+        `/api/admin/textbooks/${mergeState.textbookId}/chapters/merge`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceChapterId: mergeState.sourceChapterId,
+            targetChapterId: mergeState.targetChapterId,
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Merge failed");
+        return;
+      }
+      toast.success("Chapters merged successfully!");
+      setMergeState(null);
+      await fetchTextbooks();
+    } catch {
+      toast.error("Failed to merge chapters");
+    } finally {
+      setIsMerging(false);
     }
   }
 
@@ -567,17 +644,118 @@ export default function AdminTextbooksPage() {
     setAiDetectedChapters((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // ─── OCR Queue derived data ──────────────────────────────
+
+  const ocrQueue = textbooks.flatMap((tb) =>
+    tb.chapters
+      .filter((ch) => ch.ocrConfidence !== null && ch.ocrConfidence < 80)
+      .map((ch) => ({
+        textbookId: tb.id,
+        textbookTitle: tb.title,
+        chapterId: ch.id,
+        chapterTitle: ch.title,
+        chapterNumber: ch.chapterNumber,
+        ocrConfidence: ch.ocrConfidence!,
+      }))
+  ).sort((a, b) => a.ocrConfidence - b.ocrConfidence); // worst first
+
   // ─── Render ───────────────────────────────────────────────
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Page title */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Textbook Management</h1>
-        <p className="text-sm text-text-secondary">
-          Add and manage your school&apos;s textbooks and their content.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Textbook Management</h1>
+          <p className="text-sm text-text-secondary">
+            Add and manage your school&apos;s textbooks and their content.
+          </p>
+        </div>
+        {!loading && ocrQueue.length > 0 && (
+          <button
+            onClick={() => setShowOcrQueue((v) => !v)}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              showOcrQueue
+                ? "border-amber-400 bg-amber-50 text-amber-800"
+                : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+            }`}
+          >
+            <ScanEye className="h-4 w-4" />
+            OCR Review Queue ({ocrQueue.length})
+          </button>
+        )}
       </div>
+
+      {/* ── OCR Review Queue ── */}
+      {showOcrQueue && ocrQueue.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TriangleAlert className="h-5 w-5 text-amber-500" />
+                <h2 className="font-semibold text-text-primary">OCR Review Queue</h2>
+              </div>
+              <p className="text-xs text-text-secondary">
+                {ocrQueue.length} chapter{ocrQueue.length !== 1 ? "s" : ""} with OCR confidence below 80% — review or re-upload their content.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-gray-50/50">
+                    <th className="px-4 py-2 text-left font-medium text-text-secondary">Textbook</th>
+                    <th className="px-4 py-2 text-left font-medium text-text-secondary">Chapter</th>
+                    <th className="px-4 py-2 text-center font-medium text-text-secondary">OCR Confidence</th>
+                    <th className="px-4 py-2 text-left font-medium text-text-secondary">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {ocrQueue.map((item) => (
+                    <tr key={item.chapterId} className="hover:bg-amber-50/30">
+                      <td className="px-4 py-2 text-text-primary font-medium truncate max-w-[180px]">
+                        {item.textbookTitle}
+                      </td>
+                      <td className="px-4 py-2 text-text-secondary">
+                        Ch.{item.chapterNumber} {item.chapterTitle}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                            item.ocrConfidence < 60
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {Math.round(item.ocrConfidence)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => {
+                            setExpandedTextbookId(item.textbookId);
+                            setShowOcrQueue(false);
+                            // scroll into view after state update
+                            setTimeout(() => {
+                              document
+                                .getElementById(`textbook-${item.textbookId}`)
+                                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }, 100);
+                          }}
+                        >
+                          Review chapters →
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Left Panel: Textbook List ── */}
@@ -646,6 +824,7 @@ export default function AdminTextbooksPage() {
                     return (
                       <div
                         key={textbook.id}
+                        id={`textbook-${textbook.id}`}
                         className="flex flex-col gap-2 px-4 py-3"
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -743,6 +922,191 @@ export default function AdminTextbooksPage() {
                               ], [])}{" "}
                               — review these chapters manually.
                             </span>
+                          </div>
+                        )}
+
+                        {/* Chapters expand/collapse */}
+                        {textbook.chapters.length > 0 && (
+                          <div>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                              onClick={() =>
+                                setExpandedTextbookId((prev) =>
+                                  prev === textbook.id ? null : textbook.id
+                                )
+                              }
+                            >
+                              {expandedTextbookId === textbook.id ? (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              )}
+                              Manage Chapters ({textbook.chapters.length})
+                            </button>
+
+                            {expandedTextbookId === textbook.id && (
+                              <div className="mt-2 rounded-lg border border-border bg-background">
+                                {/* Merge confirmation banner */}
+                                {mergeState?.textbookId === textbook.id && (
+                                  <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+                                    <span className="text-amber-800">
+                                      <strong>Merging:</strong> &ldquo;{mergeState.sourceTitle}&rdquo; →{" "}
+                                      {mergeState.targetChapterId
+                                        ? `"${textbook.chapters.find((c) => c.id === mergeState.targetChapterId)?.title}"`
+                                        : "select a target chapter below"}
+                                    </span>
+                                    <div className="flex gap-2">
+                                      {mergeState.targetChapterId && (
+                                        <Button
+                                          size="sm"
+                                          isLoading={isMerging}
+                                          onClick={handleMergeChapters}
+                                          className="bg-amber-600 text-white hover:bg-amber-700 text-xs px-2 py-1 h-auto"
+                                        >
+                                          Confirm Merge
+                                        </Button>
+                                      )}
+                                      <button
+                                        className="text-amber-700 hover:text-amber-900"
+                                        onClick={() => setMergeState(null)}
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Chapter list */}
+                                <div className="divide-y divide-border/50">
+                                  {[...textbook.chapters]
+                                    .sort((a, b) => a.chapterNumber - b.chapterNumber)
+                                    .map((ch, idx, arr) => {
+                                      const isFirst = idx === 0;
+                                      const isLast = idx === arr.length - 1;
+                                      const isReordering = reorderingChapter === ch.id;
+                                      const isMergeSource =
+                                        mergeState?.sourceChapterId === ch.id;
+                                      const isMergeTarget =
+                                        mergeState?.targetChapterId === ch.id;
+                                      const isChoosingMergeTarget =
+                                        mergeState?.textbookId === textbook.id &&
+                                        mergeState?.sourceChapterId !== ch.id;
+
+                                      return (
+                                        <div
+                                          key={ch.id}
+                                          className={`flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
+                                            isMergeSource
+                                              ? "bg-amber-50"
+                                              : isMergeTarget
+                                              ? "bg-amber-100"
+                                              : isChoosingMergeTarget
+                                              ? "cursor-pointer hover:bg-amber-50"
+                                              : "hover:bg-background"
+                                          }`}
+                                          onClick={
+                                            isChoosingMergeTarget && !isMergeSource
+                                              ? () =>
+                                                  setMergeState((prev) =>
+                                                    prev
+                                                      ? { ...prev, targetChapterId: ch.id }
+                                                      : null
+                                                  )
+                                              : undefined
+                                          }
+                                        >
+                                          {/* Chapter number */}
+                                          <span className="shrink-0 w-6 text-text-muted font-mono">
+                                            {ch.chapterNumber}.
+                                          </span>
+
+                                          {/* Title + meta */}
+                                          <div className="flex-1 min-w-0">
+                                            <span
+                                              className={`font-medium ${
+                                                isMergeSource
+                                                  ? "text-amber-700"
+                                                  : isMergeTarget
+                                                  ? "text-amber-800"
+                                                  : "text-text-primary"
+                                              }`}
+                                            >
+                                              {ch.title}
+                                            </span>
+                                            <span className="ml-2 text-text-muted">
+                                              {ch._count.questions}q
+                                            </span>
+                                            {ch.ocrConfidence !== null &&
+                                              ch.ocrConfidence < 80 && (
+                                                <span className="ml-1 text-amber-600">
+                                                  ⚠ {Math.round(ch.ocrConfidence)}% OCR
+                                                </span>
+                                              )}
+                                          </div>
+
+                                          {/* Actions (hidden when in merge-target-picking mode) */}
+                                          {!isChoosingMergeTarget && (
+                                            <div className="flex shrink-0 items-center gap-1">
+                                              <button
+                                                disabled={isFirst || isReordering}
+                                                onClick={() =>
+                                                  handleMoveChapter(
+                                                    textbook.id,
+                                                    ch.id,
+                                                    "move_up"
+                                                  )
+                                                }
+                                                className="rounded p-1 text-text-muted hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                                                title="Move up"
+                                              >
+                                                <ArrowUp className="h-3 w-3" />
+                                              </button>
+                                              <button
+                                                disabled={isLast || isReordering}
+                                                onClick={() =>
+                                                  handleMoveChapter(
+                                                    textbook.id,
+                                                    ch.id,
+                                                    "move_down"
+                                                  )
+                                                }
+                                                className="rounded p-1 text-text-muted hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
+                                                title="Move down"
+                                              >
+                                                <ArrowDown className="h-3 w-3" />
+                                              </button>
+                                              {textbook.chapters.length > 1 && (
+                                                <button
+                                                  onClick={() =>
+                                                    setMergeState({
+                                                      textbookId: textbook.id,
+                                                      sourceChapterId: ch.id,
+                                                      sourceTitle: ch.title,
+                                                      targetChapterId: null,
+                                                    })
+                                                  }
+                                                  className="rounded p-1 text-text-muted hover:bg-amber-50 hover:text-amber-700"
+                                                  title="Merge into another chapter"
+                                                >
+                                                  <Merge className="h-3 w-3" />
+                                                </button>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          {/* "Select as target" indicator */}
+                                          {isChoosingMergeTarget && !isMergeSource && (
+                                            <span className="shrink-0 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
+                                              {isMergeTarget ? "✓ Target" : "Merge into"}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

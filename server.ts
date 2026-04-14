@@ -7,6 +7,57 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { decode } from "next-auth/jwt";
 import { checkBattleAchievements } from "./src/lib/achievements";
 
+// ── Fun facts pool (SRS §4.6.3) ──────────────────────────────────────────────
+const FUN_FACTS: Record<string, string[]> = {
+  Biology: [
+    "The human body contains about 37 trillion cells.",
+    "DNA from a single human cell, if uncoiled, would stretch about 2 meters.",
+    "The heart beats approximately 100,000 times per day.",
+    "Mitochondria have their own DNA, separate from the cell's nucleus.",
+    "Humans share about 98.7% of their DNA with chimpanzees.",
+  ],
+  Chemistry: [
+    "Water is the only substance that naturally exists in all three states on Earth.",
+    "Gold is so non-reactive it can be found in its pure form in nature.",
+    "A single teaspoon of honey represents the lifetime work of 12 bees.",
+    "Oxygen was discovered independently by three scientists in the 1770s.",
+    "The human body is about 60% water by mass.",
+  ],
+  Mathematics: [
+    "Zero is the only number that cannot be represented in Roman numerals.",
+    "A 'googol' is 10 to the power of 100 — more than atoms in the observable universe.",
+    "Pi has been calculated to over 100 trillion decimal places.",
+    "The Fibonacci sequence appears in sunflower seeds, pinecones, and nautilus shells.",
+    "There are more possible chess games than atoms in the observable universe.",
+  ],
+  Physics: [
+    "Light travels at about 299,792 km/s — fast enough to circle Earth 7.5 times per second.",
+    "A neutron star is so dense that a teaspoon of it would weigh a billion tonnes.",
+    "Sound travels about 4 times faster in water than in air.",
+    "The Milky Way galaxy is about 100,000 light-years across.",
+    "Every atom in your body was forged inside a star billions of years ago.",
+  ],
+  History: [
+    "Ethiopia is one of the oldest nations in the world, with a history spanning over 3,000 years.",
+    "The Battle of Adwa in 1896 made Ethiopia the first African nation to defeat a European colonial power.",
+    "Axum was one of the most powerful ancient empires and the first sub-Saharan African state to mint coins.",
+    "The Blue Nile, source of most of the Nile's water, originates at Lake Tana in Ethiopia.",
+    "Lalibela's rock-hewn churches, carved in the 12th century, are a UNESCO World Heritage Site.",
+  ],
+  default: [
+    "The average person takes about 6,000–8,000 steps per day.",
+    "Honey never spoils — archaeologists have found 3,000-year-old honey in Egyptian tombs that was still edible.",
+    "A day on Venus is longer than a year on Venus.",
+    "Bananas are slightly radioactive due to their potassium content.",
+    "Sharks are older than trees — they've existed for over 450 million years.",
+  ],
+};
+
+function getFunFact(subject?: string): string {
+  const pool = (subject && FUN_FACTS[subject]) ? FUN_FACTS[subject] : FUN_FACTS.default;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 function parseCookies(cookieHeader: string): Record<string, string> {
   return cookieHeader.split(";").reduce((acc, pair) => {
     const [key, ...val] = pair.trim().split("=");
@@ -62,6 +113,7 @@ interface RoomState {
   questionTimer?: NodeJS.Timeout;
   questionStartedAt: number;
   rematchRequesters: Set<string>;
+  subject?: string; // for fun facts
 }
 
 function serializePlayers(room: RoomState) {
@@ -201,6 +253,7 @@ app.prepare().then(() => {
           roomCode, hostId,
           players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0 }]]),
           questions, currentQuestion: 0, status: "waiting", questionStartedAt: 0, rematchRequesters: new Set(),
+          subject: config.subject ?? undefined,
         });
         socket.join(roomCode);
         socket.emit("room_created", { roomCode });
@@ -393,6 +446,8 @@ app.prepare().then(() => {
     room.currentQuestion += 1;
 
     if (room.currentQuestion >= room.questions.length) {
+      // Emit final fun fact before showing results
+      io.to(roomCode).emit("fun_fact", { fact: getFunFact(room.subject) });
       room.status = "finished";
       const allPlayers = Array.from(room.players.values());
       const finalScores = [...allPlayers].sort((a, b) => b.score - a.score);
@@ -435,7 +490,9 @@ app.prepare().then(() => {
       });
       setTimeout(() => rooms.delete(roomCode), 30_000);
     } else {
-      setTimeout(() => sendQuestion(io, rooms, roomCode), 2000);
+      // Emit a fun fact between questions (SRS §4.6.3)
+      io.to(roomCode).emit("fun_fact", { fact: getFunFact(room.subject) });
+      setTimeout(() => sendQuestion(io, rooms, roomCode), 2500);
     }
   }
 
