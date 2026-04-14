@@ -115,7 +115,7 @@ const SOURCE_CONFIG = [
 ];
 
 export default function QuizLauncherPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const startQuiz = useQuizStore((s) => s.startQuiz);
@@ -148,26 +148,27 @@ export default function QuizLauncherPage() {
   const [selectedCount, setSelectedCount] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<QuizMode>("SOLO");
 
-  // Fetch textbooks on mount
+  // Fetch textbooks on mount — wait for full session auth before reading grade
   useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+
     async function fetchTextbooks() {
       try {
-        const grade = session?.user?.grade;
-        const url = grade
-          ? `/api/textbooks?grade=${grade}`
-          : "/api/textbooks";
-        const res = await fetch(url);
+        const grade = (session?.user as any)?.grade;
+        const params = new URLSearchParams();
+        if (grade) params.set("grade", String(grade));
+        const res = await fetch(`/api/textbooks?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to load subjects");
         const data = await res.json();
-        setTextbooks(data.textbooks);
+        setTextbooks(data.textbooks ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load subjects");
       } finally {
         setLoadingTextbooks(false);
       }
     }
-    if (session) fetchTextbooks();
-  }, [session]);
+    fetchTextbooks();
+  }, [sessionStatus, session]);
 
   // Fetch chapters when textbook selected
   useEffect(() => {
