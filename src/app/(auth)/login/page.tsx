@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, Suspense, useEffect } from "react";
 import { signIn, getSession, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
 const TelegramLoginButton = dynamic(
@@ -27,7 +28,9 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
 };
 
 function LoginForm() {
-  const router     = useRouter();
+  const t      = useTranslations("auth");
+  const tc     = useTranslations("common");
+  const router = useRouter();
   const { data: session, status } = useSession();
   const searchParams   = useSearchParams();
   const justRegistered = searchParams.get("registered") === "true";
@@ -101,7 +104,6 @@ function LoginForm() {
         const isSchoolAdmin = role === "SCHOOL_ADMIN";
 
         if (callbackUrl) {
-          // Only allow safe relative paths — no open redirects
           const isSafeRelative = /^\/[^/]/.test(callbackUrl) && !callbackUrl.includes(":");
           const isAdminCb   = callbackUrl.startsWith("/admin");
           const isSchoolAdminCb = callbackUrl.startsWith("/school-admin");
@@ -144,13 +146,13 @@ function LoginForm() {
 
         {/* Logo */}
         <div className="mb-8 text-center">
-          <Link href="/" className="text-3xl font-bold text-primary">EthioLearn</Link>
-          <p className="mt-2 text-text-secondary">Sign in to your account</p>
+          <Link href="/" className="text-3xl font-bold text-primary">{tc("appName")}</Link>
+          <p className="mt-2 text-text-secondary">{t("signInSubtitle")}</p>
         </div>
 
         {justRegistered && (
           <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-center text-sm text-green-700">
-            Account created! Please sign in.
+            {t("accountCreated")}
           </div>
         )}
 
@@ -172,7 +174,7 @@ function LoginForm() {
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
-                  {socialLoading === "google" ? "Signing in…" : "Continue with Google"}
+                  {socialLoading === "google" ? t("continueGoogleLoading") : t("continueGoogle")}
                 </button>
               )}
 
@@ -197,7 +199,7 @@ function LoginForm() {
               {PHONE_ENABLED && (
                 <div className="flex items-center gap-3 pt-1">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-text-secondary">or sign in with phone</span>
+                  <span className="text-xs text-text-secondary">{t("orSignInPhone")}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
@@ -208,7 +210,7 @@ function LoginForm() {
           {PHONE_ENABLED && (step === "input" ? (
             <form onSubmit={handleSendOtp}>
               <label className="mb-2 block text-sm font-medium text-text-primary">
-                Phone Number
+                {t("phoneLabel")}
               </label>
               <div className="flex gap-2">
                 <span className="flex items-center rounded-lg border border-border bg-gray-50 px-3 text-sm text-text-secondary">
@@ -234,17 +236,17 @@ function LoginForm() {
                 disabled={isLoading}
                 className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isLoading ? "Sending…" : "Send OTP"}
+                {isLoading ? t("sending") : t("sendOtp")}
               </button>
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp}>
               <p className="mb-4 text-sm text-text-secondary">
-                We sent a 6-digit code to{" "}
+                {t("codeSentTo")}{" "}
                 <span className="font-medium text-text-primary">+251{phoneNumber}</span>
               </p>
               <label className="mb-2 block text-sm font-medium text-text-primary">
-                Enter OTP
+                {t("otpLabel")}
               </label>
               <input
                 type="text"
@@ -263,7 +265,7 @@ function LoginForm() {
                 disabled={isLoading}
                 className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isLoading ? "Verifying…" : "Verify & Sign In"}
+                {isLoading ? t("verifying") : t("verifyOtp")}
               </button>
               <button
                 type="button"
@@ -271,7 +273,7 @@ function LoginForm() {
                 className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
                 disabled={isLoading}
               >
-                Change phone number
+                {t("changePhone")}
               </button>
             </form>
           ))}
@@ -279,15 +281,15 @@ function LoginForm() {
           {/* ── Fallback: nothing enabled ────────────────────────────────── */}
           {!PHONE_ENABLED && !SOCIAL_ENABLED && (
             <p className="text-center text-sm text-text-secondary">
-              No sign-in methods are currently enabled. Please contact support.
+              {t("noSignInMethods")}
             </p>
           )}
         </div>
 
         <p className="mt-6 text-center text-sm text-text-secondary">
-          Don&apos;t have an account?{" "}
+          {t("noAccount")}{" "}
           <Link href="/register" className="font-medium text-primary hover:underline">
-            Register
+            {tc("register")}
           </Link>
         </p>
       </div>

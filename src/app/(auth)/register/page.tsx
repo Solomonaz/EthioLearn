@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
 const TelegramLoginButton = dynamic(
@@ -19,7 +20,9 @@ const PHONE_ENABLED         = process.env.NEXT_PUBLIC_PHONE_ENABLED !== "false";
 const SOCIAL_ENABLED        = GOOGLE_ENABLED || FACEBOOK_ENABLED || TELEGRAM_ENABLED;
 
 function RegisterForm() {
-  const router       = useRouter();
+  const t      = useTranslations("auth");
+  const tc     = useTranslations("common");
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
 
@@ -57,7 +60,6 @@ function RegisterForm() {
   };
 
   // ── Step 1: Send OTP ─────────────────────────────────────────────────────
-
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -82,7 +84,6 @@ function RegisterForm() {
   };
 
   // ── Step 2: Verify OTP ───────────────────────────────────────────────────
-
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -107,7 +108,6 @@ function RegisterForm() {
   };
 
   // ── Step 3: Create account ───────────────────────────────────────────────
-
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -138,9 +138,9 @@ function RegisterForm() {
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <Link href="/" className="text-3xl font-bold text-primary">
-            EthioLearn
+            {tc("appName")}
           </Link>
-          <p className="mt-2 text-text-secondary">Create your account</p>
+          <p className="mt-2 text-text-secondary">{t("registerSubtitle")}</p>
         </div>
 
         {tgErrorMsg && (
@@ -167,7 +167,7 @@ function RegisterForm() {
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
-                  {socialLoading === "google" ? "Signing up…" : "Sign up with Google"}
+                  {socialLoading === "google" ? t("signUpGoogleLoading") : t("signUpGoogle")}
                 </button>
               )}
 
@@ -192,14 +192,14 @@ function RegisterForm() {
               {PHONE_ENABLED && (
                 <div className="flex items-center gap-3 pt-1">
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-text-secondary">or register with phone</span>
+                  <span className="text-xs text-text-secondary">{t("orRegisterPhone")}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
             </div>
           )}
 
-          {/* ── Phone registration steps (only when PHONE_ENABLED) ────────── */}
+          {/* ── Phone registration steps ──────────────────────────────────── */}
           {PHONE_ENABLED && (
             <>
               {/* Step indicator */}
@@ -218,7 +218,7 @@ function RegisterForm() {
               {step === "phone" && (
                 <form onSubmit={handleSendOtp}>
                   <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                    Your phone number
+                    {t("yourPhoneNumber")}
                   </h2>
                   <div className="flex gap-2">
                     <span className="flex items-center rounded-lg border border-border bg-gray-50 px-3 text-sm text-text-secondary">
@@ -244,7 +244,7 @@ function RegisterForm() {
                     disabled={isLoading}
                     className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading ? "Sending..." : "Send OTP"}
+                    {isLoading ? t("sending") : t("sendOtp")}
                   </button>
                 </form>
               )}
@@ -253,10 +253,10 @@ function RegisterForm() {
               {step === "otp" && (
                 <form onSubmit={handleVerifyOtp}>
                   <h2 className="mb-2 text-lg font-semibold text-text-primary">
-                    Verify your number
+                    {t("verifyNumber")}
                   </h2>
                   <p className="mb-4 text-sm text-text-secondary">
-                    Enter the 6-digit code sent to{" "}
+                    {t("enterCode6")}{" "}
                     <span className="font-medium text-text-primary">+251{phoneNumber}</span>
                   </p>
                   <input
@@ -275,7 +275,7 @@ function RegisterForm() {
                     disabled={isLoading}
                     className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading ? "Verifying..." : "Verify"}
+                    {isLoading ? t("verifying") : t("verify")}
                   </button>
                   <button
                     type="button"
@@ -283,7 +283,7 @@ function RegisterForm() {
                     className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
                     disabled={isLoading}
                   >
-                    Back
+                    {tc("back")}
                   </button>
                 </form>
               )}
@@ -292,16 +292,16 @@ function RegisterForm() {
               {step === "profile" && (
                 <form onSubmit={handleCreateAccount}>
                   <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                    Complete your profile
+                    {t("completeProfile")}
                   </h2>
                   <div className="space-y-4">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-text-primary">
-                        Full Name
+                        {t("fullName")}
                       </label>
                       <input
                         type="text"
-                        placeholder="Enter your name"
+                        placeholder={t("enterName")}
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
@@ -311,7 +311,7 @@ function RegisterForm() {
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-text-primary">
-                        Grade
+                        {t("grade")}
                       </label>
                       <select
                         value={grade}
@@ -320,10 +320,10 @@ function RegisterForm() {
                         required
                         disabled={isLoading}
                       >
-                        <option value="">Select your grade</option>
+                        <option value="">{t("selectGradeOption")}</option>
                         {Array.from({ length: 12 }, (_, i) => (
                           <option key={i + 1} value={i + 1}>
-                            Grade {i + 1}
+                            {t("gradeN", { grade: i + 1 })}
                           </option>
                         ))}
                       </select>
@@ -335,7 +335,7 @@ function RegisterForm() {
                     disabled={isLoading}
                     className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading ? "Creating Account..." : "Create Account"}
+                    {isLoading ? t("creating") : tc("create")}
                   </button>
                   <button
                     type="button"
@@ -343,7 +343,7 @@ function RegisterForm() {
                     className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
                     disabled={isLoading}
                   >
-                    Back
+                    {tc("back")}
                   </button>
                 </form>
               )}
@@ -353,15 +353,15 @@ function RegisterForm() {
           {/* ── Fallback: nothing enabled ──────────────────────────────────── */}
           {!PHONE_ENABLED && !SOCIAL_ENABLED && (
             <p className="text-center text-sm text-text-secondary">
-              No registration methods are currently enabled. Please contact support.
+              {t("noRegisterMethods")}
             </p>
           )}
         </div>
 
         <p className="mt-6 text-center text-sm text-text-secondary">
-          Already have an account?{" "}
+          {t("haveAccount")}{" "}
           <Link href="/login" className="font-medium text-primary hover:underline">
-            Sign In
+            {tc("signIn")}
           </Link>
         </p>
       </div>

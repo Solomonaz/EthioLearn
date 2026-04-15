@@ -4,12 +4,15 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function CompleteProfilePage() {
   const { data: session, update } = useSession();
   const router = useRouter();
+  const t  = useTranslations("auth");
+  const tc = useTranslations("common");
 
   const [grade, setGrade]         = useState<number | "">("");
   const [isLoading, setIsLoading] = useState(false);
@@ -47,19 +50,19 @@ export default function CompleteProfilePage() {
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <Link href="/" className="text-3xl font-bold text-primary">
-            EthioLearn
+            {tc("appName")}
           </Link>
-          <p className="mt-2 text-text-secondary">One last step, {displayName}!</p>
+          <p className="mt-2 text-text-secondary">{t("completeProfileStep", { name: displayName })}</p>
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
           <form onSubmit={handleSaveGrade} className="space-y-5">
             <div>
               <h2 className="mb-1 text-xl font-semibold text-text-primary">
-                What grade are you in?
+                {t("whatGradeAreYou")}
               </h2>
               <p className="mb-5 text-sm text-text-secondary">
-                This helps us personalise quizzes and content to your curriculum.
+                {t("gradePersonalise")}
               </p>
               <select
                 value={grade}
@@ -68,9 +71,9 @@ export default function CompleteProfilePage() {
                 required
                 disabled={isLoading}
               >
-                <option value="">Select your grade</option>
+                <option value="">{t("selectGradeOption")}</option>
                 {GRADES.map((g) => (
-                  <option key={g} value={g}>Grade {g}</option>
+                  <option key={g} value={g}>{t("gradeN", { grade: g })}</option>
                 ))}
               </select>
             </div>
@@ -80,7 +83,7 @@ export default function CompleteProfilePage() {
               disabled={isLoading}
               className="w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading ? "Saving…" : "Continue to Dashboard"}
+              {isLoading ? t("saving") : t("continueToDashboard")}
             </button>
           </form>
         </div>

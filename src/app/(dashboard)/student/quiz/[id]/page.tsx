@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useQuizStore } from "@/stores/quiz-store";
 import { cn } from "@/lib/utils";
 import { useAntiCheat } from "@/lib/useAntiCheat";
+import { useTranslations } from "next-intl";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 
@@ -166,6 +167,8 @@ function OrderingInterface({ options, value, onChange }: { options: any[]; value
 }
 
 export default function QuizTakingPage() {
+  const t = useTranslations("quiz");
+  const tc = useTranslations("common");
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const quizId = params.id;
@@ -317,7 +320,7 @@ export default function QuizTakingPage() {
             <CardContent className="py-6 text-center">
               <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-warning" />
               <h3 className="text-lg font-semibold text-text-primary">
-                Submit Quiz?
+                {t("submit")}
               </h3>
               <p className="mt-2 text-sm text-text-secondary">
                 You answered {answeredCount} of {totalQuestions} questions.
@@ -340,7 +343,7 @@ export default function QuizTakingPage() {
                   onClick={() => setShowConfirm(false)}
                   disabled={isSubmitting}
                 >
-                  Go Back
+                  {tc("back")}
                 </Button>
                 <Button
                   className="flex-1"
@@ -348,7 +351,7 @@ export default function QuizTakingPage() {
                   isLoading={isSubmitting}
                 >
                   <Send className="h-4 w-4" />
-                  Submit
+                  {tc("submit")}
                 </Button>
               </div>
             </CardContent>
@@ -360,7 +363,7 @@ export default function QuizTakingPage() {
       <div className="mb-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-text-secondary">
-            Question {currentIndex + 1} of {totalQuestions}
+            {t("question")} {currentIndex + 1} {t("of")} {totalQuestions}
           </p>
           <div className="flex items-center gap-3">
             {mode === "TIMED" && (
@@ -502,17 +505,17 @@ export default function QuizTakingPage() {
           disabled={isFirstQuestion}
         >
           <ChevronLeft className="h-4 w-4" />
-          Previous
+          {t("previous")}
         </Button>
         <Button className="flex-1" onClick={handleNext}>
           {isLastQuestion ? (
             <>
-              Submit Quiz
+              {t("submit")}
               <Send className="h-4 w-4" />
             </>
           ) : (
             <>
-              Next
+              {t("next")}
               <ChevronRight className="h-4 w-4" />
             </>
           )}

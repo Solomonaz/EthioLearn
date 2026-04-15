@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { AuthProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PWAInit } from "@/components/pwa-init";
@@ -30,20 +32,25 @@ export const viewport: Viewport = {
   themeColor: "#1B5E20",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body suppressHydrationWarning>
+        <NextIntlClientProvider messages={messages}>
           <PWAInit />
           <ThemeProvider>
             <AuthProvider>{children}</AuthProvider>
           </ThemeProvider>
           <Toaster />
-        </body>
+        </NextIntlClientProvider>
+      </body>
     </html>
   );
 }

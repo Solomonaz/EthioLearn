@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { useTranslations } from "next-intl";
 import { useQuizStore } from "@/stores/quiz-store";
 import { cn } from "@/lib/utils";
 
@@ -46,76 +47,38 @@ type Difficulty = "EASY" | "MEDIUM" | "HARD" | "MIXED" | "ADAPTIVE";
 type QuizMode = "SOLO" | "TIMED";
 
 const STEPS = ["Subject", "Source", "Chapter", "Difficulty", "Types", "Questions", "Mode", "Review"];
-const TYPE_OPTIONS = [
-  { value: "MCQ", label: "Multiple Choice", icon: Layers },
-  { value: "TRUE_FALSE", label: "True / False", icon: CheckCircle },
-  { value: "FILL_IN_BLANK", label: "Fill in the Blank", icon: Sparkles },
-  { value: "MATCH_PAIRS", label: "Match Pairs", icon: Shuffle },
-  { value: "ORDERING", label: "Ordering", icon: Layers },
-];
+const TYPE_KEYS = [
+  { value: "MCQ",           labelKey: "multipleChoice", icon: Layers },
+  { value: "TRUE_FALSE",    labelKey: "trueFalse",      icon: CheckCircle },
+  { value: "FILL_IN_BLANK", labelKey: "fillInBlank",    icon: Sparkles },
+  { value: "MATCH_PAIRS",   labelKey: "matchPairs",     icon: Shuffle },
+  { value: "ORDERING",      labelKey: "ordering",       icon: Layers },
+] as const;
 const QUESTION_COUNTS = [5, 10, 15, 20];
 
-const DIFFICULTY_CONFIG: {
+const DIFFICULTY_KEYS: {
   value: Difficulty;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
   badgeVariant: "difficulty-easy" | "difficulty-medium" | "difficulty-hard" | "info";
   borderColor: string;
 }[] = [
-  {
-    value: "EASY",
-    label: "Easy",
-    description: "Foundational questions to build confidence",
-    badgeVariant: "difficulty-easy",
-    borderColor: "border-green-400",
-  },
-  {
-    value: "MEDIUM",
-    label: "Medium",
-    description: "Balanced questions for steady progress",
-    badgeVariant: "difficulty-medium",
-    borderColor: "border-yellow-400",
-  },
-  {
-    value: "HARD",
-    label: "Hard",
-    description: "Challenging questions to push your limits",
-    badgeVariant: "difficulty-hard",
-    borderColor: "border-red-400",
-  },
-  {
-    value: "ADAPTIVE",
-    label: "AI Adaptive",
-    description: "AI calibrates the perfect level for you based on history",
-    badgeVariant: "info",
-    borderColor: "border-purple-400",
-  },
-  {
-    value: "MIXED",
-    label: "Mixed",
-    description: "A mix of all difficulty levels",
-    badgeVariant: "info",
-    borderColor: "border-blue-400",
-  },
+  { value: "EASY",     labelKey: "easy",            descKey: "easyDesc",     badgeVariant: "difficulty-easy",   borderColor: "border-green-400" },
+  { value: "MEDIUM",   labelKey: "medium",          descKey: "mediumDesc",   badgeVariant: "difficulty-medium", borderColor: "border-yellow-400" },
+  { value: "HARD",     labelKey: "hard",            descKey: "hardDesc",     badgeVariant: "difficulty-hard",   borderColor: "border-red-400" },
+  { value: "ADAPTIVE", labelKey: "aiAdaptiveLabel", descKey: "adaptiveDesc", badgeVariant: "info",              borderColor: "border-purple-400" },
+  { value: "MIXED",    labelKey: "mixed",           descKey: "mixedDesc",    badgeVariant: "info",              borderColor: "border-blue-400" },
 ];
 
-const SOURCE_CONFIG = [
-  {
-    value: "BANK" as const,
-    label: "Question Bank",
-    description: "Practice with verified questions from the school curriculum",
-    icon: Layers,
-  },
-  {
-    value: "AI" as const,
-    label: "AI Generation",
-    description: "Generate fresh, unique questions using artificial intelligence",
-    icon: Sparkles,
-  },
+const SOURCE_KEYS = [
+  { value: "BANK" as const, labelKey: "questionBankSource", descKey: "questionBankDesc", icon: Layers },
+  { value: "AI"   as const, labelKey: "aiGenerationSource", descKey: "aiGenerationDesc", icon: Sparkles },
 ];
 
 export default function QuizLauncherPage() {
   const { data: session, status: sessionStatus } = useSession();
+  const t  = useTranslations("quiz");
+  const tc = useTranslations("common");
   const router = useRouter();
   const searchParams = useSearchParams();
   const startQuiz = useQuizStore((s) => s.startQuiz);
@@ -291,21 +254,21 @@ export default function QuizLauncherPage() {
             className="flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back
+            {tc("back")}
           </button>
           <p className="text-sm text-text-secondary">
-            Step {step + 1} of {STEPS.length}
+            {t("stepN", { step: step + 1, total: STEPS.length })}
           </p>
         </div>
         <h1 className="mt-2 text-xl font-bold text-text-primary">
-          {step === 0 && "Select a Subject"}
-          {step === 1 && "Question Source"}
-          {step === 2 && "Select a Chapter"}
-          {step === 3 && "Choose Difficulty"}
-          {step === 4 && "Question Types"}
-          {step === 5 && "How Many Questions?"}
-          {step === 6 && "Choose Mode"}
-          {step === 7 && "Review & Start"}
+          {step === 0 && t("selectSubjectTitle")}
+          {step === 1 && t("questionSourceTitle")}
+          {step === 2 && t("selectChapterTitle")}
+          {step === 3 && t("chooseDifficultyTitle")}
+          {step === 4 && t("questionTypesTitle")}
+          {step === 5 && t("howManyTitle")}
+          {step === 6 && t("chooseModeTitle")}
+          {step === 7 && t("reviewStart")}
         </h1>
 
         <div className="mt-3 flex gap-2">
@@ -339,7 +302,7 @@ export default function QuizLauncherPage() {
               <CardContent className="py-8 text-center">
                 <BookOpen className="mx-auto mb-2 h-10 w-10 text-text-secondary/40" />
                 <p className="text-text-secondary">
-                  No subjects available for your grade.
+                  {t("noSubjects")}
                 </p>
               </CardContent>
             </Card>
@@ -370,7 +333,7 @@ export default function QuizLauncherPage() {
                       {tb.title} &middot; Grade {tb.grade}
                     </p>
                   </div>
-                  <Badge>{tb._count.chapters} chapters</Badge>
+                  <Badge>{t("chapters", { count: tb._count.chapters })}</Badge>
                   <ChevronRight className="h-5 w-5 text-text-secondary" />
                 </CardContent>
               </Card>
@@ -382,7 +345,7 @@ export default function QuizLauncherPage() {
       {/* Step 2: Select Source */}
       {step === 1 && (
         <div className="grid gap-4">
-          {SOURCE_CONFIG.map((src) => {
+          {SOURCE_KEYS.map((src) => {
             const Icon = src.icon;
             return (
               <Card
@@ -406,13 +369,13 @@ export default function QuizLauncherPage() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-bold text-text-primary">{src.label}</p>
+                      <p className="font-bold text-text-primary">{t(src.labelKey as any)}</p>
                       {src.value === "AI" && (
                         <Badge className="bg-primary/10 text-primary border-none text-[10px] uppercase">New</Badge>
                       )}
                     </div>
                     <p className="text-sm text-text-secondary">
-                      {src.description}
+                      {t(src.descKey as any)}
                     </p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-border" />
@@ -450,8 +413,8 @@ export default function QuizLauncherPage() {
                       <Shuffle className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="font-bold text-text-primary">All Chapters</p>
-                      <p className="text-xs text-text-secondary">Comprehensive practice across the entire book</p>
+                      <p className="font-bold text-text-primary">{t("allChapters")}</p>
+                      <p className="text-xs text-text-secondary">{t("allChaptersDesc")}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -460,7 +423,7 @@ export default function QuizLauncherPage() {
                         {textbookTotals.totalQuestions} questions
                       </Badge>
                     )}
-                    {selectedSource === "BANK" && <Badge variant="default">Recommended</Badge>}
+                    {selectedSource === "BANK" && <Badge variant="default">{t("recommended")}</Badge>}
                   </div>
                 </CardContent>
               </Card>
@@ -470,7 +433,7 @@ export default function QuizLauncherPage() {
                   <CardContent className="py-8 text-center">
                     <Layers className="mx-auto mb-2 h-10 w-10 text-text-secondary/40" />
                     <p className="text-text-secondary">
-                      No chapters available for this textbook.
+                      {t("noChapters")}
                     </p>
                   </CardContent>
                 </Card>
@@ -517,7 +480,7 @@ export default function QuizLauncherPage() {
       {/* Step 4: Select Difficulty */}
       {step === 3 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          {DIFFICULTY_CONFIG.map((d) => {
+          {DIFFICULTY_KEYS.map((d) => {
             const counts = selectedChapter === "all" 
               ? textbookTotals?.difficultyCounts 
               : selectedChapter?.difficultyCounts;
@@ -557,12 +520,12 @@ export default function QuizLauncherPage() {
                   <Zap className="mx-auto mb-2 h-8 w-8 text-primary" />
                 )}
                 <Badge variant={d.badgeVariant} className={cn("mb-2", isAdaptive && "bg-purple-100 text-purple-700 border-purple-200")}>
-                  {d.label}
+                  {t(d.labelKey as any)}
                 </Badge>
-                <p className="text-sm text-text-secondary">{d.description}</p>
+                <p className="text-sm text-text-secondary">{t(d.descKey as any)}</p>
                 {selectedSource === "BANK" && (
                   <p className="mt-2 text-[10px] uppercase font-bold text-primary">
-                    {isAdaptive ? "Personalized selection" : `${qCount} Questions available`}
+                    {isAdaptive ? t("personalizedLabel") : t("questionsAvailableN", { count: qCount ?? 0 })}
                   </p>
                 )}
               </CardContent>
@@ -576,12 +539,12 @@ export default function QuizLauncherPage() {
       {step === 4 && (
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            {selectedSource === "AI" 
-              ? "What types of questions would you like the AI to generate?" 
-              : "Filter questions from the bank by type:"}
+            {selectedSource === "AI"
+              ? t("questionsAIFilter")
+              : t("questionsBankFilter")}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {TYPE_OPTIONS.map((type) => {
+            {TYPE_KEYS.map((type) => {
               const Icon = type.icon;
               const isSelected = selectedTypes.includes(type.value);
               return (
@@ -605,7 +568,7 @@ export default function QuizLauncherPage() {
                     <div className={cn("rounded-lg p-2", isSelected ? "bg-primary text-white" : "bg-gray-100 text-gray-500")}>
                       <Icon className="h-5 w-5" />
                     </div>
-                    <span className="font-semibold text-text-primary">{type.label}</span>
+                    <span className="font-semibold text-text-primary">{t(type.labelKey as any)}</span>
                     {isSelected && <CheckCircle className="ml-auto h-5 w-5 text-primary" />}
                   </CardContent>
                 </Card>
@@ -729,10 +692,10 @@ export default function QuizLauncherPage() {
             }}
           >
             <Clock className="mx-auto mb-2 h-8 w-8 text-primary" />
-            <p className="font-bold text-text-primary">Solo Mode</p>
-            <p className="text-sm text-text-secondary">No time limit</p>
+            <p className="font-bold text-text-primary">{t("soloMode")}</p>
+            <p className="text-sm text-text-secondary">{t("soloDesc")}</p>
             <p className="mt-2 text-xs text-text-secondary">
-              Answer at your own pace
+              {t("soloPace")}
             </p>
           </div>
 
@@ -750,10 +713,10 @@ export default function QuizLauncherPage() {
             }}
           >
             <Timer className="mx-auto mb-2 h-8 w-8 text-warning" />
-            <p className="font-bold text-text-primary">Timed Mode</p>
-            <p className="text-sm text-text-secondary">30s per question</p>
+            <p className="font-bold text-text-primary">{t("timedMode")}</p>
+            <p className="text-sm text-text-secondary">{t("timedDesc")}</p>
             <p className="mt-2 text-xs text-text-secondary">
-              +10% bonus points for speed
+              {t("timedBonus")}
             </p>
           </div>
         </div>
@@ -765,66 +728,66 @@ export default function QuizLauncherPage() {
           <Card>
             <CardContent className="space-y-4 py-5">
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="text-sm text-text-secondary">Subject</span>
+                <span className="text-sm text-text-secondary">{t("subjectLabel")}</span>
                 <span className="font-medium text-text-primary">
                   {selectedTextbook?.subject}
                 </span>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="text-sm text-text-secondary">Chapter</span>
+                <span className="text-sm text-text-secondary">{t("chapterLabel")}</span>
                 <span className="font-medium text-text-primary text-right">
                   {selectedChapter === "all" ? (
-                    "All Chapters (Cumulative)"
+                    t("allChaptersCumulative")
                   ) : (
                     `Ch. ${selectedChapter?.chapterNumber} – ${selectedChapter?.title}`
                   )}
                 </span>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="text-sm text-text-secondary">Source</span>
+                <span className="text-sm text-text-secondary">{t("sourceLabel")}</span>
                 <Badge variant={selectedSource === "AI" ? "info" : "default"}>
-                  {selectedSource === "AI" ? "AI Generated" : "Question Bank"}
+                  {selectedSource === "AI" ? t("aiGeneratedLabel") : t("questionBankSource")}
                 </Badge>
               </div>
               <div className="flex flex-col gap-2 border-b border-border pb-3">
-                <span className="text-sm text-text-secondary">Question Types</span>
+                <span className="text-sm text-text-secondary">{t("questionTypesLabel")}</span>
                 <div className="flex flex-wrap gap-1">
-                  {selectedTypes.map(t => (
-                    <Badge key={t} variant="default" className="text-[10px]">
-                      {TYPE_OPTIONS.find(opt => opt.value === t)?.label}
+                  {selectedTypes.map(typeVal => (
+                    <Badge key={typeVal} variant="default" className="text-[10px]">
+                      {(() => { const k = TYPE_KEYS.find(opt => opt.value === typeVal)?.labelKey; return k ? t(k as any) : typeVal; })()}
                     </Badge>
                   ))}
                 </div>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="text-sm text-text-secondary">Difficulty</span>
+                <span className="text-sm text-text-secondary">{t("difficultyLabel")}</span>
                 <Badge
                   variant={
-                    DIFFICULTY_CONFIG.find((d) => d.value === selectedDifficulty)
+                    DIFFICULTY_KEYS.find((d) => d.value === selectedDifficulty)
                       ?.badgeVariant || "default"
                   }
                 >
-                  {selectedDifficulty}
+                  {(() => { const k = DIFFICULTY_KEYS.find(d => d.value === selectedDifficulty)?.labelKey; return k ? t(k as any) : selectedDifficulty; })()}
                 </Badge>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <span className="text-sm text-text-secondary">Questions</span>
+                <span className="text-sm text-text-secondary">{t("questionsLabel")}</span>
                 <span className="font-medium text-text-primary">
                   {selectedCount}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-text-secondary">Mode</span>
+                <span className="text-sm text-text-secondary">{t("modeLabel")}</span>
                 <Badge variant={selectedMode === "TIMED" ? "warning" : "info"}>
                   {selectedMode === "TIMED" ? (
                     <span className="flex items-center gap-1">
                       <Timer className="h-3 w-3" />
-                      Timed
+                      {t("timedMode")}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      Solo
+                      {t("soloMode")}
                     </span>
                   )}
                 </Badge>
@@ -837,9 +800,9 @@ export default function QuizLauncherPage() {
             <div className="flex items-start gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
               <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-purple-500 animate-pulse" />
               <div>
-                <p className="text-sm font-semibold text-purple-800">AI Adaptive Mode</p>
+                <p className="text-sm font-semibold text-purple-800">{t("aiAdaptiveBanner")}</p>
                 <p className="mt-0.5 text-xs text-purple-600">
-                  Your difficulty will be calibrated automatically when the quiz starts.
+                  {t("aiAdaptiveBannerDesc")}
                 </p>
               </div>
             </div>
@@ -855,7 +818,7 @@ export default function QuizLauncherPage() {
               )}
               <div>
                 <p className="text-sm font-semibold text-purple-800">
-                  AI Calibrated:{" "}
+                  {t("aiCalibratedLabel")}{" "}
                   <span className={cn(
                     "font-bold",
                     adaptiveInsights.difficulty === "HARD" ? "text-red-600" :
@@ -885,7 +848,7 @@ export default function QuizLauncherPage() {
             ) : (
               <CheckCircle className="h-5 w-5" />
             )}
-            {selectedSource === "AI" ? "Generate & Start Practice" : "Start Quiz"}
+            {selectedSource === "AI" ? t("generateStart") : t("startQuiz")}
           </Button>
         </div>
       )}

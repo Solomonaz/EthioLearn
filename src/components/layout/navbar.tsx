@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { Menu, X, LogOut } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ interface NavbarProps {
 
 export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
   const { data: session, status } = useSession();
+  const t  = useTranslations("common");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -77,10 +79,10 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
                 href="/login"
                 className="text-sm font-medium text-text-secondary hover:text-primary"
               >
-                Sign In
+                {t("signIn")}
               </Link>
               <Link href="/register">
-                <Button size="sm">Get Started</Button>
+                <Button size="sm">{t("getStarted")}</Button>
               </Link>
             </div>
 
@@ -108,14 +110,14 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
             className="block py-2 text-sm font-medium text-text-secondary hover:text-primary"
             onClick={() => setMobileMenuOpen(false)}
           >
-            Sign In
+            {t("signIn")}
           </Link>
           <Link
             href="/register"
             className="block py-2 text-sm font-medium text-primary"
             onClick={() => setMobileMenuOpen(false)}
           >
-            Get Started
+            {t("getStarted")}
           </Link>
         </div>
       )}

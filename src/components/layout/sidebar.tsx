@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   Home,
   BookOpen,
@@ -25,46 +26,6 @@ import {
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
-const studentNavItems = [
-  { label: "Dashboard", href: "/student", icon: Home, exact: true },
-  { label: "Take Quiz", href: "/student/quiz", icon: BookOpen },
-  { label: "AI Tutor", href: "/student/tutor", icon: MessageSquare },
-  { label: "Battle Mode", href: "/student/battle", icon: Swords },
-  { label: "Leaderboard", href: "/student/leaderboard", icon: Trophy },
-  { label: "Rewards", href: "/student/rewards", icon: Gift },
-  { label: "Notifications", href: "/student/notifications", icon: Bell },
-  { label: "Profile", href: "/student/profile", icon: User },
-  { label: "My Progress", href: "/student/progress", icon: TrendingUp },
-  { label: "My Books", href: "/student/books", icon: BookMarked },
-  { label: "Quiz History", href: "/student/history", icon: History },
-  { label: "Settings", href: "/student/settings", icon: Settings },
-];
-
-/** SUPER_ADMIN sidebar — includes Schools and all system-level features */
-const superAdminNavItems = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
-  { label: "Schools", href: "/admin/schools", icon: Building2 },
-  { label: "Students", href: "/admin/students", icon: Users },
-  { label: "Textbooks", href: "/admin/textbooks", icon: Library },
-  { label: "Subjects", href: "/admin/subjects", icon: BookMarked },
-  { label: "Questions", href: "/admin/questions", icon: HelpCircle },
-  { label: "Rewards", href: "/admin/rewards", icon: Gift },
-  { label: "Analytics", href: "/admin/analytics", icon: BarChart2 },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
-];
-
-/** SCHOOL_ADMIN sidebar — no Schools, no system-level features */
-const schoolAdminNavItems = [
-  { label: "Dashboard", href: "/school-admin", icon: LayoutDashboard, exact: true },
-  { label: "Students", href: "/school-admin/students", icon: Users },
-  { label: "Textbooks", href: "/school-admin/textbooks", icon: Library },
-  { label: "Subjects", href: "/school-admin/subjects", icon: BookMarked },
-  { label: "Questions", href: "/school-admin/questions", icon: HelpCircle },
-  { label: "Rewards", href: "/school-admin/rewards", icon: Gift },
-  { label: "Analytics", href: "/school-admin/analytics", icon: BarChart2 },
-  { label: "Settings", href: "/school-admin/settings", icon: Settings },
-];
-
 interface SidebarProps {
   isOpen: boolean;
   onClose?: () => void;
@@ -73,24 +34,61 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role as string | undefined;
+  const t = useTranslations("nav");
 
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
 
-  // Pick the correct nav items based on route
-  let navItems;
-  let sectionLabel: string;
+  const studentNavItems = [
+    { labelKey: "dashboard",   href: "/student",                icon: Home,          exact: true },
+    { labelKey: "quiz",        href: "/student/quiz",           icon: BookOpen },
+    { labelKey: "aiTutor",     href: "/student/tutor",          icon: MessageSquare },
+    { labelKey: "battle",      href: "/student/battle",         icon: Swords },
+    { labelKey: "leaderboard", href: "/student/leaderboard",    icon: Trophy },
+    { labelKey: "rewards",     href: "/student/rewards",        icon: Gift },
+    { labelKey: "notifications", href: "/student/notifications", icon: Bell },
+    { labelKey: "profile",     href: "/student/profile",        icon: User },
+    { labelKey: "myProgress",  href: "/student/progress",       icon: TrendingUp },
+    { labelKey: "myBooks",     href: "/student/books",          icon: BookMarked },
+    { labelKey: "quizHistory", href: "/student/history",        icon: History },
+    { labelKey: "settings",    href: "/student/settings",       icon: Settings },
+  ];
+
+  const superAdminNavItems = [
+    { labelKey: "dashboard",  href: "/admin",             icon: LayoutDashboard, exact: true },
+    { labelKey: "schools",    href: "/admin/schools",      icon: Building2 },
+    { labelKey: "students",   href: "/admin/students",     icon: Users },
+    { labelKey: "textbooks",  href: "/admin/textbooks",    icon: Library },
+    { labelKey: "subjects",   href: "/admin/subjects",     icon: BookMarked },
+    { labelKey: "questions",  href: "/admin/questions",    icon: HelpCircle },
+    { labelKey: "rewards",    href: "/admin/rewards",      icon: Gift },
+    { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
+    { labelKey: "settings",   href: "/admin/settings",     icon: Settings },
+  ];
+
+  const schoolAdminNavItems = [
+    { labelKey: "dashboard",  href: "/school-admin",              icon: LayoutDashboard, exact: true },
+    { labelKey: "students",   href: "/school-admin/students",     icon: Users },
+    { labelKey: "textbooks",  href: "/school-admin/textbooks",    icon: Library },
+    { labelKey: "subjects",   href: "/school-admin/subjects",     icon: BookMarked },
+    { labelKey: "questions",  href: "/school-admin/questions",    icon: HelpCircle },
+    { labelKey: "rewards",    href: "/school-admin/rewards",      icon: Gift },
+    { labelKey: "analytics",  href: "/school-admin/analytics",    icon: BarChart2 },
+    { labelKey: "settings",   href: "/school-admin/settings",     icon: Settings },
+  ];
+
+  let navItems: typeof studentNavItems;
+  let sectionLabelKey: string;
 
   if (isSchoolAdmin) {
     navItems = schoolAdminNavItems;
-    sectionLabel = "School Management";
+    sectionLabelKey = "sectionSchoolAdmin";
   } else if (isAdmin) {
     navItems = superAdminNavItems;
-    sectionLabel = "Administration";
+    sectionLabelKey = "sectionAdmin";
   } else {
     navItems = studentNavItems;
-    sectionLabel = "Student";
+    sectionLabelKey = "sectionStudent";
   }
 
   return (
@@ -112,7 +110,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex h-full flex-col gap-1 overflow-y-auto p-4 pb-6">
           {/* Section label */}
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
-            {sectionLabel}
+            {t(sectionLabelKey as any)}
           </p>
 
           {navItems.map((item) => {
@@ -133,7 +131,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 )}
               >
                 <item.icon className="h-5 w-5 shrink-0" />
-                {item.label}
+                {t(item.labelKey as any)}
               </Link>
             );
           })}

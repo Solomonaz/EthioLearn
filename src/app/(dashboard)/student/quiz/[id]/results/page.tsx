@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import {
   CheckCircle,
   XCircle,
@@ -84,6 +85,9 @@ interface QuizResults {
 }
 
 export default function QuizResultsPage() {
+  const t  = useTranslations("quiz");
+  const tc = useTranslations("common");
+  const tn = useTranslations("nav");
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [results, setResults] = useState<QuizResults | null>(null);
@@ -154,7 +158,7 @@ export default function QuizResultsPage() {
         <h1 className="text-2xl font-bold text-text-primary">{scoreLabel}</h1>
         <p className={cn("mt-1 text-5xl font-black", scoreColor)}>{score}%</p>
         <p className="mt-1 text-sm text-text-secondary">
-          {correctAnswers} of {totalQuestions} correct
+          {correctAnswers} {t("of")} {totalQuestions} {t("correct").toLowerCase()}
         </p>
       </div>
 
@@ -164,14 +168,14 @@ export default function QuizResultsPage() {
           <CardContent className="py-4">
             <CheckCircle className="mx-auto mb-1 h-6 w-6 text-success" />
             <p className="text-xl font-bold text-success">{correctAnswers}</p>
-            <p className="text-xs text-text-secondary">Correct</p>
+            <p className="text-xs text-text-secondary">{t("correct")}</p>
           </CardContent>
         </Card>
         <Card className="text-center">
           <CardContent className="py-4">
             <XCircle className="mx-auto mb-1 h-6 w-6 text-error" />
             <p className="text-xl font-bold text-error">{wrong}</p>
-            <p className="text-xs text-text-secondary">Wrong</p>
+            <p className="text-xs text-text-secondary">{t("incorrect")}</p>
           </CardContent>
         </Card>
         <Card className="text-center">
@@ -180,7 +184,7 @@ export default function QuizResultsPage() {
             <p className="text-xl font-bold text-primary">
               +{totalPointsEarned}
             </p>
-            <p className="text-xs text-text-secondary">Points</p>
+            <p className="text-xs text-text-secondary">{t("points")}</p>
           </CardContent>
         </Card>
       </div>
@@ -189,7 +193,7 @@ export default function QuizResultsPage() {
       <Card className="mb-6">
         <CardContent className="py-4">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="text-text-secondary">Accuracy</span>
+            <span className="text-text-secondary">{t("score")}</span>
             <span className="font-semibold text-text-primary">{score}%</span>
           </div>
           <ProgressBar
@@ -205,7 +209,7 @@ export default function QuizResultsPage() {
         <Link href="/student/quiz" className="flex-1">
           <Button variant="primary" size="md" className="w-full gap-2">
             <RotateCcw className="h-4 w-4" />
-            New Quiz
+            {t("startQuiz")}
           </Button>
         </Link>
         {retryParams && (
@@ -217,13 +221,13 @@ export default function QuizResultsPage() {
             className="flex-1 gap-2"
           >
             <RefreshCw className="h-4 w-4" />
-            Retry Quiz
+            {tc("retry")}
           </Button>
         )}
         <Link href="/student" className="flex-1">
           <Button variant="outline" size="md" className="w-full gap-2">
             <Home className="h-4 w-4" />
-            Dashboard
+            {tn("dashboard")}
           </Button>
         </Link>
       </div>

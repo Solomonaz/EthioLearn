@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Trophy,
@@ -99,6 +100,7 @@ function getLocale(): "en" | "am" {
 
 export default function StudentDashboardPage() {
   const { data: session } = useSession();
+  const t  = useTranslations("student");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,9 +156,9 @@ export default function StudentDashboardPage() {
   if (error || !dashboard) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <p className="text-text-secondary">{error || "Failed to load dashboard"}</p>
+        <p className="text-text-secondary">{error || t("failedLoad")}</p>
         <Button variant="outline" onClick={() => window.location.reload()}>
-          Try Again
+          {t("tryAgain")}
         </Button>
       </div>
     );
@@ -173,7 +175,7 @@ export default function StudentDashboardPage() {
       <Card className="bg-primary text-white">
         <CardContent className="py-6">
           <h1 className="text-xl font-bold sm:text-2xl">
-            Welcome back, {userName}!
+            {t("welcome")}, {userName}!
           </h1>
           <p className="mt-1 text-sm text-white/80">
             {dailyMessage
@@ -190,8 +192,8 @@ export default function StudentDashboardPage() {
         <CardContent>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-text-secondary">XP Level</p>
-              <p className="text-2xl font-bold text-primary">Level {user.xpLevel}</p>
+              <p className="text-sm text-text-secondary">{t("xpLevel")}</p>
+              <p className="text-2xl font-bold text-primary">{t("levelLabel", { level: user.xpLevel })}</p>
             </div>
             <div className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
               {user.totalPoints} XP
@@ -199,8 +201,8 @@ export default function StudentDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="mb-1 flex justify-between text-xs text-text-secondary">
-              <span>Progress to Level {user.xpLevel + 1}</span>
-              <span>{levelProgress}/100 XP</span>
+              <span>{t("progressTo", { level: user.xpLevel + 1 })}</span>
+              <span>{t("xpPoints", { points: levelProgress })}/100</span>
             </div>
             <ProgressBar value={levelProgress} color="primary" size="md" />
           </div>
@@ -213,10 +215,10 @@ export default function StudentDashboardPage() {
           <Card className="border border-border bg-surface">
             <CardContent className="py-4">
               <p className="text-base font-semibold text-text-primary">
-                Challenge Complete! ✅
+                {t("challengeComplete")}
               </p>
               <p className="mt-1 text-sm text-text-secondary">
-                You earned +50 bonus points today. Come back tomorrow!
+                {t("challengeBonus")}
               </p>
             </CardContent>
           </Card>
@@ -224,10 +226,10 @@ export default function StudentDashboardPage() {
           <Card className="border-2 border-green-500 bg-surface">
             <CardContent className="py-4">
               <p className="text-base font-semibold text-text-primary">
-                Today&apos;s Challenge 🎯
+                {t("todayChallenge")}
               </p>
               <p className="mt-1 text-sm text-text-secondary">
-                5 questions from {challenge.subject} &bull; +50 bonus points
+                {t("challengeDetails", { subject: challenge.subject ?? "" })}
               </p>
               <div className="mt-3">
                 <Link
@@ -237,7 +239,7 @@ export default function StudentDashboardPage() {
                     size="sm"
                     className="bg-green-600 text-white hover:bg-green-700"
                   >
-                    Start Challenge
+                    {t("startChallenge")}
                   </Button>
                 </Link>
               </div>
@@ -247,10 +249,10 @@ export default function StudentDashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatCard label="Total Points" value={stats.totalPoints.toLocaleString()} icon={Trophy} />
-        <StatCard label="Quizzes Taken" value={stats.totalQuizzes} icon={BookOpen} />
-        <StatCard label="Average Score" value={`${stats.averageScore}%`} icon={Target} />
-        <StatCard label="Day Streak" value={stats.streakDays} icon={Flame} />
+        <StatCard label={t("totalPoints")} value={stats.totalPoints.toLocaleString()} icon={Trophy} />
+        <StatCard label={t("quizzesTaken")} value={stats.totalQuizzes} icon={BookOpen} />
+        <StatCard label={t("avgScore")} value={`${stats.averageScore}%`} icon={Target} />
+        <StatCard label={t("streak")} value={stats.streakDays} icon={Flame} />
       </div>
 
       {/* ── AI Study Recommendations (SRS §4.3.3) ──────────────────────── */}
@@ -259,7 +261,7 @@ export default function StudentDashboardPage() {
           <div className="mb-3 flex items-center gap-2">
             <Brain className="h-5 w-5 text-purple-500" />
             <h2 className="text-lg font-semibold text-text-primary">
-              Study Recommendations
+              {t("studyRecs")}
             </h2>
           </div>
           <div className="space-y-3">
@@ -286,7 +288,7 @@ export default function StudentDashboardPage() {
                       variant="outline"
                       className="border-purple-300 text-purple-700 hover:bg-purple-100"
                     >
-                      Practice
+                      {t("practice")}
                       <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
                   </Link>
@@ -303,10 +305,10 @@ export default function StudentDashboardPage() {
           <div className="mb-3 flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" />
             <h2 className="text-lg font-semibold text-text-primary">
-              Weakest Topics
+              {t("weakTopics")}
             </h2>
             <Badge variant="warning" className="text-xs">
-              Needs attention
+              {t("needsAttention")}
             </Badge>
           </div>
           <Card className="overflow-hidden border-amber-200">
@@ -322,7 +324,7 @@ export default function StudentDashboardPage() {
                     </p>
                     <p className="mt-0.5 text-xs text-text-secondary">
                       {ch.subject} &middot; {ch.attemptCount}{" "}
-                      {ch.attemptCount === 1 ? "attempt" : "attempts"}
+                      {ch.attemptCount === 1 ? t("attempt") : t("attempts")}
                     </p>
                   </div>
                   <div className="ml-4 flex items-center gap-3">
@@ -345,7 +347,7 @@ export default function StudentDashboardPage() {
                         variant="outline"
                         className="border-amber-300 text-amber-700 hover:bg-amber-100"
                       >
-                        Retry
+                        {t("retry")}
                       </Button>
                     </Link>
                   </div>
@@ -357,7 +359,7 @@ export default function StudentDashboardPage() {
                 href="/student/progress"
                 className="flex items-center justify-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900"
               >
-                View full progress report
+                {t("viewProgress")}
                 <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
@@ -367,16 +369,16 @@ export default function StudentDashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <QuickAction href="/student/quiz" icon={BookOpen} label="Take Quiz" desc="Start a new quiz" color="bg-primary/10 text-primary" />
-        <QuickAction href="/student/battle" icon={Swords} label="Battle Mode" desc="Challenge classmates" color="bg-purple-50 text-purple-600" />
-        <QuickAction href="/student/leaderboard" icon={Trophy} label="Leaderboard" desc="Check rankings" color="bg-yellow-50 text-yellow-600" />
-        <QuickAction href="/student/rewards" icon={Gift} label="Rewards" desc="Redeem points" color="bg-orange-50 text-orange-600" />
+        <QuickAction href="/student/quiz" icon={BookOpen} label={t("takeQuiz")} desc={t("startNewQuizDesc")} color="bg-primary/10 text-primary" />
+        <QuickAction href="/student/battle" icon={Swords} label={t("battleMode")} desc={t("challengeClassmates")} color="bg-purple-50 text-purple-600" />
+        <QuickAction href="/student/leaderboard" icon={Trophy} label={t("leaderboard")} desc={t("checkRankings")} color="bg-yellow-50 text-yellow-600" />
+        <QuickAction href="/student/rewards" icon={Gift} label={t("rewards")} desc={t("redeemPoints")} color="bg-orange-50 text-orange-600" />
       </div>
 
       {/* Start New Quiz Button */}
       <Link href="/student/quiz" className="block">
         <Button size="lg" className="w-full gap-2 text-base">
-          Start New Quiz
+          {t("startQuiz")}
           <ArrowRight className="h-5 w-5" />
         </Button>
       </Link>
@@ -384,18 +386,18 @@ export default function StudentDashboardPage() {
       {/* Recent Quizzes */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">Recent Quizzes</h2>
+          <h2 className="text-lg font-semibold text-text-primary">{t("recentQuizzes")}</h2>
           <Link href="/student/history" className="text-sm text-primary hover:underline">
-            View All
+            {t("viewAll")}
           </Link>
         </div>
         {recentQuizzes.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center">
               <BookOpen className="mx-auto mb-2 h-10 w-10 text-text-secondary/40" />
-              <p className="text-text-secondary">No quizzes yet</p>
+              <p className="text-text-secondary">{t("noQuizzes")}</p>
               <p className="mt-1 text-sm text-text-secondary/70">
-                Start your first quiz to see your progress here.
+                {t("noQuizzesDesc")}
               </p>
             </CardContent>
           </Card>
@@ -422,7 +424,7 @@ export default function StudentDashboardPage() {
                       </Badge>
                     </div>
                     <p className="mt-0.5 text-xs text-text-secondary">
-                      {quiz.correctAnswers}/{quiz.totalQuestions} correct
+                      {t("correctLabel", { correct: quiz.correctAnswers, total: quiz.totalQuestions })}
                       {" \u2022 "}
                       {new Date(quiz.completedAt).toLocaleDateString()}
                     </p>
@@ -431,7 +433,7 @@ export default function StudentDashboardPage() {
                     <p className="text-sm font-semibold text-primary">
                       +{quiz.totalPointsEarned}
                     </p>
-                    <p className="text-xs text-text-secondary">points</p>
+                    <p className="text-xs text-text-secondary">{t("pointsLabel")}</p>
                   </div>
                 </CardContent>
               </Card>
