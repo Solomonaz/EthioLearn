@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1213,6 +1214,7 @@ function BudgetTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminRewardsPage() {
+  const t = useTranslations("admin");
   const [activeTab, setActiveTab] = useState<"rewards" | "redemptions" | "budget">("rewards");
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [rewardsLoading, setRewardsLoading] = useState(true);
@@ -1253,9 +1255,9 @@ export default function AdminRewardsPage() {
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-text-primary">Reward Management</h1>
+          <h1 className="text-2xl font-bold text-text-primary">{t("rewardsTitle")}</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Create rewards and approve student redemption requests.
+            {t("settingsSubtitle")}
           </p>
         </div>
 
@@ -1270,7 +1272,7 @@ export default function AdminRewardsPage() {
                   : "text-text-secondary hover:text-text-primary"
               }`}
             >
-              Rewards
+              {t("rewardsTitle")}
               {rewards.length > 0 && (
                 <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-100 px-1 text-xs font-bold text-text-secondary">
                   {rewards.length}
@@ -1285,7 +1287,7 @@ export default function AdminRewardsPage() {
                   : "text-text-secondary hover:text-text-primary"
               }`}
             >
-              Redemptions
+              {t("pendingRedemptions")}
               {pendingCount > 0 && (
                 <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1 text-xs font-bold text-white">
                   {pendingCount}

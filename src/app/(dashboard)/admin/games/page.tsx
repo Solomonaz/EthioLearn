@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -451,21 +452,22 @@ function MonitoringTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function AdminGamesPage() {
+  const t = useTranslations("admin");
   const [activeTab, setActiveTab] = useState<"tournaments" | "settings" | "monitoring">("tournaments");
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-text-primary">Game & Competition Management</h1>
-          <p className="text-sm text-text-secondary mt-1">Configure automated tournaments and monitor student engagement.</p>
+          <h1 className="text-2xl font-bold text-text-primary">{t("gamesTitle")}</h1>
+          <p className="text-sm text-text-secondary mt-1">{t("analyticsSubtitle")}</p>
         </div>
 
         {/* Tabs Navigation */}
         <div className="flex gap-1 bg-gray-100/50 p-1 rounded-xl mb-8 w-fit">
-          <TabButton active={activeTab === "tournaments"} onClick={() => setActiveTab("tournaments")} icon={Trophy} label="Tournaments" />
-          <TabButton active={activeTab === "settings"} onClick={() => setActiveTab("settings")} icon={Settings} label="Group Settings" />
-          <TabButton active={activeTab === "monitoring"} onClick={() => setActiveTab("monitoring")} icon={Activity} label="Live Monitoring" />
+          <TabButton active={activeTab === "tournaments"} onClick={() => setActiveTab("tournaments")} icon={Trophy} label={t("tournamentsTab")} />
+          <TabButton active={activeTab === "settings"} onClick={() => setActiveTab("settings")} icon={Settings} label={t("gameConfigTab")} />
+          <TabButton active={activeTab === "monitoring"} onClick={() => setActiveTab("monitoring")} icon={Activity} label={t("activeRoomsTab")} />
         </div>
 
         {/* Tab Content */}

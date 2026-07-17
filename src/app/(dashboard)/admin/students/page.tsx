@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import Papa from "papaparse";
 import {
@@ -90,21 +91,10 @@ function getStudentStatus(student: Student): "active" | "inactive" | "suspended"
   return "active";
 }
 
-function statusBadge(student: Student) {
-  const status = getStudentStatus(student);
-  switch (status) {
-    case "active":
-      return <Badge variant="success">Active</Badge>;
-    case "inactive":
-      return <Badge variant="default">Inactive</Badge>;
-    case "suspended":
-      return <Badge variant="error">Suspended</Badge>;
-  }
-}
-
 // ── CSV Import Modal ─────────────────────────────────────────────────────────
 
 function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const t = useTranslations("admin");
   const [csvText, setCsvText] = useState("");
   const [parsedRows, setParsedRows] = useState<Record<string, string>[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -207,7 +197,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Upload className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-text-primary">Import Students</h2>
+              <h2 className="text-lg font-semibold text-text-primary">{t("importTitle")}</h2>
             </div>
             <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
               <X className="h-5 w-5 text-text-secondary" />
@@ -218,21 +208,21 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
           <div className="flex items-center gap-3 rounded-lg border border-border bg-gray-50 p-3">
             <FileText className="h-5 w-5 text-text-secondary" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-text-primary">CSV Template</p>
+              <p className="text-sm font-medium text-text-primary">{t("csvTemplate")}</p>
               <p className="text-xs text-text-secondary">
-                Download the template, fill it in, then upload or paste below.
+                {t("csvTemplateDesc")}
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={downloadTemplate} className="gap-1.5">
               <Download className="h-3.5 w-3.5" />
-              Download
+              {t("downloadBtn")}
             </Button>
           </div>
 
           {/* File input */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text-primary">
-              Upload CSV File
+              {t("uploadCsvLabel")}
             </label>
             <input
               ref={fileInputRef}
@@ -246,7 +236,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
           {/* Textarea */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text-primary">
-              Or Paste CSV Content
+              {t("pasteCsvLabel")}
             </label>
             <textarea
               value={csvText}
@@ -262,10 +252,10 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
             />
           </div>
 
-          {/* Preview button */}
+          {/* Preview + Import buttons */}
           <div className="flex gap-2">
             <Button variant="outline" onClick={handlePreview} disabled={!csvText.trim()}>
-              Preview
+              {t("previewBtn")}
             </Button>
             <Button
               variant="primary"
@@ -274,7 +264,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
               className="gap-1.5"
             >
               {importing && <Spinner size="sm" />}
-              Import
+              {t("importBtn")}
             </Button>
           </div>
 
@@ -314,7 +304,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
               </table>
               {parsedRows.length > 20 && (
                 <p className="p-2 text-center text-xs text-text-secondary">
-                  Showing 20 of {parsedRows.length} rows
+                  {t("showingRows", { count: parsedRows.length })}
                 </p>
               )}
             </div>
@@ -323,12 +313,12 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
           {/* Import result */}
           {result && (
             <div className="space-y-2 rounded-lg border border-border bg-gray-50 p-4">
-              <h3 className="text-sm font-semibold text-text-primary">Import Results</h3>
+              <h3 className="text-sm font-semibold text-text-primary">{t("importResults")}</h3>
               <div className="flex flex-wrap gap-3">
-                <Badge variant="success">{result.imported} imported</Badge>
-                <Badge variant="default">{result.skipped} skipped</Badge>
+                <Badge variant="success">{t("importedCount", { count: result.imported })}</Badge>
+                <Badge variant="default">{t("skippedCount", { count: result.skipped })}</Badge>
                 {result.errors.length > 0 && (
-                  <Badge variant="error">{result.errors.length} errors</Badge>
+                  <Badge variant="error">{t("errorsCount", { count: result.errors.length })}</Badge>
                 )}
               </div>
               {result.errors.length > 0 && (
@@ -349,6 +339,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 function AdminStudentsContent() {
+  const t = useTranslations("admin");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -358,29 +349,21 @@ function AdminStudentsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Local state for search input (debounced before hitting API)
   const [searchInput, setSearchInput] = useState(
     searchParams.get("search") ?? ""
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Status filter (client-side)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-
-  // CSV import modal
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Derive filter state from URL
   const currentSearch = searchParams.get("search") ?? "";
   const currentGrade = searchParams.get("grade") ?? "";
   const currentSection = searchParams.get("section") ?? "";
   const currentSort = searchParams.get("sort") ?? "points";
   const currentPage = parseInt(searchParams.get("page") ?? "1", 10);
 
-  // Reload counter to re-fetch after import
   const [reloadCount, setReloadCount] = useState(0);
-
-  // ── URL helpers ─────────────────────────────────────────────────────────────
 
   function buildUrl(overrides: Record<string, string | number | undefined>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -395,12 +378,9 @@ function AdminStudentsContent() {
   }
 
   function pushUrl(overrides: Record<string, string | number | undefined>) {
-    // Reset page to 1 on filter changes (unless explicitly overriding page)
     if (!("page" in overrides)) overrides.page = 1;
     router.push(buildUrl(overrides));
   }
-
-  // ── Debounce search input → URL ─────────────────────────────────────────────
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -413,8 +393,6 @@ function AdminStudentsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [searchParams]
   );
-
-  // ── Fetch data ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     setLoading(true);
@@ -442,15 +420,23 @@ function AdminStudentsContent() {
       .finally(() => setLoading(false));
   }, [currentSearch, currentGrade, currentSection, currentSort, currentPage, reloadCount]);
 
-  // ── Client-side status filtering ────────────────────────────────────────────
-
   const filteredStudents = data
     ? statusFilter === "all"
       ? data.students
       : data.students.filter((s) => getStudentStatus(s) === statusFilter)
     : [];
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  function statusBadge(student: Student) {
+    const status = getStudentStatus(student);
+    switch (status) {
+      case "active":
+        return <Badge variant="success">{t("statusActive")}</Badge>;
+      case "inactive":
+        return <Badge variant="default">{t("statusInactive")}</Badge>;
+      case "suspended":
+        return <Badge variant="error">{t("statusSuspended")}</Badge>;
+    }
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
@@ -458,7 +444,7 @@ function AdminStudentsContent() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-text-primary">Students</h1>
+          <h1 className="text-2xl font-bold text-text-primary">{t("studentsTitle")}</h1>
           {data && (
             <Badge variant="info" className="text-sm px-3 py-1">
               {data.total.toLocaleString()}
@@ -471,7 +457,7 @@ function AdminStudentsContent() {
           className="gap-1.5"
         >
           <Upload className="h-4 w-4" />
-          Import Students
+          {t("importStudents")}
         </Button>
       </div>
 
@@ -483,21 +469,21 @@ function AdminStudentsContent() {
             <span className="font-semibold text-text-primary">
               {data.stats.totalStudents.toLocaleString()}
             </span>
-            <span className="text-text-secondary">Total Students</span>
+            <span className="text-text-secondary">{t("totalStudentsPill")}</span>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm shadow-sm">
             <Activity className="h-4 w-4 text-success" />
             <span className="font-semibold text-text-primary">
               {data.stats.activeThisWeek.toLocaleString()}
             </span>
-            <span className="text-text-secondary">Active This Week</span>
+            <span className="text-text-secondary">{t("activeThisWeek")}</span>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm shadow-sm">
             <TrendingUp className="h-4 w-4 text-info" />
             <span className="font-semibold text-text-primary">
               {data.stats.avgPoints.toLocaleString()}
             </span>
-            <span className="text-text-secondary">Avg Points</span>
+            <span className="text-text-secondary">{t("avgPoints")}</span>
           </div>
         </div>
       )}
@@ -509,7 +495,7 @@ function AdminStudentsContent() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
           <input
             type="text"
-            placeholder="Search by name or phone..."
+            placeholder={t("searchPlaceholder")}
             value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full rounded-lg border border-border bg-surface py-2.5 pl-9 pr-4 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -522,10 +508,10 @@ function AdminStudentsContent() {
           onChange={(e) => pushUrl({ grade: e.target.value })}
           className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          <option value="">All Grades</option>
+          <option value="">{t("allGrades")}</option>
           {[9, 10, 11, 12].map((g) => (
             <option key={g} value={g}>
-              Grade {g}
+              {t("gradeLabel", { grade: g })}
             </option>
           ))}
         </select>
@@ -533,7 +519,7 @@ function AdminStudentsContent() {
         {/* Section filter */}
         <input
           type="text"
-          placeholder="Section..."
+          placeholder={t("sectionPlaceholder")}
           value={currentSection}
           onChange={(e) => pushUrl({ section: e.target.value })}
           className="w-24 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -545,10 +531,10 @@ function AdminStudentsContent() {
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="suspended">Suspended</option>
+          <option value="all">{t("allStatus")}</option>
+          <option value="active">{t("statusActive")}</option>
+          <option value="inactive">{t("statusInactive")}</option>
+          <option value="suspended">{t("statusSuspended")}</option>
         </select>
 
         {/* Sort */}
@@ -557,9 +543,9 @@ function AdminStudentsContent() {
           onChange={(e) => pushUrl({ sort: e.target.value })}
           className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          <option value="points">Top Points</option>
-          <option value="name">Name A-Z</option>
-          <option value="recent">Recently Active</option>
+          <option value="points">{t("sortPoints")}</option>
+          <option value="name">{t("sortName")}</option>
+          <option value="recent">{t("sortRecent")}</option>
         </select>
       </div>
 
@@ -572,7 +558,7 @@ function AdminStudentsContent() {
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
           <p className="text-text-secondary">{error}</p>
           <Button variant="outline" onClick={() => window.location.reload()}>
-            Try Again
+            {t("tryAgain")}
           </Button>
         </div>
       ) : !data || filteredStudents.length === 0 ? (
@@ -580,12 +566,12 @@ function AdminStudentsContent() {
           <CardContent className="flex min-h-[40vh] flex-col items-center justify-center gap-3 py-16 text-center">
             <BookOpen className="h-12 w-12 text-text-secondary/30" />
             <p className="text-lg font-medium text-text-primary">
-              No students found
+              {t("noStudentsFound")}
             </p>
             <p className="text-sm text-text-secondary">
               {currentSearch || currentGrade || currentSection || statusFilter !== "all"
-                ? "Try adjusting your filters."
-                : "No students have been enrolled yet."}
+                ? t("noStudentsFiltered")
+                : t("noStudentsEnrolled")}
             </p>
           </CardContent>
         </Card>
@@ -597,28 +583,28 @@ function AdminStudentsContent() {
               <thead className="border-b border-border bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    Student
+                    {t("colStudent")}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    Phone
+                    {t("colPhone")}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    Grade / Section
+                    {t("colGradeSection")}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    Status
+                    {t("colStatus")}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    XP / Points
+                    {t("colXpPoints")}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    Quizzes
+                    {t("colQuizzes")}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                    Last Active
+                    {t("colLastActive")}
                   </th>
                   <th className="px-4 py-3 text-right font-semibold text-text-secondary">
-                    Actions
+                    {t("colActions")}
                   </th>
                 </tr>
               </thead>
@@ -650,7 +636,7 @@ function AdminStudentsContent() {
                     {/* Grade / Section */}
                     <td className="px-4 py-3 text-text-secondary">
                       {student.grade
-                        ? `Grade ${student.grade}${student.section ? ` / ${student.section}` : ""}`
+                        ? `${t("gradeLabel", { grade: student.grade })}${student.section ? ` / ${student.section}` : ""}`
                         : "\u2014"}
                     </td>
 
@@ -668,7 +654,7 @@ function AdminStudentsContent() {
                         <span className="font-semibold text-primary">
                           {student.totalPoints.toLocaleString()}
                         </span>
-                        <span className="text-xs text-text-secondary">pts</span>
+                        <span className="text-xs text-text-secondary">{t("ptsLabel")}</span>
                       </div>
                     </td>
 
@@ -687,7 +673,7 @@ function AdminStudentsContent() {
                       <Link href={`${basePath}/students/${student.id}`}>
                         <Button size="sm" variant="outline" className="gap-1.5">
                           <Eye className="h-3.5 w-3.5" />
-                          View
+                          {t("viewBtn")}
                         </Button>
                       </Link>
                     </td>
@@ -715,15 +701,15 @@ function AdminStudentsContent() {
                         </p>
                         <p className="text-xs text-text-secondary">
                           {student.grade
-                            ? `Grade ${student.grade}${student.section ? ` / ${student.section}` : ""}`
-                            : "No grade"}
+                            ? `${t("gradeLabel", { grade: student.grade })}${student.section ? ` / ${student.section}` : ""}`
+                            : t("noGrade")}
                         </p>
                       </div>
                     </div>
 
                     <Link href={`${basePath}/students/${student.id}`}>
                       <Button size="sm" variant="outline">
-                        View
+                        {t("viewBtn")}
                       </Button>
                     </Link>
                   </div>
@@ -731,16 +717,16 @@ function AdminStudentsContent() {
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {statusBadge(student)}
                     <Badge variant="info">
-                      {student.totalPoints.toLocaleString()} pts
+                      {student.totalPoints.toLocaleString()} {t("ptsLabel")}
                     </Badge>
                     <Badge variant="default">
-                      Lvl {student.xpLevel}
+                      {t("lvlLabel", { level: student.xpLevel })}
                     </Badge>
                     <span className="text-xs text-text-secondary">
-                      {student.quizCount} quizzes
+                      {t("quizzesCount", { count: student.quizCount })}
                     </span>
                     <span className="ml-auto text-xs text-text-secondary">
-                      Active {relativeTime(student.lastActiveAt)}
+                      {t("activeLabel", { time: relativeTime(student.lastActiveAt) })}
                     </span>
                   </div>
                 </CardContent>
@@ -759,7 +745,7 @@ function AdminStudentsContent() {
                 className="gap-1"
               >
                 <ChevronLeft className="h-4 w-4" />
-                Prev
+                {t("prevBtn")}
               </Button>
 
               {Array.from({ length: data.totalPages }, (_, i) => i + 1)
@@ -802,7 +788,7 @@ function AdminStudentsContent() {
                 onClick={() => pushUrl({ page: currentPage + 1 })}
                 className="gap-1"
               >
-                Next
+                {t("nextBtn")}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

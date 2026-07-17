@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { BookOpen, Plus, Trash2, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ interface Subject {
 }
 
 export default function AdminSubjectsPage() {
+  const t = useTranslations("admin");
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -89,9 +91,9 @@ export default function AdminSubjectsPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold text-text-primary">Manage Subjects</h1>
+        <h1 className="text-2xl font-bold text-text-primary">{t("subjectsTitle")}</h1>
         <p className="text-sm text-text-secondary">
-          Add or remove subjects. These will appear in dropdowns across the platform.
+          {t("analyticsSubtitle")}
         </p>
       </div>
 

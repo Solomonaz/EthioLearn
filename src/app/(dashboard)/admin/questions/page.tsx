@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import {
   HelpCircle,
@@ -115,6 +116,7 @@ const LABEL_CLASS = "mb-1.5 block text-sm font-medium text-text-primary";
 // ─── Main Component ───────────────────────────────────────
 
 export default function AdminQuestionsPage() {
+  const t = useTranslations("admin");
   const basePath = useAdminBasePath();
 
   // ── Filter state ─────────────────────────────────────────
@@ -528,9 +530,9 @@ export default function AdminQuestionsPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Page title */}
       <div>
-        <h1 className="text-2xl font-bold text-text-primary">Question Bank</h1>
+        <h1 className="text-2xl font-bold text-text-primary">{t("questionsTitle")}</h1>
         <p className="text-sm text-text-secondary">
-          Manage quiz questions across all textbooks and chapters.
+          {t("analyticsSubtitle")}
         </p>
       </div>
 

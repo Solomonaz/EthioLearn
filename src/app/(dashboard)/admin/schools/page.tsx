@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   School,
@@ -38,6 +39,7 @@ interface SchoolItem {
 }
 
 export default function AdminSchoolsPage() {
+  const t = useTranslations("admin");
   const { data: session } = useSession();
   const [schools, setSchools] = useState<SchoolItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,10 +150,10 @@ export default function AdminSchoolsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
-            Manage Schools
+            {t("schoolsTitle")}
           </h1>
           <p className="text-sm text-text-secondary">
-            Create and manage schools across the platform.
+            {t("settingsSubtitle")}
           </p>
         </div>
         <Button
@@ -159,7 +161,7 @@ export default function AdminSchoolsPage() {
           className="gap-1.5"
         >
           <Plus className="h-4 w-4" />
-          Add School
+          {t("addSchool")}
         </Button>
       </div>
 

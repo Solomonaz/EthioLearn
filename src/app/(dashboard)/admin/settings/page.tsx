@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,8 @@ interface UserData {
 }
 
 export default function AdminSettingsPage() {
+  const t = useTranslations("admin");
+  const tq = useTranslations("quiz");
   const basePath = useAdminBasePath();
   const [school, setSchool] = useState<SchoolData | null>(null);
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -56,13 +59,11 @@ export default function AdminSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Form state
   const [name, setName] = useState("");
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [type, setType] = useState<"PUBLIC" | "PRIVATE">("PUBLIC");
-  
-  // Game Config state
+
   const [maxPlayersPerRoom, setMaxPlayersPerRoom] = useState(20);
   const [timePerQuestion, setTimePerQuestion] = useState(20);
   const [defaultDifficulty, setDefaultDifficulty] = useState<"EASY" | "MEDIUM" | "HARD">("MEDIUM");
@@ -112,9 +113,9 @@ export default function AdminSettingsPage() {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           name, region, city, type,
-          maxPlayersPerRoom, timePerQuestion, defaultDifficulty 
+          maxPlayersPerRoom, timePerQuestion, defaultDifficulty,
         }),
       });
 
@@ -124,10 +125,8 @@ export default function AdminSettingsPage() {
       }
 
       const data = await res.json();
-      setSchool((prev) =>
-        prev ? { ...prev, ...data.school } : prev
-      );
-      setSuccess("School settings updated successfully!");
+      setSchool((prev) => prev ? { ...prev, ...data.school } : prev);
+      setSuccess(t("settingsSaved"));
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -155,8 +154,8 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-text-primary">School Settings</h1>
-        <p className="text-sm text-text-muted">Manage your school information and preferences</p>
+        <h1 className="text-2xl font-bold text-text-primary">{t("settingsTitle")}</h1>
+        <p className="text-sm text-text-muted">{t("settingsSubtitle")}</p>
       </div>
 
       {error && (
@@ -177,34 +176,34 @@ export default function AdminSettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-text-primary">School Information</h2>
+              <h2 className="text-lg font-semibold text-text-primary">{t("schoolInfoTitle")}</h2>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
-              label="School Name"
+              label={t("schoolNameLabel")}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter school name"
+              placeholder={t("schoolNamePlaceholder")}
             />
             <Input
-              label="Region"
+              label={t("regionLabel")}
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              placeholder="Enter region"
+              placeholder={t("regionPlaceholder")}
             />
             <Input
-              label="City"
+              label={t("cityLabel")}
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder="Enter city"
+              placeholder={t("cityPlaceholder")}
             />
             <div className="w-full">
               <label
                 htmlFor="school-type"
                 className="mb-2 block text-sm font-medium text-text-primary"
               >
-                School Type
+                {t("schoolTypeLabel")}
               </label>
               <select
                 id="school-type"
@@ -212,30 +211,31 @@ export default function AdminSettingsPage() {
                 onChange={(e) => setType(e.target.value as "PUBLIC" | "PRIVATE")}
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
               >
-                <option value="PUBLIC">Public</option>
-                <option value="PRIVATE">Private</option>
+                <option value="PUBLIC">{t("publicType")}</option>
+                <option value="PRIVATE">{t("privateType")}</option>
               </select>
             </div>
           </CardContent>
           <CardFooter>
             <Button onClick={handleSave} isLoading={saving}>
-              Save Changes
+              {t("saveChanges")}
             </Button>
           </CardFooter>
         </Card>
 
+        {/* Game & Quiz Settings */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-text-primary">Game & Quiz Settings</h2>
+              <h2 className="text-lg font-semibold text-text-primary">{t("gameSettingsTitle")}</h2>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-text-primary">Time Per Question (seconds)</label>
+              <label className="text-sm font-medium text-text-primary">{t("timePerQuestion")}</label>
               <div className="flex items-center gap-2">
-                <Spinner className="hidden" /> {/* just to ensure spinner exists if needed */}
+                <Spinner className="hidden" />
                 <Input
                   type="number"
                   value={timePerQuestion}
@@ -246,7 +246,7 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-text-primary">Max Players Per Room</label>
+              <label className="text-sm font-medium text-text-primary">{t("maxPlayersPerRoom")}</label>
               <Input
                 type="number"
                 value={maxPlayersPerRoom}
@@ -256,21 +256,21 @@ export default function AdminSettingsPage() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-text-primary">Default Quiz Difficulty</label>
+              <label className="text-sm font-medium text-text-primary">{t("defaultQuizDifficulty")}</label>
               <select
                 value={defaultDifficulty}
                 onChange={(e) => setDefaultDifficulty(e.target.value as any)}
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary focus:border-primary outline-none"
               >
-                <option value="EASY">Easy</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HARD">Hard</option>
+                <option value="EASY">{tq("easy")}</option>
+                <option value="MEDIUM">{tq("medium")}</option>
+                <option value="HARD">{tq("hard")}</option>
               </select>
             </div>
           </CardContent>
           <CardFooter>
             <Button onClick={handleSave} isLoading={saving} className="w-full">
-              Save Game Settings
+              {t("saveGameSettings")}
             </Button>
           </CardFooter>
         </Card>
@@ -278,14 +278,14 @@ export default function AdminSettingsPage() {
         {/* School Stats Card */}
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold text-text-primary">School Statistics</h2>
+            <h2 className="text-lg font-semibold text-text-primary">{t("schoolStats")}</h2>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-lg bg-blue-50 p-4">
                 <div className="flex items-center gap-2 text-blue-600">
                   <Users className="h-4 w-4" />
-                  <span className="text-sm font-medium">Students</span>
+                  <span className="text-sm font-medium">{t("colStudents")}</span>
                 </div>
                 <p className="mt-1 text-2xl font-bold text-blue-700">
                   {school?._count.users ?? 0}
@@ -294,7 +294,7 @@ export default function AdminSettingsPage() {
               <div className="rounded-lg bg-green-50 p-4">
                 <div className="flex items-center gap-2 text-green-600">
                   <BookOpen className="h-4 w-4" />
-                  <span className="text-sm font-medium">Textbooks</span>
+                  <span className="text-sm font-medium">{t("textbooks")}</span>
                 </div>
                 <p className="mt-1 text-2xl font-bold text-green-700">
                   {school?._count.textbooks ?? 0}
@@ -303,7 +303,7 @@ export default function AdminSettingsPage() {
               <div className="rounded-lg bg-purple-50 p-4">
                 <div className="flex items-center gap-2 text-purple-600">
                   <Gift className="h-4 w-4" />
-                  <span className="text-sm font-medium">Rewards</span>
+                  <span className="text-sm font-medium">{t("quickRewards")}</span>
                 </div>
                 <p className="mt-1 text-2xl font-bold text-purple-700">
                   {school?._count.rewards ?? 0}
@@ -312,7 +312,7 @@ export default function AdminSettingsPage() {
               <div className="rounded-lg bg-amber-50 p-4">
                 <div className="flex items-center gap-2 text-amber-600">
                   <Calendar className="h-4 w-4" />
-                  <span className="text-sm font-medium">Created</span>
+                  <span className="text-sm font-medium">{t("createdLabel")}</span>
                 </div>
                 <p className="mt-1 text-sm font-bold text-amber-700">
                   {school?.createdAt
@@ -329,14 +329,14 @@ export default function AdminSettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-text-primary">Admin Account</h2>
+              <h2 className="text-lg font-semibold text-text-primary">{t("adminAccount")}</h2>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3">
               <User className="h-4 w-4 text-text-muted" />
               <div>
-                <p className="text-xs text-text-muted">Name</p>
+                <p className="text-xs text-text-muted">{t("adminName")}</p>
                 <p className="text-sm font-medium text-text-primary">
                   {currentUser?.name ?? "N/A"}
                 </p>
@@ -345,7 +345,7 @@ export default function AdminSettingsPage() {
             <div className="flex items-center gap-3">
               <Phone className="h-4 w-4 text-text-muted" />
               <div>
-                <p className="text-xs text-text-muted">Phone</p>
+                <p className="text-xs text-text-muted">{t("adminPhone")}</p>
                 <p className="text-sm font-medium text-text-primary">
                   {currentUser?.phoneNumber ?? "N/A"}
                 </p>
@@ -354,7 +354,7 @@ export default function AdminSettingsPage() {
             <div className="flex items-center gap-3">
               <Shield className="h-4 w-4 text-text-muted" />
               <div>
-                <p className="text-xs text-text-muted">Role</p>
+                <p className="text-xs text-text-muted">{t("adminRole")}</p>
                 <Badge variant="info">
                   {currentUser?.role ?? "N/A"}
                 </Badge>
@@ -366,7 +366,7 @@ export default function AdminSettingsPage() {
         {/* Quick Actions Card */}
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold text-text-primary">Quick Actions</h2>
+            <h2 className="text-lg font-semibold text-text-primary">{t("quickActions")}</h2>
           </CardHeader>
           <CardContent className="space-y-3">
             <Button
@@ -375,12 +375,12 @@ export default function AdminSettingsPage() {
               onClick={() => alert("Coming soon")}
             >
               <Download className="h-4 w-4" />
-              Export Student Data
+              {t("exportStudentData")}
             </Button>
             <Link href={`${basePath}/textbooks`}>
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Library className="h-4 w-4" />
-                Manage Textbooks
+                {t("manageTextbooks")}
               </Button>
             </Link>
           </CardContent>

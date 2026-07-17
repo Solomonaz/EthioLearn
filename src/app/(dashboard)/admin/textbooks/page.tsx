@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert, ArrowUp, ArrowDown, Merge, ChevronRight, ScanEye } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +120,7 @@ function totalQuestions(textbook: TextbookListItem): number {
 // ─── Main Component ───────────────────────────────────────
 
 export default function AdminTextbooksPage() {
+  const t = useTranslations("admin");
   const [textbooks, setTextbooks] = useState<TextbookListItem[]>([]);
   const [subjectsList, setSubjectsList] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -666,9 +668,9 @@ export default function AdminTextbooksPage() {
       {/* Page title */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Textbook Management</h1>
+          <h1 className="text-2xl font-bold text-text-primary">{t("textbooksTitle")}</h1>
           <p className="text-sm text-text-secondary">
-            Add and manage your school&apos;s textbooks and their content.
+            {t("analyticsSubtitle")}
           </p>
         </div>
         {!loading && ocrQueue.length > 0 && (

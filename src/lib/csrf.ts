@@ -21,24 +21,31 @@ export function validateCsrfOrigin(request: Request | NextRequest): boolean {
     return true; // Malformed NEXTAUTH_URL — skip
   }
 
-  const origin = request.headers.get("origin");
-  if (origin) {
-    try {
-      return new URL(origin).host === appHost;
-    } catch {
-      return false;
-    }
-  }
+  // In development, accept same-machine origins so local browsing (localhost)
+  // works even when NEXTAUTH_URL points at a tunnel like ngrok (needed for
+  // Telegram/OAuth callbacks). Production remains strict same-host only.
+  const isDev = process.env.NODE_ENV !== "production";
+  const isLocalHost = (host: string) =>
+    /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
 
-  // No Origin header — fall back to Referer
-  const referer = request.headers.get("referer");
-  if (referer) {
+  const hostMatches = (value: string | null): boolean | null => {
+    if (!value) return null;
     try {
-      return new URL(referer).host === appHost;
+      const host = new URL(value).host;
+      if (host === appHost) return true;
+      if (isDev && isLocalHost(host)) return true;
+      return false;
     } catch {
       return false;
     }
-  }
+  };
+
+  // Prefer Origin; fall back to Referer for same-origin navigations.
+  const origin = hostMatches(request.headers.get("origin"));
+  if (origin !== null) return origin;
+
+  const referer = hostMatches(request.headers.get("referer"));
+  if (referer !== null) return referer;
 
   // Neither header present — reject
   return false;

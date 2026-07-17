@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Users,
   BookOpen,
@@ -54,6 +55,7 @@ interface DashboardData {
 }
 
 export default function SchoolAdminDashboardPage() {
+  const t = useTranslations("admin");
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
