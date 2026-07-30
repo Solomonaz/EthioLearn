@@ -5,7 +5,7 @@ import type {
   DetectChaptersOptions,
   DetectedChapter,
 } from "./gemini";
-import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
 
 // ─── Client ─────────────────────────────────────────────
 
@@ -19,6 +19,40 @@ function getGroqClient() {
   return new Groq({ apiKey });
 }
 
+/**
+ * Send a prompt to Groq and return the raw response text (JSON mode).
+ * A general-purpose helper mirroring `ollamaChat` so any pipeline can use Groq
+ * as a fast primary provider. Returns null if GROQ_API_KEY is missing or the
+ * request fails, letting callers fall through to the next provider.
+ */
+export async function groqChat(
+  prompt: string,
+  opts: { system?: string; temperature?: number; maxTokens?: number } = {}
+): Promise<string | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+  try {
+    const client = getGroqClient();
+    const completion = await client.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        ...(opts.system
+          ? [{ role: "system" as const, content: opts.system }]
+          : []),
+        { role: "user", content: prompt },
+      ],
+      temperature: opts.temperature ?? 0.2,
+      max_tokens: opts.maxTokens ?? 4096,
+      response_format: { type: "json_object" },
+    });
+    return completion.choices[0]?.message?.content ?? null;
+  } catch (err) {
+    console.warn(
+      `[Groq] Chat request failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
+}
+
 // ─── Prompt builders (reuse same prompts as Gemini) ─────
 
 function buildPrompt(opts: GenerateOptions): string {
@@ -27,7 +61,7 @@ function buildPrompt(opts: GenerateOptions): string {
   return buildQuestionGenerationPrompt(opts, 30000);
 }
 
-function buildChapterDetectionPrompt(opts: DetectChaptersOptions): string {
+export function buildChapterDetectionPrompt(opts: DetectChaptersOptions): string {
   const lang = opts.language ?? "en";
 
   return `You are an expert at analyzing textbook structure for the Ethiopian curriculum.
@@ -60,7 +94,7 @@ Identify all chapters/units now as a JSON array.`;
 
 // ─── JSON extraction helper ─────────────────────────────
 
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   // Try direct parse first
   try {
     return JSON.parse(text);
@@ -81,7 +115,7 @@ function extractJson(text: string): unknown {
 
 // ─── Validation (same logic as gemini.ts) ───────────────
 
-function validateQuestions(raw: unknown): GeneratedQuestion[] {
+export function validateQuestions(raw: unknown): GeneratedQuestion[] {
   if (!Array.isArray(raw)) {
     throw new Error("Response is not an array");
   }
@@ -130,7 +164,7 @@ function validateQuestions(raw: unknown): GeneratedQuestion[] {
     }
 
     validated.push({
-      questionText: q.questionText.trim(),
+      questionText: sanitizeQuestionText(q.questionText),
       type: type as any,
       options,
       correctAnswer,
@@ -142,7 +176,7 @@ function validateQuestions(raw: unknown): GeneratedQuestion[] {
   return validated;
 }
 
-function validateDetectedChapters(raw: unknown): DetectedChapter[] {
+export function validateDetectedChapters(raw: unknown): DetectedChapter[] {
   if (!Array.isArray(raw)) {
     throw new Error("Response is not an array");
   }

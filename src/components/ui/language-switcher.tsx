@@ -1,22 +1,14 @@
 "use client";
-import { useTransition, useEffect, useState } from "react";
+import { useTransition } from "react";
+import { useLocale } from "next-intl";
 import { cn } from "@/lib/utils";
-
-function getLocaleFromCookie(): "en" | "am" {
-  if (typeof document === "undefined") return "en";
-  const match = document.cookie.match(/(?:^|;\s*)locale=(\w+)/);
-  return match?.[1] === "am" ? "am" : "en";
-}
 
 export function LanguageSwitcher() {
   const [isPending, startTransition] = useTransition();
-  const [active, setActive] = useState<"en" | "am">("en");
-
-  useEffect(() => {
-    setActive(getLocaleFromCookie());
-  }, []);
+  const active = useLocale() === "am" ? "am" : "en";
 
   const switchTo = (locale: "en" | "am") => {
+    if (locale === active) return;
     startTransition(async () => {
       await fetch("/api/locale", { method: "POST", body: JSON.stringify({ locale }) });
       window.location.reload();

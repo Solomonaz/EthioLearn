@@ -1,5 +1,5 @@
 /**
- * Unified AI provider: Gemini → Groq fallback chain (production).
+ * Unified AI provider: Gemini → Cerebras → Groq fallback chain (production).
  * Ollama Mistral is available as a local-dev-only tertiary fallback when
  * OLLAMA_BASE_URL is set to a non-localhost address.
  *
@@ -14,6 +14,7 @@ import {
   splitTextByChapters,
 } from "./gemini";
 import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript } from "./groq";
+import { cerebrasGenerateQuestions, cerebrasDetectChapters, hasCerebrasKey } from "./cerebras";
 import { ollamaGenerateQuestions, ollamaDetectChapters } from "./ollama";
 
 import type {
@@ -87,7 +88,7 @@ function hasOllama(): boolean {
 
 export async function generateQuestions(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "groq" | "ollama" }> {
+): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "cerebras" | "groq" | "ollama" }> {
   // 1. Gemini — 1M TPM free tier handles large chapter content without rate limits
   if (hasGeminiKey()) {
     try {
@@ -95,14 +96,28 @@ export async function generateQuestions(
       return { questions, provider: "gemini" };
     } catch (err) {
       if (isRateLimitError(err)) {
-        console.warn("[AI Provider] Gemini rate-limited, falling back to Groq…");
+        console.warn("[AI Provider] Gemini rate-limited, falling back to Cerebras…");
       } else {
         throw err;
       }
     }
   }
 
-  // 2. Groq — fast fallback; may hit 6K TPM with very large chapter content
+  // 2. Cerebras — fast, separate free-tier quota (survives Gemini exhaustion).
+  //    As an optional add-on, ANY failure (rate limit, bad key, parse) falls
+  //    through to the next provider rather than aborting the chain.
+  if (hasCerebrasKey()) {
+    try {
+      const questions = await cerebrasGenerateQuestions(opts);
+      return { questions, provider: "cerebras" };
+    } catch (err) {
+      console.warn(
+        `[AI Provider] Cerebras failed (${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
+      );
+    }
+  }
+
+  // 3. Groq — fast fallback; may hit 6K TPM with very large chapter content
   if (hasGroqKey()) {
     try {
       const questions = await groqGenerateQuestions(opts);
@@ -116,7 +131,7 @@ export async function generateQuestions(
     }
   }
 
-  // 3. Ollama Mistral — local dev only, skipped in production
+  // 4. Ollama Mistral — local dev only, skipped in production
   if (hasOllama()) {
     try {
       const questions = await ollamaGenerateQuestions(opts);
@@ -124,18 +139,18 @@ export async function generateQuestions(
       return { questions, provider: "ollama" };
     } catch (err) {
       throw new Error(
-        `All AI providers failed. Gemini and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
+        `All AI providers failed. Gemini, Cerebras and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
         "Ensure Ollama is running with 'mistral' model pulled (ollama pull mistral)."
       );
     }
   }
 
   throw new Error(
-    "All AI providers failed. Gemini and Groq are both rate-limited. Please wait a moment and try again."
+    "All AI providers are rate-limited. Add a free CEREBRAS_API_KEY (https://cloud.cerebras.ai) for more capacity, or wait a moment and try again."
   );
 }
 
-// ─── Detect Chapters (Gemini → Groq → Ollama) ───────────
+// ─── Detect Chapters (Gemini → Cerebras → Groq → Ollama) ─
 //
 // Same reasoning as generateQuestions: chapter detection sends up to 50K chars
 // of content (~12,500 tokens), which alone exceeds Groq's 6K TPM free tier.
@@ -143,7 +158,7 @@ export async function generateQuestions(
 
 export async function detectChapters(
   opts: DetectChaptersOptions
-): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "groq" | "ollama" }> {
+): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "cerebras" | "groq" | "ollama" }> {
   // 1. Gemini — 1M TPM handles large textbook content without rate limits
   if (hasGeminiKey()) {
     try {
@@ -151,14 +166,26 @@ export async function detectChapters(
       return { chapters, provider: "gemini" };
     } catch (err) {
       if (isRateLimitError(err)) {
-        console.warn("[AI Provider] Gemini rate-limited (Chapters), falling back to Groq…");
+        console.warn("[AI Provider] Gemini rate-limited (Chapters), falling back to Cerebras…");
       } else {
         throw err;
       }
     }
   }
 
-  // 2. Groq — fast fallback
+  // 2. Cerebras — fast, separate free-tier quota. Any failure falls through.
+  if (hasCerebrasKey()) {
+    try {
+      const chapters = await cerebrasDetectChapters(opts);
+      return { chapters, provider: "cerebras" };
+    } catch (err) {
+      console.warn(
+        `[AI Provider] Cerebras failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
+      );
+    }
+  }
+
+  // 3. Groq — fast fallback
   if (hasGroqKey()) {
     try {
       const chapters = await groqDetectChapters(opts);
@@ -172,7 +199,7 @@ export async function detectChapters(
     }
   }
 
-  // 3. Ollama Mistral — local dev only, skipped in production
+  // 4. Ollama Mistral — local dev only, skipped in production
   if (hasOllama()) {
     try {
       const chapters = await ollamaDetectChapters(opts);

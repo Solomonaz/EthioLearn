@@ -9,17 +9,36 @@ import type {
   DetectChaptersOptions,
   DetectedChapter,
 } from "./gemini";
-import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
 
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 export const OLLAMA_CHAT_MODEL = "mistral";
 
 /**
+ * Whether Ollama should be used as a provider at all.
+ *
+ * A localhost URL is treated as "dev only": local Ollama runs on CPU and is
+ * far slower than the cloud providers (Groq/Gemini), so it must not sit ahead
+ * of them in a latency-sensitive pipeline. Ollama is only enabled when pointed
+ * at a real (non-localhost) host — matching the embeddings pipeline's gate.
+ */
+export function isOllamaEnabled(): boolean {
+  return !!process.env.OLLAMA_BASE_URL && BASE_URL !== "http://localhost:11434";
+}
+
+/**
  * Send a prompt to an Ollama chat model and return the raw response text.
  * Forces JSON output mode via Ollama's `format: "json"` flag.
  * Returns null if Ollama is unreachable or returns a non-OK status.
+ *
+ * `timeoutMs` defaults to 10 min for heavyweight local generation (questions),
+ * but latency-sensitive callers should pass a short value so a slow or hung
+ * Ollama can't dominate the pipeline.
  */
-export async function ollamaChat(prompt: string): Promise<string | null> {
+export async function ollamaChat(
+  prompt: string,
+  timeoutMs = 600_000
+): Promise<string | null> {
   try {
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: "POST",
@@ -30,7 +49,7 @@ export async function ollamaChat(prompt: string): Promise<string | null> {
         format: "json",
         stream: false,
       }),
-      signal: AbortSignal.timeout(600_000), // 10 min — local LLMs can be slow on CPU
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!res.ok) {
@@ -76,7 +95,7 @@ function validateQuestions(raw: unknown): GeneratedQuestion[] {
     const difficulty = diff === "EASY" ? "EASY" : diff === "HARD" ? "HARD" : "MEDIUM";
 
     validated.push({
-      questionText: String(q.questionText).trim(),
+      questionText: sanitizeQuestionText(String(q.questionText)),
       type: type as GeneratedQuestion["type"],
       options: (q.options as unknown[]).map(String),
       correctAnswer: String(q.correctAnswer).trim(),

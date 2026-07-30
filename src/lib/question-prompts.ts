@@ -18,6 +18,40 @@
 
 import type { GenerateOptions } from "./gemini";
 
+// ─── Deterministic output sanitizer ────────────────────────────────────────
+
+/**
+ * Strip source-referencing lead-ins ("According to the chapter, …", "Based on
+ * the text, …") from a generated question so it reads as a standalone exam item.
+ *
+ * LLMs ignore the prompt's meta-reference ban (rule Q11) often enough that a
+ * deterministic pass is required. Gated on an explicit source noun so genuine
+ * phrasings like "According to Herodotus, …" or "In the process of …" are left
+ * untouched. Applied by every provider's validator, so it runs regardless of
+ * which model produced the question.
+ */
+export function sanitizeQuestionText(text: string): string {
+  if (!text) return text;
+  let t = text.trim();
+
+  const leadIn =
+    /^(?:according to|based on|as (?:stated|described|mentioned|explained|noted|discussed|shown|outlined) in|as per|per|from|in)\s+(?:the\s+)?(?:chapters?|texts?|passages?|content|textbooks?|books?|readings?|lessons?|units?|materials?|documents?|paragraphs?|sections?|author)\b[^,:.?!]*[,:]\s*/i;
+  let prev: string;
+  do {
+    prev = t;
+    t = t.replace(leadIn, "");
+  } while (t !== prev && t.length > 0);
+
+  t = t.replace(
+    /,?\s*(?:according to|as (?:stated|described|mentioned|noted) in|based on)\s+(?:the\s+)?(?:chapters?|texts?|passages?|content|textbooks?|books?|readings?|lessons?|units?)\b/gi,
+    ""
+  );
+
+  t = t.replace(/\s{2,}/g, " ").replace(/^[,;:\s]+/, "").trim();
+  if (t.length > 0) t = t[0].toUpperCase() + t.slice(1);
+  return t;
+}
+
 // ─── Difficulty rubric (Bloom-aligned) ─────────────────────────────────────
 
 const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy):
@@ -61,6 +95,15 @@ const DIFFICULTY_RUBRIC = `DIFFICULTY RUBRIC (STRICT — follow Bloom's Taxonomy
            HOW: Options propose 4 different net outcomes with different
            mechanistic reasons. Student must understand BOTH processes to
            decide which wins under the stated conditions.
+           CRITICAL CONSTRAINT: A and B must be GENUINELY COMPETING — forces or
+           mechanisms that push the SAME variable in OPPOSITE directions so that
+           only ONE net outcome is possible. Do NOT use this template with
+           parallel, independent, or classification schemes (e.g. two different
+           ways of naming/categorizing the same thing, two timelines, two
+           labelling systems). Under parallel schemes every option is separately
+           true, so "which dominates" has no single answer — that is a BROKEN
+           question. If the two things do not physically conflict over one
+           shared outcome, pick a different template.
 
            TEMPLATE 3 — Evidence Evaluation:
            "Which of the following observations would MOST STRONGLY support
@@ -219,7 +262,22 @@ Q13. DISTRACTOR COHERENCE (MCQ only): Every option must be a DIRECT LOGICAL
            all 4 options must be plausible causes of that event, not a mix
            of causes, effects, definitions, and dates.
     If any option answers a question other than the one being asked, replace it
-    with an option that stays in the same logical domain as the other three.`;
+    with an option that stays in the same logical domain as the other three.
+Q14. EXACTLY ONE CORRECT ANSWER: Precisely one option may be true; the other
+    three must each be DEFINITIVELY false. Reject any stem whose framing lets
+    two or more options be simultaneously correct. In particular, do NOT ask
+    which of several PARALLEL or INDEPENDENT schemes "dominates", "best applies",
+    or "wins" when each option is correct under its own separate scheme — there
+    is no single answer. If you need to test parallel schemes, constrain the
+    question to ONE named scheme so only one option fits.
+    WRONG: "If the behaviour periodization and the tool-making periodization were
+      both applied to the Old Stone Age, which outcome would dominate?" (each
+      scheme gives a different, equally-valid label — multiple options are true).
+    RIGHT: "Under the human-behaviour periodization, the Old Stone Age falls in
+      which stage?" (one scheme → exactly one correct answer).
+Q15. NO "ALL/NONE OF THE ABOVE": Never use "All of the above", "None of the
+    above", "Both A and B", or similar meta-options. Every option must be a
+    concrete, substantive answer. (Reinforces Q6.)`;
 
 // ─── Format rules per question type ────────────────────────────────────────
 

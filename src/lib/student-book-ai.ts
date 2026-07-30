@@ -3,11 +3,13 @@
  * Uses a lighter-touch prompt (faster, fewer quality checks) compared
  * to the admin textbook pipeline. (SRS §4.8.2)
  *
- * Falls back through: Gemini → Groq
+ * Falls back through: Gemini → Cerebras → Groq
  */
 
 import { generateQuestionsFromContent } from "./gemini";
+import type { GeneratedQuestion } from "./gemini";
 import { groqGenerateQuestions } from "./groq";
+import { cerebrasGenerateQuestions, hasCerebrasKey } from "./cerebras";
 
 export interface StudentBookQuestion {
   question: string;
@@ -49,10 +51,8 @@ export async function generateQuestionsFromText(
     language: "en",
   };
 
-  try {
-    // Primary: Gemini
-    const raw = await generateQuestionsFromContent(genOptions);
-    return raw.map((q) => ({
+  const mapQuestions = (raw: GeneratedQuestion[]): StudentBookQuestion[] =>
+    raw.map((q) => ({
       question: q.questionText,
       options: Array.isArray(q.options)
         ? (q.options as unknown[]).map((o) =>
@@ -66,28 +66,30 @@ export async function generateQuestionsFromText(
       difficulty: q.difficulty ?? difficulty,
       type: q.type ?? questionType,
     }));
-  } catch (primaryErr) {
-    console.warn("[student-book-ai] Gemini failed, trying Groq:", primaryErr);
+
+  // Fallback chain: Gemini → Cerebras → Groq. Each provider is tried in turn;
+  // any failure (rate limit, bad key, etc.) moves on to the next.
+  const providers: { name: string; run: () => Promise<GeneratedQuestion[]> }[] = [
+    { name: "Gemini", run: () => generateQuestionsFromContent(genOptions) },
+    ...(hasCerebrasKey()
+      ? [{ name: "Cerebras", run: () => cerebrasGenerateQuestions(genOptions) }]
+      : []),
+    { name: "Groq", run: () => groqGenerateQuestions(genOptions) },
+  ];
+
+  let lastErr: unknown;
+  for (const provider of providers) {
     try {
-      // Fallback: Groq
-      const raw = await groqGenerateQuestions(genOptions);
-      return raw.map((q) => ({
-        question: q.questionText,
-        options: Array.isArray(q.options)
-          ? (q.options as unknown[]).map((o) =>
-              typeof o === "string" ? o : (o as { text: string }).text ?? String(o)
-            )
-          : [],
-        correctAnswer: typeof q.correctAnswer === "string"
-          ? q.correctAnswer
-          : (q.correctAnswer as { text: string })?.text ?? String(q.correctAnswer),
-        explanation: q.explanation ?? "",
-        difficulty: q.difficulty ?? difficulty,
-        type: q.type ?? questionType,
-      }));
-    } catch (fallbackErr) {
-      console.error("[student-book-ai] All AI providers failed:", fallbackErr);
-      throw new Error("AI question generation failed for this book.");
+      return mapQuestions(await provider.run());
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[student-book-ai] ${provider.name} failed, trying next:`,
+        err instanceof Error ? err.message : err
+      );
     }
   }
+
+  console.error("[student-book-ai] All AI providers failed:", lastErr);
+  throw new Error("AI question generation failed for this book.");
 }

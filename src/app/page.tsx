@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { BookOpen, Trophy, Swords, Target, Zap, Star } from "lucide-react";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
+import { Logo } from "@/components/ui/logo";
 
 export default async function HomePage() {
   const t = await getTranslations("home");
@@ -33,7 +34,9 @@ export default async function HomePage() {
       {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-border bg-surface/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <span className="text-2xl font-black text-primary">{tc("appName")}</span>
+          <Link href="/" aria-label={tc("appName")}>
+            <Logo size="md" />
+          </Link>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
             <Link href="/login" className="text-sm font-medium text-text-secondary hover:text-primary">
@@ -144,7 +147,7 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border bg-surface py-8">
         <div className="mx-auto max-w-6xl px-4 text-center text-sm text-text-muted">
-          <p className="font-bold text-primary">{tc("appName")}</p>
+          <Logo size="sm" className="justify-center" />
           <p className="mt-1">{t("footerCopyright")}</p>
         </div>
       </footer>

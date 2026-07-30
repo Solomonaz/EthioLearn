@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ function validateQuestions(raw: unknown): GeneratedQuestion[] {
     }
 
     validated.push({
-      questionText: q.questionText.trim(),
+      questionText: sanitizeQuestionText(q.questionText),
       type: type as any,
       options,
       correctAnswer,
@@ -341,56 +341,109 @@ function buildNormWithMap(fullText: string): { normText: string; indexMap: numbe
 }
 
 /**
- * Try to locate `title` inside `normText` (already normalised) using
- * progressively looser strategies.  Returns the index in the ORIGINAL
- * `fullText` on success, or -1 on failure.
+ * Locate ALL occurrences of `title` inside `normText`, returned as sorted
+ * positions in the ORIGINAL `fullText`.
+ *
+ * A textbook title typically appears at least twice — once in the Table of
+ * Contents (front matter) and again at the real chapter start — so callers
+ * need every candidate in order to pick the right one. Candidates are gathered
+ * from specific strategies (exact title, prefix-stripped, first-6-words) that
+ * are safe to union together; looser strategies (first-3-words, any long word)
+ * are used only as a fallback when the specific ones find nothing.
  */
-function findTitlePosition(
-  fullText: string,
+function findAllTitlePositions(
   normText: string,   // normalised version of fullText
   indexMap: number[], // maps normText positions → fullText positions
   title: string
-): number {
+): number[] {
   const translate = (normIdx: number) =>
     normIdx >= 0 && normIdx < indexMap.length ? indexMap[normIdx] : -1;
 
-  // Strategy 1 – exact normalised match
-  const normTitle = normaliseForMatch(title);
-  let idx = normText.indexOf(normTitle);
-  if (idx >= 0) return translate(idx);
+  const collectAll = (needle: string): number[] => {
+    if (!needle || needle.length < 3) return [];
+    const out: number[] = [];
+    let from = 0;
+    for (;;) {
+      const idx = normText.indexOf(needle, from);
+      if (idx < 0) break;
+      const pos = translate(idx);
+      if (pos >= 0) out.push(pos);
+      from = idx + needle.length;
+    }
+    return out;
+  };
 
-  // Strategy 2 – strip leading "Chapter N / Unit N / ምዕራፍ N" prefix
+  const normTitle = normaliseForMatch(title);
+  const words = normTitle.split(" ").filter((w) => w.length > 2);
+
+  // Specific strategies — low false-positive rate, safe to union.
+  const specific = new Set<number>();
+  collectAll(normTitle).forEach((p) => specific.add(p));
+
   const stripped = normTitle
     .replace(/^(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)\s*[\d\w]*[.:)]\s*/i, "")
     .trim();
-  if (stripped.length > 4) {
-    idx = normText.indexOf(stripped);
-    if (idx >= 0) return translate(idx);
-  }
+  if (stripped.length > 4) collectAll(stripped).forEach((p) => specific.add(p));
 
-  // Strategy 3 – match the first 6+ meaningful words of the title
-  const words = normTitle.split(" ").filter((w) => w.length > 2);
   const keyPhrase = words.slice(0, 6).join(" ");
-  if (keyPhrase.length > 5) {
-    idx = normText.indexOf(keyPhrase);
-    if (idx >= 0) return translate(idx);
-  }
+  if (keyPhrase.length > 5) collectAll(keyPhrase).forEach((p) => specific.add(p));
 
-  // Strategy 4 – match first 3 meaningful words (handles slight title shortening)
+  if (specific.size > 0) return Array.from(specific).sort((a, b) => a - b);
+
+  // Fallback strategies — only when nothing specific matched.
   const shortPhrase = words.slice(0, 3).join(" ");
   if (shortPhrase.length > 4) {
-    idx = normText.indexOf(shortPhrase);
-    if (idx >= 0) return translate(idx);
+    const hits = collectAll(shortPhrase);
+    if (hits.length) return hits.sort((a, b) => a - b);
   }
-
-  // Strategy 5 – scan for any word in the title that is unique-ish (≥8 chars)
   const longWords = words.filter((w) => w.length >= 8);
   for (const lw of longWords) {
-    idx = normText.indexOf(lw);
-    if (idx >= 0) return translate(idx);
+    const hits = collectAll(lw);
+    if (hits.length) return hits.sort((a, b) => a - b);
+  }
+  return [];
+}
+
+/**
+ * Detect the end of a Table-of-Contents / front-matter region, if present.
+ *
+ * A contents page lists most chapter titles bunched together near the very
+ * front of the document, separated by only a line or two — far tighter than a
+ * real chapter, which runs for tens of thousands of characters. We build the
+ * initial cluster from each chapter's FIRST occurrence and, if several titles
+ * are packed into a span much smaller than one chapter's worth of text near
+ * the start, return the cluster's end position so those occurrences can be
+ * discarded. Returns 0 when there is no such cluster (e.g. no contents page).
+ */
+function findFrontMatterCutoff(
+  candidatesPerChapter: number[][],
+  textLen: number,
+  chapterCount: number
+): number {
+  const firsts = candidatesPerChapter
+    .filter((c) => c.length > 0)
+    .map((c) => c[0])
+    .sort((a, b) => a - b);
+  if (firsts.length < 3) return 0;
+
+  const avgChapterSize = textLen / Math.max(1, chapterCount);
+  const gapThreshold = avgChapterSize * 0.25;
+
+  let clusterEnd = firsts[0];
+  let count = 1;
+  for (let i = 1; i < firsts.length; i++) {
+    if (firsts[i] - clusterEnd <= gapThreshold) {
+      clusterEnd = firsts[i];
+      count++;
+    } else {
+      break;
+    }
   }
 
-  return -1;
+  // Only treat it as front matter when several titles are bunched together
+  // near the start — otherwise these are genuine, well-spaced chapter starts.
+  if (count >= 3 && clusterEnd < avgChapterSize) return clusterEnd;
+  return 0;
 }
 
 export function splitTextByChapters(
@@ -399,31 +452,68 @@ export function splitTextByChapters(
 ): DetectedChapterWithContent[] {
   if (chapters.length === 0) return [];
 
-  const { normText, indexMap } = buildNormWithMap(fullText);
-
-  interface ChapterPosition {
-    chapter: DetectedChapter;
-    position: number; // -1 = not found
+  // Single chapter (incl. the "Full Textbook Content" fallback): the whole
+  // document is its content — never depend on the title appearing in the text.
+  if (chapters.length === 1) {
+    return [{ ...chapters[0], content: fullText.trim() }];
   }
 
-  // 1. Locate each chapter in the text
-  const positions: ChapterPosition[] = chapters.map((ch) => ({
-    chapter: ch,
-    position: findTitlePosition(fullText, normText, indexMap, ch.title),
-  }));
+  const { normText, indexMap } = buildNormWithMap(fullText);
 
-  // 2. Sort the ones that were found by their location
-  const found = positions
-    .filter((p) => p.position >= 0)
+  // Work in chapter-number order so boundaries follow the book's sequence.
+  const ordered = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+  // 1. Gather EVERY candidate position for each chapter title, then discard
+  //    Table-of-Contents occurrences so we match real body headings. Chapters
+  //    left with no body occurrence fall through to neighbour inference below.
+  const rawCandidates = ordered.map((ch) =>
+    findAllTitlePositions(normText, indexMap, ch.title)
+  );
+  const frontCutoff = findFrontMatterCutoff(
+    rawCandidates,
+    fullText.length,
+    ordered.length
+  );
+  const candidates =
+    frontCutoff > 0
+      ? rawCandidates.map((list) => list.filter((p) => p > frontCutoff))
+      : rawCandidates;
+
+  // 2. Choose one position per chapter, scanning from the LAST chapter
+  //    backwards and always taking the latest occurrence that still precedes
+  //    the next chapter's start. This skips the Table-of-Contents cluster
+  //    (where every title is bunched together at the front) in favour of the
+  //    real body headings, while a later chapter's start caps any stray
+  //    in-text cross-reference to an earlier chapter's title.
+  const chosen: (number | null)[] = new Array(ordered.length).fill(null);
+  let upperBound = fullText.length;
+  for (let i = ordered.length - 1; i >= 0; i--) {
+    const valid = candidates[i].filter((p) => p < upperBound);
+    if (valid.length > 0) {
+      chosen[i] = valid[valid.length - 1];
+      upperBound = chosen[i]!;
+    }
+  }
+
+  const found = ordered
+    .map((chapter, i) => ({ chapter, position: chosen[i] }))
+    .filter((p): p is { chapter: DetectedChapter; position: number } => p.position !== null)
     .sort((a, b) => a.position - b.position);
 
-  const notFoundChapters = positions
-    .filter((p) => p.position < 0)
-    .map((p) => p.chapter);
+  // Safety net: no title matched anywhere — put everything in the first
+  // chapter rather than silently dropping the entire document.
+  if (found.length === 0) {
+    return ordered.map((ch, i) => ({
+      ...ch,
+      content: i === 0 ? fullText.trim() : "",
+    }));
+  }
+
+  const notFoundChapters = ordered.filter((_, i) => chosen[i] === null);
 
   const result: DetectedChapterWithContent[] = [];
 
-  // 3. Slice text between consecutive found chapter positions
+  // 3. Slice text between consecutive chosen positions.
   for (let i = 0; i < found.length; i++) {
     const start = found[i].position;
     const end = i + 1 < found.length ? found[i + 1].position : fullText.length;

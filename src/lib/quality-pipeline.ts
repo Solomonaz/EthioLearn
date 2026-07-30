@@ -29,7 +29,8 @@ export type QualityFlag =
   | "AMBIGUOUS"            // Potentially ambiguous question
   | "FACTUAL_ERROR"        // Correct answer or premise is factually wrong
   | "META_REFERENCE"       // Question text references "the chapter / the text"
-  | "COMPOUND_QUESTION";   // MCQ/TRUE_FALSE asks two things ("…and why?")
+  | "COMPOUND_QUESTION"    // MCQ/TRUE_FALSE asks two things ("…and why?")
+  | "WEAK_OPTION";         // MCQ uses "All/None of the above" or "Both A and B"
 
 export interface QualityResult {
   questionIndex: number;
@@ -85,6 +86,14 @@ const COMPOUND_QUESTION_PATTERNS = [
   /,\s*and\s+how\?$/i,
   /,\s*and\s+explain\.?$/i,
   /\?\s+and\s+why\?$/i,
+];
+
+// Weak / meta MCQ options that must never appear (Q6 / Q15 enforcement)
+const WEAK_OPTION_PATTERNS = [
+  /\b(all|none)\s+of\s+(the\s+)?(above|below|these|options|answers)\b/i,
+  /\bboth\s+[a-d]\s+and\s+[a-d]\b/i,
+  /\bneither\s+[a-d]\s+nor\s+[a-d]\b/i,
+  /\bnone\s+of\s+these\b/i,
 ];
 
 // Phrases that must not appear in question text (Q11 enforcement)
@@ -164,6 +173,14 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
     flags.push("COMPOUND_QUESTION");
   }
 
+  if (
+    type === "MCQ" &&
+    Array.isArray(q.options) &&
+    q.options.some((o) => WEAK_OPTION_PATTERNS.some((p) => p.test(o)))
+  ) {
+    flags.push("WEAK_OPTION");
+  }
+
   return flags;
 }
 
@@ -208,12 +225,19 @@ CHECK 1 — DIFFICULTY: Rate as EASY, MEDIUM, or HARD.
 CHECK 2 — GRAMMAR: Return the grammatical or structural issue as a short string,
 or null if the question is grammatically correct. Do NOT flag correct questions.
 
-CHECK 3 — FACTUAL ACCURACY: Verify all four:
+CHECK 3 — FACTUAL ACCURACY & SINGLE ANSWER: Verify all six:
 (a) The question premise is factually accurate.
 (b) The marked correct answer is genuinely correct.
 (c) No wrong option could also be defended as correct by a knowledgeable student.
 (d) No two options say logically equivalent things from opposite angles
     (e.g. "A is more rigid" vs "B is more flexible" are the same conclusion).
+(e) EXACTLY ONE option is true. Fail if the stem lets two or more options be
+    simultaneously correct — especially "which dominates / best applies / wins"
+    stems comparing PARALLEL or INDEPENDENT schemes (different classification
+    systems, timelines, or labelling methods), where each option is correct
+    under its own scheme and there is no single answer.
+(f) No option is a meta-option like "All of the above", "None of the above",
+    or "Both A and B" — every option must be a concrete, substantive answer.
 Return factualPassed: false with a concise reason if ANY sub-check fails.
 
 QUESTIONS:
@@ -419,6 +443,10 @@ export async function runQualityPipeline(
       if (flag === "COMPOUND_QUESTION") {
         details["COMPOUND_QUESTION"] = "MCQ/TRUE_FALSE asks two things (e.g. '…and why?') — options cannot answer both; split into a single focused question";
         penalty += 0.25;
+      }
+      if (flag === "WEAK_OPTION") {
+        details["WEAK_OPTION"] = "MCQ uses a meta-option ('All/None of the above', 'Both A and B') — replace with a concrete, substantive answer";
+        penalty += 0.2;
       }
     }
 

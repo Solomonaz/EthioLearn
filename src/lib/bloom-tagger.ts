@@ -5,11 +5,12 @@
  *   Remember → Understand → Apply → Analyze → Evaluate → Create
  *
  * Batch processes multiple chunks in a single AI call for efficiency.
- * Provider priority: Ollama Mistral → Gemini → default "Understand".
+ * Provider priority: Groq → Gemini → Ollama (remote only) → default "Understand".
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { ollamaChat } from "./ollama";
+import { ollamaChat, isOllamaEnabled } from "./ollama";
+import { groqChat } from "./groq";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -46,6 +47,12 @@ function getClient() {
 
 // ─── Prompt ─────────────────────────────────────────────
 
+// Bloom level reflects the *type* of cognitive demand, which the opening of a
+// chunk establishes — the full 1500-char body isn't needed and triples token
+// cost (a single 15-chunk batch was ~6k tokens, exhausting Groq's 100k/day cap
+// on one textbook). A short sample keeps the whole book well within budget.
+const CHUNK_SAMPLE_CHARS = 500;
+
 function buildBloomTaggingPrompt(
   chunks: { chunkIndex: number; content: string }[],
   subject: string,
@@ -54,7 +61,7 @@ function buildBloomTaggingPrompt(
   const chunkList = chunks
     .map(
       (c) =>
-        `CHUNK ${c.chunkIndex}:\n"""${c.content.slice(0, 1500)}"""`
+        `CHUNK ${c.chunkIndex}:\n"""${c.content.slice(0, CHUNK_SAMPLE_CHARS)}"""`
     )
     .join("\n\n");
 
@@ -126,6 +133,35 @@ function validateBloomTags(raw: unknown, expectedChunks: number[]): BloomTagResu
   return validated;
 }
 
+// ─── Heuristic fallback (zero-cost, offline) ────────────
+// When every AI provider is unavailable or rate-limited (e.g. Groq's daily
+// token cap is hit mid-run), classify by the cognitive verbs/cues present in
+// the text instead of blindly tagging every chunk "Understand" — which would
+// silently flatten the whole Bloom distribution.
+
+const BLOOM_CUES: Record<BloomLevel, RegExp> = {
+  Remember: /\b(defin|list|name|identif|recall|state|label|terminolog|what is|who was|when did)\b/i,
+  Understand: /\b(explain|describ|summar|interpret|meaning|in other words|for example|illustrat|classif)\b/i,
+  Apply: /\b(solve|calculat|comput|apply|demonstrat|how to|procedure|steps to|method to|use the)\b/i,
+  Analyze: /\b(compar|contrast|analy|differ|caus|effect|relationship|examine|categor|distinguish|why did)\b/i,
+  Evaluate: /\b(evaluat|justif|assess|critiqu|judg|argue|defend|advantages and disadvantages|significance|impact of)\b/i,
+  Create: /\b(design|creat|construct|plan a|develop a|propose|invent|compose|formulat|imagine)\b/i,
+};
+
+function heuristicBloomLevel(content: string): BloomLevel {
+  let best: BloomLevel = "Understand";
+  let bestScore = 0;
+  for (const level of BLOOM_LEVELS) {
+    const matches = content.match(new RegExp(BLOOM_CUES[level].source, "gi"));
+    const score = matches ? matches.length : 0;
+    if (score > bestScore) {
+      bestScore = score;
+      best = level;
+    }
+  }
+  return best;
+}
+
 // ─── Per-batch AI call with provider chain ──────────────
 
 async function tagBatch(
@@ -136,15 +172,17 @@ async function tagBatch(
   const expectedIndices = batch.map((c) => c.chunkIndex);
   const prompt = buildBloomTaggingPrompt(batch, subject, grade);
 
-  // 1. Ollama Mistral (local, no quota)
+  // 1. Groq — fastest cloud provider, primary
   try {
-    const raw = await ollamaChat(prompt);
+    const raw = await groqChat(prompt, {
+      system:
+        "You are an expert in Bloom's Taxonomy. Always respond with valid JSON only.",
+      temperature: 0.2,
+      maxTokens: 2048,
+    });
     if (raw) {
       const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
-      if (tags.length > 0) {
-        console.info("[Bloom Tagger] Used Ollama Mistral.");
-        return tags;
-      }
+      if (tags.length > 0) return tags;
     }
   } catch {
     // fall through
@@ -169,17 +207,42 @@ async function tagBatch(
     }
   }
 
-  // 3. Default fallback
-  console.warn("[Bloom Tagger] All providers failed — assigning default 'Understand'.");
-  return batch.map((c) => ({ chunkIndex: c.chunkIndex, bloomLevel: "Understand" as BloomLevel, confidence: 0 }));
+  // 3. Ollama Mistral — only when pointed at a real (non-localhost) host, and
+  //    with a short timeout so a slow/hung local model can't stall the pipeline.
+  if (isOllamaEnabled()) {
+    try {
+      const raw = await ollamaChat(prompt, 30_000);
+      if (raw) {
+        const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
+        if (tags.length > 0) {
+          console.info("[Bloom Tagger] Used Ollama Mistral.");
+          return tags;
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // 4. Heuristic fallback — all AI providers exhausted/unavailable. Classify
+  //    by keyword cues rather than flattening everything to "Understand".
+  console.warn("[Bloom Tagger] All AI providers unavailable — using heuristic keyword classifier.");
+  return batch.map((c) => ({
+    chunkIndex: c.chunkIndex,
+    bloomLevel: heuristicBloomLevel(c.content),
+    confidence: 0.3,
+  }));
 }
 
 // ─── Main: Tag Chunks with Bloom's Levels ───────────────
 
 /**
  * Tag multiple chunks with Bloom's Taxonomy levels in a single AI call.
- * Provider priority: Ollama Mistral → Gemini → default "Understand".
- * Processes in batches of 50 chunks.
+ * Provider priority: Groq → Gemini → Ollama (remote only) → default "Understand".
+ *
+ * Batches are kept small so each prompt stays modest and the JSON output stays
+ * well under the model's output-token cap (a batch too large truncates the
+ * response, fails to parse, and silently defaults every chunk to "Understand").
  */
 export async function tagChunksWithBloomLevel(
   chunks: { chunkIndex: number; content: string }[],
@@ -188,7 +251,7 @@ export async function tagChunksWithBloomLevel(
 ): Promise<BloomTagResult[]> {
   if (chunks.length === 0) return [];
 
-  const BATCH_SIZE = 50;
+  const BATCH_SIZE = 15;
   const allResults: BloomTagResult[] = [];
 
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
