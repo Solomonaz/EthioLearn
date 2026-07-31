@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { useTranslations } from "next-intl";
 import { useQuizStore } from "@/stores/quiz-store";
-import { cn } from "@/lib/utils";
+import { cn, buildQuickPresets } from "@/lib/utils";
 
 interface Textbook {
   id: string;
@@ -35,12 +35,16 @@ interface Textbook {
   _count: { chapters: number };
 }
 
+// Per-difficulty → per-type PUBLISHED question counts, e.g. { EASY: { MCQ: 4 } }.
+type DiffTypeCounts = Record<string, Record<string, number>>;
+
 interface Chapter {
   id: string;
   title: string;
   chapterNumber: number;
   _count: { questions: number };
   difficultyCounts: { EASY: number; MEDIUM: number; HARD: number };
+  difficultyTypeCounts?: DiffTypeCounts;
 }
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD" | "MIXED" | "ADAPTIVE";
@@ -91,6 +95,7 @@ export default function QuizLauncherPage() {
   const [textbookTotals, setTextbookTotals] = useState<{
     totalQuestions: number;
     difficultyCounts: { EASY: number; MEDIUM: number; HARD: number };
+    difficultyTypeCounts?: DiffTypeCounts;
   } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -583,19 +588,30 @@ export default function QuizLauncherPage() {
 
       {/* Step 6: Select Question Count */}
       {step === 5 && (() => {
-        const counts = selectedChapter === "all" 
-          ? textbookTotals?.difficultyCounts 
-          : selectedChapter?.difficultyCounts;
-        
-        // Define max based on selection
-        let maxAvailable = 20; // Default for AI
-        if (selectedSource === "BANK") {
-          if (selectedDifficulty === "MIXED") {
-            maxAvailable = selectedChapter === "all" ? (textbookTotals?.totalQuestions || 0) : (selectedChapter?._count.questions || 0);
-          } else if (counts) {
-            maxAvailable = counts[selectedDifficulty as keyof typeof counts] || 0;
+        const typeCounts = selectedChapter === "all"
+          ? textbookTotals?.difficultyTypeCounts
+          : selectedChapter?.difficultyTypeCounts;
+
+        // Available count that matches what the quiz query will actually return:
+        // sum the counts across the chosen difficulty AND the chosen types.
+        // (No types selected → all types, matching the backend's type filter.)
+        const availableForBank = () => {
+          if (!typeCounts) return 0;
+          const diffs =
+            selectedDifficulty === "EASY" || selectedDifficulty === "MEDIUM" || selectedDifficulty === "HARD"
+              ? [selectedDifficulty]
+              : ["EASY", "MEDIUM", "HARD"]; // MIXED / ADAPTIVE → all difficulties
+          let sum = 0;
+          for (const d of diffs) {
+            const perType = typeCounts[d] || {};
+            const types = selectedTypes.length > 0 ? selectedTypes : Object.keys(perType);
+            for (const ty of types) sum += perType[ty] || 0;
           }
-        }
+          return sum;
+        };
+
+        // Define max based on selection
+        const maxAvailable = selectedSource === "BANK" ? availableForBank() : 20;
 
         const isInvalid = !selectedCount || selectedCount < 1 || selectedCount > maxAvailable;
 
@@ -624,7 +640,7 @@ export default function QuizLauncherPage() {
               </div>
               
               <div className="mt-4 flex justify-center gap-2 flex-wrap">
-                {[5, 10, 20].filter(n => n <= maxAvailable).map(n => (
+                {buildQuickPresets(maxAvailable).map(n => (
                   <button
                     key={n}
                     onClick={() => setSelectedCount(n)}

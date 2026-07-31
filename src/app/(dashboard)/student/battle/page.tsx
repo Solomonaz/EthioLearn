@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
+import { cn, buildQuickPresets } from "@/lib/utils";
 
 interface PlayerInfo {
   userId: string;
@@ -39,9 +39,11 @@ interface BattleQuestion {
 
 type ActiveTab = "create" | "join";
 
-// Subjects fetched dynamically
-const GRADES = [9, 10, 11, 12];
-const QUESTION_COUNTS = [5, 10, 15];
+// Battle-ready subject with its available MCQ count, scoped to the student's grade.
+interface BattleSubject {
+  name: string;
+  count: number;
+}
 
 export default function BattleLobbyPage() {
   const { data: session } = useSession();
@@ -50,10 +52,11 @@ export default function BattleLobbyPage() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("create");
 
-  // Create room state
-  const [subjectsList, setSubjectsList] = useState<string[]>(["Biology", "Mathematics", "Physics", "Chemistry", "English"]);
-  const [selectedSubject, setSelectedSubject] = useState<string>("Biology");
-  const [selectedGrade, setSelectedGrade] = useState<number>(9);
+  // Create room state — subjects/grade are scoped to the student's profile.
+  const [subjects, setSubjects] = useState<BattleSubject[]>([]);
+  const [grade, setGrade] = useState<number | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [creating, setCreating] = useState(false);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
@@ -61,21 +64,25 @@ export default function BattleLobbyPage() {
   const [startingGame, setStartingGame] = useState(false);
 
   useEffect(() => {
-    async function fetchSubjects() {
+    async function fetchOptions() {
       try {
-        const res = await fetch("/api/subjects");
+        const res = await fetch("/api/battles/options");
         if (res.ok) {
-          const data = await res.json();
-          if (data.subjects && data.subjects.length > 0) {
-             setSubjectsList((data.subjects as { id: string; name: string }[]).map((s) => s.name));
-             setSelectedSubject(data.subjects[0].name);
+          const data = (await res.json()) as { grade: number | null; subjects: BattleSubject[] };
+          setGrade(data.grade);
+          setSubjects(data.subjects);
+          if (data.subjects.length > 0) {
+            setSelectedSubject(data.subjects[0].name);
+            setQuestionCount(Math.min(10, data.subjects[0].count));
           }
         }
       } catch (err) {
-        console.error("Failed to fetch subjects", err);
+        console.error("Failed to fetch battle options", err);
+      } finally {
+        setLoadingOptions(false);
       }
     }
-    fetchSubjects();
+    fetchOptions();
   }, []);
 
   // Join room state
@@ -184,9 +191,9 @@ export default function BattleLobbyPage() {
       const res = await fetch("/api/battles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // Grade is derived server-side from the student's profile.
         body: JSON.stringify({
           subject: selectedSubject,
-          grade: selectedGrade,
           questionCount,
         }),
       });
@@ -272,6 +279,16 @@ export default function BattleLobbyPage() {
     });
   }
 
+  // Selecting a subject clamps the chosen count to that subject's availability.
+  function handleSelectSubject(name: string, count: number) {
+    setSelectedSubject(name);
+    setQuestionCount((prev) => Math.min(prev || 10, count));
+  }
+
+  const availableCount =
+    subjects.find((s) => s.name === selectedSubject)?.count ?? 0;
+  const countPresets = buildQuickPresets(availableCount);
+
   const isHost = userId === hostId;
   const canStart = isHost && players.length >= 1 && roomStatus === "waiting";
 
@@ -327,88 +344,109 @@ export default function BattleLobbyPage() {
       {/* Create Tab */}
       {(activeTab === "create" || inRoom) && !inRoom && (
         <div className="space-y-5">
-          {/* Subject */}
-          <div>
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-              <BookOpen className="h-4 w-4 text-primary" />
-              Subject
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {subjectsList.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSelectedSubject(s)}
-                  className={cn(
-                    "rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors",
-                    selectedSubject === s
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-text-secondary hover:border-primary/40"
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
+          {loadingOptions ? (
+            <div className="flex items-center justify-center py-10">
+              <Spinner size="sm" className="text-primary" />
             </div>
-          </div>
-
-          {/* Grade */}
-          <div>
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-              <Hash className="h-4 w-4 text-primary" />
-              Grade
-            </label>
-            <div className="flex gap-2">
-              {GRADES.map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setSelectedGrade(g)}
-                  className={cn(
-                    "w-14 rounded-lg border-2 py-2.5 text-sm font-semibold transition-colors",
-                    selectedGrade === g
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-text-secondary hover:border-primary/40"
-                  )}
-                >
-                  {g}
-                </button>
-              ))}
+          ) : subjects.length === 0 ? (
+            <div className="rounded-lg border border-border bg-gray-50 p-6 text-center text-sm text-text-secondary">
+              {grade
+                ? `No battle-ready subjects for Grade ${grade} yet. Ask your teacher to add questions.`
+                : "Your profile has no grade set. Complete your profile to play battles."}
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Subject — only subjects with questions for the student's grade */}
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  Subject
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {subjects.map((s) => (
+                    <button
+                      key={s.name}
+                      onClick={() => handleSelectSubject(s.name, s.count)}
+                      className={cn(
+                        "rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors",
+                        selectedSubject === s.name
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-text-secondary hover:border-primary/40"
+                      )}
+                    >
+                      {s.name}
+                      <span className="ml-1.5 text-xs opacity-70">({s.count})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Question Count */}
-          <div>
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-              <Hash className="h-4 w-4 text-primary" />
-              Questions
-            </label>
-            <div className="flex gap-2">
-              {QUESTION_COUNTS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setQuestionCount(c)}
-                  className={cn(
-                    "w-16 rounded-lg border-2 py-2.5 text-sm font-semibold transition-colors",
-                    questionCount === c
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-text-secondary hover:border-primary/40"
+              {/* Grade — locked to the student's profile grade */}
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                  <Hash className="h-4 w-4 text-primary" />
+                  Grade
+                </label>
+                <div className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+                  Grade {grade}
+                  <span className="text-xs font-normal text-text-secondary">
+                    (your grade)
+                  </span>
+                </div>
+              </div>
+
+              {/* Question Count — capped to what's available for the subject */}
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                  <Hash className="h-4 w-4 text-primary" />
+                  Questions
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {countPresets.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setQuestionCount(c)}
+                      className={cn(
+                        "rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-colors",
+                        questionCount === c
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-text-secondary hover:border-primary/40"
+                      )}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                  {availableCount > 0 && (
+                    <button
+                      onClick={() => setQuestionCount(availableCount)}
+                      className={cn(
+                        "rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-colors",
+                        questionCount === availableCount
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-text-secondary hover:border-primary/40"
+                      )}
+                    >
+                      Max ({availableCount})
+                    </button>
                   )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
+                </div>
+                <p className="mt-2 text-xs text-text-secondary">
+                  {availableCount} question{availableCount === 1 ? "" : "s"} available in {selectedSubject}
+                </p>
+              </div>
 
-          <Button
-            size="lg"
-            className="w-full gap-2"
-            onClick={handleCreateRoom}
-            isLoading={creating}
-            disabled={creating}
-          >
-            <Swords className="h-5 w-5" />
-            Create Battle Room
-          </Button>
+              <Button
+                size="lg"
+                className="w-full gap-2"
+                onClick={handleCreateRoom}
+                isLoading={creating}
+                disabled={creating || availableCount < 1}
+              >
+                <Swords className="h-5 w-5" />
+                Create Battle Room
+              </Button>
+            </>
+          )}
         </div>
       )}
 

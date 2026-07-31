@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateQuestions } from "@/lib/ai-provider";
 import { QuestionType, Difficulty } from "@prisma/client";
-import { normalizeOption } from "@/lib/utils";
+import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
 
 export async function POST(request: Request) {
@@ -153,13 +153,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       quizId: quiz.id,
-      questions: allQuizQuestions.map((q) => ({
-        id: q.id,
-        questionText: q.questionText,
-        options: (q.options as any[]).map(normalizeOption),
-        type: q.type,
-        difficulty: q.difficulty,
-      })),
+      questions: allQuizQuestions.map((q) => {
+        const options = (q.options as any[]).map(normalizeOption);
+        return {
+          id: q.id,
+          questionText: q.questionText,
+          // Randomise MCQ order (grading is by text — display order is safe).
+          options: q.type === "MCQ" ? shuffleArray(options) : options,
+          type: q.type,
+          difficulty: q.difficulty,
+        };
+      }),
       adaptiveCalibrated: body.difficulty === "ADAPTIVE" ? difficulty : undefined,
     });
   } catch (error) {

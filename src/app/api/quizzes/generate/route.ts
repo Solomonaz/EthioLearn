@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { normalizeOption } from "@/lib/utils";
+import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 
 export async function POST(request: Request) {
@@ -142,13 +142,19 @@ export async function POST(request: Request) {
       quizId: quiz.id,
       mode: quiz.mode,
       totalQuestions: selected.length,
-      questions: selected.map((q) => ({
-        id: q.id,
-        questionText: q.questionText,
-        options: (q.options as unknown[]).map(normalizeOption),
-        type: q.type,
-        difficulty: q.difficulty,
-      })),
+      questions: selected.map((q) => {
+        const options = (q.options as unknown[]).map(normalizeOption);
+        return {
+          id: q.id,
+          questionText: q.questionText,
+          // Randomise MCQ answer order so the correct choice isn't always slot A.
+          // Grading matches by text (see submit route), so display order is safe
+          // to change. Other types keep their order (positional meaning).
+          options: q.type === "MCQ" ? shuffleArray(options) : options,
+          type: q.type,
+          difficulty: q.difficulty,
+        };
+      }),
       adaptiveCalibrated,
       adaptiveInsights: adaptiveInsights
         ? {

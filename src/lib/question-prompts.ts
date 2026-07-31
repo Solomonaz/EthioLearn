@@ -190,9 +190,17 @@ Q2. DISTRACTOR QUALITY (MCQ): All 3 wrong options must be PLAUSIBLE,
     Also ensure no two options say the same thing from opposite angles
     (e.g. "A is more rigid" and "B is more flexible" are logically equivalent
     and must not both appear as options).
-Q3. TOPIC DIVERSITY: Across the whole batch, cover DIFFERENT subtopics from the
-    chapter. Do not generate multiple questions testing the exact same fact.
-    Aim for broad coverage of the chapter content.
+Q3. TOPIC DIVERSITY (HARD CAP): Across the whole batch, cover DIFFERENT
+    subtopics from the chapter. Spread questions across the chapter's DISTINCT
+    sections, civilizations, people, and events — do not cluster.
+    HARD LIMIT: AT MOST 2 questions may touch the same named entity, event, or
+    sub-topic (e.g. one specific kingdom's decline, one person, one invention).
+    A 3rd question on the same nexus is FORBIDDEN — replace it with one drawn
+    from an as-yet-uncovered part of the chapter.
+    BEFORE FINALIZING: list the primary subtopic of each question; if any single
+    subtopic appears 3+ times, rewrite the extras to cover different material.
+    If the chapter spans multiple civilizations/regions/themes, the batch must
+    sample BROADLY across them, not exhaust one.
 Q4. TRUE_FALSE DIFFICULTY CAP: TRUE_FALSE questions may ONLY be labelled EASY
     or MEDIUM — never HARD. (Binary questions have a 50% random-guess rate and
     cannot meaningfully test HARD-level reasoning.)
@@ -277,7 +285,14 @@ Q14. EXACTLY ONE CORRECT ANSWER: Precisely one option may be true; the other
       which stage?" (one scheme → exactly one correct answer).
 Q15. NO "ALL/NONE OF THE ABOVE": Never use "All of the above", "None of the
     above", "Both A and B", or similar meta-options. Every option must be a
-    concrete, substantive answer. (Reinforces Q6.)`;
+    concrete, substantive answer. (Reinforces Q6.)
+Q16. ANSWER BALANCE: Never make the correct choice predictable.
+    - MCQ: do NOT always place the correct answer first. Vary which option is
+      correct across the batch. (The system also shuffles options after you,
+      so never write a stem that hints at a position like "the first option".)
+    - TRUE_FALSE: write a MIX of true and false statements — aim for roughly
+      half TRUE and half FALSE across the batch. Do NOT default every statement
+      to true; deliberately include statements whose correct answer is False.`;
 
 // ─── Format rules per question type ────────────────────────────────────────
 
@@ -307,7 +322,14 @@ const FORMAT_RULES = `QUESTION-TYPE FORMAT RULES:
    - questionText: instruction to arrange items in the correct sequence.
    - options: all items in RANDOM order.
    - correctAnswer: items in the CORRECT order, pipe-separated,
-     e.g. "Step1|Step2|Step3".`;
+     e.g. "Step1|Step2|Step3".
+   - NO SORT-KEY LEAKAGE: options must NEVER contain the value that reveals the
+     order — no years, dates, numbers, or step labels ("first", "1st", "Phase 1")
+     embedded in the option text. The student must order by KNOWLEDGE, not by
+     reading a printed number and sorting it.
+     WRONG: ["Roman conquest (30 B.C)", "Philip II wins (338 B.C)", …]  ← dates leak the order
+     RIGHT: ["Roman conquest of Greece", "Philip II defeats the Greek city-states", …]
+     (The correctAnswer still encodes the true order; the options must not.)`;
 
 // ─── Main builder ──────────────────────────────────────────────────────────
 
@@ -375,7 +397,14 @@ For each candidate question, verify ALL of the following:
           DIFFERENT question, replace it.
 
   DIVERSITY CHECK:
-  ✓ [Q3]  This subtopic has not already been covered in this batch.
+  ✓ [Q3]  No single named entity/event/sub-topic appears in 3+ questions across
+          the batch. List each question's subtopic; if any repeats 3+ times,
+          rewrite the extras to cover uncovered parts of the chapter.
+
+  ORDERING CHECK (only if type = ORDERING):
+  ✓  No option contains a year, date, number, or step label that would let the
+     student sort without knowledge. If any option leaks the order, remove the
+     value from the option text (keep it only in correctAnswer).
 
   HARD-SPECIFIC CHECKS (only if difficulty = HARD):
   ✓ DUAL-FACT: A student who knows only ONE fact from the chapter cannot

@@ -10,6 +10,7 @@ import type {
   DetectedChapter,
 } from "./gemini";
 import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
+import { shuffleArray } from "./utils";
 
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 export const OLLAMA_CHAT_MODEL = "mistral";
@@ -94,10 +95,14 @@ function validateQuestions(raw: unknown): GeneratedQuestion[] {
     const diff = String(q.difficulty ?? "MEDIUM").toUpperCase();
     const difficulty = diff === "EASY" ? "EASY" : diff === "HARD" ? "HARD" : "MEDIUM";
 
+    const options = (q.options as unknown[]).map(String);
+
     validated.push({
       questionText: sanitizeQuestionText(String(q.questionText)),
       type: type as GeneratedQuestion["type"],
-      options: (q.options as unknown[]).map(String),
+      // Shuffle MCQ options so the correct answer isn't biased toward slot A.
+      // Only MCQ — MATCH_PAIRS/ORDERING option order carries meaning.
+      options: type === "MCQ" ? shuffleArray(options) : options,
       correctAnswer: String(q.correctAnswer).trim(),
       difficulty: difficulty as GeneratedQuestion["difficulty"],
       explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",

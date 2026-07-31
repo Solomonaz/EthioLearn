@@ -3,13 +3,14 @@
  * Uses a lighter-touch prompt (faster, fewer quality checks) compared
  * to the admin textbook pipeline. (SRS §4.8.2)
  *
- * Falls back through: Gemini → Cerebras → Groq
+ * Falls back through: Gemini → Cerebras → NVIDIA → Groq
  */
 
 import { generateQuestionsFromContent } from "./gemini";
 import type { GeneratedQuestion } from "./gemini";
 import { groqGenerateQuestions } from "./groq";
 import { cerebrasGenerateQuestions, hasCerebrasKey } from "./cerebras";
+import { nvidiaGenerateQuestions, hasNvidiaKey } from "./nvidia";
 
 export interface StudentBookQuestion {
   question: string;
@@ -73,6 +74,9 @@ export async function generateQuestionsFromText(
     { name: "Gemini", run: () => generateQuestionsFromContent(genOptions) },
     ...(hasCerebrasKey()
       ? [{ name: "Cerebras", run: () => cerebrasGenerateQuestions(genOptions) }]
+      : []),
+    ...(hasNvidiaKey()
+      ? [{ name: "NVIDIA", run: () => nvidiaGenerateQuestions(genOptions) }]
       : []),
     { name: "Groq", run: () => groqGenerateQuestions(genOptions) },
   ];

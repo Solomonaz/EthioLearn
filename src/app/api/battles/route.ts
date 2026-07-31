@@ -21,43 +21,51 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { subject, grade, questionCount = 10 } = body as {
+    const { subject, questionCount = 10 } = body as {
       subject: string;
-      grade: number;
       questionCount: number;
     };
 
-    if (!subject || !grade) {
+    // Grade is ALWAYS the student's own profile grade — never trust the client.
+    const grade = (user as { grade?: number | null }).grade ?? null;
+
+    if (!subject) {
+      return NextResponse.json({ error: "Subject is required" }, { status: 400 });
+    }
+    if (!grade) {
       return NextResponse.json(
-        { error: "Subject and grade are required" },
+        { error: "Your profile has no grade set. Complete your profile first." },
         { status: 400 }
       );
     }
 
-    // Find a textbook matching subject/grade
-    const textbook = await db.textbook.findFirst({
+    // Gather all COMPLETED textbooks for this exact subject + the student's grade.
+    // (findMany, not findFirst, so the pool matches the count from /options,
+    // which sums across every textbook for the subject.)
+    const textbooks = await db.textbook.findMany({
       where: {
-        subject: { contains: subject, mode: "insensitive" },
+        subject: { equals: subject, mode: "insensitive" },
         grade,
         processingStatus: "COMPLETED",
       },
       include: { chapters: { select: { id: true } } },
     });
 
-    if (!textbook || textbook.chapters.length === 0) {
+    const chapterIds = textbooks.flatMap((t) => t.chapters.map((c) => c.id));
+
+    if (chapterIds.length === 0) {
       return NextResponse.json(
         { error: "No questions available for this subject and grade" },
         { status: 404 }
       );
     }
 
-    const chapterIds = textbook.chapters.map((c) => c.id);
-
     // Fetch questions with correctAnswer included (for in-memory socket validation)
     const allQuestions = await db.question.findMany({
       where: {
         chapterId: { in: chapterIds },
         type: "MCQ",
+        status: "PUBLISHED",
       },
       select: {
         id: true,
@@ -118,7 +126,7 @@ export async function POST(request: Request) {
           subject,
           grade,
           questionCount: questionsWithIndex.length,
-          textbookId: textbook.id,
+          textbookId: textbooks[0]?.id ?? null,
           questions: questionsWithIndex,
         },
       },

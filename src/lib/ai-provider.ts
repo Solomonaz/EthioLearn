@@ -1,5 +1,5 @@
 /**
- * Unified AI provider: Gemini → Cerebras → Groq fallback chain (production).
+ * Unified AI provider: Gemini → Cerebras → NVIDIA → Groq fallback chain (production).
  * Ollama Mistral is available as a local-dev-only tertiary fallback when
  * OLLAMA_BASE_URL is set to a non-localhost address.
  *
@@ -15,6 +15,7 @@ import {
 } from "./gemini";
 import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript } from "./groq";
 import { cerebrasGenerateQuestions, cerebrasDetectChapters, hasCerebrasKey } from "./cerebras";
+import { nvidiaGenerateQuestions, nvidiaDetectChapters, hasNvidiaKey } from "./nvidia";
 import { ollamaGenerateQuestions, ollamaDetectChapters } from "./ollama";
 
 import type {
@@ -88,7 +89,7 @@ function hasOllama(): boolean {
 
 export async function generateQuestions(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "cerebras" | "groq" | "ollama" }> {
+): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "cerebras" | "nvidia" | "groq" | "ollama" }> {
   // 1. Gemini — 1M TPM free tier handles large chapter content without rate limits
   if (hasGeminiKey()) {
     try {
@@ -117,7 +118,20 @@ export async function generateQuestions(
     }
   }
 
-  // 3. Groq — fast fallback; may hit 6K TPM with very large chapter content
+  // 3. NVIDIA NIM — highest free-tier RPM, no hard credit cap; separate quota.
+  //    Any failure falls through to the next provider rather than aborting.
+  if (hasNvidiaKey()) {
+    try {
+      const questions = await nvidiaGenerateQuestions(opts);
+      return { questions, provider: "nvidia" };
+    } catch (err) {
+      console.warn(
+        `[AI Provider] NVIDIA failed (${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
+      );
+    }
+  }
+
+  // 4. Groq — fast fallback; may hit 6K TPM with very large chapter content
   if (hasGroqKey()) {
     try {
       const questions = await groqGenerateQuestions(opts);
@@ -131,7 +145,7 @@ export async function generateQuestions(
     }
   }
 
-  // 4. Ollama Mistral — local dev only, skipped in production
+  // 5. Ollama Mistral — local dev only, skipped in production
   if (hasOllama()) {
     try {
       const questions = await ollamaGenerateQuestions(opts);
@@ -139,14 +153,14 @@ export async function generateQuestions(
       return { questions, provider: "ollama" };
     } catch (err) {
       throw new Error(
-        `All AI providers failed. Gemini, Cerebras and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
+        `All AI providers failed. Gemini, Cerebras, NVIDIA and Groq are rate-limited, and Ollama returned an error: ${err instanceof Error ? err.message : String(err)}. ` +
         "Ensure Ollama is running with 'mistral' model pulled (ollama pull mistral)."
       );
     }
   }
 
   throw new Error(
-    "All AI providers are rate-limited. Add a free CEREBRAS_API_KEY (https://cloud.cerebras.ai) for more capacity, or wait a moment and try again."
+    "All AI providers are rate-limited. Add a free NVIDIA_API_KEY (https://build.nvidia.com) or CEREBRAS_API_KEY (https://cloud.cerebras.ai) for more capacity, or wait a moment and try again."
   );
 }
 
@@ -158,7 +172,7 @@ export async function generateQuestions(
 
 export async function detectChapters(
   opts: DetectChaptersOptions
-): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "cerebras" | "groq" | "ollama" }> {
+): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "cerebras" | "nvidia" | "groq" | "ollama" }> {
   // 1. Gemini — 1M TPM handles large textbook content without rate limits
   if (hasGeminiKey()) {
     try {
@@ -185,7 +199,19 @@ export async function detectChapters(
     }
   }
 
-  // 3. Groq — fast fallback
+  // 3. NVIDIA NIM — highest free-tier RPM, separate quota. Any failure falls through.
+  if (hasNvidiaKey()) {
+    try {
+      const chapters = await nvidiaDetectChapters(opts);
+      return { chapters, provider: "nvidia" };
+    } catch (err) {
+      console.warn(
+        `[AI Provider] NVIDIA failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
+      );
+    }
+  }
+
+  // 4. Groq — fast fallback
   if (hasGroqKey()) {
     try {
       const chapters = await groqDetectChapters(opts);
@@ -199,7 +225,7 @@ export async function detectChapters(
     }
   }
 
-  // 4. Ollama Mistral — local dev only, skipped in production
+  // 5. Ollama Mistral — local dev only, skipped in production
   if (hasOllama()) {
     try {
       const chapters = await ollamaDetectChapters(opts);

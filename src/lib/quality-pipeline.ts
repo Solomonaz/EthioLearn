@@ -30,7 +30,8 @@ export type QualityFlag =
   | "FACTUAL_ERROR"        // Correct answer or premise is factually wrong
   | "META_REFERENCE"       // Question text references "the chapter / the text"
   | "COMPOUND_QUESTION"    // MCQ/TRUE_FALSE asks two things ("…and why?")
-  | "WEAK_OPTION";         // MCQ uses "All/None of the above" or "Both A and B"
+  | "WEAK_OPTION"          // MCQ uses "All/None of the above" or "Both A and B"
+  | "ANSWER_SKEW";         // Batch's correct answers are lopsided (position / true-false)
 
 export interface QualityResult {
   questionIndex: number;
@@ -371,6 +372,63 @@ function checkRelevance(
   return relevanceScores;
 }
 
+// ─── Batch answer-balance check ────────────────────────
+// Flags a lopsided answer key across the batch. MCQ option order is already
+// randomised at generation, so this mainly catches TRUE_FALSE batches that skew
+// heavily to one answer (which shuffling cannot fix). Returns a map of question
+// index → reason for the questions that should carry the ANSWER_SKEW flag.
+function detectAnswerSkew(questions: GeneratedQuestion[]): Map<number, string> {
+  const flagged = new Map<number, string>();
+
+  // TRUE_FALSE balance
+  const tf = questions
+    .map((q, i) => ({ i, ans: String(q.correctAnswer).trim().toLowerCase() }))
+    .filter(({ i }) => questions[i].type.toUpperCase() === "TRUE_FALSE");
+  if (tf.length >= 4) {
+    const trueRatio = tf.filter((x) => x.ans === "true").length / tf.length;
+    if (trueRatio >= 0.75 || trueRatio <= 0.25) {
+      const majority = trueRatio >= 0.5 ? "True" : "False";
+      const pct = Math.round((trueRatio >= 0.5 ? trueRatio : 1 - trueRatio) * 100);
+      for (const { i } of tf) {
+        flagged.set(i, `${pct}% of True/False answers are "${majority}" — vary the mix toward ~50/50`);
+      }
+    }
+  }
+
+  // MCQ correct-answer position balance (safety net; usually uniform post-shuffle)
+  const mcqByPos: Record<number, number[]> = {};
+  let mcqTotal = 0;
+  questions.forEach((q, i) => {
+    if (q.type.toUpperCase() !== "MCQ" || !Array.isArray(q.options)) return;
+    const pos = q.options
+      .map((o) => String(o).trim().toLowerCase())
+      .indexOf(String(q.correctAnswer).trim().toLowerCase());
+    if (pos < 0) return;
+    if (!mcqByPos[pos]) mcqByPos[pos] = [];
+    mcqByPos[pos].push(i);
+    mcqTotal++;
+  });
+  if (mcqTotal >= 4) {
+    let topPos = -1;
+    let topLen = 0;
+    for (const [p, idxs] of Object.entries(mcqByPos)) {
+      if (idxs.length > topLen) {
+        topLen = idxs.length;
+        topPos = Number(p);
+      }
+    }
+    if (topPos >= 0 && topLen / mcqTotal > 0.6) {
+      const label = String.fromCharCode(65 + topPos);
+      const pct = Math.round((topLen / mcqTotal) * 100);
+      for (const i of mcqByPos[topPos]) {
+        flagged.set(i, `${pct}% of MCQ correct answers are in position ${label} — distribute across options`);
+      }
+    }
+  }
+
+  return flagged;
+}
+
 // ─── Main Pipeline ──────────────────────────────────────
 
 /**
@@ -409,6 +467,9 @@ export async function runQualityPipeline(
   const duplicateIndices = new Set(
     duplicateResult.duplicatePairs.flat()
   );
+
+  // Batch-level answer-balance check (position / true-false skew).
+  const answerSkew = detectAnswerSkew(questions);
 
   // Build results for each question
   const results: QualityResult[] = questions.map((q, idx) => {
@@ -489,6 +550,14 @@ export async function runQualityPipeline(
       flags.push("FACTUAL_ERROR");
       details["FACTUAL_ERROR"] = aiCheck.factualReason || "Factual accuracy check failed";
       penalty += 0.45; // Severe — a wrong correct answer directly harms students
+    }
+
+    // 8. Answer-key skew (batch-level: lopsided position or true/false balance)
+    const skewReason = answerSkew.get(idx);
+    if (skewReason) {
+      flags.push("ANSWER_SKEW");
+      details["ANSWER_SKEW"] = skewReason;
+      penalty += 0.1;
     }
 
     const qualityScore = Math.max(0, Math.round((1 - penalty) * 100) / 100);

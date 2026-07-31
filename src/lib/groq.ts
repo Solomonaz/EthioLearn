@@ -6,6 +6,7 @@ import type {
   DetectedChapter,
 } from "./gemini";
 import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
+import { shuffleArray } from "./utils";
 
 // ─── Client ─────────────────────────────────────────────
 
@@ -166,7 +167,9 @@ export function validateQuestions(raw: unknown): GeneratedQuestion[] {
     validated.push({
       questionText: sanitizeQuestionText(q.questionText),
       type: type as any,
-      options,
+      // Shuffle MCQ options so the correct answer isn't biased toward slot A.
+      // Only MCQ — MATCH_PAIRS/ORDERING option order carries meaning.
+      options: type === "MCQ" ? shuffleArray(options) : options,
       correctAnswer,
       difficulty,
       explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
