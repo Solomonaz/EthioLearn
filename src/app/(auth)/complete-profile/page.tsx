@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 import { useTranslations } from "next-intl";
 
 const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -49,8 +50,8 @@ export default function CompleteProfilePage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <Link href="/" className="text-3xl font-bold text-primary">
-            {tc("appName")}
+          <Link href="/" aria-label={tc("appName")} className="inline-flex justify-center">
+            <Logo size="lg" />
           </Link>
           <p className="mt-2 text-text-secondary">{t("completeProfileStep", { name: displayName })}</p>
         </div>

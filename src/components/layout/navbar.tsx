@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NotificationBell } from "@/components/ui/notification-bell";
+import { Logo } from "@/components/ui/logo";
 
 interface NavbarProps {
   onMenuToggle?: () => void;
@@ -40,9 +41,9 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
               )}
             </button>
           )}
-          <span className="text-xl font-bold text-primary">
-            EthioLearn
-          </span>
+          <Link href="/" aria-label={t("appName")}>
+            <Logo size="sm" />
+          </Link>
         </div>
 
         {status === "loading" ? null : session ? (

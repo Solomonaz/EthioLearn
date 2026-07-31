@@ -185,14 +185,41 @@ export async function GET() {
     .sort((a, b) => a.avgScore - b.avgScore)
     .slice(0, 5);
 
-  // Study recommendations (AI-style logic)
+  // Study recommendations — detailed, data-driven, and linkable to the chapter.
   const studyRecommendations = weakestChapters.map((c) => {
-    const lastAttempts = Math.min(c.attemptCount, 3);
-    const avgText =
-      lastAttempts > 1
-        ? `your last ${lastAttempts} attempts averaged ${c.avgScore}%`
-        : `your latest attempt was ${c.avgScore}%`;
-    return `You should review ${c.title} of ${c.subject} — ${avgText}.`;
+    const attemptsText = c.attemptCount === 1 ? "1 attempt" : `${c.attemptCount} attempts`;
+    // Next mastery tier the student is working toward.
+    const target = c.avgScore < 60 ? 60 : 80;
+    const targetLabel = target === 60 ? "Proficient" : "Mastered";
+    const gap = Math.max(0, target - c.avgScore);
+
+    let suggestion: string;
+    if (c.avgScore < 40) {
+      suggestion =
+        "Start with Easy questions to rebuild the fundamentals, then step up to Medium. Read the explanation after every question.";
+    } else if (c.avgScore < 60) {
+      suggestion =
+        "Focus on Medium questions and review the explanation for each answer you miss to close the gaps.";
+    } else {
+      suggestion =
+        "You're close — practice Hard questions to reach Mastered.";
+    }
+
+    const detail =
+      `You're averaging ${c.avgScore}% on “${c.title}” (${c.subject}, Grade ${c.grade}) ` +
+      `across ${attemptsText} — ${gap}% below ${targetLabel} (${target}%).`;
+
+    return {
+      chapterId: c.id,
+      chapterTitle: c.title,
+      subject: c.subject,
+      grade: c.grade,
+      avgScore: c.avgScore,
+      attemptCount: c.attemptCount,
+      masteryLevel: c.masteryLevel,
+      detail,
+      suggestion,
+    };
   });
 
   return NextResponse.json({

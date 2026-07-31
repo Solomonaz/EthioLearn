@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   LineChart,
@@ -48,11 +49,23 @@ interface ChapterStat {
   attemptCount: number;
 }
 
+interface Recommendation {
+  chapterId: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+  avgScore: number;
+  attemptCount: number;
+  masteryLevel: MasteryLevel;
+  detail: string;
+  suggestion: string;
+}
+
 interface ProgressData {
   subjects: SubjectStat[];
   chapters: ChapterStat[];
   weakestChapters: ChapterStat[];
-  studyRecommendations: string[];
+  studyRecommendations: Recommendation[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -250,14 +263,26 @@ export default function StudentProgressPage() {
             </h2>
             <div className="space-y-4">
               {studyRecommendations.length > 0 ? (
-                studyRecommendations.map((rec: string, idx: number) => (
-                  <Card key={idx} className="relative overflow-hidden border-purple-200 bg-purple-50/50 hover:bg-purple-50 transition-colors">
+                studyRecommendations.map((rec: Recommendation) => (
+                  <Card key={rec.chapterId} className="relative overflow-hidden border-purple-200 bg-purple-50/50 hover:bg-purple-50 transition-colors">
                     <CardContent className="p-4">
-                       <p className="text-xs font-bold text-purple-600 uppercase tracking-tighter mb-1">Personal Goal</p>
-                       <p className="text-sm font-medium text-purple-900 leading-relaxed">{rec}</p>
-                       <div className="mt-3 flex items-center gap-1 text-[10px] font-bold text-purple-600 uppercase">
-                         Explore Chapter <ChevronRight className="h-3 w-3" />
+                       <div className="mb-1 flex items-center justify-between gap-2">
+                         <p className="text-xs font-bold text-purple-600 uppercase tracking-tighter">Personal Goal</p>
+                         <Badge variant={scoreVariant(rec.avgScore)}>{rec.avgScore}%</Badge>
                        </div>
+                       <p className="text-sm font-semibold text-purple-900 leading-snug">{rec.chapterTitle}</p>
+                       <p className="mt-1 text-xs text-purple-700/80">{rec.subject} · Grade {rec.grade} · {rec.attemptCount} attempt{rec.attemptCount === 1 ? "" : "s"}</p>
+                       <p className="mt-2 text-sm text-purple-900/90 leading-relaxed">{rec.detail}</p>
+                       <p className="mt-2 flex gap-1.5 text-sm text-purple-800/90 leading-relaxed">
+                         <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-600" />
+                         <span>{rec.suggestion}</span>
+                       </p>
+                       <Link
+                         href={`/student/quiz?review=true&chapterId=${rec.chapterId}`}
+                         className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-purple-600 uppercase hover:text-purple-800 hover:underline"
+                       >
+                         Practice this chapter <ChevronRight className="h-3 w-3" />
+                       </Link>
                     </CardContent>
                     <div className="absolute top-0 right-0 h-16 w-16 -translate-y-8 translate-x-8 rounded-full bg-purple-200/30" />
                   </Card>

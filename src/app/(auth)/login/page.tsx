@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 import { useState, Suspense, useEffect } from "react";
 import { signIn, getSession, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -146,7 +147,7 @@ function LoginForm() {
 
         {/* Logo */}
         <div className="mb-8 text-center">
-          <Link href="/" className="text-3xl font-bold text-primary">{tc("appName")}</Link>
+          <Link href="/" aria-label={tc("appName")} className="inline-flex justify-center"><Logo size="lg" /></Link>
           <p className="mt-2 text-text-secondary">{t("signInSubtitle")}</p>
         </div>
 

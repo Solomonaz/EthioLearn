@@ -201,6 +201,43 @@ export default function QuizLauncherPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-launch a practice quiz from a "Practice this chapter" recommendation link
+  useEffect(() => {
+    const reviewChapterId = searchParams.get("chapterId");
+    const isReview = searchParams.get("review") === "true";
+    if (!isReview || !reviewChapterId) return;
+
+    async function launchReview() {
+      setGenerating(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/quizzes/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chapterId: reviewChapterId,
+            difficulty: "MIXED",
+            questionCount: 10,
+            mode: "SOLO",
+            isDailyChallenge: false,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to generate practice quiz");
+        }
+        const data = await res.json();
+        startQuiz(data.quizId, data.questions, "SOLO");
+        router.push(`/student/quiz/${data.quizId}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to start practice quiz");
+        setGenerating(false);
+      }
+    }
+    launchReview();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleStartQuiz() {
     if (!selectedTextbook || !selectedChapter || !selectedDifficulty || !selectedCount) return;
 

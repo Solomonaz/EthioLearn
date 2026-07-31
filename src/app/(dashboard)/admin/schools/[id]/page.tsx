@@ -151,9 +151,17 @@ export default function SchoolDetailPage() {
 
     setAddingAdmin(true);
     try {
+      // The "+251" shown in the form is a fixed label — prepend it before
+      // sending. Normalise so a pasted 0912…, 251912…, or +251912… also works:
+      // keep digits only, then strip a leading country code (251) or trunk 0.
+      const localDigits = adminPhone
+        .trim()
+        .replace(/\D/g, "")
+        .replace(/^251/, "")
+        .replace(/^0/, "");
       const body =
         adminMode === "create"
-          ? { name: adminName.trim(), phoneNumber: adminPhone.trim() }
+          ? { name: adminName.trim(), phoneNumber: `+251${localDigits}` }
           : { userId: adminUserId.trim() };
 
       const res = await fetch(`/api/admin/schools/${schoolId}/admins`, {

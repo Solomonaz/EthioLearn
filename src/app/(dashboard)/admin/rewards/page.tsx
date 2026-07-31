@@ -1257,7 +1257,7 @@ export default function AdminRewardsPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-text-primary">{t("rewardsTitle")}</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            {t("settingsSubtitle")}
+            {t("rewardsSubtitle")}
           </p>
         </div>
 

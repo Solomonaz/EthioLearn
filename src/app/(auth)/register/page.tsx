@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 import { useState, useEffect, Suspense } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -137,8 +138,8 @@ function RegisterForm() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <Link href="/" className="text-3xl font-bold text-primary">
-            {tc("appName")}
+          <Link href="/" aria-label={tc("appName")} className="inline-flex justify-center">
+            <Logo size="lg" />
           </Link>
           <p className="mt-2 text-text-secondary">{t("registerSubtitle")}</p>
         </div>
