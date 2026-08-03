@@ -2,6 +2,44 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { chatWithTutor } from "@/lib/ai-provider";
+import { semanticSearch } from "@/lib/embeddings";
+
+// How many of the most relevant chunks to retrieve as tutor context.
+const TUTOR_RETRIEVAL_LIMIT = 8;
+
+/**
+ * Build the grounding content for the tutor. Prefers semantic retrieval over
+ * the chapter's embedded chunks — the chunks most relevant to the student's
+ * question — so the model receives focused context instead of a blindly
+ * truncated prefix of a possibly-huge chapter. Falls back to the raw chapter
+ * text when the chapter has not been processed into embeddings yet (or pgvector
+ * is unavailable), preserving the previous behaviour in that case.
+ */
+async function buildTutorContext(
+  chapterId: string,
+  message: string,
+  fallback: string
+): Promise<string> {
+  try {
+    const hits = await semanticSearch(message, {
+      chapterId,
+      limit: TUTOR_RETRIEVAL_LIMIT,
+    });
+
+    if (hits.length > 0) {
+      // Preserve the chapter's natural reading order for coherence.
+      return hits
+        .slice()
+        .sort((a, b) => a.chunkIndex - b.chunkIndex)
+        .map((h) => h.content)
+        .join("\n\n---\n\n");
+    }
+  } catch (err) {
+    console.warn("[Tutor API] Semantic retrieval failed, using raw chapter content:", err);
+  }
+
+  return fallback;
+}
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -28,11 +66,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
     }
 
-    // 2. Chat with Tutor
+    // 2. Retrieve the most relevant chunks for this question (RAG), falling
+    //    back to raw chapter text when embeddings aren't available.
+    const content = await buildTutorContext(
+      chapterId,
+      message,
+      chapter.content || chapter.textbook.content || ""
+    );
+
+    // 3. Chat with Tutor
     const result = await chatWithTutor({
       message,
       history,
-      content: chapter.content || chapter.textbook.content || "",
+      content,
       chapterTitle: chapter.title,
       subject: chapter.textbook.subject,
       grade: chapter.textbook.grade,

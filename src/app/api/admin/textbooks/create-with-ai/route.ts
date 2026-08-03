@@ -99,10 +99,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate at least one AI API key
-  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
+  // Validate at least one AI provider is configured (Gemini, Cerebras, NVIDIA, or Groq).
+  if (
+    !process.env.GEMINI_API_KEY &&
+    !process.env.GROQ_API_KEY &&
+    !process.env.CEREBRAS_API_KEY &&
+    !process.env.NVIDIA_API_KEY
+  ) {
     return NextResponse.json(
-      { error: "No AI API key configured. Set GEMINI_API_KEY or GROQ_API_KEY." },
+      { error: "No AI API key configured. Set GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY." },
       { status: 500 }
     );
   }

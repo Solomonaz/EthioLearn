@@ -13,8 +13,10 @@ import type {
   GeneratedQuestion,
   DetectChaptersOptions,
   DetectedChapter,
+  VideoScript,
 } from "./gemini";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
 import {
   extractJson,
   validateQuestions,
@@ -32,7 +34,7 @@ export function hasNvidiaKey(): boolean {
 }
 
 async function nvidiaChatCompletion(
-  messages: { role: "system" | "user"; content: string }[],
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
   opts: { temperature?: number; maxTokens?: number; jsonMode?: boolean } = {}
 ): Promise<string> {
   const apiKey = process.env.NVIDIA_API_KEY;
@@ -94,7 +96,7 @@ export async function nvidiaChat(
 export async function nvidiaGenerateQuestions(
   opts: GenerateOptions
 ): Promise<GeneratedQuestion[]> {
-  const prompt = buildQuestionGenerationPrompt(opts, 30000);
+  const prompt = buildQuestionGenerationPrompt(opts);
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const text = await nvidiaChatCompletion(
@@ -175,4 +177,41 @@ export async function nvidiaDetectChapters(
   }
 
   throw new Error("NVIDIA chapter detection failed after 2 attempts");
+}
+
+// ─── AI Tutor Chat ──────────────────────────────────────
+
+export async function nvidiaTutorChat(opts: {
+  message: string;
+  history: { role: "user" | "assistant"; content: string }[];
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+}): Promise<string> {
+  const text = await nvidiaChatCompletion(
+    [
+      { role: "system", content: buildTutorSystemPrompt(opts) },
+      ...opts.history,
+      { role: "user", content: opts.message },
+    ],
+    { temperature: 0.7, maxTokens: 2048, jsonMode: false }
+  );
+  return text.trim() || "I apologize, but I'm having trouble responding right now.";
+}
+
+// ─── Video Tutorial Script ──────────────────────────────
+
+export async function nvidiaGenerateVideoScript(opts: {
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+  topic?: string;
+}): Promise<VideoScript> {
+  const text = await nvidiaChatCompletion(
+    [{ role: "user", content: buildVideoScriptPrompt(opts) }],
+    { temperature: 0.6, maxTokens: 3000, jsonMode: true }
+  );
+  return parseVideoScript(text);
 }

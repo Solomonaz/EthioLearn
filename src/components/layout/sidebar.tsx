@@ -22,6 +22,7 @@ import {
   TrendingUp,
   BookMarked,
   Building2,
+  CreditCard,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "subjects",   href: "/admin/subjects",     icon: BookMarked },
     { labelKey: "questions",  href: "/admin/questions",    icon: HelpCircle },
     { labelKey: "rewards",    href: "/admin/rewards",      icon: Gift },
+    { labelKey: "pricing",    href: "/admin/pricing",      icon: CreditCard },
     { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
     { labelKey: "settings",   href: "/admin/settings",     icon: Settings },
   ];

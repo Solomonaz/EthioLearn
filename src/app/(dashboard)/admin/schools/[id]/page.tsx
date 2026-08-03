@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
+import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 
 interface SchoolAdmin {
   id: string;
@@ -419,6 +420,9 @@ export default function SchoolDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Subscription */}
+      <SubscriptionPanel audience="SCHOOL" targetId={school.id} />
 
       {/* School Administrators */}
       <Card>

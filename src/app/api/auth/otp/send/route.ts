@@ -1,17 +1,34 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 import { storeOTP } from "@/lib/otp-store";
 import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { phoneNumber } = body;
+    const { phoneNumber, purpose } = body;
 
     if (!phoneNumber || !/^\+251[0-9]{9}$/.test(phoneNumber)) {
       return NextResponse.json(
         { error: "Invalid Ethiopian phone number format (+251XXXXXXXXX)" },
         { status: 400 }
       );
+    }
+
+    // For registration, reject an already-registered number up front — before
+    // sending an OTP or collecting a profile — so the user is told to sign in
+    // instead of only discovering the conflict at the final submit step.
+    if (purpose === "register") {
+      const existing = await db.user.findUnique({
+        where: { phoneNumber },
+        select: { id: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: "An account with this phone number already exists. Please sign in instead." },
+          { status: 409 }
+        );
+      }
     }
 
     // 3 OTP sends per phone per 10 minutes

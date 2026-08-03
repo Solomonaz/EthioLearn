@@ -7,6 +7,18 @@ import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
+import { formatMoney, billingIntervalLabel, type BillingInterval } from "@/lib/pricing";
+
+interface StudentPlan {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | null;
+  currency: string;
+  billingInterval: BillingInterval;
+  trialDays: number;
+  features: string[];
+}
 
 const TelegramLoginButton = dynamic(
   () => import("@/components/auth/telegram-login").then((m) => m.TelegramLoginButton),
@@ -42,13 +54,24 @@ function RegisterForm() {
   }, [status, session, router]);
 
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
-  const [step, setStep]               = useState<"phone" | "otp" | "profile">("phone");
+  const [step, setStep]               = useState<"phone" | "otp" | "profile" | "plan">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp]                 = useState("");
   const [name, setName]               = useState("");
   const [grade, setGrade]             = useState("");
   const [isLoading, setIsLoading]     = useState(false);
   const [error, setError]             = useState("");
+
+  // Available student plans (drives the optional plan-selection step)
+  const [plans, setPlans]                 = useState<StudentPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+
+  useEffect(() => {
+    fetch("/api/plans/student")
+      .then((r) => (r.ok ? r.json() : { plans: [] }))
+      .then((d) => setPlans(d.plans ?? []))
+      .catch(() => {});
+  }, []);
 
   // ── Social sign-up ────────────────────────────────────────────────────────
   const handleSocialSignUp = async (provider: string) => {
@@ -69,7 +92,7 @@ function RegisterForm() {
       const res  = await fetch("/api/auth/otp/send", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ phoneNumber: "+251" + phoneNumber }),
+        body:    JSON.stringify({ phoneNumber: "+251" + phoneNumber, purpose: "register" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -108,16 +131,38 @@ function RegisterForm() {
     }
   };
 
-  // ── Step 3: Create account ───────────────────────────────────────────────
-  const handleCreateAccount = async (e: React.FormEvent) => {
+  // ── Step 3: Profile → next (plan step if plans exist, else create) ───────
+  const handleProfileNext = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim() || !grade) {
+      setError("Please enter your name and select your grade.");
+      return;
+    }
+    setError("");
+    if (plans.length > 0) {
+      setStep("plan");
+    } else {
+      handleCreateAccount();
+    }
+  };
+
+  // ── Step 4: Create account (optionally with a selected plan) ─────────────
+  // planIdOverride: pass "" to force no plan (Skip); omit to use the selection.
+  const handleCreateAccount = async (planIdOverride?: string) => {
+    const planId = planIdOverride !== undefined ? planIdOverride : selectedPlanId;
     setError("");
     setIsLoading(true);
     try {
       const res  = await fetch("/api/auth/register", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ phoneNumber: "+251" + phoneNumber, name, role: "STUDENT", grade }),
+        body:    JSON.stringify({
+          phoneNumber: "+251" + phoneNumber,
+          name,
+          role: "STUDENT",
+          grade,
+          planId: planId || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -132,7 +177,10 @@ function RegisterForm() {
     }
   };
 
-  const steps = ["phone", "otp", "profile"] as const;
+  const steps: readonly ("phone" | "otp" | "profile" | "plan")[] =
+    plans.length > 0
+      ? ["phone", "otp", "profile", "plan"]
+      : ["phone", "otp", "profile"];
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -291,7 +339,7 @@ function RegisterForm() {
 
               {/* ── Step 3: Profile ───────────────────────────────────────── */}
               {step === "profile" && (
-                <form onSubmit={handleCreateAccount}>
+                <form onSubmit={handleProfileNext}>
                   <h2 className="mb-4 text-lg font-semibold text-text-primary">
                     {t("completeProfile")}
                   </h2>
@@ -336,7 +384,7 @@ function RegisterForm() {
                     disabled={isLoading}
                     className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isLoading ? t("creating") : tc("create")}
+                    {plans.length > 0 ? "Continue" : isLoading ? t("creating") : tc("create")}
                   </button>
                   <button
                     type="button"
@@ -347,6 +395,90 @@ function RegisterForm() {
                     {tc("back")}
                   </button>
                 </form>
+              )}
+
+              {/* ── Step 4: Choose a plan (optional) ──────────────────────── */}
+              {step === "plan" && (
+                <div>
+                  <h2 className="mb-1 text-lg font-semibold text-text-primary">
+                    Choose a plan
+                  </h2>
+                  <p className="mb-4 text-sm text-text-secondary">
+                    Pick a plan to get started — you can change or cancel it anytime in Settings.
+                  </p>
+                  <div className="space-y-3">
+                    {plans.map((p) => {
+                      const selected = selectedPlanId === p.id;
+                      return (
+                        <button
+                          type="button"
+                          key={p.id}
+                          onClick={() => setSelectedPlanId(selected ? "" : p.id)}
+                          disabled={isLoading}
+                          className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "border-border hover:border-primary/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-text-primary">{p.name}</span>
+                            <span className="text-base font-bold text-text-primary">
+                              {formatMoney(p.price, p.currency)}
+                              <span className="text-xs font-normal text-text-secondary">
+                                {billingIntervalLabel(p.billingInterval)}
+                              </span>
+                            </span>
+                          </div>
+                          {p.trialDays > 0 && (
+                            <p className="mt-0.5 text-xs text-green-600">
+                              {p.trialDays}-day free trial
+                            </p>
+                          )}
+                          {p.description && (
+                            <p className="mt-1 text-sm text-text-secondary">{p.description}</p>
+                          )}
+                          {p.features.length > 0 && (
+                            <ul className="mt-2 space-y-0.5">
+                              {p.features.map((f, i) => (
+                                <li key={i} className="text-sm text-text-secondary">• {f}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                  <button
+                    type="button"
+                    onClick={() => handleCreateAccount()}
+                    disabled={isLoading}
+                    className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading
+                      ? t("creating")
+                      : selectedPlanId
+                      ? "Create account with plan"
+                      : "Create account"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCreateAccount("")}
+                    disabled={isLoading}
+                    className="mt-2 w-full text-sm text-text-secondary hover:text-primary"
+                  >
+                    Skip for now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStep("profile"); setError(""); }}
+                    className="mt-3 w-full text-sm text-text-secondary hover:text-primary"
+                    disabled={isLoading}
+                  >
+                    {tc("back")}
+                  </button>
+                </div>
               )}
             </>
           )}

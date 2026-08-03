@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { phoneNumber, name, role, grade, section, schoolId } = body;
+    const { phoneNumber, name, role, grade, section, schoolId, planId } = body;
 
     // Validate required fields
     if (!phoneNumber || !name || !role) {
@@ -73,6 +73,34 @@ export async function POST(request: Request) {
         createdAt: true,
       },
     });
+
+    // Optionally attach a self-selected plan (independent students only).
+    // Non-fatal: a plan problem must never block account creation.
+    if (planId && role === "STUDENT" && !schoolId) {
+      try {
+        const plan = await db.pricingPlan.findUnique({ where: { id: String(planId) } });
+        if (plan && plan.audience === "STUDENT" && plan.isActive) {
+          const startDate = new Date();
+          const isTrial = plan.trialDays > 0;
+          await db.subscription.create({
+            data: {
+              planId: plan.id,
+              studentId: user.id,
+              status: isTrial ? "TRIAL" : "ACTIVE",
+              startDate,
+              endDate: isTrial
+                ? new Date(startDate.getTime() + plan.trialDays * 24 * 60 * 60 * 1000)
+                : null,
+              amount: plan.price, // student plans are FLAT
+              currency: plan.currency,
+              createdById: user.id,
+            },
+          });
+        }
+      } catch (subErr) {
+        console.error("Registration plan attach failed (non-fatal):", subErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -96,7 +96,8 @@
     "home": "ዋና ገጽ",
     "ranks": "ደረጃዎች",
     "quiz_short": "ፈተና",
-    "battle_short": "ፉክክር"
+    "battle_short": "ፉክክር",
+    "pricing": "የዋጋ እቅዶች"
   },
   "auth": {
     "phoneLabel": "ስልክ ቁጥር",

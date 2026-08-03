@@ -115,10 +115,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     ? (body.questionTypes.filter((t) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[])
     : ["MCQ" as const];
 
-  // Check at least one AI API key
-  if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) {
+  // Check at least one AI provider is configured. The provider chain supports
+  // Gemini, Cerebras, NVIDIA and Groq — accept ANY of them, not just the first two.
+  if (
+    !process.env.GEMINI_API_KEY &&
+    !process.env.GROQ_API_KEY &&
+    !process.env.CEREBRAS_API_KEY &&
+    !process.env.NVIDIA_API_KEY
+  ) {
     return NextResponse.json(
-      { error: "AI generation is not configured. Set GEMINI_API_KEY or GROQ_API_KEY." },
+      { error: "AI generation is not configured. Set GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY." },
       { status: 503 }
     );
   }

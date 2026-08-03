@@ -1105,6 +1105,19 @@ async function main() {
   });
   console.log(`  Admin: ${admin.name} (${admin.phoneNumber})`);
 
+  // 2b. Create a demo school administrator (for testing the school-admin views)
+  const schoolAdmin = await prisma.user.upsert({
+    where: { phoneNumber: "+251922000001" },
+    update: { name: "Demo School Admin", role: "SCHOOL_ADMIN", schoolId: school.id },
+    create: {
+      phoneNumber: "+251922000001",
+      name: "Demo School Admin",
+      role: "SCHOOL_ADMIN",
+      schoolId: school.id,
+    },
+  });
+  console.log(`  School Admin: ${schoolAdmin.name} (${schoolAdmin.phoneNumber})`);
+
   // 3. Create test student
   const student = await prisma.user.upsert({
     where: { phoneNumber: "+251911111111" },

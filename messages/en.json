@@ -96,7 +96,8 @@
     "home": "Home",
     "ranks": "Ranks",
     "quiz_short": "Quiz",
-    "battle_short": "Battle"
+    "battle_short": "Battle",
+    "pricing": "Pricing"
   },
   "auth": {
     "phoneLabel": "Phone Number",

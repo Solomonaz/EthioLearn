@@ -94,20 +94,47 @@ enum TournamentStatus {
   CANCELLED
 }
 
+enum PlanAudience {
+  SCHOOL
+  STUDENT
+}
+
+enum PricingModel {
+  FLAT // fixed price (student plans)
+  PER_STUDENT // school plans: price = rate × enrolled students
+  TIERED // school plans: price from the bracket matching student count
+}
+
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+  SEMESTER
+  YEARLY
+  ONE_TIME
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
 // ─── Models ──────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  phoneNumber  String?  @unique
-  email        String?  @unique
-  name         String
-  role         UserRole @default(STUDENT)
-  grade        Int?
-  section      String?
-  avatarUrl    String?
-  xpLevel      Int      @default(1)
-  totalPoints  Int      @default(0)
-  streakDays   Int      @default(0)
+  id            String    @id @default(cuid())
+  phoneNumber   String?   @unique
+  email         String?   @unique
+  name          String
+  role          UserRole  @default(STUDENT)
+  grade         Int?
+  section       String?
+  avatarUrl     String?
+  xpLevel       Int       @default(1)
+  totalPoints   Int       @default(0)
+  streakDays    Int       @default(0)
   isActive      Boolean   @default(true)
   suspendedAt   DateTime?
   suspendReason String?
@@ -116,26 +143,28 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Social login identifiers
-  googleId     String?  @unique
-  facebookId   String?  @unique
-  telegramId   String?  @unique
+  googleId   String? @unique
+  facebookId String? @unique
+  telegramId String? @unique
 
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id])
 
   // Relations
   quizzes              Quiz[]
-  hostedGameRooms      GameRoom[]         @relation("GameHost")
+  hostedGameRooms      GameRoom[]        @relation("GameHost")
   gameParticipations   GamePlayer[]
   redemptions          Redemption[]
   pointLedger          PointLedger[]
-  uploadedTextbooks    Textbook[]         @relation("TextbookUploader")
-  approvedRedemptions  Redemption[]       @relation("RedemptionApprover")
+  uploadedTextbooks    Textbook[]        @relation("TextbookUploader")
+  approvedRedemptions  Redemption[]      @relation("RedemptionApprover")
   notifications        Notification[]
   achievements         UserAchievement[]
   studentBooks         StudentBook[]
-  createdTournaments   Tournament[]       @relation("TournamentCreator")
+  createdTournaments   Tournament[]      @relation("TournamentCreator")
   sessions             UserSession[]
+  subscriptions        Subscription[]    @relation("StudentSubscriptions")
+  createdSubscriptions Subscription[]    @relation("SubscriptionCreator")
 
   @@map("users")
 }
@@ -155,7 +184,7 @@ model Subject {
 
 model OtpCode {
   id        String   @id @default(cuid())
-  key       String   @unique   // phone number
+  key       String   @unique // phone number
   code      String
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -166,19 +195,19 @@ model OtpCode {
 // ─── User Sessions ────────────────────────────────────────
 
 model UserSession {
-  id          String    @id @default(cuid())
-  userId      String
-  sessionId   String    @unique @default(cuid())
-  deviceName  String?
-  userAgent   String?   @db.Text
-  ipAddress   String?
-  createdAt   DateTime  @default(now())
-  lastUsedAt  DateTime  @default(now())
-  expiresAt   DateTime
-  isRevoked   Boolean   @default(false)
-  revokedAt   DateTime?
+  id         String    @id @default(cuid())
+  userId     String
+  sessionId  String    @unique @default(cuid())
+  deviceName String?
+  userAgent  String?   @db.Text
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  isRevoked  Boolean   @default(false)
+  revokedAt  DateTime?
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([sessionId])
@@ -195,12 +224,13 @@ model School {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  users          User[]
-  textbooks      Textbook[]
-  rewards        Reward[]
-  rewardBudgets  RewardBudget[]
-  tournaments    Tournament[]
-  gameConfig     GameConfig?
+  users         User[]
+  textbooks     Textbook[]
+  rewards       Reward[]
+  rewardBudgets RewardBudget[]
+  tournaments   Tournament[]
+  gameConfig    GameConfig?
+  subscriptions Subscription[]
 
   @@map("schools")
 }
@@ -218,13 +248,13 @@ model Textbook {
   fileUrl          String
   processingStatus ProcessingStatus @default(PENDING)
   chunkingStatus   ChunkingStatus   @default(PENDING)
-  ocrFlaggedPages  Json?            // array of { page, confidence } for pages below 80% OCR confidence
+  ocrFlaggedPages  Json? // array of { page, confidence } for pages below 80% OCR confidence
   chapterCount     Int              @default(0)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
   uploadedById String?
-  uploadedBy   User?  @relation("TextbookUploader", fields: [uploadedById], references: [id])
+  uploadedBy   User?   @relation("TextbookUploader", fields: [uploadedById], references: [id])
 
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id])
@@ -272,9 +302,9 @@ model Question {
   qualityFlags  String[]       @default([])
   usageCount    Int            @default(0)
   avgAccuracy   Float?
-  language      String       @default("en")
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  language      String         @default("en")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   chapterId String
   chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
@@ -285,14 +315,14 @@ model Question {
 }
 
 model Quiz {
-  id               String   @id @default(cuid())
-  mode             QuizMode @default(SOLO)
-  score            Int      @default(0)
-  totalPointsEarned Int     @default(0)
-  totalQuestions   Int      @default(0)
-  correctAnswers   Int      @default(0)
-  startedAt        DateTime @default(now())
-  completedAt      DateTime?
+  id                String    @id @default(cuid())
+  mode              QuizMode  @default(SOLO)
+  score             Int       @default(0)
+  totalPointsEarned Int       @default(0)
+  totalQuestions    Int       @default(0)
+  correctAnswers    Int       @default(0)
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
 
   studentId String
   student   User   @relation(fields: [studentId], references: [id])
@@ -308,14 +338,14 @@ model Quiz {
 }
 
 model QuizAnswer {
-  id           String  @id @default(cuid())
+  id            String  @id @default(cuid())
   studentAnswer String
-  isCorrect    Boolean
-  timeTakenMs  Int
-  pointsEarned Int     @default(0)
+  isCorrect     Boolean
+  timeTakenMs   Int
+  pointsEarned  Int     @default(0)
 
-  quizId     String
-  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId String
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
@@ -343,13 +373,13 @@ model GameRoom {
 }
 
 model GamePlayer {
-  id        String   @id @default(cuid())
-  score     Int      @default(0)
-  rank      Int?
-  joinedAt  DateTime @default(now())
+  id       String   @id @default(cuid())
+  score    Int      @default(0)
+  rank     Int?
+  joinedAt DateTime @default(now())
 
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   gameRoomId String
   gameRoom   GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
@@ -359,20 +389,20 @@ model GamePlayer {
 }
 
 model Reward {
-  id             String    @id @default(cuid())
-  tier           RewardTier
-  name           String
-  description    String?
-  pointsCost     Int
-  inventoryCount Int       @default(0)
-  imageUrl       String?
-  unitCost       Float?
-  redemptionWindow       RedemptionWindow @default(ANYTIME)
-  windowStartDate        DateTime?
-  windowEndDate          DateTime?
+  id                      String           @id @default(cuid())
+  tier                    RewardTier
+  name                    String
+  description             String?
+  pointsCost              Int
+  inventoryCount          Int              @default(0)
+  imageUrl                String?
+  unitCost                Float?
+  redemptionWindow        RedemptionWindow @default(ANYTIME)
+  windowStartDate         DateTime?
+  windowEndDate           DateTime?
   maxRedemptionsPerWindow Int?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 
   schoolId String
   school   School @relation(fields: [schoolId], references: [id])
@@ -417,11 +447,11 @@ model PointLedger {
 
 model Notification {
   id        String   @id @default(cuid())
-  type      String   // "achievement", "reward", "battle_invite", "streak", "level_up", "system"
+  type      String // "achievement", "reward", "battle_invite", "streak", "level_up", "system"
   title     String
   message   String
   isRead    Boolean  @default(false)
-  data      Json?    // optional metadata (e.g., achievementId, rewardId)
+  data      Json? // optional metadata (e.g., achievementId, rewardId)
   createdAt DateTime @default(now())
 
   userId String
@@ -447,7 +477,7 @@ model StudentBook {
   title            String
   description      String?
   fileUrl          String
-  content          String?          @db.Text   // extracted text from the uploaded file
+  content          String?          @db.Text // extracted text from the uploaded file
   processingStatus ProcessingStatus @default(PENDING)
   isPublic         Boolean          @default(false)
   storageBytes     Int              @default(0)
@@ -458,7 +488,7 @@ model StudentBook {
   updatedAt        DateTime         @updatedAt
 
   uploadedById String?
-  uploadedBy   User?  @relation(fields: [uploadedById], references: [id])
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
 
   @@map("student_books")
 }
@@ -499,8 +529,8 @@ model Tournament {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  schoolId    String
-  school      School @relation(fields: [schoolId], references: [id])
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
 
   createdById String
   createdBy   User   @relation("TournamentCreator", fields: [createdById], references: [id])
@@ -520,7 +550,7 @@ model TournamentRound {
   tournamentId String
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
-  gameRoomId String?  @unique
+  gameRoomId String?   @unique
   gameRoom   GameRoom? @relation(fields: [gameRoomId], references: [id])
 
   @@unique([tournamentId, roundNumber])
@@ -545,19 +575,99 @@ model GameConfig {
 // ─── Content Chunks (pgvector semantic retrieval) ───────
 
 model ContentChunk {
-  id            String   @id @default(cuid())
-  chapterId     String
-  chapter       Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
-  chunkIndex    Int
-  content       String   @db.Text
-  tokenCount    Int
-  bloomLevel    String?
-  embedding     Unsupported("vector(768)")?
+  chunkIndex Int
+  content    String                      @db.Text
+  tokenCount Int
+  bloomLevel String?
+  embedding  Unsupported("vector(768)")?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([chapterId, chunkIndex])
   @@index([chapterId])
   @@map("content_chunks")
+}
+
+// ─── Pricing & Subscriptions ────────────────────────────
+
+model PricingPlan {
+  id              String          @id @default(cuid())
+  name            String
+  description     String?
+  audience        PlanAudience
+  pricingModel    PricingModel    @default(FLAT)
+  // FLAT → the price; PER_STUDENT → rate per enrolled student; TIERED → null (see tiers)
+  price           Float?
+  currency        String          @default("ETB")
+  billingInterval BillingInterval @default(MONTHLY)
+  trialDays       Int             @default(0)
+  features        String[]        @default([])
+  isActive        Boolean         @default(true) // available for assignment
+  sortOrder       Int             @default(0)
+
+  // Entitlements — what the plan unlocks. Primarily for STUDENT plans; school
+  // students and school plans are always treated as full access regardless.
+  // Default true so existing/full plans keep every capability.
+  allowAi          Boolean @default(true) // AI tutor, AI video, AI quiz generation
+  allowMultiplayer Boolean @default(true) // battle / group games (solo is always allowed)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  tiers         PricingTier[]
+  subscriptions Subscription[]
+
+  @@index([audience])
+  @@map("pricing_plans")
+}
+
+model PricingTier {
+  id          String   @id @default(cuid())
+  minStudents Int
+  maxStudents Int? // null = no upper bound
+  price       Float
+  createdAt   DateTime @default(now())
+
+  planId String
+  plan   PricingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("pricing_tiers")
+}
+
+model Subscription {
+  id     String      @id @default(cuid())
+  planId String
+  plan   PricingPlan @relation(fields: [planId], references: [id])
+
+  // Exactly one of schoolId / studentId is set, matching the plan's audience.
+  schoolId  String?
+  school    School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  studentId String?
+  student   User?   @relation("StudentSubscriptions", fields: [studentId], references: [id], onDelete: Cascade)
+
+  status    SubscriptionStatus @default(ACTIVE)
+  startDate DateTime           @default(now())
+  endDate   DateTime?
+
+  // Snapshot of the computed price at assignment time (audit trail).
+  amount               Float?
+  currency             String  @default("ETB")
+  studentCountSnapshot Int? // school subs: enrolled students when priced
+  notes                String?
+
+  createdById String?
+  createdBy   User?   @relation("SubscriptionCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([schoolId])
+  @@index([studentId])
+  @@index([planId])
+  @@map("subscriptions")
 }

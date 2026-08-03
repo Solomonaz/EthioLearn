@@ -192,15 +192,15 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
 // rate-limit collision that occurred when both ran against Gemini simultaneously.
 // Provider order: Groq (production primary) → Gemini → Ollama (local dev only).
 
-async function runAIQualityChecks(
+async function runAIQualityChecksBatch(
   questions: GeneratedQuestion[],
   subject: string,
   grade: number
 ): Promise<Map<number, AIQualityCheck>> {
   const result = new Map<number, AIQualityCheck>();
+  if (questions.length === 0) return result;
 
   const questionList = questions
-    .slice(0, 20)
     .map((q, i) => {
       const opts = q.options
         .map((o, j) => `  ${String.fromCharCode(65 + j)}. ${o}`)
@@ -328,6 +328,30 @@ Return JSON only — no markdown, no code fences:
   return result;
 }
 
+// Run the AI quality check over EVERY question, in batches of 20 to keep each
+// prompt within a safe token budget. Previously only the first 20 questions
+// were checked, so questions 21–30 silently skipped difficulty/grammar/factual
+// verification. Batch-local indices are offset back to global positions.
+const AI_CHECK_BATCH_SIZE = 20;
+
+async function runAIQualityChecks(
+  questions: GeneratedQuestion[],
+  subject: string,
+  grade: number
+): Promise<Map<number, AIQualityCheck>> {
+  const result = new Map<number, AIQualityCheck>();
+
+  for (let start = 0; start < questions.length; start += AI_CHECK_BATCH_SIZE) {
+    const batch = questions.slice(start, start + AI_CHECK_BATCH_SIZE);
+    const batchResult = await runAIQualityChecksBatch(batch, subject, grade);
+    for (const [localIdx, check] of batchResult) {
+      result.set(start + localIdx, check);
+    }
+  }
+
+  return result;
+}
+
 // ─── 5. Semantic Duplicate Detection ───────────────────
 
 function detectDuplicates(
@@ -355,21 +379,55 @@ function detectDuplicates(
 }
 
 // ─── 6. Relevance Check (question vs source content) ───
+//
+// Scores each question against the ENTIRE source, not just its opening. The
+// source is split into windows (see splitSourceForRelevance) that are embedded
+// individually; a question's relevance is its BEST (max) cosine similarity to
+// any window. This fixes the bias where a valid question drawn from content
+// deep in the chapter was flagged LOW_RELEVANCE because only the first ~5k
+// characters were embedded as "the source".
 
 function checkRelevance(
   questions: GeneratedQuestion[],
-  sourceEmbedding: number[],
+  sourceEmbeddings: number[][],
   questionEmbeddings: number[][]
 ): Map<number, number> {
   const relevanceScores = new Map<number, number>();
 
+  if (sourceEmbeddings.length === 0) return relevanceScores;
+
   for (let i = 0; i < questions.length; i++) {
-    if (questionEmbeddings[i]) {
-      relevanceScores.set(i, cosineSimilarity(sourceEmbedding, questionEmbeddings[i]));
+    const qEmbedding = questionEmbeddings[i];
+    if (!qEmbedding) continue;
+
+    let best = -1;
+    for (const sourceEmbedding of sourceEmbeddings) {
+      const sim = cosineSimilarity(sourceEmbedding, qEmbedding);
+      if (sim > best) best = sim;
     }
+    if (best >= -1) relevanceScores.set(i, best);
   }
 
   return relevanceScores;
+}
+
+// Split source content into overlapping-free windows for whole-document
+// relevance scoring. Windows are capped so a very large "all chapters" source
+// (up to ~80k chars) stays within a bounded number of embedding calls.
+function splitSourceForRelevance(
+  text: string,
+  windowChars = 4000,
+  maxWindows = 25
+): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const windows: string[] = [];
+  for (let i = 0; i < trimmed.length && windows.length < maxWindows; i += windowChars) {
+    const slice = trimmed.slice(i, i + windowChars).trim();
+    if (slice) windows.push(slice);
+  }
+  return windows;
 }
 
 // ─── Batch answer-balance check ────────────────────────
@@ -441,18 +499,23 @@ export async function runQualityPipeline(
   subject: string,
   grade: number
 ): Promise<QualityPipelineResult> {
-  // Pre-compute all embeddings in a single batch (source + all questions).
-  // This avoids making 2N+1 separate embedding calls by sharing one N+1 call
-  // between duplicate detection and relevance scoring.
-  const sourceSnippet = sourceContent.slice(0, 5000);
-  const allTexts = [sourceSnippet, ...questions.map((q) => q.questionText)];
-  let sourceEmbedding: number[] = [];
+  // Pre-compute all embeddings in a single batch (source windows + all
+  // questions). The source is split into windows so relevance is scored against
+  // the WHOLE document, not just its opening 5k characters. Sharing one batched
+  // call keeps duplicate detection and relevance scoring on a single API round.
+  const sourceWindows = splitSourceForRelevance(sourceContent);
+  const allTexts = [...sourceWindows, ...questions.map((q) => q.questionText)];
+  let sourceEmbeddings: number[][] = [];
   let questionEmbeddings: number[][] = [];
 
   try {
     const embeddingResults = await generateEmbeddings(allTexts);
-    sourceEmbedding = embeddingResults[0].embedding;
-    questionEmbeddings = embeddingResults.slice(1).map((r) => r.embedding);
+    sourceEmbeddings = embeddingResults
+      .slice(0, sourceWindows.length)
+      .map((r) => r.embedding);
+    questionEmbeddings = embeddingResults
+      .slice(sourceWindows.length)
+      .map((r) => r.embedding);
   } catch (error) {
     console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
   }
@@ -462,7 +525,7 @@ export async function runQualityPipeline(
   // that occurred when two parallel AI calls hit the same endpoint.
   const aiChecksMap = await runAIQualityChecks(questions, subject, grade);
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
-  const relevanceMap = checkRelevance(questions, sourceEmbedding, questionEmbeddings);
+  const relevanceMap = checkRelevance(questions, sourceEmbeddings, questionEmbeddings);
 
   const duplicateIndices = new Set(
     duplicateResult.duplicatePairs.flat()

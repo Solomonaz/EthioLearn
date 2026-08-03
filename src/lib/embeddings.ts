@@ -52,48 +52,60 @@ function getClient() {
 
 let vectorColumnVerified = false;
 
+// Arbitrary but fixed key for the advisory lock guarding the column rebuild.
+// Any process attempting the rebuild takes this lock first, so the destructive
+// DDL can never run concurrently across requests or instances.
+const VECTOR_REBUILD_LOCK_KEY = 992_017;
+
 async function ensureCorrectVectorDimension(): Promise<void> {
   if (vectorColumnVerified) return;
   try {
-    // pg_catalog.format_type returns e.g. "vector(1024)" for pgvector columns
-    const rows: { type_name: string }[] = await db.$queryRaw`
-      SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS type_name
-      FROM   pg_attribute a
-      JOIN   pg_class     c ON c.oid = a.attrelid
-      WHERE  c.relname = 'content_chunks'
-        AND  a.attname = 'embedding'
-        AND  a.attnum  > 0
-      LIMIT 1
-    `;
-
-    const actualType   = rows[0]?.type_name ?? "";
     const expectedType = `vector(${EMBEDDING_DIMENSIONS})`;
 
-    if (actualType && actualType !== expectedType) {
-      console.warn(
-        `[Embeddings] Vector column dimension mismatch: DB has ${actualType}, ` +
-        `code expects ${expectedType}. Rebuilding column (existing embeddings cleared)…`
+    // Run the whole check-and-rebuild inside ONE transaction holding a
+    // transaction-scoped advisory lock. Concurrent callers block on the lock,
+    // then re-read the type after acquiring it and find it already correct —
+    // so the destructive DROP COLUMN runs at most once, never as a race.
+    await db.$transaction(async (tx) => {
+      // pg_advisory_xact_lock auto-releases when the transaction ends.
+      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${VECTOR_REBUILD_LOCK_KEY})`);
+
+      // pg_catalog.format_type returns e.g. "vector(1024)" for pgvector columns
+      const rows: { type_name: string }[] = await tx.$queryRawUnsafe(
+        `SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS type_name
+         FROM   pg_attribute a
+         JOIN   pg_class     c ON c.oid = a.attrelid
+         WHERE  c.relname = 'content_chunks'
+           AND  a.attname = 'embedding'
+           AND  a.attnum  > 0
+         LIMIT 1`
       );
-      // Drop index first — required before altering the column
-      await db.$executeRawUnsafe(
-        `DROP INDEX IF EXISTS content_chunks_embedding_idx`
-      );
-      await db.$executeRawUnsafe(
-        `ALTER TABLE content_chunks DROP COLUMN IF EXISTS embedding`
-      );
-      await db.$executeRawUnsafe(
-        `ALTER TABLE content_chunks ADD COLUMN embedding vector(${EMBEDDING_DIMENSIONS})`
-      );
-      // Recreate HNSW index for cosine similarity search
-      await db.$executeRawUnsafe(
-        `CREATE INDEX IF NOT EXISTS content_chunks_embedding_idx
-         ON content_chunks USING hnsw (embedding vector_cosine_ops)`
-      );
-      console.info(
-        `[Embeddings] Vector column rebuilt as ${expectedType}. ` +
-        `Re-upload textbooks to regenerate embeddings.`
-      );
-    }
+
+      const actualType = rows[0]?.type_name ?? "";
+
+      // Only rebuild on a genuine, non-empty mismatch (double-checked under lock).
+      if (actualType && actualType !== expectedType) {
+        console.warn(
+          `[Embeddings] Vector column dimension mismatch: DB has ${actualType}, ` +
+          `code expects ${expectedType}. Rebuilding column (existing embeddings cleared)…`
+        );
+        // Drop index first — required before altering the column
+        await tx.$executeRawUnsafe(`DROP INDEX IF EXISTS content_chunks_embedding_idx`);
+        await tx.$executeRawUnsafe(`ALTER TABLE content_chunks DROP COLUMN IF EXISTS embedding`);
+        await tx.$executeRawUnsafe(
+          `ALTER TABLE content_chunks ADD COLUMN embedding vector(${EMBEDDING_DIMENSIONS})`
+        );
+        // Recreate HNSW index for cosine similarity search
+        await tx.$executeRawUnsafe(
+          `CREATE INDEX IF NOT EXISTS content_chunks_embedding_idx
+           ON content_chunks USING hnsw (embedding vector_cosine_ops)`
+        );
+        console.info(
+          `[Embeddings] Vector column rebuilt as ${expectedType}. ` +
+          `Re-upload textbooks to regenerate embeddings.`
+        );
+      }
+    });
 
     vectorColumnVerified = true;
   } catch (err) {

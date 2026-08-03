@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
-import { shuffleArray } from "./utils";
+import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
+import { validateQuestions, validateDetectedChapters } from "./question-validation";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -59,75 +60,9 @@ function getClient() {
 // ─── Prompt builder ─────────────────────────────────────
 
 function buildPrompt(opts: GenerateOptions): string {
-  // Delegate to the shared prompt builder so every provider uses the
-  // same Bloom-aligned difficulty rubric and quality rules.
-  // Gemini allows a larger context window, so we pass 50k chars.
-  return buildQuestionGenerationPrompt(opts, 50000);
-}
-
-// ─── Validation ─────────────────────────────────────────
-
-function validateQuestions(raw: unknown): GeneratedQuestion[] {
-  if (!Array.isArray(raw)) {
-    throw new Error("Gemini response is not an array");
-  }
-
-  const validated: GeneratedQuestion[] = [];
-  const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
-
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-
-    const q = item as Record<string, unknown>;
-
-    // Required fields
-    if (typeof q.questionText !== "string" || !q.questionText.trim()) continue;
-    if (typeof q.correctAnswer !== "string" || !q.correctAnswer.trim()) continue;
-    if (!Array.isArray(q.options)) continue;
-
-    // Normalize type
-    let type = String(q.type).toUpperCase();
-    if (!validTypes.includes(type)) type = "MCQ";
-
-    // Normalize difficulty
-    const diff = String(q.difficulty || "MEDIUM").toUpperCase();
-    const difficulty: "EASY" | "MEDIUM" | "HARD" =
-      diff === "EASY" ? "EASY" : diff === "HARD" ? "HARD" : "MEDIUM";
-
-    const options = q.options.map((o: unknown) => String(o));
-    const correctAnswer = String(q.correctAnswer).trim();
-
-    // Type-specific validation
-    if (type === "MCQ") {
-      if (options.length < 2) continue;
-      if (!options.includes(correctAnswer)) {
-        const match = options.find(o => o.toLowerCase() === correctAnswer.toLowerCase());
-        if (!match) continue;
-      }
-    } else if (type === "TRUE_FALSE") {
-      if (!["True", "False"].includes(correctAnswer)) continue;
-    } else if (type === "MATCH_PAIRS") {
-      const numPairs = correctAnswer.split("|").filter(Boolean).length;
-      if (options.length !== numPairs * 2 || options.length < 2) continue;
-      if (!correctAnswer.includes(":") || !correctAnswer.includes("|")) continue;
-    } else if (type === "ORDERING") {
-      if (options.length < 2) continue;
-      if (!correctAnswer.includes("|")) continue;
-    }
-
-    validated.push({
-      questionText: sanitizeQuestionText(q.questionText),
-      type: type as any,
-      // Shuffle MCQ options so the correct answer isn't biased toward slot A.
-      // Only MCQ — MATCH_PAIRS/ORDERING option order carries meaning.
-      options: type === "MCQ" ? shuffleArray(options) : options,
-      correctAnswer,
-      difficulty,
-      explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
-    });
-  }
-
-  return validated;
+  // Delegate to the shared prompt builder so every provider uses the same
+  // Bloom-aligned rubric, quality rules AND content window (QUESTION_CONTENT_CHARS).
+  return buildQuestionGenerationPrompt(opts);
 }
 
 // ─── Main function ──────────────────────────────────────
@@ -214,38 +149,6 @@ ${opts.content.slice(0, 50000)}
 """
 
 Identify all chapters/units now as a JSON array.`;
-}
-
-function validateDetectedChapters(raw: unknown): DetectedChapter[] {
-  if (!Array.isArray(raw)) {
-    throw new Error("Gemini response is not an array");
-  }
-
-  const validated: DetectedChapter[] = [];
-
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-
-    const ch = item as Record<string, unknown>;
-
-    const chapterNumber = Number(ch.chapterNumber);
-    if (!chapterNumber || chapterNumber < 1 || chapterNumber > 50) continue;
-
-    if (typeof ch.title !== "string" || !ch.title.trim()) continue;
-
-    validated.push({
-      chapterNumber,
-      title: ch.title.trim(),
-    });
-  }
-
-  // Sort by chapter number and re-number sequentially
-  validated.sort((a, b) => a.chapterNumber - b.chapterNumber);
-  validated.forEach((ch, i) => {
-    ch.chapterNumber = i + 1;
-  });
-
-  return validated;
 }
 
 export async function detectChaptersFromContent(
@@ -575,25 +478,7 @@ export async function tutorResponseFromContent(opts: {
   const client = getClient();
   const model = client.getGenerativeModel({
     model: "gemini-2.0-flash",
-    systemInstruction: `You are an expert AI Tutor for the EthioLearn platform, specializing in the Ethiopian national curriculum.
-Your goal is to help students understand concepts from their textbooks.
-
-RULES:
-1. FOCUS: Use ONLY the provided textbook chapter content as your primary source of truth.
-2. PEDAGOGY: Act as a supportive, encouraging teacher. Explain things step-by-step. Use analogies appropriate for a Grade ${opts.grade} student.
-3. NO DIRECT ANSWERS: If a student asks for a specific exam answer, guide them to find it in the text rather than just giving it.
-4. ENGAGEMENT: Ask follow-up questions to check if the student understood your explanation.
-5. LANGUAGE: Respond in the language used by the student (English or Amharic). Use clear, simple formatting.
-6. SCOPE: If the student asks about something outside the provided chapter context, politely redirect them to focus on the current topic.
-
-SUBJECT: ${opts.subject}
-GRADE: ${opts.grade}
-CHAPTER: ${opts.chapterTitle}
-
-CHAPTER CONTENT:
-"""
-${opts.content.slice(0, 50000)}
-"""`,
+    systemInstruction: buildTutorSystemPrompt(opts),
   });
 
   const chat = model.startChat({
@@ -662,75 +547,6 @@ export async function generateVideoScript(opts: {
     },
   });
 
-  const prompt = `You are an expert educational video script writer for the Ethiopian national curriculum.
-Create a richly animated video tutorial script for a Grade ${opts.grade} student.
-
-Subject: ${opts.subject}
-Chapter: ${opts.chapterTitle}
-${opts.topic ? `Focus topic: ${opts.topic}` : ""}
-
-Chapter content (use ONLY this as your source — do NOT invent facts):
-"""
-${opts.content.slice(0, 8000)}
-"""
-
-TASK: Generate the RIGHT NUMBER of slides for this specific topic.
-- Simple concept (1-2 ideas): 3-4 slides
-- Medium concept (3-5 ideas): 5-7 slides
-- Complex concept (many ideas/steps): 8-12 slides
-Always start with an introduction slide and end with a summary/recap slide.
-
-RULES:
-1. Each slide narration: 40-60 words of friendly, spoken English — like an enthusiastic teacher.
-2. keyPoints: 2-4 short bullets shown on screen (5-12 words each).
-3. teacherEmotion: pick the most appropriate for the content:
-   - "explaining" → general teaching, definitions
-   - "pointing"   → directing attention to diagram/process
-   - "excited"    → introducing big idea, conclusion, breakthrough
-   - "thinking"   → posing a question, showing cause-effect
-   - "writing"    → introducing formula, writing down rules
-4. visualType + visualData: choose the BEST visual for each slide's content:
-   - "process"    → visualData.steps: 2-5 sequential steps (for how-things-work, cause-effect chains)
-   - "comparison" → visualData.leftLabel, leftItems[], rightLabel, rightItems[] (for vs/differences)
-   - "formula"    → visualData.text (the formula/equation), visualData.subtext (what it means)
-   - "timeline"   → visualData.events[]: [{period, event}] (for historical events, sequences in time)
-   - "highlight"  → visualData.text (big key concept/word), visualData.subtext (brief definition)
-   - "diagram"    → visualData.steps[]: node labels (for systems, cycles, relationships — shown as connected boxes)
-   - "list"       → no visualData needed — keyPoints ARE the visual (for lists of facts/rules)
-
-Return ONLY valid JSON, no markdown fences:
-{
-  "title": "Tutorial title",
-  "estimatedMinutes": 5,
-  "slides": [
-    {
-      "heading": "Slide heading (3-7 words)",
-      "narration": "Natural spoken text, 40-60 words.",
-      "keyPoints": ["Short bullet 1", "Short bullet 2"],
-      "teacherEmotion": "explaining",
-      "visualType": "highlight",
-      "visualData": { "text": "Big Concept", "subtext": "One-line definition" }
-    }
-  ]
-}`;
-
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-
-  // Strip potential markdown fences
-  const cleaned = text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error("Gemini returned invalid JSON for video script");
-  }
-
-  const script = parsed as VideoScript;
-  if (!script.slides || !Array.isArray(script.slides) || script.slides.length === 0) {
-    throw new Error("Invalid video script structure returned by AI");
-  }
-
-  return script;
+  const result = await model.generateContent(buildVideoScriptPrompt(opts));
+  return parseVideoScript(result.response.text());
 }

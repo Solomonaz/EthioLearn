@@ -5,8 +5,13 @@ import type {
   DetectChaptersOptions,
   DetectedChapter,
 } from "./gemini";
-import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
-import { shuffleArray } from "./utils";
+import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
+import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
+
+// Re-export the shared validators so Cerebras/NVIDIA can keep importing them
+// from "./groq" (their historical import path) without change.
+export { extractJson, validateQuestions, validateDetectedChapters };
 
 // ─── Client ─────────────────────────────────────────────
 
@@ -57,9 +62,9 @@ export async function groqChat(
 // ─── Prompt builders (reuse same prompts as Gemini) ─────
 
 function buildPrompt(opts: GenerateOptions): string {
-  // Delegate to the shared prompt builder so every provider uses the
-  // same Bloom-aligned difficulty rubric and quality rules.
-  return buildQuestionGenerationPrompt(opts, 30000);
+  // Delegate to the shared prompt builder so every provider uses the same
+  // Bloom-aligned rubric, quality rules AND content window (QUESTION_CONTENT_CHARS).
+  return buildQuestionGenerationPrompt(opts);
 }
 
 export function buildChapterDetectionPrompt(opts: DetectChaptersOptions): string {
@@ -91,123 +96,6 @@ ${opts.content.slice(0, 30000)}
 """
 
 Identify all chapters/units now as a JSON array.`;
-}
-
-// ─── JSON extraction helper ─────────────────────────────
-
-export function extractJson(text: string): unknown {
-  // Try direct parse first
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Try extracting from markdown code block
-    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-      return JSON.parse(codeBlockMatch[1].trim());
-    }
-    // Try extracting array from text
-    const arrayMatch = text.match(/\[[\s\S]*\]/);
-    if (arrayMatch) {
-      return JSON.parse(arrayMatch[0]);
-    }
-    throw new Error("Could not extract JSON from Groq response");
-  }
-}
-
-// ─── Validation (same logic as gemini.ts) ───────────────
-
-export function validateQuestions(raw: unknown): GeneratedQuestion[] {
-  if (!Array.isArray(raw)) {
-    throw new Error("Response is not an array");
-  }
-
-  const validated: GeneratedQuestion[] = [];
-  const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
-
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-
-    const q = item as Record<string, unknown>;
-
-    // Required fields
-    if (typeof q.questionText !== "string" || !q.questionText.trim()) continue;
-    if (typeof q.correctAnswer !== "string" || !q.correctAnswer.trim()) continue;
-    if (!Array.isArray(q.options)) continue;
-
-    // Normalize type
-    let type = String(q.type).toUpperCase();
-    if (!validTypes.includes(type)) type = "MCQ";
-
-    // Normalize difficulty
-    const diff = String(q.difficulty || "MEDIUM").toUpperCase();
-    const difficulty: "EASY" | "MEDIUM" | "HARD" =
-      diff === "EASY" ? "EASY" : diff === "HARD" ? "HARD" : "MEDIUM";
-
-    const options = q.options.map((o: unknown) => String(o));
-    const correctAnswer = String(q.correctAnswer).trim();
-
-    // Type-specific validation
-    if (type === "MCQ") {
-      if (options.length < 2) continue;
-      if (!options.includes(correctAnswer)) {
-        const match = options.find(o => o.toLowerCase() === correctAnswer.toLowerCase());
-        if (!match) continue;
-      }
-    } else if (type === "TRUE_FALSE") {
-      if (!["True", "False"].includes(correctAnswer)) continue;
-    } else if (type === "MATCH_PAIRS") {
-      const numPairs = correctAnswer.split("|").filter(Boolean).length;
-      if (options.length !== numPairs * 2 || options.length < 2) continue;
-      if (!correctAnswer.includes(":") || !correctAnswer.includes("|")) continue;
-    } else if (type === "ORDERING") {
-      if (options.length < 2) continue;
-      if (!correctAnswer.includes("|")) continue;
-    }
-
-    validated.push({
-      questionText: sanitizeQuestionText(q.questionText),
-      type: type as any,
-      // Shuffle MCQ options so the correct answer isn't biased toward slot A.
-      // Only MCQ — MATCH_PAIRS/ORDERING option order carries meaning.
-      options: type === "MCQ" ? shuffleArray(options) : options,
-      correctAnswer,
-      difficulty,
-      explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
-    });
-  }
-
-  return validated;
-}
-
-export function validateDetectedChapters(raw: unknown): DetectedChapter[] {
-  if (!Array.isArray(raw)) {
-    throw new Error("Response is not an array");
-  }
-
-  const validated: DetectedChapter[] = [];
-
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-
-    const ch = item as Record<string, unknown>;
-
-    const chapterNumber = Number(ch.chapterNumber);
-    if (!chapterNumber || chapterNumber < 1 || chapterNumber > 50) continue;
-
-    if (typeof ch.title !== "string" || !ch.title.trim()) continue;
-
-    validated.push({
-      chapterNumber,
-      title: ch.title.trim(),
-    });
-  }
-
-  validated.sort((a, b) => a.chapterNumber - b.chapterNumber);
-  validated.forEach((ch, i) => {
-    ch.chapterNumber = i + 1;
-  });
-
-  return validated;
 }
 
 // ─── Question Generation ────────────────────────────────
@@ -325,25 +213,7 @@ export async function groqTutorChatResponse(opts: {
 }): Promise<string> {
   const client = getGroqClient();
 
-  const systemPrompt = `You are an expert AI Tutor for the EthioLearn platform, specializing in the Ethiopian national curriculum.
-Your goal is to help students understand concepts from their textbooks.
-
-RULES:
-1. FOCUS: Use ONLY the provided textbook chapter content as your primary source of truth.
-2. PEDAGOGY: Act as a supportive, encouraging teacher. Explain things step-by-step. Use analogies appropriate for a Grade ${opts.grade} student.
-3. NO DIRECT ANSWERS: If a student asks for a specific exam answer, guide them to find it in the text rather than just giving it.
-4. ENGAGEMENT: Ask follow-up questions to check if the student understood your explanation.
-5. LANGUAGE: Respond in the language used by the student (English or Amharic). Use clear, simple formatting.
-6. SCOPE: If the student asks about something outside the provided chapter context, politely redirect them to focus on the current topic.
-
-SUBJECT: ${opts.subject}
-GRADE: ${opts.grade}
-CHAPTER: ${opts.chapterTitle}
-
-CHAPTER CONTENT:
-"""
-${opts.content.slice(0, 30000)}
-"""`;
+  const systemPrompt = buildTutorSystemPrompt(opts);
 
   const completion = await client.chat.completions.create({
     model: "llama-3.3-70b-versatile",
@@ -372,76 +242,13 @@ export async function groqGenerateVideoScript(opts: {
 }): Promise<VideoScript> {
   const client = getGroqClient();
 
-  const prompt = `You are an expert educational video script writer for the Ethiopian national curriculum.
-Create a richly animated video tutorial script for a Grade ${opts.grade} student.
-
-Subject: ${opts.subject}
-Chapter: ${opts.chapterTitle}
-${opts.topic ? `Focus topic: ${opts.topic}` : ""}
-
-Chapter content:
-"""
-${opts.content.slice(0, 6000)}
-"""
-
-Generate the RIGHT NUMBER of slides for this topic:
-- Simple concept (1-2 ideas): 3-4 slides
-- Medium concept (3-5 ideas): 5-7 slides
-- Complex concept (many steps): 8-12 slides
-Always start with an introduction slide and end with a summary slide.
-
-Each slide needs: heading, narration (40-60 words spoken English), keyPoints (2-4 bullets),
-teacherEmotion (one of: "explaining","pointing","excited","thinking","writing"),
-visualType (one of: "process","comparison","formula","timeline","highlight","diagram","list"),
-and visualData matching the visualType:
-- "process": {"steps":["step1","step2",...]}
-- "comparison": {"leftLabel":"A","leftItems":["..."],"rightLabel":"B","rightItems":["..."]}
-- "formula": {"text":"F=ma","subtext":"Force equals mass times acceleration"}
-- "timeline": {"events":[{"period":"1900","event":"Discovery of X"},...]}
-- "highlight": {"text":"KEY CONCEPT","subtext":"Brief definition"}
-- "diagram": {"steps":["Node1","Node2","Node3"]}
-- "list": {} (no visualData needed — keyPoints are the visual)
-
-Return ONLY valid JSON, no markdown fences:
-{
-  "title": "Tutorial title",
-  "estimatedMinutes": 5,
-  "slides": [
-    {
-      "heading": "Heading",
-      "narration": "Spoken text 40-60 words.",
-      "keyPoints": ["Bullet 1", "Bullet 2"],
-      "teacherEmotion": "explaining",
-      "visualType": "highlight",
-      "visualData": {"text": "Concept", "subtext": "Definition"}
-    }
-  ]
-}`;
-
   const completion = await client.chat.completions.create({
     model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: buildVideoScriptPrompt(opts) }],
     temperature: 0.6,
     max_tokens: 3000,
+    response_format: { type: "json_object" },
   });
 
-  const text = (completion.choices[0]?.message?.content ?? "").trim();
-
-  // Extract JSON from response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Groq returned no valid JSON for video script");
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonMatch[0]);
-  } catch {
-    throw new Error("Groq returned invalid JSON for video script");
-  }
-
-  const script = parsed as VideoScript;
-  if (!script.slides || !Array.isArray(script.slides) || script.slides.length === 0) {
-    throw new Error("Invalid video script structure returned by Groq");
-  }
-
-  return script;
+  return parseVideoScript(completion.choices[0]?.message?.content ?? "");
 }

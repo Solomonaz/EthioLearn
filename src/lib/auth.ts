@@ -126,6 +126,7 @@ const providers: NextAuthOptions["providers"] = [
         grade:        user.grade,
         xpLevel:      user.xpLevel,
         totalPoints:  user.totalPoints,
+        schoolId:     user.schoolId,
       };
     },
   }),
@@ -162,6 +163,7 @@ const providers: NextAuthOptions["providers"] = [
         grade:       user.grade,
         xpLevel:     user.xpLevel,
         totalPoints: user.totalPoints,
+        schoolId:    user.schoolId,
       };
     },
   }),
@@ -346,6 +348,7 @@ export const authOptions: NextAuthOptions = {
             token.grade        = dbUser.grade;
             token.xpLevel      = dbUser.xpLevel;
             token.totalPoints  = dbUser.totalPoints;
+            token.schoolId     = dbUser.schoolId;
             // Profile is incomplete until the user picks a grade
             token.profileIncomplete = !dbUser.grade;
           }
@@ -354,7 +357,7 @@ export const authOptions: NextAuthOptions = {
           const u = user as unknown as {
             id: string; role: string; phone: string | null;
             grade: number | null; xpLevel: number; totalPoints: number;
-            profileIncomplete?: boolean;
+            profileIncomplete?: boolean; schoolId?: string | null;
           };
           token.id              = u.id;
           token.role            = u.role;
@@ -362,6 +365,7 @@ export const authOptions: NextAuthOptions = {
           token.grade           = u.grade;
           token.xpLevel         = u.xpLevel;
           token.totalPoints     = u.totalPoints;
+          token.schoolId        = u.schoolId ?? null;
           token.profileIncomplete = u.profileIncomplete ?? false;
         }
 
@@ -410,6 +414,7 @@ export const authOptions: NextAuthOptions = {
         u.grade        = token.grade;
         u.xpLevel      = token.xpLevel;
         u.totalPoints  = token.totalPoints;
+        u.schoolId     = token.schoolId;
         u.profileIncomplete = token.profileIncomplete;
 
         (session as any).sessionId = token.sessionId;

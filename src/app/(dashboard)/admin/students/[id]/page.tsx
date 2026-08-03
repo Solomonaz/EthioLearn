@@ -26,6 +26,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 import { formatDate, scoreVariant } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -737,6 +738,9 @@ export default function AdminStudentDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Subscription */}
+      <SubscriptionPanel audience="STUDENT" targetId={id} />
     </div>
   );
 }

@@ -18,6 +18,11 @@
 
 import type { GenerateOptions } from "./gemini";
 
+// Single shared content window for question generation so every provider
+// (Gemini, Groq, Cerebras, NVIDIA) sees the SAME slice of chapter text and
+// therefore produces comparable questions regardless of which one answers.
+export const QUESTION_CONTENT_CHARS = 30000;
+
 // ─── Deterministic output sanitizer ────────────────────────────────────────
 
 /**
@@ -339,7 +344,7 @@ const FORMAT_RULES = `QUESTION-TYPE FORMAT RULES:
  */
 export function buildQuestionGenerationPrompt(
   opts: GenerateOptions,
-  contentCharLimit: number = 30000
+  contentCharLimit: number = QUESTION_CONTENT_CHARS
 ): string {
   const count = opts.count ?? 10;
   const types = opts.questionTypes ?? ["MCQ"];

@@ -34,6 +34,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
+import { StudentBillingPanel } from "@/components/student/billing-panel";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,9 @@ function StudentSettingsInner() {
   const { data: session } = useSession();
   const currentSessionId = (session as typeof session & { sessionId?: string })
     ?.sessionId;
+  // Section is a within-school class attribute — only relevant to students who
+  // belong to a school. Individual students never have one.
+  const belongsToSchool = !!(session?.user as { schoolId?: string | null } | undefined)?.schoolId;
   const searchParams = useSearchParams();
 
   const [userData, setUserData] = useState<UserSettings | null>(null);
@@ -392,12 +396,14 @@ function StudentSettingsInner() {
               </select>
             </div>
 
-            <Input
-              label="Section"
-              placeholder='e.g. "A", "B"'
-              value={section}
-              onChange={(e) => setSection(e.target.value)}
-            />
+            {belongsToSchool && (
+              <Input
+                label="Section"
+                placeholder='e.g. "A", "B"'
+                value={section}
+                onChange={(e) => setSection(e.target.value)}
+              />
+            )}
 
             <Button type="submit" isLoading={saving} className="w-full">
               Save Changes
@@ -449,6 +455,9 @@ function StudentSettingsInner() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Your Plan (independent students only; hidden for school students) ── */}
+      <StudentBillingPanel />
 
       {/* ── Connected Accounts ────────────────────────────────────────────── */}
       {TELEGRAM_ENABLED && (
