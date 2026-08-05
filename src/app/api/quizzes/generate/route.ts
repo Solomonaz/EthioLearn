@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -31,10 +32,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolve Adaptive Difficulty
+    // Resolve Adaptive Difficulty — AI Adaptive is an AI feature; gate it.
     let adaptiveCalibrated: string | undefined = undefined;
     let adaptiveInsights: AdaptiveInsights | undefined = undefined;
     if (difficulty === "ADAPTIVE") {
+      const ent = await getEntitlements(user);
+      if (!ent.ai) {
+        return NextResponse.json(
+          { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
+          { status: 403 }
+        );
+      }
       adaptiveInsights = await getAdaptiveDifficultyInsights(user.id);
       difficulty = adaptiveInsights.difficulty;
       adaptiveCalibrated = difficulty;

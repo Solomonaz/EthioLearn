@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.rewards) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.rewards, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   // Get all rewards for the user's school, ordered by pointsCost ASC

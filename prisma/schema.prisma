@@ -160,7 +160,6 @@ model User {
   approvedRedemptions  Redemption[]      @relation("RedemptionApprover")
   notifications        Notification[]
   achievements         UserAchievement[]
-  studentBooks         StudentBook[]
   createdTournaments   Tournament[]      @relation("TournamentCreator")
   sessions             UserSession[]
   subscriptions        Subscription[]    @relation("StudentSubscriptions")
@@ -472,26 +471,6 @@ model UserAchievement {
   @@map("user_achievements")
 }
 
-model StudentBook {
-  id               String           @id @default(cuid())
-  title            String
-  description      String?
-  fileUrl          String
-  content          String?          @db.Text // extracted text from the uploaded file
-  processingStatus ProcessingStatus @default(PENDING)
-  isPublic         Boolean          @default(false)
-  storageBytes     Int              @default(0)
-  quizCount        Int              @default(0)
-  pointsAwarded    Boolean          @default(false) // true once +300 pts credited
-  approvedAt       DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-
-  uploadedById String?
-  uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
-
-  @@map("student_books")
-}
 
 // ─── Reward Budget ──────────────────────────────────────
 
@@ -614,6 +593,8 @@ model PricingPlan {
   // Default true so existing/full plans keep every capability.
   allowAi          Boolean @default(true) // AI tutor, AI video, AI quiz generation
   allowMultiplayer Boolean @default(true) // battle / group games (solo is always allowed)
+  allowRewards     Boolean @default(true) // rewards catalogue & redemption
+  allowLeaderboard Boolean @default(true) // leaderboard / rankings
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -652,7 +633,12 @@ model Subscription {
 
   status    SubscriptionStatus @default(ACTIVE)
   startDate DateTime           @default(now())
+  // For a canceled-at-period-end sub this holds the paid-through date; the sub
+  // stays live (access continues) until endDate passes, then it lapses.
   endDate   DateTime?
+  // When true, the plan was canceled but access continues until endDate (the
+  // end of the already-paid period) instead of ending immediately.
+  cancelAtPeriodEnd Boolean @default(false)
 
   // Snapshot of the computed price at assignment time (audit trail).
   amount               Float?

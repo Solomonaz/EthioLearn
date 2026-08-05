@@ -127,6 +127,47 @@ export function billingIntervalLabel(interval: BillingInterval): string {
   return INTERVAL_LABELS[interval] ?? "";
 }
 
+// Months per billing period (null = non-recurring, e.g. ONE_TIME).
+const INTERVAL_MONTHS: Record<BillingInterval, number | null> = {
+  MONTHLY: 1,
+  QUARTERLY: 3,
+  SEMESTER: 6,
+  YEARLY: 12,
+  ONE_TIME: null,
+};
+
+/** True when the interval recurs (so it has a "current period" to end). */
+export function intervalRecurs(interval: BillingInterval): boolean {
+  return INTERVAL_MONTHS[interval] != null;
+}
+
+/**
+ * The end of the billing period that currently contains `now`, computed by
+ * advancing from `startDate` one interval at a time until strictly after `now`.
+ * Returns null for non-recurring intervals (ONE_TIME).
+ *
+ * Used for "cancel at period end": access continues until this date.
+ */
+export function computeCurrentPeriodEnd(
+  startDate: Date | string,
+  interval: BillingInterval,
+  now: Date = new Date()
+): Date | null {
+  const months = INTERVAL_MONTHS[interval];
+  if (months == null) return null;
+
+  const d = new Date(startDate);
+  // Guard against a bad/absent start date.
+  if (isNaN(d.getTime())) return null;
+
+  let guard = 0;
+  while (d <= now && guard < 1200) {
+    d.setMonth(d.getMonth() + months);
+    guard++;
+  }
+  return d;
+}
+
 /** Format a money amount with its currency, e.g. formatMoney(5000, "ETB") → "5,000 ETB". */
 export function formatMoney(amount: number | null | undefined, currency = "ETB"): string {
   if (amount === null || amount === undefined || !Number.isFinite(amount)) {
@@ -158,6 +199,10 @@ export interface PlanInputData {
   features: string[];
   isActive: boolean;
   sortOrder: number;
+  allowAi: boolean;
+  allowMultiplayer: boolean;
+  allowRewards: boolean;
+  allowLeaderboard: boolean;
 }
 
 /**
@@ -196,6 +241,11 @@ export function parsePlanInput(
     : 0;
   const sortOrder = Number.isFinite(Number(body.sortOrder)) ? Math.floor(Number(body.sortOrder)) : 0;
   const isActive = body.isActive === undefined ? true : Boolean(body.isActive);
+  // Entitlements — default to full access (true) when unspecified.
+  const allowAi = body.allowAi === undefined ? true : Boolean(body.allowAi);
+  const allowMultiplayer = body.allowMultiplayer === undefined ? true : Boolean(body.allowMultiplayer);
+  const allowRewards = body.allowRewards === undefined ? true : Boolean(body.allowRewards);
+  const allowLeaderboard = body.allowLeaderboard === undefined ? true : Boolean(body.allowLeaderboard);
   const features = Array.isArray(body.features)
     ? body.features.map((f) => String(f).trim()).filter(Boolean)
     : [];
@@ -247,6 +297,10 @@ export function parsePlanInput(
       features,
       isActive,
       sortOrder,
+      allowAi,
+      allowMultiplayer,
+      allowRewards,
+      allowLeaderboard,
     },
     tiers,
   };

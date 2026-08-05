@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const t = useTranslations("nav");
+  const ent = useEntitlements();
 
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
@@ -50,10 +52,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "notifications", href: "/student/notifications", icon: Bell },
     { labelKey: "profile",     href: "/student/profile",        icon: User },
     { labelKey: "myProgress",  href: "/student/progress",       icon: TrendingUp },
-    { labelKey: "myBooks",     href: "/student/books",          icon: BookMarked },
     { labelKey: "quizHistory", href: "/student/history",        icon: History },
+    { labelKey: "billing",     href: "/student/billing",        icon: CreditCard },
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
-  ];
+    // Hide plan-locked features for restricted (individual) students.
+  ].filter((item) => {
+    if (item.labelKey === "aiTutor" && !ent.ai) return false;
+    if (item.labelKey === "battle" && !ent.multiplayer) return false;
+    if (item.labelKey === "rewards" && !ent.rewards) return false;
+    if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;
+    return true;
+  });
 
   const superAdminNavItems = [
     { labelKey: "dashboard",  href: "/admin",             icon: LayoutDashboard, exact: true },

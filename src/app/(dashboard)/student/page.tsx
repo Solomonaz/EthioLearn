@@ -23,6 +23,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { StatCard } from "@/components/shared/stat-card";
 import { Spinner } from "@/components/ui/spinner";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ function getLocale(): "en" | "am" {
 
 export default function StudentDashboardPage() {
   const { data: session } = useSession();
+  const ent = useEntitlements();
   const t  = useTranslations("student");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -255,8 +257,8 @@ export default function StudentDashboardPage() {
         <StatCard label={t("streak")} value={stats.streakDays} icon={Flame} />
       </div>
 
-      {/* ── AI Study Recommendations (SRS §4.3.3) ──────────────────────── */}
-      {studyRecommendations.length > 0 && (
+      {/* ── AI Study Recommendations (SRS §4.3.3) — AI feature, full-access only ── */}
+      {ent.ai && studyRecommendations.length > 0 && (
         <section>
           <div className="mb-3 flex items-center gap-2">
             <Brain className="h-5 w-5 text-purple-500" />
@@ -370,9 +372,15 @@ export default function StudentDashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <QuickAction href="/student/quiz" icon={BookOpen} label={t("takeQuiz")} desc={t("startNewQuizDesc")} color="bg-primary/10 text-primary" />
-        <QuickAction href="/student/battle" icon={Swords} label={t("battleMode")} desc={t("challengeClassmates")} color="bg-purple-50 text-purple-600" />
-        <QuickAction href="/student/leaderboard" icon={Trophy} label={t("leaderboard")} desc={t("checkRankings")} color="bg-yellow-50 text-yellow-600" />
-        <QuickAction href="/student/rewards" icon={Gift} label={t("rewards")} desc={t("redeemPoints")} color="bg-orange-50 text-orange-600" />
+        {ent.multiplayer && (
+          <QuickAction href="/student/battle" icon={Swords} label={t("battleMode")} desc={t("challengeClassmates")} color="bg-purple-50 text-purple-600" />
+        )}
+        {ent.leaderboard && (
+          <QuickAction href="/student/leaderboard" icon={Trophy} label={t("leaderboard")} desc={t("checkRankings")} color="bg-yellow-50 text-yellow-600" />
+        )}
+        {ent.rewards && (
+          <QuickAction href="/student/rewards" icon={Gift} label={t("rewards")} desc={t("redeemPoints")} color="bg-orange-50 text-orange-600" />
+        )}
       </div>
 
       {/* Start New Quiz Button */}

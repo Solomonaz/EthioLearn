@@ -34,7 +34,6 @@ import { signOut, useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
-import { StudentBillingPanel } from "@/components/student/billing-panel";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -455,9 +454,6 @@ function StudentSettingsInner() {
           </div>
         </CardContent>
       </Card>
-
-      {/* ── Your Plan (independent students only; hidden for school students) ── */}
-      <StudentBillingPanel />
 
       {/* ── Connected Accounts ────────────────────────────────────────────── */}
       {TELEGRAM_ENABLED && (

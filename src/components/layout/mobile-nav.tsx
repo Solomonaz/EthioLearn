@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Home, BookOpen, User, Trophy, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 const studentNavKeys = [
   { labelKey: "home",        href: "/student",              icon: Home,     exact: true },
@@ -17,13 +18,21 @@ const studentNavKeys = [
 export function MobileNav() {
   const pathname = usePathname();
   const t = useTranslations("nav");
+  const ent = useEntitlements();
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/school-admin")) return null;
+
+  // Hide plan-locked destinations (Battle → multiplayer, Ranks → leaderboard).
+  const navKeys = studentNavKeys.filter((item) => {
+    if (item.labelKey === "battle_short" && !ent.multiplayer) return false;
+    if (item.labelKey === "ranks" && !ent.leaderboard) return false;
+    return true;
+  });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface md:hidden">
       <div className="flex items-center justify-around py-2">
-        {studentNavKeys.map((item) => {
+        {navKeys.map((item) => {
           const isActive = item.exact
             ? pathname === item.href
             : pathname === item.href || pathname.startsWith(item.href + "/");

@@ -6,11 +6,20 @@ import { generateQuestions } from "@/lib/ai-provider";
 import { QuestionType, Difficulty } from "@prisma/client";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.ai) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   // Rate limit: 3 AI generations per minute for students (stricter than admins)

@@ -81,7 +81,6 @@
     "aiTutor": "AI Tutor",
     "notifications": "Notifications",
     "myProgress": "My Progress",
-    "myBooks": "My Books",
     "quizHistory": "Quiz History",
     "settings": "Settings",
     "students": "Students",
@@ -97,7 +96,8 @@
     "ranks": "Ranks",
     "quiz_short": "Quiz",
     "battle_short": "Battle",
-    "pricing": "Pricing"
+    "pricing": "Pricing",
+    "billing": "Billing"
   },
   "auth": {
     "phoneLabel": "Phone Number",

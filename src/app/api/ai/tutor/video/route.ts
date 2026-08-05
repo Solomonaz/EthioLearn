@@ -3,11 +3,20 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateVideoTutorial } from "@/lib/ai-provider";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.ai) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   // Rate limit: 5 video generations per minute per student

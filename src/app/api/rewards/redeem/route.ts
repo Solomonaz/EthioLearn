@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { createNotification } from "@/lib/notifications";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -12,6 +13,14 @@ export async function POST(request: NextRequest) {
 
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.rewards) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.rewards, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   let body: { rewardId?: string };

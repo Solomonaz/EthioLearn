@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
+import { UpgradeNotice } from "@/components/student/upgrade-notice";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import { cn, buildQuickPresets } from "@/lib/utils";
 
 interface PlayerInfo {
@@ -47,6 +49,7 @@ interface BattleSubject {
 
 export default function BattleLobbyPage() {
   const { data: session } = useSession();
+  const ent = useEntitlements();
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
 
@@ -291,6 +294,11 @@ export default function BattleLobbyPage() {
 
   const isHost = userId === hostId;
   const canStart = isHost && players.length >= 1 && roomStatus === "waiting";
+
+  // Plan gating — battle mode requires a plan that allows multiplayer.
+  if (!ent.loading && !ent.multiplayer) {
+    return <UpgradeNotice feature="Battle Mode" planName={ent.planName} />;
+  }
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">

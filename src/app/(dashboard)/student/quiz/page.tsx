@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { useTranslations } from "next-intl";
 import { useQuizStore } from "@/stores/quiz-store";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import { cn, buildQuickPresets } from "@/lib/utils";
 
 interface Textbook {
@@ -81,6 +82,7 @@ const SOURCE_KEYS = [
 
 export default function QuizLauncherPage() {
   const { data: session, status: sessionStatus } = useSession();
+  const ent = useEntitlements();
   const t  = useTranslations("quiz");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -387,7 +389,8 @@ export default function QuizLauncherPage() {
       {/* Step 2: Select Source */}
       {step === 1 && (
         <div className="grid gap-4">
-          {SOURCE_KEYS.map((src) => {
+          {/* AI-generated quizzes require an AI-enabled plan. */}
+          {SOURCE_KEYS.filter((s) => s.value !== "AI" || ent.ai).map((src) => {
             const Icon = src.icon;
             return (
               <Card
@@ -522,7 +525,8 @@ export default function QuizLauncherPage() {
       {/* Step 4: Select Difficulty */}
       {step === 3 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          {DIFFICULTY_KEYS.map((d) => {
+          {/* AI Adaptive difficulty is an AI feature — hidden without an AI plan. */}
+          {DIFFICULTY_KEYS.filter((d) => d.value !== "ADAPTIVE" || ent.ai).map((d) => {
             const counts = selectedChapter === "all" 
               ? textbookTotals?.difficultyCounts 
               : selectedChapter?.difficultyCounts;

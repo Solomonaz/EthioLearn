@@ -2,11 +2,20 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.leaderboard) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.leaderboard, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   const { searchParams } = new URL(request.url);

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { semanticSearch } from "@/lib/embeddings";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 // How many of the most relevant chunks to retrieve as tutor context.
 const TUTOR_RETRIEVAL_LIMIT = 8;
@@ -45,6 +46,14 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.ai) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   try {

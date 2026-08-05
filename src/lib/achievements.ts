@@ -28,7 +28,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { code: "battle_win",          name: "Battle Victor",          icon: "⚔️", desc: "Win your first battle",                            category: "battle"   },
   { code: "battle_5_wins",       name: "Battle Commander",       icon: "🛡️", desc: "Win 5 battles",                                    category: "battle"   },
   { code: "social_butterfly",    name: "Social Butterfly",       icon: "🦋", desc: "Play 10 group games",                              category: "social"   },
-  { code: "knowledge_sharer",    name: "Knowledge Sharer",       icon: "📖", desc: "Upload 3 books to the platform",                  category: "social"   },
   { code: "points_500",          name: "Point Collector",        icon: "💰", desc: "Earn 500 total points",                            category: "points"   },
   { code: "points_1000",         name: "Point Hoarder",          icon: "💎", desc: "Earn 1,000 total points",                          category: "points"   },
   { code: "points_3000",         name: "Point Master",           icon: "👑", desc: "Earn 3,000 total points",                          category: "points"   },
@@ -225,36 +224,6 @@ export async function checkAndAwardAchievements(
 
   } catch (err) {
     console.error("[achievements] checkAndAwardAchievements error:", err);
-  }
-}
-
-/**
- * Award Knowledge Sharer achievement when a student book is approved/processed.
- * Call this after a student book reaches COMPLETED status.
- */
-export async function checkBookUploadAchievement(userId: string): Promise<void> {
-  try {
-    const earned = await db.userAchievement.findMany({
-      where: { userId },
-      select: { code: true },
-    });
-    const earnedCodes = new Set(earned.map((e) => e.code));
-    if (earnedCodes.has("knowledge_sharer")) return;
-
-    const bookCount = await db.studentBook.count({
-      where: { uploadedById: userId, processingStatus: "COMPLETED" },
-    });
-
-    if (bookCount >= 3) {
-      const def = getAchievement("knowledge_sharer");
-      if (!def) return;
-      try {
-        await db.userAchievement.create({ data: { userId, code: "knowledge_sharer" } });
-        await notifyAchievement(userId, def.name);
-      } catch { /* race */ }
-    }
-  } catch (err) {
-    console.error("[achievements] checkBookUploadAchievement error:", err);
   }
 }
 

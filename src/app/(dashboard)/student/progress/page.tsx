@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Skeleton, SkeletonRow } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import { cn, scoreVariant } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ const masteryConfig: Record<
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StudentProgressPage() {
+  const ent = useEntitlements();
   const [data, setData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +257,8 @@ export default function StudentProgressPage() {
         {/* Right Column: AI Recommendations & Weakest Areas */}
         <div className="space-y-8">
           
-          {/* AI Recommendations */}
+          {/* AI Recommendations — AI feature, hidden without an AI plan */}
+          {ent.ai && (
           <section>
             <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-text-primary">
               <Brain className="h-5 w-5 text-purple-500" />
@@ -294,6 +297,7 @@ export default function StudentProgressPage() {
               )}
             </div>
           </section>
+          )}
 
           {/* Weakest Topics List */}
           <section>

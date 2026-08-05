@@ -81,7 +81,6 @@
     "aiTutor": "AI አሰልጣኝ",
     "notifications": "ማሳወቂያዎች",
     "myProgress": "እድገቴ",
-    "myBooks": "መጽሃፍቶቼ",
     "quizHistory": "የፈተና ታሪክ",
     "settings": "ቅንብሮች",
     "students": "ተማሪዎች",
@@ -97,7 +96,8 @@
     "ranks": "ደረጃዎች",
     "quiz_short": "ፈተና",
     "battle_short": "ፉክክር",
-    "pricing": "የዋጋ እቅዶች"
+    "pricing": "የዋጋ እቅዶች",
+    "billing": "ክፍያ"
   },
   "auth": {
     "phoneLabel": "ስልክ ቁጥር",

@@ -1118,6 +1118,40 @@ async function main() {
   });
   console.log(`  School Admin: ${schoolAdmin.name} (${schoolAdmin.phoneNumber})`);
 
+  // 2c. Student pricing plans: Free (solo only) and Full Access (everything).
+  async function upsertStudentPlan(name: string, data: Record<string, unknown>) {
+    const existing = await prisma.pricingPlan.findFirst({ where: { audience: "STUDENT", name } });
+    if (existing) {
+      await prisma.pricingPlan.update({ where: { id: existing.id }, data });
+    } else {
+      await prisma.pricingPlan.create({
+        data: { name, audience: "STUDENT", pricingModel: "FLAT", currency: "ETB", billingInterval: "MONTHLY", ...data },
+      });
+    }
+  }
+  await upsertStudentPlan("Free", {
+    description: "Solo quizzes and solo games. No AI features.",
+    price: 0, isActive: true, sortOrder: 0,
+    allowAi: false, allowMultiplayer: false, allowRewards: false, allowLeaderboard: false,
+    features: ["Solo quizzes from the question bank", "Daily challenges", "Solo games", "Progress tracking"],
+  });
+  await upsertStudentPlan("Full Access", {
+    description: "Everything: AI tutor, AI videos, AI quizzes, battle mode, rewards, and leaderboard.",
+    price: 99, isActive: true, sortOrder: 1,
+    allowAi: true, allowMultiplayer: true, allowRewards: true, allowLeaderboard: true,
+    features: [
+      "Everything in Free",
+      "AI Tutor & AI video tutorials",
+      "AI-generated quizzes",
+      "AI Adaptive difficulty",
+      "AI study recommendations",
+      "Battle mode (multiplayer)",
+      "Rewards & redemption",
+      "Leaderboard & rankings",
+    ],
+  });
+  console.log(`  Student plans: Free, Full Access`);
+
   // 3. Create test student
   const student = await prisma.user.upsert({
     where: { phoneNumber: "+251911111111" },

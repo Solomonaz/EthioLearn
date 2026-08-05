@@ -41,6 +41,10 @@ interface Plan {
   features: string[];
   isActive: boolean;
   sortOrder: number;
+  allowAi: boolean;
+  allowMultiplayer: boolean;
+  allowRewards: boolean;
+  allowLeaderboard: boolean;
   tiers: Tier[];
   _count?: { subscriptions: number };
 }
@@ -68,6 +72,10 @@ interface EditorState {
   trialDays: string;
   features: string;
   isActive: boolean;
+  allowAi: boolean;
+  allowMultiplayer: boolean;
+  allowRewards: boolean;
+  allowLeaderboard: boolean;
   tiers: TierRow[];
 }
 
@@ -84,6 +92,10 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
     trialDays: "0",
     features: "",
     isActive: true,
+    allowAi: true,
+    allowMultiplayer: true,
+    allowRewards: true,
+    allowLeaderboard: true,
     tiers: [{ minStudents: "1", maxStudents: "", price: "" }],
   };
 }
@@ -101,6 +113,10 @@ function editorFromPlan(plan: Plan): EditorState {
     trialDays: String(plan.trialDays),
     features: plan.features.join(", "),
     isActive: plan.isActive,
+    allowAi: plan.allowAi ?? true,
+    allowMultiplayer: plan.allowMultiplayer ?? true,
+    allowRewards: plan.allowRewards ?? true,
+    allowLeaderboard: plan.allowLeaderboard ?? true,
     tiers:
       plan.tiers.length > 0
         ? plan.tiers.map((t) => ({
@@ -158,6 +174,10 @@ export default function AdminPricingPage() {
       billingInterval: editor.billingInterval,
       trialDays: Number(editor.trialDays) || 0,
       isActive: editor.isActive,
+      allowAi: editor.allowAi,
+      allowMultiplayer: editor.allowMultiplayer,
+      allowRewards: editor.allowRewards,
+      allowLeaderboard: editor.allowLeaderboard,
       features: editor.features
         .split(",")
         .map((f) => f.trim())
@@ -354,6 +374,22 @@ function PlanSection({
                     <p className="mt-0.5 text-sm text-text-secondary">{plan.description}</p>
                   )}
                   <p className="mt-1 text-sm text-text-primary">{priceSummary(plan)}</p>
+                  {plan.audience === "STUDENT" && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
+                      <span className={plan.allowAi ? "text-success" : "text-text-muted"}>
+                        {plan.allowAi ? "✓" : "✗"} AI features
+                      </span>
+                      <span className={plan.allowMultiplayer ? "text-success" : "text-text-muted"}>
+                        {plan.allowMultiplayer ? "✓" : "✗"} Battle mode
+                      </span>
+                      <span className={plan.allowRewards ? "text-success" : "text-text-muted"}>
+                        {plan.allowRewards ? "✓" : "✗"} Rewards
+                      </span>
+                      <span className={plan.allowLeaderboard ? "text-success" : "text-text-muted"}>
+                        {plan.allowLeaderboard ? "✓" : "✗"} Leaderboard
+                      </span>
+                    </div>
+                  )}
                   {plan.pricingModel === "TIERED" && plan.tiers.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {plan.tiers.map((t, i) => (
@@ -558,6 +594,59 @@ function PlanEditor({
         <Field label="Features (comma-separated, optional)">
           <Input value={editor.features} onChange={(e) => set({ features: e.target.value })} disabled={saving} placeholder="Unlimited quizzes, AI tutor, Priority support" />
         </Field>
+
+        {/* Entitlements — what the plan unlocks. Only meaningful for STUDENT plans;
+            school students always get full access regardless. */}
+        {isSchool ? (
+          <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-text-secondary">
+            School plans always include full access (AI features and battle mode) for all their students.
+          </p>
+        ) : (
+          <Field label="Plan access">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={editor.allowAi}
+                  onChange={(e) => set({ allowAi: e.target.checked })}
+                  disabled={saving}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                AI features (AI tutor, AI videos, AI-generated quizzes)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={editor.allowMultiplayer}
+                  onChange={(e) => set({ allowMultiplayer: e.target.checked })}
+                  disabled={saving}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                Battle mode (multiplayer games) — solo games are always allowed
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={editor.allowRewards}
+                  onChange={(e) => set({ allowRewards: e.target.checked })}
+                  disabled={saving}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                Rewards (earn &amp; redeem rewards)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={editor.allowLeaderboard}
+                  onChange={(e) => set({ allowLeaderboard: e.target.checked })}
+                  disabled={saving}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                Leaderboard (rankings)
+              </label>
+            </div>
+          </Field>
+        )}
 
         <label className="flex items-center gap-2 text-sm text-text-primary">
           <input

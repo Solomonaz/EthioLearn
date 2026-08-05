@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
+import { UpgradeNotice } from "@/components/student/upgrade-notice";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -282,6 +284,7 @@ function RewardCard({ reward, userPoints, redemption, onRedeem }: RewardCardProp
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function RewardsPage() {
+  const ent = useEntitlements();
   const [data, setData] = useState<RewardsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -348,6 +351,11 @@ export default function RewardsPage() {
     if (redeeming) return;
     setPendingReward(null);
   };
+
+  // Rewards are a premium feature — gate for plans without the entitlement.
+  if (!ent.loading && !ent.rewards) {
+    return <UpgradeNotice feature="Rewards" planName={ent.planName} />;
+  }
 
   if (loading) {
     return (

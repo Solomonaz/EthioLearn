@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import VideoTutorialPlayer from "@/components/student/video-tutorial-player";
+import { UpgradeNotice } from "@/components/student/upgrade-notice";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import type { VideoScript } from "@/lib/ai-provider";
 
 interface Chapter {
@@ -43,6 +45,7 @@ interface Message {
 
 export default function TutorPage() {
   const { data: session } = useSession();
+  const ent = useEntitlements();
 
   // Selection state
   const [textbooks, setTextbooks] = useState<Textbook[]>([]);
@@ -194,6 +197,11 @@ export default function TutorPage() {
     } finally {
       setGeneratingVideo(false);
     }
+  }
+
+  // Plan gating — the AI Tutor requires an AI-enabled plan.
+  if (!ent.loading && !ent.ai) {
+    return <UpgradeNotice feature="AI Tutor" planName={ent.planName} />;
   }
 
   if (fetchingData) {

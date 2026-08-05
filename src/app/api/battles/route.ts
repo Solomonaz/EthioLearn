@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { normalizeOption } from "@/lib/utils";
+import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -17,6 +18,14 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.multiplayer) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.multiplayer, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   try {
@@ -166,6 +175,14 @@ export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ent = await getEntitlements(user);
+  if (!ent.multiplayer) {
+    return NextResponse.json(
+      { error: UPGRADE_MESSAGES.multiplayer, code: "UPGRADE_REQUIRED" },
+      { status: 403 }
+    );
   }
 
   const { searchParams } = new URL(request.url);

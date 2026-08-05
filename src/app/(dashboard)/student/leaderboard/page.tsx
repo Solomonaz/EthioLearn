@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SkeletonRow } from "@/components/ui/skeleton";
+import { UpgradeNotice } from "@/components/student/upgrade-notice";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,7 @@ const SCOPE_OPTIONS: { value: ScopeType; label: string; icon: React.ElementType;
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function LeaderboardPage() {
+  const ent = useEntitlements();
   const [scope, setScope] = useState<ScopeType>("school");
   const [period, setPeriod] = useState<"alltime" | "weekly">("alltime");
   const [subject, setSubject] = useState("");
@@ -145,6 +148,11 @@ export default function LeaderboardPage() {
   const showCurrentUserFooter = !currentUserInList && currentUserRank !== null;
   const selectedSubjectLabel = subjectsList.find((s) => s.value === subject)?.label ?? "All Subjects";
   const activeScopeOption = SCOPE_OPTIONS.find((s) => s.value === scope)!;
+
+  // Leaderboard is a premium feature — gate for plans without the entitlement.
+  if (!ent.loading && !ent.leaderboard) {
+    return <UpgradeNotice feature="Leaderboard" planName={ent.planName} />;
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
