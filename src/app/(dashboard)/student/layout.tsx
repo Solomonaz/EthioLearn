@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/get-session";
+import { StudentNotes } from "@/components/student/student-notes";
 
 export default async function StudentLayout({
   children,
@@ -24,5 +25,12 @@ export default async function StudentLayout({
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {/* Floating, draggable study-notes scratchpad — persists across every
+          student page and only closes when the student clicks ✕. */}
+      <StudentNotes />
+    </>
+  );
 }

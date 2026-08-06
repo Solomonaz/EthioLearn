@@ -60,12 +60,17 @@ export async function GET() {
           quiz: { studentId: user.id, completedAt: { not: null } },
         },
         select: {
+          isCorrect: true,
           question: {
             select: {
+              difficulty: true,
+              bloomLevel: true,
+              type: true,
               chapter: {
                 select: {
                   id: true,
                   title: true,
+                  topicTags: true,
                   textbook: { select: { subject: true, grade: true } },
                 },
               },
@@ -77,19 +82,35 @@ export async function GET() {
     ]);
 
   // ── Weakest Topics & Study Recommendations (SRS §4.3.3) ────────────────────
-  // Accumulate per-chapter scores (deduplicate answers from the same quiz)
+  // Accumulate per-chapter scores (deduplicate answers from the same quiz) plus
+  // per-answer accuracy by difficulty / Bloom level / question type, so we can
+  // surface *specific* focus areas — not just an overall percentage.
+  type Bucket = { correct: number; total: number };
   type ChapterAccum = {
     id: string;
     title: string;
     subject: string;
     grade: number;
     quizScores: Map<string, number>; // completedAt ISO -> score
+    topicTags: string[];
+    byDifficulty: Map<string, Bucket>;
+    byBloom: Map<string, Bucket>;
+    byType: Map<string, Bucket>;
   };
 
   const chapterMap = new Map<string, ChapterAccum>();
 
+  const bump = (m: Map<string, Bucket>, key: string | null | undefined, correct: boolean) => {
+    if (!key) return;
+    const b = m.get(key) ?? { correct: 0, total: 0 };
+    b.total += 1;
+    if (correct) b.correct += 1;
+    m.set(key, b);
+  };
+
   for (const answer of quizAnswers) {
-    const chapter = answer.question.chapter;
+    const q = answer.question;
+    const chapter = q.chapter;
     const textbook = chapter.textbook;
     const completedAt = answer.quiz.completedAt
       ? answer.quiz.completedAt.toISOString()
@@ -103,6 +124,10 @@ export async function GET() {
         subject: textbook.subject,
         grade: textbook.grade,
         quizScores: new Map(),
+        topicTags: chapter.topicTags ?? [],
+        byDifficulty: new Map(),
+        byBloom: new Map(),
+        byType: new Map(),
       });
     }
 
@@ -110,7 +135,54 @@ export async function GET() {
     if (!accum.quizScores.has(completedAt)) {
       accum.quizScores.set(completedAt, score);
     }
+    bump(accum.byDifficulty, q.difficulty, answer.isCorrect);
+    bump(accum.byBloom, q.bloomLevel, answer.isCorrect);
+    bump(accum.byType, q.type, answer.isCorrect);
   }
+
+  // Helpers for building focus-area bullets from a chapter's accumulated data.
+  const TYPE_LABEL: Record<string, string> = {
+    MCQ: "multiple-choice",
+    TRUE_FALSE: "true/false",
+    FILL_IN_BLANK: "fill-in-the-blank",
+    MATCH_PAIRS: "matching",
+    ORDERING: "ordering",
+  };
+  const diffLabel = (d: string) => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+  const weakestBucket = (m: Map<string, Bucket>, minTotal = 2) => {
+    let best: { key: string; acc: number } | null = null;
+    for (const [key, b] of m) {
+      if (b.total < minTotal) continue;
+      const acc = b.correct / b.total;
+      if (!best || acc < best.acc) best = { key, acc };
+    }
+    return best;
+  };
+
+  const buildFocusAreas = (accum: ChapterAccum): string[] => {
+    const bullets: string[] = [];
+
+    const wd = weakestBucket(accum.byDifficulty);
+    if (wd && wd.acc < 0.7) {
+      bullets.push(`Practice ${diffLabel(wd.key)} questions — only ${Math.round(wd.acc * 100)}% correct so far`);
+    }
+    const wb = weakestBucket(accum.byBloom);
+    if (wb && wb.acc < 0.7) {
+      bullets.push(`Strengthen ${wb.key}-level questions — ${Math.round(wb.acc * 100)}% correct`);
+    }
+    const wt = weakestBucket(accum.byType);
+    if (wt && wt.acc < 0.6) {
+      bullets.push(`Work on ${TYPE_LABEL[wt.key] ?? wt.key.toLowerCase()} questions — ${Math.round(wt.acc * 100)}% correct`);
+    }
+    const tags = [...new Set(accum.topicTags)].filter(Boolean).slice(0, 4);
+    if (tags.length > 0) {
+      bullets.push(`Review key topics: ${tags.join(", ")}`);
+    }
+    if (bullets.length === 0) {
+      bullets.push("Re-take a quiz on this chapter to reinforce the core concepts");
+    }
+    return bullets.slice(0, 4);
+  };
 
   // Find chapters where avg score < 60%
   const weakestChapters: {
@@ -155,6 +227,7 @@ export async function GET() {
       chapter: c.title,
       avgScore: c.avgScore,
       message: `Review ${c.title} of ${c.subject} \u2014 ${avgText}.`,
+      focusAreas: buildFocusAreas(chapterMap.get(c.id)!),
     };
   });
 

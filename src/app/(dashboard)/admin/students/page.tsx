@@ -20,12 +20,15 @@ import {
   Download,
   X,
   FileText,
+  UserPlus,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/sonner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -338,6 +341,126 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// ── Add a single student ──────────────────────────────────────────────────────
+function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [grade, setGrade] = useState("");
+  const [section, setSection] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectClass =
+    "w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      setError("Name and phone number are required.");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      // Normalise so a pasted 0912…, 251912…, or +251912… also works.
+      const localDigits = phone.trim().replace(/\D/g, "").replace(/^251/, "").replace(/^0/, "");
+      const res = await fetch("/api/admin/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: `+251${localDigits}`,
+          grade: grade || undefined,
+          section: section.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Failed to add student.");
+        return;
+      }
+      toast.success("Student added successfully!");
+      onAdded();
+      onClose();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="relative w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <CardContent className="space-y-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-text-primary">Add Student</h2>
+            </div>
+            <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100" aria-label="Close">
+              <X className="h-5 w-5 text-text-secondary" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase text-text-muted">Full Name</label>
+              <Input placeholder="e.g. Abebe Kebede" value={name} onChange={(e) => setName(e.target.value)} disabled={saving} />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase text-text-muted">Phone Number</label>
+              <div className="flex">
+                <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-gray-50 px-3 text-sm text-text-secondary">
+                  +251
+                </span>
+                <Input
+                  placeholder="9XXXXXXXX"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={saving}
+                  className="rounded-l-none"
+                  inputMode="numeric"
+                />
+              </div>
+              <p className="text-xs text-text-muted">The student signs in with this number via OTP.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-text-muted">Grade</label>
+                <select className={selectClass} value={grade} onChange={(e) => setGrade(e.target.value)} disabled={saving}>
+                  <option value="">Select…</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                    <option key={g} value={g}>Grade {g}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-text-muted">Section</label>
+                <Input placeholder='e.g. "A"' value={section} onChange={(e) => setSection(e.target.value)} disabled={saving} />
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <Button type="submit" isLoading={saving} className="flex-1 gap-1.5">
+                <UserPlus className="h-4 w-4" />
+                Add Student
+              </Button>
+              <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function AdminStudentsContent() {
   const t = useTranslations("admin");
   const router = useRouter();
@@ -356,6 +479,7 @@ function AdminStudentsContent() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const currentSearch = searchParams.get("search") ?? "";
   const currentGrade = searchParams.get("grade") ?? "";
@@ -451,14 +575,20 @@ function AdminStudentsContent() {
             </Badge>
           )}
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowImportModal(true)}
-          className="gap-1.5"
-        >
-          <Upload className="h-4 w-4" />
-          {t("importStudents")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowImportModal(true)}
+            className="gap-1.5"
+          >
+            <Upload className="h-4 w-4" />
+            {t("importStudents")}
+          </Button>
+          <Button onClick={() => setShowAddModal(true)} className="gap-1.5">
+            <UserPlus className="h-4 w-4" />
+            Add Student
+          </Button>
+        </div>
       </div>
 
       {/* ── Stats pills ─────────────────────────────────────────────────────── */}
@@ -801,6 +931,14 @@ function AdminStudentsContent() {
         <CsvImportModal
           onClose={() => setShowImportModal(false)}
           onImported={() => setReloadCount((c) => c + 1)}
+        />
+      )}
+
+      {/* Add Single Student Modal */}
+      {showAddModal && (
+        <AddStudentModal
+          onClose={() => setShowAddModal(false)}
+          onAdded={() => setReloadCount((c) => c + 1)}
         />
       )}
     </div>

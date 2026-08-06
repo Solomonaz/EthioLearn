@@ -2,6 +2,82 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
+import { validateCsrfOrigin } from "@/lib/csrf";
+
+// Normalize an Ethiopian phone number to +251XXXXXXXXX, or null if invalid.
+function normalizePhone(raw: string): string | null {
+  const trimmed = raw.trim().replace(/\s+/g, "");
+  let n = trimmed;
+  if (trimmed.startsWith("0")) n = "+251" + trimmed.slice(1);
+  else if (trimmed.startsWith("251")) n = "+" + trimmed;
+  else if (!trimmed.startsWith("+251")) return null;
+  return /^\+251[0-9]{9}$/.test(n) ? n : null;
+}
+
+// ─── POST: create a single student ──
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
+    return NextResponse.json({ error: "School admin account not configured" }, { status: 403 });
+  }
+
+  let body: { name?: string; phone?: string; phoneNumber?: string; grade?: string | number; section?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (name.length < 2) {
+    return NextResponse.json({ error: "Please enter the student's full name." }, { status: 400 });
+  }
+
+  const rawPhone = String(body.phone ?? body.phoneNumber ?? "");
+  const phoneNumber = normalizePhone(rawPhone);
+  if (!phoneNumber) {
+    return NextResponse.json(
+      { error: "Enter a valid Ethiopian phone number (e.g. 9XXXXXXXX)." },
+      { status: 400 }
+    );
+  }
+
+  const gradeNum =
+    body.grade === undefined || body.grade === "" ? null : parseInt(String(body.grade), 10);
+  if (gradeNum !== null && (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 12)) {
+    return NextResponse.json({ error: "Grade must be between 1 and 12." }, { status: 400 });
+  }
+  const section = typeof body.section === "string" && body.section.trim() ? body.section.trim() : null;
+
+  const existing = await db.user.findUnique({ where: { phoneNumber }, select: { id: true } });
+  if (existing) {
+    return NextResponse.json(
+      { error: "A user with this phone number already exists." },
+      { status: 409 }
+    );
+  }
+
+  const student = await db.user.create({
+    data: {
+      name,
+      phoneNumber,
+      role: "STUDENT",
+      grade: gradeNum,
+      section,
+      // School admins add to their own school; super admins create unassigned.
+      schoolId: user.schoolId ?? null,
+    },
+    select: { id: true, name: true, phoneNumber: true, grade: true, section: true },
+  });
+
+  return NextResponse.json({ student }, { status: 201 });
+}
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();

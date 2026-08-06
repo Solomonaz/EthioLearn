@@ -52,6 +52,7 @@ interface StudyRecommendation {
   chapter: string;
   avgScore: number;
   message: string;
+  focusAreas: string[];
 }
 
 interface DailyMessageData {
@@ -280,6 +281,21 @@ export default function StudentDashboardPage() {
                     <p className="mt-0.5 text-sm font-medium leading-relaxed text-purple-900">
                       {rec.message}
                     </p>
+                    {rec.focusAreas && rec.focusAreas.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">
+                          Focus areas
+                        </p>
+                        <ul className="mt-1 space-y-1">
+                          {rec.focusAreas.map((f, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-sm text-purple-900/90">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
+                              <span>{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                   <Link
                     href={`/student/quiz?chapterId=${rec.chapterId}&count=10`}
