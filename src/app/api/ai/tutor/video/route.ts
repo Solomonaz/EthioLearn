@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateVideoTutorial } from "@/lib/ai-provider";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -16,6 +17,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
       { status: 403 }
+    );
+  }
+  if (!(await isAiFeatureEnabled("aiVideo"))) {
+    return NextResponse.json(
+      { error: "AI video tutorials are currently turned off.", code: "AI_DISABLED" },
+      { status: 503 }
     );
   }
 

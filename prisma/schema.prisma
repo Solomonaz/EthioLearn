@@ -188,6 +188,22 @@ model StudentNote {
   @@map("student_notes")
 }
 
+// ─── Global platform settings (singleton) ───────────────────
+// System-wide kill-switches an owner can flip from the admin — e.g. launch with
+// AI OFF (no AI bill) and pricing OFF (free for everyone), then turn them on later.
+model PlatformSettings {
+  id                String   @id @default("singleton")
+  aiEnabled         Boolean  @default(true) // master AI switch — off disables ALL AI
+  aiTutorEnabled    Boolean  @default(true) // AI tutor chat
+  aiVideoEnabled    Boolean  @default(true) // AI video tutorials
+  aiQuizGenEnabled  Boolean  @default(true) // AI question / quiz generation
+  aiAdaptiveEnabled Boolean  @default(true) // adaptive difficulty
+  pricingEnabled    Boolean  @default(true) // paid plans & billing — off = free for all
+  updatedAt         DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
 // ─── Subjects ───────────────────────────────────────────────
 
 model Subject {

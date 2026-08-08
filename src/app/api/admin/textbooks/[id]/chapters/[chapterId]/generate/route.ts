@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateQuestionsBatched } from "@/lib/ai-provider";
+import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 interface RouteParams {
   params: Promise<{ id: string; chapterId: string }>;
@@ -17,6 +18,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  // Global kill-switch: AI question generation can be turned off platform-wide.
+  if (!(await isAiFeatureEnabled("aiQuizGen"))) {
+    return NextResponse.json(
+      { error: "AI question generation is currently turned off.", code: "AI_DISABLED" },
+      { status: 503 }
+    );
   }
 
   // Rate limit: 5 AI generations per minute per user

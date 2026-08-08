@@ -61,6 +61,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
     if (item.labelKey === "rewards" && !ent.rewards) return false;
     if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;
+    // Pricing turned off platform-wide → hide the Billing page entirely.
+    if (item.labelKey === "billing" && !ent.pricingEnabled) return false;
     return true;
   });
 

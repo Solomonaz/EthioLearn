@@ -10,6 +10,10 @@ export interface EntitlementsInfo {
   isIndependent: boolean;
   isSchoolStudent: boolean;
   planName: string | null;
+  /** Paid plans / billing enabled platform-wide. Off = hide billing UI. */
+  pricingEnabled: boolean;
+  /** Effective per-AI-feature switches (master AND per-feature). */
+  aiFeatures: { aiTutor: boolean; aiVideo: boolean; aiQuizGen: boolean; aiAdaptive: boolean };
   loading: boolean;
 }
 
@@ -23,6 +27,8 @@ const DEFAULT: EntitlementsInfo = {
   isIndependent: false,
   isSchoolStudent: false,
   planName: null,
+  pricingEnabled: true,
+  aiFeatures: { aiTutor: true, aiVideo: true, aiQuizGen: true, aiAdaptive: true },
   loading: true,
 };
 
@@ -48,6 +54,13 @@ export function useEntitlements(): EntitlementsInfo {
             isIndependent: !!d.isIndependent,
             isSchoolStudent: !!d.isSchoolStudent,
             planName: d.planName ?? null,
+            pricingEnabled: d.pricingEnabled !== false,
+            aiFeatures: {
+              aiTutor: d.aiFeatures?.aiTutor !== false,
+              aiVideo: d.aiFeatures?.aiVideo !== false,
+              aiQuizGen: d.aiFeatures?.aiQuizGen !== false,
+              aiAdaptive: d.aiFeatures?.aiAdaptive !== false,
+            },
             loading: false,
           });
         } else {

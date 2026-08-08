@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { getEntitlements } from "@/lib/entitlements";
+import { getPlatformSettings, effectiveAiFlags } from "@/lib/platform-settings";
 
 /**
  * Returns the current user's feature entitlements for client-side gating.
@@ -27,5 +28,17 @@ export async function GET() {
     planName = sub?.plan?.name ?? null;
   }
 
-  return NextResponse.json({ ...ent, isIndependent, isSchoolStudent, planName });
+  // Global platform flags so the client can hide billing (pricing off) and
+  // individual AI features (per-feature switches) without a flash of locked UI.
+  const settings = await getPlatformSettings();
+  const aiFeatures = effectiveAiFlags(settings);
+
+  return NextResponse.json({
+    ...ent,
+    isIndependent,
+    isSchoolStudent,
+    planName,
+    pricingEnabled: settings.pricingEnabled,
+    aiFeatures,
+  });
 }

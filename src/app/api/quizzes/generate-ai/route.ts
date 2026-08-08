@@ -7,6 +7,7 @@ import { QuestionType, Difficulty } from "@prisma/client";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -19,6 +20,12 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
       { status: 403 }
+    );
+  }
+  if (!(await isAiFeatureEnabled("aiQuizGen"))) {
+    return NextResponse.json(
+      { error: "AI quiz generation is currently turned off.", code: "AI_DISABLED" },
+      { status: 503 }
     );
   }
 

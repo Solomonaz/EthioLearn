@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { PlatformSettingsPanel } from "@/components/admin/platform-settings-panel";
 import {
   Building2,
   Users,
@@ -169,6 +170,9 @@ export default function AdminSettingsPage() {
           {success}
         </div>
       )}
+
+      {/* Global AI / pricing kill-switches (SUPER_ADMIN only; self-hides otherwise) */}
+      <PlatformSettingsPanel />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* School Info Card */}

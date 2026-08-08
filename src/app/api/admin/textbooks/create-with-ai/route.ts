@@ -6,6 +6,7 @@ import {
   detectChapters,
   splitTextByChapters,
 } from "@/lib/ai-provider";
+import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 // Simple in-memory rate limiter
 const rateLimitMap = new Map<string, number[]>();
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
 
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  // Global kill-switch: AI chapter detection can be turned off platform-wide.
+  if (!(await isAiFeatureEnabled("aiQuizGen"))) {
+    return NextResponse.json(
+      { error: "AI features are currently turned off.", code: "AI_DISABLED" },
+      { status: 503 }
+    );
   }
 
   if (!checkRateLimit(user.id)) {

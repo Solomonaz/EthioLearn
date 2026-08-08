@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 // How many of the most relevant chunks to retrieve as tutor context.
 const TUTOR_RETRIEVAL_LIMIT = 8;
@@ -53,6 +54,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
       { status: 403 }
+    );
+  }
+  if (!(await isAiFeatureEnabled("aiTutor"))) {
+    return NextResponse.json(
+      { error: "The AI tutor is currently turned off.", code: "AI_DISABLED" },
+      { status: 503 }
     );
   }
 

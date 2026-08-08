@@ -12,6 +12,7 @@
  */
 
 import { db } from "./db";
+import { getPlatformSettings } from "./platform-settings";
 
 export interface Entitlements {
   /** AI tutor, AI video tutorials, AI quiz generation. */
@@ -52,13 +53,23 @@ interface UserLike {
  * for individual students (the only ones whose access is plan-gated).
  */
 export async function getEntitlements(user: UserLike | null | undefined): Promise<Entitlements> {
-  if (!user) return FREE_TIER;
+  const settings = await getPlatformSettings();
+  // The global master switch overrides everything: if AI is off platform-wide
+  // (e.g. the owner hasn't paid for the AI service), nobody gets AI — no matter
+  // what their plan says.
+  const gate = (e: Entitlements): Entitlements => ({ ...e, ai: e.ai && settings.aiEnabled });
 
-  // Admins and other non-student roles are unrestricted.
-  if (user.role !== "STUDENT") return FULL_ACCESS;
+  if (!user) return gate(FREE_TIER);
+
+  // Admins and other non-student roles are unrestricted (AI still master-gated).
+  if (user.role !== "STUDENT") return gate(FULL_ACCESS);
 
   // Students who belong to a school always have full access (managed by school).
-  if (user.schoolId) return FULL_ACCESS;
+  if (user.schoolId) return gate(FULL_ACCESS);
+
+  // Pricing turned OFF platform-wide → launch free: every individual student
+  // gets the full (non-AI) feature set, no plan required.
+  if (!settings.pricingEnabled) return gate(FULL_ACCESS);
 
   // Individual student → look up their current plan. A sub counts as live only
   // while its status is live AND it hasn't passed its endDate (the paid-through
@@ -82,13 +93,13 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
     },
   });
 
-  if (!sub?.plan) return FREE_TIER;
-  return {
+  if (!sub?.plan) return gate(FREE_TIER);
+  return gate({
     ai: sub.plan.allowAi,
     multiplayer: sub.plan.allowMultiplayer,
     rewards: sub.plan.allowRewards,
     leaderboard: sub.plan.allowLeaderboard,
-  };
+  });
 }
 
 // Human-readable messages returned by the API when a capability is locked.
