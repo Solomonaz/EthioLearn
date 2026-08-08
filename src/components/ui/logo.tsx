@@ -6,6 +6,8 @@ type LogoProps = {
   iconOnly?: boolean;
   /** Visual size of the mark + wordmark. */
   size?: "sm" | "md" | "lg";
+  /** Recolour the wordmark + accent ring for a dark background. */
+  onDark?: boolean;
   className?: string;
 };
 
@@ -20,7 +22,7 @@ const SIZES = {
  * yellow "spark" accent, next to the two-tone wordmark. The wordmark stays
  * Latin ("EthioLearn") in every locale — a brand name, not translated copy.
  */
-export function Logo({ iconOnly = false, size = "md", className }: LogoProps) {
+export function Logo({ iconOnly = false, size = "md", onDark = false, className }: LogoProps) {
   const s = SIZES[size];
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)} aria-label="EthioLearn">
@@ -33,7 +35,8 @@ export function Logo({ iconOnly = false, size = "md", className }: LogoProps) {
         <GraduationCap className={cn("text-white", s.icon)} strokeWidth={2.5} aria-hidden="true" />
         <span
           className={cn(
-            "absolute -right-0.5 -top-0.5 rounded-full bg-[#FDD835] ring-2 ring-surface",
+            "absolute -right-0.5 -top-0.5 rounded-full bg-[#FDD835] ring-2",
+            onDark ? "ring-[#070b08]" : "ring-surface",
             s.dot
           )}
           aria-hidden="true"
@@ -41,8 +44,8 @@ export function Logo({ iconOnly = false, size = "md", className }: LogoProps) {
       </span>
       {!iconOnly && (
         <span className={cn("font-black tracking-tight", s.word)}>
-          <span className="text-primary">Ethio</span>
-          <span className="text-text-primary">Learn</span>
+          <span className={onDark ? "text-primary-light" : "text-primary"}>Ethio</span>
+          <span className={onDark ? "text-white" : "text-text-primary"}>Learn</span>
         </span>
       )}
     </span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { getQuestionSeconds } from "@/lib/quiz-timing";
 
 interface QuizQuestionOption {
   label: string;
@@ -86,7 +87,8 @@ export const useQuizStore = create<QuizState>((set, get) => ({
       questionStartTime: Date.now(),
       isSubmitting: false,
       mode,
-      timeLeft: 30,
+      // Per-question time budget, scaled by the question's weight.
+      timeLeft: normalized[0] ? getQuestionSeconds(normalized[0]) : 30,
       timerActive: mode === "TIMED",
     });
   },

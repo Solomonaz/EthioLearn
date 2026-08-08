@@ -35,7 +35,9 @@ interface RedemptionSummary {
 
 interface RewardsData {
   rewards: Reward[];
-  userPoints: number;
+  userPoints: number; // redeemable (prize-eligible) balance
+  totalPoints?: number; // leaderboard score, for context
+  qualityThreshold?: number; // min quiz score that earns redeemable points
   redemptions: RedemptionSummary[];
 }
 
@@ -150,7 +152,7 @@ function ConfirmModal({
               </span>
             </div>
             <div className="mt-1 flex items-center justify-between text-sm">
-              <span className="text-gray-600">Your points</span>
+              <span className="text-gray-600">Redeemable points</span>
               <span className="text-gray-800">{userPoints.toLocaleString()} pts</span>
             </div>
             <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-2 text-sm">
@@ -377,7 +379,8 @@ export default function RewardsPage() {
     );
   }
 
-  const { rewards, userPoints, redemptions } = data;
+  const { rewards, userPoints, totalPoints, qualityThreshold, redemptions } = data;
+  const qualityPct = qualityThreshold ?? 60;
 
   const filteredRewards =
     activeFilter === "ALL"
@@ -399,16 +402,23 @@ export default function RewardsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rewards Store</h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Spend your points on exciting rewards
+            Redeemable points are earned from quizzes you score {qualityPct}% or higher.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-4 py-2.5">
-          <Coins className="h-5 w-5 text-primary" />
-          <span className="text-sm font-medium text-gray-600">You have</span>
-          <span className="text-lg font-bold text-primary">
-            {userPoints.toLocaleString()}
-          </span>
-          <span className="text-sm font-medium text-gray-600">points</span>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-4 py-2.5">
+            <Coins className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-gray-600">Redeemable</span>
+            <span className="text-lg font-bold text-primary">
+              {userPoints.toLocaleString()}
+            </span>
+            <span className="text-sm font-medium text-gray-600">pts</span>
+          </div>
+          {typeof totalPoints === "number" && (
+            <span className="text-xs text-gray-400">
+              {totalPoints.toLocaleString()} total points earned
+            </span>
+          )}
         </div>
       </div>
 

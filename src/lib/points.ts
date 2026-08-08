@@ -48,7 +48,14 @@ export function calculateQuizPoints(
     total += 200;
   }
 
-  // Speed bonus: +50% if avg time per question ≤ 8 seconds
+  // Speed bonus: +50% for answering *fast AND accurately*. Crucially, this is
+  // gated so it can't reward rapid random clicking:
+  //   • accuracy must be high (≥80%) — guessers rarely clear this, and
+  //   • the average time must sit in a *plausible* window (≥2.5s per question);
+  //     anything faster than ~2.5s means the question wasn't actually read.
+  const SPEED_MIN_MS = 2500; // faster than this ⇒ not reading, no bonus
+  const SPEED_MAX_MS = 8000; // must beat this to count as "fast"
+  const SPEED_MIN_ACCURACY = 0.8;
   let speedBonus = 0;
   if (
     opts?.totalTimeTakenMs !== undefined &&
@@ -57,7 +64,13 @@ export function calculateQuizPoints(
     total > 0
   ) {
     const avgTimePerQuestion = opts.totalTimeTakenMs / opts.questionCount;
-    if (avgTimePerQuestion <= 8000) {
+    const correctRatio =
+      answers.filter((a) => a.isCorrect).length / answers.length;
+    if (
+      correctRatio >= SPEED_MIN_ACCURACY &&
+      avgTimePerQuestion >= SPEED_MIN_MS &&
+      avgTimePerQuestion <= SPEED_MAX_MS
+    ) {
       speedBonus = Math.round(total * 0.5);
       total += speedBonus;
     }
@@ -75,4 +88,14 @@ export function calculateQuizPoints(
 
 export function calculateXPLevel(totalPoints: number): number {
   return Math.floor(totalPoints / 100) + 1;
+}
+
+/**
+ * Scales earned points by quiz accuracy so a marginal pass earns proportionally
+ * less than a strong one. Returns 0 below `floorScore` (blocks lucky guessing),
+ * then ramps linearly with the score (e.g. 60% → 0.6×, 100% → 1.0×).
+ */
+export function getAccuracyFactor(score: number, floorScore: number): number {
+  if (score < floorScore) return 0;
+  return Math.min(1, Math.max(0, score / 100));
 }

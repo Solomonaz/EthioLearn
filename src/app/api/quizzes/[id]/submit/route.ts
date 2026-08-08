@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { calculateQuizPoints, calculateXPLevel } from "@/lib/points";
+import { calculateQuizPoints, calculateXPLevel, getAccuracyFactor } from "@/lib/points";
 import { Difficulty } from "@prisma/client";
 import { notifyLevelUp } from "@/lib/notifications";
 import { checkAndAwardAchievements } from "@/lib/achievements";
@@ -10,7 +10,20 @@ import { validateCsrfOrigin } from "@/lib/csrf";
 
 // ── Anti-gaming constants (SRS §4.9.2) ───────────────────────────────────────
 const MAX_SCORED_QUIZZES_PER_DAY = 20;
-const MIN_SCORE_FOR_POINTS = 30; // below 30% → no leaderboard points
+// Below this score → no points at all. Set above the 25% four-option guessing
+// baseline so random clicking can't reliably clear it.
+const MIN_SCORE_FOR_POINTS = 50;
+// Only quizzes at/above this score contribute to the *redeemable* (prize)
+// balance — so prizes reflect demonstrated mastery, not sheer quiz volume.
+const QUALITY_SCORE_FOR_REWARDS = 60;
+// Server-side floor: a legitimate answer needs at least this long to read +
+// answer. Measured from Quiz.startedAt (un-fakeable by the client). Finishing
+// faster than questionCount × this ⇒ points blocked.
+const MIN_MS_PER_QUESTION = 3000;
+// Re-answering a question the student has ALREADY mastered earns only this
+// fraction of the points for the leaderboard (and nothing toward prizes) — so
+// retaking the same quiz over and over can't be used to farm points.
+const REVIEW_POINTS_FACTOR = 0.25;
 
 interface SubmittedAnswer {
   questionId: string;
@@ -189,8 +202,13 @@ export async function POST(
     const correctCount = gradedAnswers.filter((a) => a.isCorrect).length;
     const score = Math.round((correctCount / gradedAnswers.length) * 100);
 
-    // ── Anti-gaming: accuracy & daily cap checks (SRS §4.9.2) ───────────────
-    const pointsBlocked = exceedsDailyLimit || score < MIN_SCORE_FOR_POINTS;
+    // ── Anti-gaming: daily cap, accuracy floor, and an un-fakeable time gate ──
+    // Elapsed is measured server-side from Quiz.startedAt, so a client can't
+    // spoof it by lying about per-answer times.
+    const elapsedMs = Date.now() - new Date(quiz.startedAt).getTime();
+    const tooFast = elapsedMs < gradedAnswers.length * MIN_MS_PER_QUESTION;
+    const pointsBlocked =
+      exceedsDailyLimit || score < MIN_SCORE_FOR_POINTS || tooFast;
 
     const { total: rawPointsEarned, breakdown, speedBonus, streakBonus } =
       calculateQuizPoints(pointsInput, {
@@ -199,10 +217,71 @@ export async function POST(
         streakDays: newStreak,
       });
 
-    // Zero out points if anti-gaming rules triggered
-    const totalPointsEarned = pointsBlocked ? 0 : rawPointsEarned;
-    const effectiveSpeedBonus = pointsBlocked ? 0 : speedBonus;
-    const effectiveStreakBonus = pointsBlocked ? 0 : streakBonus;
+    // ── Repeat/mastery weighting ────────────────────────────────────────────
+    // Which of these questions has the student already answered correctly in a
+    // previous completed quiz? Re-answering a known question is revision, not
+    // new learning — it earns only a small "review" credit and never counts
+    // toward the prize (redeemable) balance. This is what stops retaking the
+    // same quiz from farming points once the answers are memorised.
+    const priorCorrect = await db.quizAnswer.findMany({
+      where: {
+        questionId: { in: questionIds },
+        isCorrect: true,
+        quiz: { studentId: user.id, completedAt: { not: null } },
+      },
+      select: { questionId: true },
+      distinct: ["questionId"],
+    });
+    const masteredBefore = new Set(priorCorrect.map((a) => a.questionId));
+
+    // Per-answer review weight: new-correct = full, repeat-correct = review, wrong = 0.
+    const reviewWeight = gradedAnswers.map((a) =>
+      a.isCorrect ? (masteredBefore.has(a.questionId) ? REVIEW_POINTS_FACTOR : 1) : 0,
+    );
+    const weightedBaseArr = breakdown.map((b, i) => (b ?? 0) * reviewWeight[i]);
+    const weightedBase = weightedBaseArr.reduce((s, n) => s + n, 0);
+    const sumBreakdown = breakdown.reduce((s, n) => s + (n ?? 0), 0);
+    // Perfect + speed bonuses are performance bonuses → scaled by how much of the
+    // quiz was genuinely new. The daily login-streak bonus is not (it rewards
+    // showing up, not the quiz content).
+    const performanceBonuses = rawPointsEarned - sumBreakdown - streakBonus;
+    const newCorrectCount = gradedAnswers.filter(
+      (a) => a.isCorrect && !masteredBefore.has(a.questionId),
+    ).length;
+    const noveltyFactor =
+      gradedAnswers.length > 0 ? newCorrectCount / gradedAnswers.length : 0;
+    // Base points from newly-mastered questions only — the sole source of prize points.
+    const newBase = breakdown.reduce(
+      (s, b, i) =>
+        s + (gradedAnswers[i].isCorrect && !masteredBefore.has(gradedAnswers[i].questionId) ? (b ?? 0) : 0),
+      0,
+    );
+
+    // Scale points by accuracy (60% → 0.6×, 100% → 1.0×) so a marginal pass
+    // earns proportionally less. Zeroed entirely when an anti-gaming rule fires.
+    const accuracyFactor = pointsBlocked
+      ? 0
+      : getAccuracyFactor(score, MIN_SCORE_FOR_POINTS);
+
+    // Leaderboard/XP points: review-weighted base + novelty-scaled performance
+    // bonuses + login-streak bonus, all scaled by accuracy.
+    const totalPointsEarned = Math.round(
+      (weightedBase + performanceBonuses * noveltyFactor + streakBonus) * accuracyFactor,
+    );
+    const effectiveSpeedBonus = Math.round(speedBonus * noveltyFactor * accuracyFactor);
+    const effectiveStreakBonus = Math.round(streakBonus * accuracyFactor);
+
+    // Prize-eligible points: only NEW mastery on quality quizzes contributes.
+    // A fully fresh quiz earns close to its full value here; a pure retake earns
+    // zero (newBase and noveltyFactor are both 0). The login-streak bonus is
+    // excluded — prizes come from mastery, not from showing up.
+    const redeemableEarned =
+      !pointsBlocked && score >= QUALITY_SCORE_FOR_REWARDS
+        ? Math.round((newBase + performanceBonuses * noveltyFactor) * accuracyFactor)
+        : 0;
+
+    const repeatCount = gradedAnswers.filter((a) => masteredBefore.has(a.questionId)).length;
+    const answerPoints = weightedBaseArr.map((b) => Math.round(b * accuracyFactor));
 
     // Save quiz answers
     await db.quizAnswer.createMany({
@@ -212,7 +291,7 @@ export async function POST(
         studentAnswer: a.studentAnswer,
         isCorrect: a.isCorrect,
         timeTakenMs: a.timeTakenMs,
-        pointsEarned: pointsBlocked ? 0 : (breakdown[i] ?? 0),
+        pointsEarned: answerPoints[i] ?? 0,
       })),
     });
 
@@ -309,6 +388,7 @@ export async function POST(
       where: { id: user.id },
       data: {
         totalPoints: { increment: totalPointsEarned },
+        redeemablePoints: { increment: redeemableEarned },
         lastActiveAt: new Date(),
       },
     });
@@ -376,8 +456,16 @@ export async function POST(
       pointsBlockedReason: pointsBlocked
         ? exceedsDailyLimit
           ? "Daily quiz limit reached (20 scored quizzes/day)"
-          : "Score below 30% threshold"
+          : tooFast
+            ? "Answered too fast to count — take your time to earn points"
+            : `Score below ${MIN_SCORE_FOR_POINTS}% — no points awarded`
         : undefined,
+      redeemablePointsEarned: redeemableEarned,
+      newRedeemablePoints: updatedUser.redeemablePoints,
+      qualityThreshold: QUALITY_SCORE_FOR_REWARDS,
+      repeatQuestions: repeatCount,
+      newQuestions: newCorrectCount,
+      pointsReducedForRepeats: repeatCount > 0,
       newTotalPoints: updatedUser.totalPoints,
       newXPLevel,
       retryChapterId,
@@ -392,7 +480,7 @@ export async function POST(
         isCorrect: a.isCorrect,
         explanation: a.explanation,
         videoUrl: a.videoUrl,
-        pointsEarned: pointsBlocked ? 0 : (breakdown[i] ?? 0),
+        pointsEarned: answerPoints[i] ?? 0,
       })),
     });
   } catch (error) {

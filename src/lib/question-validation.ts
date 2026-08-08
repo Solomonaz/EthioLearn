@@ -19,6 +19,19 @@ const VALID_TYPES: GeneratedQuestion["type"][] = [
   "ORDERING",
 ];
 
+// Banned "meta" options the models keep emitting despite the prompt ban (Q15):
+// "All/None of the above", "Both A and B", "Neither A nor B".
+const WEAK_OPTION_PATTERNS = [
+  /\b(all|none)\s+of\s+(the\s+)?(above|below|these|options|answers)\b/i,
+  /\bboth\s+[a-d]\s+and\s+[a-d]\b/i,
+  /\bneither\s+[a-d]\s+nor\s+[a-d]\b/i,
+  /\bnone\s+of\s+these\b/i,
+];
+
+function isWeakOption(option: string): boolean {
+  return WEAK_OPTION_PATTERNS.some((p) => p.test(option));
+}
+
 /**
  * Extract a JSON value from a raw LLM response. Tries a direct parse first,
  * then a fenced ```json code block, then the outermost [...] array.
@@ -72,14 +85,17 @@ export function validateQuestions(raw: unknown): GeneratedQuestion[] {
 
     const options = q.options.map((o: unknown) => String(o));
     const correctAnswer = String(q.correctAnswer).trim();
+    let finalOptions = options;
 
     // Type-specific validation
     if (type === "MCQ") {
-      if (options.length < 2) continue;
-      if (!options.includes(correctAnswer)) {
-        const match = options.find((o) => o.toLowerCase() === correctAnswer.toLowerCase());
-        if (!match) continue;
-      }
+      // Drop banned meta options ("None/All of the above", "Both A and B").
+      // If the correct answer itself is one of these, the question can't be
+      // salvaged, so skip it entirely.
+      if (isWeakOption(correctAnswer)) continue;
+      finalOptions = options.filter((o) => !isWeakOption(o));
+      if (finalOptions.length < 2) continue;
+      if (!finalOptions.some((o) => o.toLowerCase() === correctAnswer.toLowerCase())) continue;
     } else if (type === "TRUE_FALSE") {
       if (!["True", "False"].includes(correctAnswer)) continue;
     } else if (type === "MATCH_PAIRS") {
@@ -96,7 +112,7 @@ export function validateQuestions(raw: unknown): GeneratedQuestion[] {
       type,
       // Shuffle MCQ options so the correct answer isn't biased toward slot A.
       // Only MCQ — MATCH_PAIRS/ORDERING option order carries meaning.
-      options: type === "MCQ" ? shuffleArray(options) : options,
+      options: type === "MCQ" ? shuffleArray(finalOptions) : finalOptions,
       correctAnswer,
       difficulty,
       explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",

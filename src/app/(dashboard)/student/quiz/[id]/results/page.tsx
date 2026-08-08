@@ -16,6 +16,8 @@ import {
   RefreshCw,
   PlayCircle,
   ExternalLink,
+  Gift,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +84,11 @@ interface QuizResults {
   retryChapterId?: string | null;
   retryDifficulty?: string;
   retryQuestionCount?: number;
+  redeemablePointsEarned?: number;
+  pointsBlocked?: boolean;
+  pointsBlockedReason?: string;
+  repeatQuestions?: number;
+  pointsReducedForRepeats?: boolean;
 }
 
 export default function QuizResultsPage() {
@@ -139,9 +146,21 @@ export default function QuizResultsPage() {
 
   if (!results) return null;
 
-  const { score, totalQuestions, correctAnswers, totalPointsEarned, answers } =
-    results;
+  const {
+    score,
+    totalQuestions,
+    correctAnswers,
+    totalPointsEarned,
+    answers,
+    redeemablePointsEarned = 0,
+    pointsBlocked = false,
+    pointsBlockedReason,
+    repeatQuestions = 0,
+    pointsReducedForRepeats = false,
+  } = results;
   const wrong = totalQuestions - correctAnswers;
+  const showPointsNote =
+    pointsBlocked || pointsReducedForRepeats || redeemablePointsEarned > 0;
 
   const scoreColor =
     score >= 80 ? "text-success" : score >= 50 ? "text-warning" : "text-error";
@@ -188,6 +207,36 @@ export default function QuizResultsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Points note — reward points, repeats, or a blocked-points reason */}
+      {showPointsNote && (
+        <Card className="mb-6">
+          <CardContent className="space-y-1.5 py-3 text-sm">
+            {pointsBlocked ? (
+              <p className="flex items-center gap-2 text-warning">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {pointsBlockedReason ?? "No points awarded for this attempt."}
+              </p>
+            ) : (
+              <>
+                {redeemablePointsEarned > 0 && (
+                  <p className="flex items-center gap-2 text-text-secondary">
+                    <Gift className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="font-semibold text-primary">+{redeemablePointsEarned}</span>
+                    reward points earned — spendable in the Rewards store.
+                  </p>
+                )}
+                {pointsReducedForRepeats && (
+                  <p className="flex items-center gap-2 text-text-secondary">
+                    <RefreshCw className="h-4 w-4 shrink-0 text-warning" />
+                    {repeatQuestions} review question{repeatQuestions === 1 ? "" : "s"} — reduced points, and no reward points (you&apos;d already mastered {repeatQuestions === 1 ? "it" : "them"}).
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Accuracy Bar */}
       <Card className="mb-6">

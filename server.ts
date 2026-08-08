@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { decode } from "next-auth/jwt";
 import { checkBattleAchievements } from "./src/lib/achievements";
+import { getBattleSeconds } from "./src/lib/quiz-timing";
 
 // ── Fun facts pool (SRS §4.6.3) ──────────────────────────────────────────────
 const FUN_FACTS: Record<string, string[]> = {
@@ -112,6 +113,7 @@ interface RoomState {
   status: "waiting" | "countdown" | "in_progress" | "finished";
   questionTimer?: NodeJS.Timeout;
   questionStartedAt: number;
+  currentTimeLimit?: number; // seconds allotted to the current question
   rematchRequesters: Set<string>;
   subject?: string; // for fun facts
 }
@@ -211,7 +213,8 @@ app.prepare().then(() => {
         io.to(roomCode).emit("player_reconnected", { userId });
         if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
           const q = room.questions[room.currentQuestion];
-          socket.emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit: 20 });
+          const timeLimit = room.currentTimeLimit ?? getBattleSeconds({ questionText: q.question, options: q.options });
+          socket.emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit });
         }
         return;
       }
@@ -290,7 +293,10 @@ app.prepare().then(() => {
       const allPlayers = Array.from(room.players.values());
       const maxScore = Math.max(0, ...allPlayers.map((p) => p.score));
       const isLeader = player.score >= maxScore && maxScore > 0;
-      const speedBonus = isCorrect ? Math.round((timeLeft / 20) * 10 * (isLeader ? 0.8 : 1.0)) : 0;
+      // Normalise speed by THIS question's time budget so heavy questions (with a
+      // longer window) don't hand out oversized speed bonuses.
+      const timeBudget = room.currentTimeLimit ?? 20;
+      const speedBonus = isCorrect ? Math.round((timeLeft / timeBudget) * 10 * (isLeader ? 0.8 : 1.0)) : 0;
       const pointsEarned = isCorrect ? 10 + speedBonus : 0;
 
       player.score += pointsEarned;
@@ -400,7 +406,8 @@ app.prepare().then(() => {
       socket.emit("room_updated", { players: serializePlayers(room), status: room.status, hostId: room.hostId });
       if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
         const q = room.questions[room.currentQuestion];
-        socket.emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit: 20 });
+        const timeLimit = room.currentTimeLimit ?? getBattleSeconds({ questionText: q.question, options: q.options });
+        socket.emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit });
       }
     });
 
@@ -435,8 +442,11 @@ app.prepare().then(() => {
     if (!room) return;
     room.questionStartedAt = Date.now();
     const q = room.questions[room.currentQuestion];
-    io.to(roomCode).emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit: 20 });
-    room.questionTimer = setTimeout(() => advanceQuestion(io, rooms, roomCode), 22_000);
+    // Heavy calculation/graph questions get a longer window; normal ones keep 20 s.
+    const timeLimit = getBattleSeconds({ questionText: q.question, options: q.options });
+    room.currentTimeLimit = timeLimit;
+    io.to(roomCode).emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit });
+    room.questionTimer = setTimeout(() => advanceQuestion(io, rooms, roomCode), (timeLimit + 2) * 1000);
   }
 
   function advanceQuestion(io: SocketServer, rooms: Map<string, RoomState>, roomCode: string) {

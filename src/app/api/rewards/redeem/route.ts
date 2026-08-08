@@ -52,22 +52,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check user has enough points (re-fetch to get latest totalPoints)
+  // Check user has enough *redeemable* points (re-fetch to get latest value).
+  // Rewards are bought with redeemablePoints — the prize-eligible balance earned
+  // only from quality quizzes — not the raw leaderboard total.
   const freshUser = await db.user.findUnique({
     where: { id: user.id },
-    select: { totalPoints: true },
+    select: { redeemablePoints: true },
   });
 
   if (!freshUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  if (freshUser.totalPoints < reward.pointsCost) {
+  if (freshUser.redeemablePoints < reward.pointsCost) {
     return NextResponse.json(
       {
         error: "Insufficient points",
         required: reward.pointsCost,
-        available: freshUser.totalPoints,
+        available: freshUser.redeemablePoints,
       },
       { status: 400 }
     );
@@ -89,12 +91,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Perform atomically: deduct points, decrement inventory, create redemption, log ledger
+  // Perform atomically: deduct redeemable points, decrement inventory, create
+  // redemption, log ledger. totalPoints (leaderboard/XP) is intentionally left
+  // untouched so spending prizes never lowers a student's rank or level.
   const [updatedUser, , redemption] = await db.$transaction([
     db.user.update({
       where: { id: user.id },
-      data: { totalPoints: { decrement: reward.pointsCost } },
-      select: { totalPoints: true },
+      data: { redeemablePoints: { decrement: reward.pointsCost } },
+      select: { redeemablePoints: true },
     }),
     db.reward.update({
       where: { id: rewardId },
@@ -150,6 +154,6 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     success: true,
     redemption,
-    newPoints: updatedUser.totalPoints,
+    newPoints: updatedUser.redeemablePoints,
   });
 }

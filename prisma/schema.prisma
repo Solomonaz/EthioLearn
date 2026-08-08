@@ -134,6 +134,9 @@ model User {
   avatarUrl     String?
   xpLevel       Int       @default(1)
   totalPoints   Int       @default(0)
+  // Points that may be spent on rewards. Only earned from quizzes scored at or
+  // above the quality threshold — protects the prize economy from point farming.
+  redeemablePoints Int    @default(0)
   streakDays    Int       @default(0)
   isActive      Boolean   @default(true)
   suspendedAt   DateTime?
@@ -350,6 +353,7 @@ model Quiz {
 
   answers QuizAnswer[]
 
+  @@index([studentId])
   @@map("quizzes")
 }
 
@@ -366,6 +370,7 @@ model QuizAnswer {
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
+  @@index([questionId])
   @@map("quiz_answers")
 }
 

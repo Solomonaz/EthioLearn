@@ -336,6 +336,76 @@ const FORMAT_RULES = `QUESTION-TYPE FORMAT RULES:
      RIGHT: ["Roman conquest of Greece", "Philip II defeats the Greek city-states", …]
      (The correctAnswer still encodes the true order; the options must not.)`;
 
+// ─── Quantitative subjects (Physics, Maths, Chemistry …) ───────────────────
+
+/**
+ * True for calculation-heavy subjects that should get numerical + graph-based
+ * questions, not just conceptual prose. Matched loosely on the subject name.
+ */
+export function isQuantitativeSubject(subject: string): boolean {
+  const s = (subject || "").toLowerCase();
+  return (
+    s.includes("phys") ||
+    s.includes("math") || // mathematics, maths
+    s.includes("chem") ||
+    s.includes("account") ||
+    s.includes("econom") ||
+    s.includes("statist")
+  );
+}
+
+const QUANTITATIVE_INSTRUCTIONS = `QUANTITATIVE-SUBJECT REQUIREMENTS (this is a calculation-heavy subject):
+This subject is tested with NUMERICAL and GRAPHICAL reasoning — NOT only
+definitions. A batch of pure prose/recall questions is a FAILURE for this
+subject. Across the batch, AT LEAST HALF the questions MUST be one of:
+
+A. NUMERICAL / CALCULATION questions
+   - Give specific numeric values WITH UNITS (e.g. F = 12 N, m = 3 kg, v = 4 m/s)
+     that are consistent with the formulas, laws, or worked examples in the
+     chapter content below.
+   - Require the student to SELECT a formula/method, SUBSTITUTE the values, and
+     COMPUTE a result. The correctAnswer is the computed value WITH its unit.
+   - Distractors MUST be the results of COMMON, REALISTIC mistakes — not random
+     numbers: using the wrong formula, a unit-conversion slip, an arithmetic
+     error, dropping a constant/factor (e.g. forgetting the ½ in KE = ½mv²),
+     or inverting a ratio. Each wrong option should be reachable by a specific
+     misstep a real student makes.
+   - The explanation MUST show the formula, the substitution, and the arithmetic.
+   - Keep numbers clean enough to solve by hand at this grade level.
+
+B. GRAPH / DIAGRAM / TABLE INTERPRETATION questions (described fully in words —
+   questions are text-only, so DESCRIBE the figure, never reference an unseen image)
+   - Describe the graph/figure/table precisely in the questionText, e.g.
+     "A velocity–time graph is a straight line from (0 s, 0 m/s) to (4 s, 20 m/s)."
+     then ask the student to read or compute a slope/gradient, area under the
+     line, intercept, rate of change, or trend.
+   - The description must be complete enough to answer from the text alone.
+
+DIFFICULTY FOR NUMERICAL ITEMS (overrides the conceptual templates for this subject):
+   • EASY   → recall a formula, constant, unit, or a one-step plug-in with given values.
+   • MEDIUM → a single-formula calculation, or reading one value off a described graph.
+   • HARD   → a MULTI-STEP problem: chain two formulas, convert units then compute,
+              or combine two quantities so the answer needs ≥2 steps. A multi-step
+              numerical problem fully satisfies the HARD bar for this subject.
+
+Prefer MCQ (numeric options) or FILL_IN_BLANK (numeric answer) for calculations.
+Still include SOME conceptual questions, but the batch must be a genuine MIX of
+numerical, graphical, and conceptual — never all prose.`;
+
+// Fast-play variant (Timed / Battle): calculation & graph questions that need
+// real working are unfair under a per-question countdown, so they are limited to
+// quick, single-step items and heavy multi-step / graph-reading is excluded.
+const FAST_MODE_INSTRUCTIONS = `FAST-PLAY MODE (this quiz is TIMED / head-to-head — every question has a short countdown):
+Questions MUST be answerable within a few seconds. Therefore:
+• NO multi-step calculations. At most a SINGLE, mental-math step (e.g. F = m·a
+  with small whole numbers) — nothing requiring paper, long division, or chaining
+  two formulas.
+• NO questions that require reading values off a described graph, computing a
+  slope/area, or interpreting a figure — these take too long under a countdown.
+• Favour quick recall, definitions, unit/formula identification ("which formula
+  gives kinetic energy?"), and one-line conceptual questions.
+• Keep questionText and every option SHORT.`;
+
 // ─── Main builder ──────────────────────────────────────────────────────────
 
 /**
@@ -355,6 +425,16 @@ export function buildQuestionGenerationPrompt(
       ? `All ${count} questions must be ${opts.difficulty} difficulty — and they must TRULY meet that level per the rubric below.`
       : `Mix difficulties: roughly 30% EASY, 40% MEDIUM, 30% HARD. Each question's label must TRULY match the rubric below.`;
 
+  // Timed / Battle play can't fairly ask heavy calculation or graph questions
+  // under a countdown, so those modes get the "fast" ruleset instead of the
+  // quantitative one. SOLO (or unspecified) keeps the full numerical + graph mix.
+  const fastMode = opts.mode === "TIMED" || opts.mode === "GROUP";
+  const quantitativeBlock = fastMode
+    ? `\n${FAST_MODE_INSTRUCTIONS}\n`
+    : isQuantitativeSubject(opts.subject)
+      ? `\n${QUANTITATIVE_INSTRUCTIONS}\n`
+      : "";
+
   return `You are an expert educational content designer for the Ethiopian national curriculum, with deep experience in assessment writing and Bloom's Taxonomy.
 
 TASK: Generate exactly ${count} high-quality exam questions based ONLY on the textbook chapter content provided below.
@@ -370,7 +450,7 @@ ${DIFFICULTY_RUBRIC}
 ${QUALITY_RULES}
 
 ${FORMAT_RULES}
-
+${quantitativeBlock}
 DIFFICULTY TARGET FOR THIS BATCH:
 ${difficultyInstruction}
 

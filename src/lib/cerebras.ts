@@ -108,7 +108,7 @@ export async function cerebrasGenerateQuestions(
         },
         { role: "user", content: prompt },
       ],
-      { temperature: 0.5, maxTokens: 8192, jsonMode: true }
+      { temperature: 0.5, maxTokens: 4096, jsonMode: true }
     );
 
     try {

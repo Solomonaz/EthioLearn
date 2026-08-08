@@ -53,7 +53,7 @@ async function nvidiaChatCompletion(
       max_tokens: opts.maxTokens ?? 8192,
       ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(35_000),
   });
 
   if (!res.ok) {
@@ -108,7 +108,7 @@ export async function nvidiaGenerateQuestions(
         },
         { role: "user", content: prompt },
       ],
-      { temperature: 0.5, maxTokens: 8192, jsonMode: true }
+      { temperature: 0.5, maxTokens: 4096, jsonMode: true }
     );
 
     try {

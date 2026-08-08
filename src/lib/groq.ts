@@ -118,7 +118,7 @@ export async function groqGenerateQuestions(
         { role: "user", content: prompt },
       ],
       temperature: 0.5,
-      max_tokens: 8192,
+      max_tokens: 4096,
       response_format: { type: "json_object" },
     });
 

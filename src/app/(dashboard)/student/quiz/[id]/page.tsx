@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuizStore } from "@/stores/quiz-store";
+import { getQuestionSeconds } from "@/lib/quiz-timing";
 import { cn } from "@/lib/utils";
 import { useAntiCheat } from "@/lib/useAntiCheat";
 import { useTranslations } from "next-intl";
@@ -195,6 +196,8 @@ export default function QuizTakingPage() {
   // Derived values (safe even when questions is empty)
   const hasQuestions = questions && questions.length > 0;
   const currentQuestion = hasQuestions ? questions[currentIndex] : null;
+  // Per-question time budget (heavier questions get more time in TIMED mode).
+  const questionSeconds = currentQuestion ? getQuestionSeconds(currentQuestion) : 30;
 
   // ── Anti-cheat ───────────────────────────────────────────────────────────
   // Use a mutable ref so the hook always calls the latest handleSubmit
@@ -268,12 +271,13 @@ export default function QuizTakingPage() {
     if (mode !== "TIMED" || !timerActive) return;
 
     if (timeLeft <= 0) {
-      // Auto-advance: if on last question, submit; otherwise next
+      // Auto-advance: if on last question, submit; otherwise next.
+      // The question-change effect below resets the countdown to the new
+      // question's budget, so no explicit reset is needed here.
       if (currentIndex >= questions.length - 1) {
         handleSubmit();
       } else {
         nextQuestion();
-        setTimeLeft(30);
       }
       return;
     }
@@ -285,13 +289,13 @@ export default function QuizTakingPage() {
     return () => clearInterval(interval);
   }, [timeLeft, timerActive, mode, currentIndex, questions.length, nextQuestion, setTimeLeft, handleSubmit]);
 
-  // Reset timer when question changes
+  // Reset timer to the current question's budget when the question changes.
   useEffect(() => {
     if (mode === "TIMED") {
-      setTimeLeft(30);
+      setTimeLeft(questionSeconds);
       setTimerActive(true);
     }
-  }, [currentIndex, mode, setTimeLeft, setTimerActive]);
+  }, [currentIndex, mode, questionSeconds, setTimeLeft, setTimerActive]);
 
   // If no quiz loaded — render AFTER all hooks
   if (!hasQuestions || !currentQuestion) {
@@ -412,7 +416,7 @@ export default function QuizTakingPage() {
                   "h-full transition-all duration-1000",
                   timeLeft <= 10 ? "bg-error" : timeLeft <= 20 ? "bg-warning" : "bg-success"
                 )}
-                style={{ width: `${(timeLeft / 30) * 100}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, (timeLeft / questionSeconds) * 100))}%` }}
               />
             </div>
           )}

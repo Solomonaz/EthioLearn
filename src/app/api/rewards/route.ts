@@ -50,7 +50,11 @@ export async function GET() {
 
   return NextResponse.json({
     rewards,
-    userPoints: user.totalPoints,
+    // Spendable balance = redeemablePoints (earned only from quality quizzes).
+    // totalPoints is the leaderboard score and is shown separately for context.
+    userPoints: user.redeemablePoints,
+    totalPoints: user.totalPoints,
+    qualityThreshold: 60,
     redemptions,
   });
 }

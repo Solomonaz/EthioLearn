@@ -15,6 +15,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
 import { ollamaChat } from "./ollama";
+import { groqChat } from "./groq";
+import { cerebrasChat } from "./cerebras";
+import { nvidiaChat } from "./nvidia";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -31,7 +34,10 @@ export type QualityFlag =
   | "META_REFERENCE"       // Question text references "the chapter / the text"
   | "COMPOUND_QUESTION"    // MCQ/TRUE_FALSE asks two things ("…and why?")
   | "WEAK_OPTION"          // MCQ uses "All/None of the above" or "Both A and B"
-  | "ANSWER_SKEW";         // Batch's correct answers are lopsided (position / true-false)
+  | "ANSWER_SKEW"          // Batch's correct answers are lopsided (position / true-false)
+  | "WRONG_KEY"            // Independent solver disagrees with the marked answer
+  | "MULTI_ANSWER"         // Independent solver finds 0 or ≥2 defensible answers
+  | "UNVERIFIED";          // Independent solver could not run (fail-closed)
 
 export interface QualityResult {
   questionIndex: number;
@@ -39,6 +45,10 @@ export interface QualityResult {
   flags: QualityFlag[];
   details: Record<string, string>; // flag → human-readable description
   passed: boolean; // qualityScore >= 0.6
+  // Independent-solver gate: true only when a second model re-solved the
+  // question blind and agreed with the marked answer. Students are served
+  // ONLY verified questions; unverified/rejected are never auto-served.
+  verified: boolean;
 }
 
 export interface QualityPipelineResult {
@@ -183,6 +193,27 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
   }
 
   return flags;
+}
+
+// Deterministic (non-AI) structural flags that should block a question from
+// being served to a student, who takes the test immediately and can't vet it.
+// EMPTY_EXPLANATION is intentionally excluded — it's a minor issue, not a defect
+// that misleads the test-taker.
+const STUDENT_BLOCKING_FLAGS: QualityFlag[] = [
+  "TOO_SHORT",
+  "META_REFERENCE",
+  "COMPOUND_QUESTION",
+  "WEAK_OPTION",
+];
+
+/**
+ * True if a question has a blocking deterministic defect (bad answer format,
+ * meta-reference, compound stem, or a weak "All/None of the above" option).
+ * Used by the student flow to drop such questions without an AI round-trip.
+ */
+export function hasBlockingStructuralIssue(q: GeneratedQuestion): boolean {
+  if (!validateAnswer(q).valid) return true;
+  return structuralChecks(q).some((f) => STUDENT_BLOCKING_FLAGS.includes(f));
 }
 
 // ─── 3. Combined AI Quality Checks (difficulty + grammar + factual) ──────────
@@ -487,6 +518,180 @@ function detectAnswerSkew(questions: GeneratedQuestion[]): Map<number, string> {
   return flagged;
 }
 
+// ─── Independent-solver verification (the real quality gate) ───────────────
+//
+// The critic is shown each question WITHOUT its answer key, must solve it
+// itself, and must report how many options are defensibly correct. We then
+// compare its blind answer to the marked answer. This catches the two failures
+// a "does this look ok?" glance misses: a WRONG answer key, and questions where
+// TWO options are both correct. It runs on a DIFFERENT provider than the one
+// that generated the questions (cross-model), and FAILS CLOSED — if it cannot
+// run, the question is marked unverified, never silently passed.
+
+export type VerifyVerdict = "verified" | "rejected" | "unverified";
+export interface VerifyResult {
+  verdict: VerifyVerdict;
+  reason: string;
+  flag?: QualityFlag; // WRONG_KEY | MULTI_ANSWER | UNVERIFIED
+  solved?: string; // the critic's own blind answer
+}
+
+const VERIFY_BATCH_SIZE = 8;
+
+type ChatFn = (
+  prompt: string,
+  opts?: { temperature?: number; maxTokens?: number },
+) => Promise<string | null>;
+
+// Try providers in an order that puts the generator's own provider LAST, so the
+// critic is a different model whenever another is available. Returns "" if none
+// respond (→ fail closed).
+async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<string> {
+  const providers: { name: string; fn: ChatFn }[] = [
+    { name: "groq", fn: (p, o) => groqChat(p, o) },
+    { name: "cerebras", fn: (p, o) => cerebrasChat(p, o) },
+    { name: "nvidia", fn: (p, o) => nvidiaChat(p, o) },
+  ];
+  if (ollamaChatEnabled) providers.push({ name: "ollama", fn: (p) => ollamaChat(p) });
+
+  const ordered = [
+    ...providers.filter((p) => p.name !== avoidProvider),
+    ...providers.filter((p) => p.name === avoidProvider),
+  ];
+
+  for (const p of ordered) {
+    try {
+      const out = await p.fn(prompt, { temperature: 0.1, maxTokens: 1200 });
+      if (out && out.trim()) return out;
+    } catch {
+      /* try the next provider */
+    }
+  }
+  return "";
+}
+
+function buildVerifyPrompt(
+  items: { localIndex: number; q: GeneratedQuestion }[],
+  subject: string,
+  grade: number,
+): string {
+  const list = items
+    .map(({ localIndex, q }) => {
+      if (q.type.toUpperCase() === "TRUE_FALSE") {
+        return `Q${localIndex} [TRUE_FALSE]\nStatement: ${q.questionText}`;
+      }
+      const opts = q.options
+        .map((o, j) => `  ${String.fromCharCode(65 + j)}. ${o}`)
+        .join("\n");
+      return `Q${localIndex} [MCQ]\nQuestion: ${q.questionText}\nOptions:\n${opts}`;
+    })
+    .join("\n\n");
+
+  return `You are a meticulous Grade ${grade} ${subject} examiner. You are given exam questions WITHOUT their answer keys. For EACH question, work independently:
+
+1. SOLVE it yourself from your own knowledge.
+2. Decide how many of the options are DEFENSIBLY correct — i.e. how many a knowledgeable student could justify as correct: 0, 1, or 2 (use 2 to mean "two or more").
+3. If EXACTLY ONE option is correct, report its letter (A, B, C, …) as "answer" — for TRUE_FALSE report "True" or "False". If 0 or 2+ options are correct, or the question is ambiguous, set "answer" to null and "correctCount" accordingly.
+
+Be strict. If two options are both true, if none is clearly correct, or if the stem is ambiguous, correctCount must NOT be 1.
+
+QUESTIONS:
+${list}
+
+Return JSON ONLY (no markdown):
+{"verdicts":[{"index":0,"answer":"C","correctCount":1,"reason":""},{"index":1,"answer":null,"correctCount":2,"reason":"Both B and C are correct"}]}`;
+}
+
+function resolveVerdict(
+  q: GeneratedQuestion,
+  v: { answer?: unknown; correctCount?: unknown; reason?: unknown } | undefined,
+): VerifyResult {
+  if (!v) return { verdict: "unverified", reason: "No verifier response", flag: "UNVERIFIED" };
+
+  const reason = typeof v.reason === "string" ? v.reason : "";
+  const cc = Number(v.correctCount);
+  if (cc !== 1) {
+    return {
+      verdict: "rejected",
+      reason: reason || `Independent solver found ${Number.isFinite(cc) ? cc : "an unclear number of"} defensible answers`,
+      flag: "MULTI_ANSWER",
+    };
+  }
+
+  const ans = String(v.answer ?? "").trim();
+  if (!ans) {
+    return { verdict: "rejected", reason: reason || "Solver gave no single answer", flag: "MULTI_ANSWER" };
+  }
+
+  const marked = String(q.correctAnswer).trim().toLowerCase();
+  let criticText = ans.toLowerCase();
+  // Map an option letter (A/B/C…) to that option's text for comparison.
+  if (q.type.toUpperCase() === "MCQ" && /^[a-z]$/i.test(ans)) {
+    const idx = ans.toUpperCase().charCodeAt(0) - 65;
+    if (idx >= 0 && idx < q.options.length) criticText = String(q.options[idx]).trim().toLowerCase();
+  }
+
+  if (criticText === marked) {
+    return { verdict: "verified", reason: "", solved: ans };
+  }
+  return {
+    verdict: "rejected",
+    reason: reason || `Independent solver chose "${ans}", which disagrees with the marked answer`,
+    flag: "WRONG_KEY",
+    solved: ans,
+  };
+}
+
+/**
+ * Independently re-solve MCQ / TRUE_FALSE questions with a cross-model critic
+ * and return a verdict per question (aligned to the input order). Non-MCQ/TF
+ * types default to "verified" here (they are gated by the other pipeline checks
+ * — blind free-text comparison is unreliable for them).
+ */
+export async function verifyQuestions(
+  questions: GeneratedQuestion[],
+  subject: string,
+  grade: number,
+  opts?: { avoidProvider?: string },
+): Promise<VerifyResult[]> {
+  const results: VerifyResult[] = questions.map(() => ({ verdict: "verified", reason: "" }));
+
+  const checkable = questions
+    .map((q, i) => ({ q, i }))
+    .filter(({ q }) => {
+      const t = q.type.toUpperCase();
+      return t === "MCQ" || t === "TRUE_FALSE";
+    });
+  if (checkable.length === 0) return results;
+
+  for (let s = 0; s < checkable.length; s += VERIFY_BATCH_SIZE) {
+    const batch = checkable.slice(s, s + VERIFY_BATCH_SIZE);
+    const items = batch.map((b, localIndex) => ({ localIndex, q: b.q }));
+    const raw = await runVerifierChat(buildVerifyPrompt(items, subject, grade), opts?.avoidProvider);
+
+    const verdictMap = new Map<number, { answer?: unknown; correctCount?: unknown; reason?: unknown }>();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        for (const v of Array.isArray(parsed.verdicts) ? parsed.verdicts : []) {
+          verdictMap.set(Number(v.index), v);
+        }
+      } catch {
+        /* leave map empty → those items become unverified below */
+      }
+    }
+
+    batch.forEach((b, localIndex) => {
+      // Fail closed: no verifier response at all ⇒ unverified.
+      results[b.i] = raw
+        ? resolveVerdict(b.q, verdictMap.get(localIndex))
+        : { verdict: "unverified", reason: "Verifier unavailable", flag: "UNVERIFIED" };
+    });
+  }
+
+  return results;
+}
+
 // ─── Main Pipeline ──────────────────────────────────────
 
 /**
@@ -497,7 +702,8 @@ export async function runQualityPipeline(
   questions: GeneratedQuestion[],
   sourceContent: string,
   subject: string,
-  grade: number
+  grade: number,
+  generatorProvider?: string
 ): Promise<QualityPipelineResult> {
   // Pre-compute all embeddings in a single batch (source windows + all
   // questions). The source is split into windows so relevance is scored against
@@ -524,6 +730,10 @@ export async function runQualityPipeline(
   // Groq-first provider order prevents the Gemini rate-limit collisions
   // that occurred when two parallel AI calls hit the same endpoint.
   const aiChecksMap = await runAIQualityChecks(questions, subject, grade);
+  // Independent-solver verification (blind re-solve, cross-model, fail-closed).
+  const verifyResults = await verifyQuestions(questions, subject, grade, {
+    avoidProvider: generatorProvider,
+  });
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
   const relevanceMap = checkRelevance(questions, sourceEmbeddings, questionEmbeddings);
 
@@ -623,6 +833,18 @@ export async function runQualityPipeline(
       penalty += 0.1;
     }
 
+    // 9. Independent-solver verdict (authoritative correctness gate)
+    const verify = verifyResults[idx];
+    const verified = verify?.verdict === "verified";
+    if (verify && verify.verdict !== "verified") {
+      const flag = verify.flag ?? "UNVERIFIED";
+      flags.push(flag);
+      details[flag] = verify.reason;
+      // A disagreeing/ambiguous answer is severe; an unverifiable one is a
+      // softer flag but still blocks the student (verified === false) below.
+      penalty += verify.verdict === "rejected" ? 0.5 : 0.2;
+    }
+
     const qualityScore = Math.max(0, Math.round((1 - penalty) * 100) / 100);
 
     return {
@@ -631,6 +853,7 @@ export async function runQualityPipeline(
       flags,
       details,
       passed: qualityScore >= QUALITY_PASS_THRESHOLD,
+      verified,
     };
   });
 

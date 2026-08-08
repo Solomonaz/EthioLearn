@@ -39,3 +39,107 @@
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   Landing-page (futuristic) helpers — used by the marketing page.
+   Hard-coded dark aesthetic, independent of the light/dark tokens.
+   ────────────────────────────────────────────────────────────── */
+
+/* Subtle tech grid overlay */
+.lp-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 55%, transparent 100%);
+}
+
+/* Gradient text (green → lime → gold) */
+.lp-text-gradient {
+  background-image: linear-gradient(100deg, #6ee7b7 0%, #a3e635 45%, #fde047 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Animated conic border for glass cards */
+.lp-ring {
+  position: relative;
+}
+.lp-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, rgba(110, 231, 183, 0.5), rgba(255, 255, 255, 0.06) 40%, rgba(253, 224, 71, 0.35));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+@keyframes lp-aurora {
+  0%,
+  100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.9; }
+  50% { transform: translate3d(3%, 4%, 0) scale(1.15); opacity: 1; }
+}
+@keyframes lp-aurora-2 {
+  0%,
+  100% { transform: translate3d(0, 0, 0) scale(1.1); opacity: 0.8; }
+  50% { transform: translate3d(-4%, -3%, 0) scale(1); opacity: 1; }
+}
+@keyframes lp-float {
+  0%,
+  100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes lp-shimmer {
+  100% { transform: translateX(100%); }
+}
+@keyframes lp-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes lp-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes lp-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lp-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.lp-shimmer-track {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: translateX(-100%);
+  animation: lp-shimmer 1.3s ease-in-out infinite;
+}
+
+.lp-aurora-1 { animation: lp-aurora 14s ease-in-out infinite; }
+.lp-aurora-2 { animation: lp-aurora-2 18s ease-in-out infinite; }
+.lp-float { animation: lp-float 6s ease-in-out infinite; }
+.lp-float-slow { animation: lp-float 9s ease-in-out infinite; }
+.lp-marquee { animation: lp-marquee 32s linear infinite; }
+.lp-blink { animation: lp-blink 1s step-end infinite; }
+.lp-fade-up { animation: lp-fade-up 0.6s ease both; }
+.lp-pop { animation: lp-pop 0.35s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-aurora-1,
+  .lp-aurora-2,
+  .lp-float,
+  .lp-float-slow,
+  .lp-marquee,
+  .lp-blink,
+  .lp-fade-up,
+  .lp-pop,
+  .lp-shimmer-track {
+    animation: none !important;
+  }
+}

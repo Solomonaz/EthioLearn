@@ -14,6 +14,9 @@ export interface GenerateOptions {
   difficulty?: "EASY" | "MEDIUM" | "HARD" | "MIXED";
   questionTypes?: ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[];
   language?: string;
+  /** Quiz mode. TIMED / GROUP (battle) suppress heavy multi-step & graph
+   *  questions so fast play stays answerable; SOLO/undefined gets the full mix. */
+  mode?: "SOLO" | "TIMED" | "GROUP";
 }
 
 // ─── Chapter Detection Types ────────────────────────────
@@ -47,6 +50,11 @@ export interface GeneratedQuestion {
 
 // ─── Client ─────────────────────────────────────────────
 
+// The Gemini model is configurable via env so it can be switched without code
+// changes — e.g. when a model loses free-tier quota (the "limit: 0" 429s) you
+// can point GEMINI_MODEL at gemini-2.5-flash / gemini-1.5-flash instead.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -72,11 +80,11 @@ export async function generateQuestionsFromContent(
 ): Promise<GeneratedQuestion[]> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: GEMINI_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.7,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 4096,
     },
   });
 
@@ -156,7 +164,7 @@ export async function detectChaptersFromContent(
 ): Promise<DetectedChapter[]> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: GEMINI_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.3,
@@ -477,7 +485,7 @@ export async function tutorResponseFromContent(opts: {
 }): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: GEMINI_MODEL,
     systemInstruction: buildTutorSystemPrompt(opts),
   });
 
@@ -539,7 +547,7 @@ export async function generateVideoScript(opts: {
 }): Promise<VideoScript> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: GEMINI_MODEL,
     generationConfig: {
       responseMimeType: "application/json",
       maxOutputTokens: 5000,

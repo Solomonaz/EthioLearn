@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateQuestions } from "@/lib/ai-provider";
+import { generateQuestionsBatched, verifyQuestions, hasBlockingStructuralIssue } from "@/lib/ai-provider";
 import { QuestionType, Difficulty } from "@prisma/client";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
@@ -101,20 +101,47 @@ export async function POST(request: Request) {
 
     // 3. AI Generation
     const count = Math.min(Math.max(Number(questionCount) || 10, 1), 20);
+    // Generate a small surplus so enough questions survive verification.
+    const genCount = Math.min(count + 3, 20);
     const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
     const questionTypes = Array.isArray(body.questionTypes) && body.questionTypes.length > 0
       ? (body.questionTypes.filter((t: string) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[])
       : ["MCQ" as const];
 
-    const { questions: aiQuestions } = await generateQuestions({
+    const { questions: rawQuestions, provider } = await generateQuestionsBatched({
       content: finalContent,
       chapterTitle: finalTitle,
       subject: textbook.subject,
       grade: textbook.grade,
-      count,
+      count: genCount,
       difficulty: difficulty as any,
       questionTypes: questionTypes as any,
+      mode: (mode === "TIMED" || mode === "GROUP" ? mode : "SOLO") as "SOLO" | "TIMED" | "GROUP",
     });
+
+    // 3b. Independent-solver verification. Students take the test immediately and
+    // cannot vet questions themselves, so they are served ONLY verified ones — a
+    // second model re-solves each question blind and must agree with the answer
+    // key. Rejected/unverified questions are dropped (fail-closed), never served.
+    const verdicts = await verifyQuestions(
+      rawQuestions,
+      textbook.subject,
+      textbook.grade,
+      { avoidProvider: provider }
+    );
+    const aiQuestions = rawQuestions
+      .filter(
+        (q, i) =>
+          verdicts[i]?.verdict === "verified" && !hasBlockingStructuralIssue(q)
+      )
+      .slice(0, count);
+
+    if (aiQuestions.length === 0) {
+      return NextResponse.json(
+        { error: "Couldn't produce verified questions right now. Please try again." },
+        { status: 502 }
+      );
+    }
 
     // 4. Save to DB (Filtered by Deduplication)
     // We fetch existing questions for this chapter to avoid duplicates

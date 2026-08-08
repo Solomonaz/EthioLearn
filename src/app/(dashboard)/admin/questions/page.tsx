@@ -113,6 +113,30 @@ const SELECT_CLASS =
 
 const LABEL_CLASS = "mb-1.5 block text-sm font-medium text-text-primary";
 
+// Flags serious enough that an AI-generated question should be reviewed before
+// saving — the solver disagreed/couldn't verify, OR a structural defect exists.
+const REVIEW_FLAGS = new Set([
+  "WEAK_OPTION",
+  "COMPOUND_QUESTION",
+  "META_REFERENCE",
+  "INVALID_ANSWER",
+  "TOO_SHORT",
+  "WRONG_KEY",
+  "MULTI_ANSWER",
+  "UNVERIFIED",
+  "FACTUAL_ERROR",
+  "LOW_RELEVANCE",
+]);
+
+function aiNeedsReview(q: { qualityVerified?: boolean; qualityFlags?: string[] }): boolean {
+  if (q.qualityVerified === false) return true;
+  return (q.qualityFlags ?? []).some((f) => REVIEW_FLAGS.has(f));
+}
+
+// Draft key so a page reload (Fast Refresh, session refresh, accidental nav)
+// doesn't lose a batch of AI-generated questions the admin is still reviewing.
+const AI_DRAFT_KEY = "ethiolearn:admin:ai-draft:v1";
+
 // ─── Main Component ───────────────────────────────────────
 
 export default function AdminQuestionsPage() {
@@ -153,6 +177,9 @@ export default function AdminQuestionsPage() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // ── Collapsible "Add Question" panel ─────────────────────
+  const [addOpen, setAddOpen] = useState(false);
+
   // ── Tab + Bulk Import state ───────────────────────────────
   const [activeTab, setActiveTab] = useState<"single" | "bulk" | "ai">("single");
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -174,12 +201,64 @@ export default function AdminQuestionsPage() {
   const [aiQuestionTypes, setAiQuestionTypes] = useState<string[]>(["MCQ"]);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiQuestions, setAiQuestions] = useState<
-    { questionText: string; type: string; options: string[]; correctAnswer: string; difficulty: string; explanation: string; _selected: boolean }[]
+    {
+      questionText: string;
+      type: string;
+      options: string[];
+      correctAnswer: string;
+      difficulty: string;
+      explanation: string;
+      qualityVerified?: boolean;
+      qualityFlags?: string[];
+      qualityDetails?: Record<string, string>;
+      _selected: boolean;
+    }[]
   >([]);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftHydrated = useRef(false);
+
+  // ── Restore an in-progress AI batch after a reload ───────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AI_DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.questions) && d.questions.length > 0) {
+        setAiQuestions(d.questions);
+        if (d.textbookId) setAiTextbookId(d.textbookId);
+        if (d.chapterId) setAiChapterId(d.chapterId);
+        setActiveTab("ai");
+        setAddOpen(true);
+        toast.info("Restored your unsaved AI-generated questions.");
+      }
+    } catch {
+      /* ignore malformed draft */
+    }
+  }, []);
+
+  // ── Persist the AI batch so a refresh never loses it ─────
+  useEffect(() => {
+    // Skip the first run so restoring a draft doesn't immediately overwrite it.
+    if (!draftHydrated.current) {
+      draftHydrated.current = true;
+      return;
+    }
+    try {
+      if (aiQuestions.length > 0) {
+        localStorage.setItem(
+          AI_DRAFT_KEY,
+          JSON.stringify({ textbookId: aiTextbookId, chapterId: aiChapterId, questions: aiQuestions }),
+        );
+      } else {
+        localStorage.removeItem(AI_DRAFT_KEY);
+      }
+    } catch {
+      /* storage full / unavailable — non-fatal */
+    }
+  }, [aiQuestions, aiTextbookId, aiChapterId]);
 
   // ── Derived: chapters for filter dropdown ────────────────
   const filterChapters =
@@ -275,7 +354,22 @@ export default function AdminQuestionsPage() {
     setFormError(null);
   }
 
+  // Open the collapsible panel in a clean "add" state.
+  function openAddPanel() {
+    clearForm();
+    setActiveTab("single");
+    setAddOpen(true);
+  }
+
+  // Close the panel and discard any in-progress add/edit.
+  function closeAddPanel() {
+    clearForm();
+    setAddOpen(false);
+  }
+
   function startEdit(question: QuestionItem) {
+    setActiveTab("single");
+    setAddOpen(true);
     setEditingQuestion(question);
     setFormTextbookId(question.chapter.textbook.id);
     setFormChapterId(question.chapter.id);
@@ -491,10 +585,20 @@ export default function AdminQuestionsPage() {
       setAiQuestions(
         (data.questions ?? []).map((q: Record<string, unknown>) => ({
           ...q,
-          _selected: true,
+          // Pre-select only clean questions; any that failed verification OR
+          // carry a serious structural flag are left unchecked so they aren't
+          // saved without a deliberate look.
+          _selected: !aiNeedsReview(q),
         }))
       );
-      toast.success(`Generated ${data.questions?.length ?? 0} questions.`);
+      const flaggedCount = (data.questions ?? []).filter(
+        (q: Record<string, unknown>) => aiNeedsReview(q)
+      ).length;
+      const verifiedCount = (data.questions?.length ?? 0) - flaggedCount;
+      toast.success(
+        `Generated ${data.questions?.length ?? 0} questions — ${verifiedCount} verified` +
+          (flaggedCount > 0 ? `, ${flaggedCount} need review.` : ".")
+      );
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "AI generation failed");
     } finally {
@@ -526,21 +630,40 @@ export default function AdminQuestionsPage() {
 
   // ─── Render ───────────────────────────────────────────────
 
+  const panelOpen = addOpen || !!editingQuestion;
+
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
-      {/* Page title */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">{t("questionsTitle")}</h1>
-        <p className="text-sm text-text-secondary">
-          {t("analyticsSubtitle")}
-        </p>
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+      {/* Page header — title + collapsible "Add Question" toggle */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">{t("questionsTitle")}</h1>
+          <p className="text-sm text-text-secondary">
+            {t("analyticsSubtitle")}
+          </p>
+        </div>
+        <Button
+          onClick={() => (panelOpen ? closeAddPanel() : openAddPanel())}
+          variant={panelOpen ? "outline" : "primary"}
+          className="shrink-0 gap-2"
+        >
+          {panelOpen ? (
+            <>
+              <X className="h-4 w-4" /> Close
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" /> Add Question
+            </>
+          )}
+        </Button>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="flex flex-col gap-6">
         {/* ════════════════════════════════════════
             LEFT PANEL — Filters + Question List
         ════════════════════════════════════════ */}
-        <div className="flex flex-col gap-4">
+        <div className="order-2 flex flex-col gap-4">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -668,7 +791,7 @@ export default function AdminQuestionsPage() {
                   <HelpCircle className="h-10 w-10 text-text-muted" />
                   <p className="text-sm text-text-secondary">No questions found.</p>
                   <p className="text-xs text-text-muted">
-                    Use the form on the right to add one.
+                    Click <span className="font-medium text-text-secondary">Add Question</span> above to create one.
                   </p>
                 </div>
               ) : (
@@ -791,9 +914,10 @@ export default function AdminQuestionsPage() {
         </div>
 
         {/* ════════════════════════════════════════
-            RIGHT PANEL — Create / Edit Form
+            CREATE / EDIT PANEL — collapsible submenu
         ════════════════════════════════════════ */}
-        <div className="flex flex-col gap-4">
+        {panelOpen && (
+        <div className="order-1 flex flex-col gap-4">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -803,16 +927,14 @@ export default function AdminQuestionsPage() {
                     {editingQuestion ? "Edit Question" : "Add Question"}
                   </h2>
                 </div>
-                {editingQuestion && (
-                  <button
-                    type="button"
-                    onClick={clearForm}
-                    className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-border/50 hover:text-text-primary"
-                    title="Cancel edit"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={closeAddPanel}
+                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-border/50 hover:text-text-primary"
+                  title={editingQuestion ? "Cancel edit" : "Close"}
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </CardHeader>
 
@@ -1387,11 +1509,25 @@ export default function AdminQuestionsPage() {
                                 className="mt-1 h-4 w-4 rounded border-border text-primary"
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
+                                <div className="mb-1 flex flex-wrap items-center gap-2">
                                   <span className="font-medium">Q{i + 1}.</span>
                                   <Badge variant={q.difficulty === "EASY" ? "success" : q.difficulty === "HARD" ? "error" : "warning"}>
                                     {q.difficulty}
                                   </Badge>
+                                  {aiNeedsReview(q) ? (
+                                    <Badge
+                                      variant="warning"
+                                      title={
+                                        q.qualityDetails && Object.keys(q.qualityDetails).length > 0
+                                          ? Object.values(q.qualityDetails).join(" · ")
+                                          : (q.qualityFlags ?? []).join(", ")
+                                      }
+                                    >
+                                      ⚠ Needs review
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="success">✓ Verified</Badge>
+                                  )}
                                 </div>
                                 <p className="text-text-primary mb-1">{q.questionText}</p>
                                 <div className="grid grid-cols-2 gap-1">
@@ -1432,6 +1568,7 @@ export default function AdminQuestionsPage() {
             </CardContent>
           </Card>
         </div>
+        )}
       </div>
     </div>
   );

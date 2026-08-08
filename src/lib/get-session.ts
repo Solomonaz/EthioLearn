@@ -44,6 +44,7 @@ export const getCurrentUser = cache(async () => {
       avatarUrl: null,
       xpLevel: 0,
       totalPoints: 0,
+      redeemablePoints: 0,
       streakDays: 0,
       isActive: true,
       suspendedAt: null,

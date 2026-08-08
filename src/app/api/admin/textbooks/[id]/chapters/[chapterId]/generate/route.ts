@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateQuestions } from "@/lib/ai-provider";
+import { generateQuestionsBatched } from "@/lib/ai-provider";
 
 interface RouteParams {
   params: Promise<{ id: string; chapterId: string }>;
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const { questions, provider } = await generateQuestions({
+    const { questions, provider } = await generateQuestionsBatched({
       content: finalContent,
       chapterTitle: finalTitle,
       subject: textbook.subject,
@@ -148,7 +148,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       questions,
       finalContent,
       textbook.subject,
-      textbook.grade
+      textbook.grade,
+      provider
     );
 
     // Map quality results back to questions
@@ -159,6 +160,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         qualityScore: qResult.qualityScore,
         qualityFlags: qResult.flags,
         qualityPassed: qResult.passed,
+        qualityVerified: qResult.verified,
         qualityDetails: qResult.details,
       };
     });
