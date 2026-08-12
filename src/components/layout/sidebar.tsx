@@ -57,7 +57,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
     // Hide plan-locked features for restricted (individual) students.
   ].filter((item) => {
-    if (item.labelKey === "aiTutor" && !ent.ai) return false;
+    if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
     if (item.labelKey === "rewards" && !ent.rewards) return false;
     if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;

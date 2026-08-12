@@ -200,7 +200,7 @@ export default function TutorPage() {
   }
 
   // Plan gating — the AI Tutor requires an AI-enabled plan.
-  if (!ent.loading && !ent.ai) {
+  if (!ent.loading && !(ent.ai && ent.aiFeatures.aiTutor)) {
     return <UpgradeNotice feature="AI Tutor" planName={ent.planName} />;
   }
 
@@ -289,8 +289,8 @@ export default function TutorPage() {
               </select>
             </div>
 
-            {/* ── Video Tutorial Section ────────────────── */}
-            {selectedChapter && (
+            {/* ── Video Tutorial Section (hidden when AI Video is off) ── */}
+            {selectedChapter && ent.ai && ent.aiFeatures.aiVideo && (
               <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
                 <div className="flex items-center gap-2 text-primary">
                   <Video className="h-4 w-4" />

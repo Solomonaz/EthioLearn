@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import Papa from "papaparse";
 import { cn } from "@/lib/utils";
 
@@ -142,6 +143,8 @@ const AI_DRAFT_KEY = "ethiolearn:admin:ai-draft:v1";
 export default function AdminQuestionsPage() {
   const t = useTranslations("admin");
   const basePath = useAdminBasePath();
+  const ent = useEntitlements();
+  const aiGenEnabled = ent.aiFeatures.aiQuizGen;
 
   // ── Filter state ─────────────────────────────────────────
   const [filterTextbookId, setFilterTextbookId] = useState("");
@@ -219,6 +222,11 @@ export default function AdminQuestionsPage() {
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftHydrated = useRef(false);
+
+  // If AI question generation is turned off platform-wide, never sit on the AI tab.
+  useEffect(() => {
+    if (!aiGenEnabled && activeTab === "ai") setActiveTab("single");
+  }, [aiGenEnabled, activeTab]);
 
   // ── Restore an in-progress AI batch after a reload ───────
   useEffect(() => {
@@ -965,21 +973,23 @@ export default function AdminQuestionsPage() {
                 >
                   Bulk CSV
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("ai")}
-                  className={cn(
-                    "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    activeTab === "ai"
-                      ? "bg-primary text-white"
-                      : "text-text-secondary hover:text-text-primary"
-                  )}
-                >
-                  <span className="flex items-center justify-center gap-1">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    AI
-                  </span>
-                </button>
+                {aiGenEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("ai")}
+                    className={cn(
+                      "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      activeTab === "ai"
+                        ? "bg-primary text-white"
+                        : "text-text-secondary hover:text-text-primary"
+                    )}
+                  >
+                    <span className="flex items-center justify-center gap-1">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AI
+                    </span>
+                  </button>
+                )}
               </div>
 
               {activeTab === "single" && (
@@ -1316,7 +1326,7 @@ export default function AdminQuestionsPage() {
               )}
 
               {/* ── AI Generate Panel — Book-First Flow ── */}
-              {activeTab === "ai" && (
+              {activeTab === "ai" && aiGenEnabled && (
                 <div className="space-y-4">
                   <div className="rounded-lg border border-border bg-background p-3">
                     <div className="flex items-center gap-2 mb-1">

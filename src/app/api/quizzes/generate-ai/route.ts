@@ -46,10 +46,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Textbook ID is required" }, { status: 400 });
     }
 
-    // Resolve Adaptive Difficulty
+    // Resolve Adaptive Difficulty — honour the platform switch. When adaptive is
+    // turned off, fall back to a fixed difficulty instead of calibrating.
     if (difficulty === "ADAPTIVE") {
-      difficulty = await getRecommendedDifficulty(user.id);
-      console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty}`);
+      if (await isAiFeatureEnabled("aiAdaptive")) {
+        difficulty = await getRecommendedDifficulty(user.id);
+        console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty}`);
+      } else {
+        difficulty = "MEDIUM";
+      }
     }
 
     // 1. Fetch Textbook & Content

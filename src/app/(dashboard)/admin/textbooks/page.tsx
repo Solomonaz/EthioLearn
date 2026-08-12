@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -126,7 +127,14 @@ export default function AdminTextbooksPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const ent = useEntitlements();
+  const aiUploadEnabled = ent.aiFeatures.aiQuizGen;
   const [activeTab, setActiveTab] = useState<"simple" | "json" | "ai">("ai");
+
+  // If AI upload is turned off platform-wide, never sit on the AI tab.
+  useEffect(() => {
+    if (!aiUploadEnabled && activeTab === "ai") setActiveTab("simple");
+  }, [aiUploadEnabled, activeTab]);
 
   // Simple form state
   const [simpleTitle, setSimpleTitle] = useState("");
@@ -1133,17 +1141,19 @@ export default function AdminTextbooksPage() {
             <CardContent>
               {/* Tab switcher */}
               <div className="mb-5 flex rounded-lg border border-border bg-background p-1">
-                <button
-                  onClick={() => setActiveTab("ai")}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    activeTab === "ai"
-                      ? "bg-surface text-text-primary shadow-sm"
-                      : "text-text-secondary hover:text-text-primary"
-                  }`}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  AI Upload
-                </button>
+                {aiUploadEnabled && (
+                  <button
+                    onClick={() => setActiveTab("ai")}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                      activeTab === "ai"
+                        ? "bg-surface text-text-primary shadow-sm"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    AI Upload
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveTab("simple")}
                   className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
@@ -1168,8 +1178,8 @@ export default function AdminTextbooksPage() {
                 </button>
               </div>
 
-              {/* ── AI Upload Tab ── */}
-              {activeTab === "ai" && (
+              {/* ── AI Upload Tab (hidden when AI is off) ── */}
+              {activeTab === "ai" && aiUploadEnabled && (
                 <div className="space-y-4">
                   <div className="rounded-lg border border-border bg-background p-4">
                     <div className="mb-1 flex items-center gap-2">

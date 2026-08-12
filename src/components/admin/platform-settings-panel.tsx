@@ -101,9 +101,11 @@ export function PlatformSettingsPanel() {
   }, []);
 
   async function update(key: Key, value: boolean) {
-    if (!settings) return;
-    const prev = settings;
-    setSettings({ ...settings, [key]: value });
+    // Functional update so toggling several switches quickly never clobbers each
+    // other — each change touches ONLY its own key. (The old code merged a stale
+    // full snapshot / overwrote with the whole response, which flipped the
+    // others back on.)
+    setSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
     setSavingKey(key);
     try {
       const res = await fetch("/api/admin/platform-settings", {
@@ -112,14 +114,17 @@ export function PlatformSettingsPanel() {
         body: JSON.stringify({ [key]: value }),
       });
       if (!res.ok) throw new Error();
-      const d = await res.json();
-      if (d?.settings) setSettings(d.settings);
+      // Confirm ONLY this key from the authoritative response — never overwrite
+      // the whole object (a concurrent toggle may not be reflected in it yet).
+      const d = await res.json().catch(() => null);
+      const confirmed = typeof d?.settings?.[key] === "boolean" ? d.settings[key] : value;
+      setSettings((prev) => (prev ? { ...prev, [key]: confirmed } : prev));
       toast.success("Setting updated.");
     } catch {
-      setSettings(prev); // roll back
+      setSettings((prev) => (prev ? { ...prev, [key]: !value } : prev)); // revert only this key
       toast.error("Couldn't update the setting.");
     } finally {
-      setSavingKey(null);
+      setSavingKey((prev) => (prev === key ? null : prev));
     }
   }
 

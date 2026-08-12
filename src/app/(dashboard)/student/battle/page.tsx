@@ -12,8 +12,6 @@ import {
   Crown,
   Play,
   LogIn,
-  BookOpen,
-  Hash,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +20,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { UpgradeNotice } from "@/components/student/upgrade-notice";
 import { useEntitlements } from "@/hooks/use-entitlements";
-import { cn, buildQuickPresets } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 interface PlayerInfo {
   userId: string;
@@ -45,6 +43,20 @@ type ActiveTab = "create" | "join";
 interface BattleSubject {
   name: string;
   count: number;
+}
+
+const SELECT_CLASS =
+  "w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm font-medium text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary";
+
+// Sensible battle sizes: capped at 30 (30 questions already runs ~10 min) and
+// never more than the subject has. Always includes the true max so a small
+// subject shows its real limit. Scales cleanly no matter how many questions exist.
+function battleCountOptions(available: number): number[] {
+  const cap = Math.min(available, 30);
+  if (cap < 1) return [];
+  const set = new Set<number>([5, 10, 15, 20, 30].filter((n) => n <= cap));
+  set.add(cap);
+  return [...set].sort((a, b) => a - b);
 }
 
 export default function BattleLobbyPage() {
@@ -282,15 +294,26 @@ export default function BattleLobbyPage() {
     });
   }
 
-  // Selecting a subject clamps the chosen count to that subject's availability.
+  // Selecting a subject snaps the chosen count to a valid option for it.
   function handleSelectSubject(name: string, count: number) {
     setSelectedSubject(name);
-    setQuestionCount((prev) => Math.min(prev || 10, count));
+    const opts = battleCountOptions(count);
+    setQuestionCount((prev) =>
+      opts.includes(prev) ? prev : opts.includes(10) ? 10 : (opts[opts.length - 1] ?? 0),
+    );
   }
 
   const availableCount =
     subjects.find((s) => s.name === selectedSubject)?.count ?? 0;
-  const countPresets = buildQuickPresets(availableCount);
+  const questionOptions = battleCountOptions(availableCount);
+
+  // Keep the chosen count valid whenever the available pool changes (e.g. on load).
+  useEffect(() => {
+    if (questionOptions.length > 0 && !questionOptions.includes(questionCount)) {
+      setQuestionCount(questionOptions.includes(10) ? 10 : questionOptions[questionOptions.length - 1]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableCount]);
 
   const isHost = userId === hostId;
   const canStart = isHost && players.length >= 1 && roomStatus === "waiting";
@@ -350,112 +373,82 @@ export default function BattleLobbyPage() {
       )}
 
       {/* Create Tab */}
-      {(activeTab === "create" || inRoom) && !inRoom && (
-        <div className="space-y-5">
+      {activeTab === "create" && !inRoom && (
+        <>
           {loadingOptions ? (
             <div className="flex items-center justify-center py-10">
               <Spinner size="sm" className="text-primary" />
             </div>
           ) : subjects.length === 0 ? (
-            <div className="rounded-lg border border-border bg-gray-50 p-6 text-center text-sm text-text-secondary">
+            <div className="rounded-xl border border-border bg-surface p-6 text-center text-sm text-text-secondary">
               {grade
                 ? `No battle-ready subjects for Grade ${grade} yet. Ask your teacher to add questions.`
                 : "Your profile has no grade set. Complete your profile to play battles."}
             </div>
           ) : (
-            <>
-              {/* Subject — only subjects with questions for the student's grade */}
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <BookOpen className="h-4 w-4 text-primary" />
-                  Subject
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {subjects.map((s) => (
-                    <button
-                      key={s.name}
-                      onClick={() => handleSelectSubject(s.name, s.count)}
-                      className={cn(
-                        "rounded-lg border-2 px-4 py-2 text-sm font-medium transition-colors",
-                        selectedSubject === s.name
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-text-secondary hover:border-primary/40"
-                      )}
-                    >
-                      {s.name}
-                      <span className="ml-1.5 text-xs opacity-70">({s.count})</span>
-                    </button>
-                  ))}
+            <Card>
+              <CardContent className="space-y-6 p-5 sm:p-6">
+                {/* Subject — dropdown, scales to any number of subjects */}
+                <div>
+                  <label htmlFor="battle-subject" className="mb-2 block text-sm font-semibold text-text-primary">
+                    Subject
+                  </label>
+                  <select
+                    id="battle-subject"
+                    value={selectedSubject}
+                    onChange={(e) => {
+                      const s = subjects.find((x) => x.name === e.target.value);
+                      if (s) handleSelectSubject(s.name, s.count);
+                    }}
+                    className={SELECT_CLASS}
+                  >
+                    {subjects.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.name} ({s.count} question{s.count === 1 ? "" : "s"})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
 
-              {/* Grade — locked to the student's profile grade */}
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Hash className="h-4 w-4 text-primary" />
-                  Grade
-                </label>
-                <div className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
-                  Grade {grade}
-                  <span className="text-xs font-normal text-text-secondary">
-                    (your grade)
-                  </span>
+                {/* Questions — dropdown; grade shown inline as a subtle note */}
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <label htmlFor="battle-count" className="text-sm font-semibold text-text-primary">
+                      Questions
+                    </label>
+                    <span className="text-xs text-text-secondary">
+                      Grade {grade} · your grade
+                    </span>
+                  </div>
+                  <select
+                    id="battle-count"
+                    value={questionCount}
+                    onChange={(e) => setQuestionCount(Number(e.target.value))}
+                    className={SELECT_CLASS}
+                  >
+                    {questionOptions.map((n) => (
+                      <option key={n} value={n}>
+                        {n} question{n === 1 ? "" : "s"}
+                        {n === availableCount ? " (all)" : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
 
-              {/* Question Count — capped to what's available for the subject */}
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Hash className="h-4 w-4 text-primary" />
-                  Questions
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {countPresets.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setQuestionCount(c)}
-                      className={cn(
-                        "rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-colors",
-                        questionCount === c
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-text-secondary hover:border-primary/40"
-                      )}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                  {availableCount > 0 && (
-                    <button
-                      onClick={() => setQuestionCount(availableCount)}
-                      className={cn(
-                        "rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-colors",
-                        questionCount === availableCount
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-text-secondary hover:border-primary/40"
-                      )}
-                    >
-                      Max ({availableCount})
-                    </button>
-                  )}
-                </div>
-                <p className="mt-2 text-xs text-text-secondary">
-                  {availableCount} question{availableCount === 1 ? "" : "s"} available in {selectedSubject}
-                </p>
-              </div>
-
-              <Button
-                size="lg"
-                className="w-full gap-2"
-                onClick={handleCreateRoom}
-                isLoading={creating}
-                disabled={creating || availableCount < 1}
-              >
-                <Swords className="h-5 w-5" />
-                Create Battle Room
-              </Button>
-            </>
+                <Button
+                  size="lg"
+                  className="w-full gap-2"
+                  onClick={handleCreateRoom}
+                  isLoading={creating}
+                  disabled={creating || availableCount < 1}
+                >
+                  <Swords className="h-5 w-5" />
+                  Create Battle Room
+                </Button>
+              </CardContent>
+            </Card>
           )}
-        </div>
+        </>
       )}
 
       {/* Join Tab */}

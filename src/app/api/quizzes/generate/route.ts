@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -43,10 +44,16 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
-      adaptiveInsights = await getAdaptiveDifficultyInsights(user.id);
-      difficulty = adaptiveInsights.difficulty;
-      adaptiveCalibrated = difficulty;
-      console.log(`[Adaptive Engine] Calibrated to ${difficulty} (accuracy=${Math.round(adaptiveInsights.weightedAccuracy * 100)}%, trend=${adaptiveInsights.trend})`);
+      // Honour the platform Adaptive-Difficulty switch; fall back to a fixed
+      // difficulty when it's turned off.
+      if (await isAiFeatureEnabled("aiAdaptive")) {
+        adaptiveInsights = await getAdaptiveDifficultyInsights(user.id);
+        difficulty = adaptiveInsights.difficulty;
+        adaptiveCalibrated = difficulty;
+        console.log(`[Adaptive Engine] Calibrated to ${difficulty} (accuracy=${Math.round(adaptiveInsights.weightedAccuracy * 100)}%, trend=${adaptiveInsights.trend})`);
+      } else {
+        difficulty = "MEDIUM";
+      }
     }
 
     // Validate question count (1–50)
