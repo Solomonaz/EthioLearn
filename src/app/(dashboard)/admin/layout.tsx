@@ -17,6 +17,10 @@ export default async function AdminLayout({
     redirect("/school-admin");
   }
 
+  if (user.role === "TEACHER") {
+    redirect("/teacher");
+  }
+
   if (user.role !== "SUPER_ADMIN") {
     redirect("/student");
   }

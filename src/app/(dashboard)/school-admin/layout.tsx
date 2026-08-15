@@ -18,6 +18,10 @@ export default async function SchoolAdminLayout({
     redirect("/admin");
   }
 
+  if (user.role === "TEACHER") {
+    redirect("/teacher");
+  }
+
   if (user.role !== "SCHOOL_ADMIN") {
     redirect("/student");
   }

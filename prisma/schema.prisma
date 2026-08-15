@@ -12,6 +12,7 @@ datasource db {
 enum UserRole {
   SUPER_ADMIN
   SCHOOL_ADMIN
+  TEACHER
   STUDENT
 }
 
@@ -58,6 +59,16 @@ enum GameStatus {
   WAITING
   ACTIVE
   COMPLETED
+}
+
+// Elementary (grades 1–6) game content. One row feeds several game skins:
+//   PAIR     → memory game, find-the-pair, tug-of-war prompts
+//   CATEGORY → grouping (drag items into their category)
+//   MCQ      → tug-of-war question rounds
+enum GameContentType {
+  PAIR
+  CATEGORY
+  MCQ
 }
 
 enum RewardTier {
@@ -124,26 +135,26 @@ enum SubscriptionStatus {
 // ─── Models ──────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  phoneNumber   String?   @unique
-  email         String?   @unique
-  name          String
-  role          UserRole  @default(STUDENT)
-  grade         Int?
-  section       String?
-  avatarUrl     String?
-  xpLevel       Int       @default(1)
-  totalPoints   Int       @default(0)
+  id               String    @id @default(cuid())
+  phoneNumber      String?   @unique
+  email            String?   @unique
+  name             String
+  role             UserRole  @default(STUDENT)
+  grade            Int?
+  section          String?
+  avatarUrl        String?
+  xpLevel          Int       @default(1)
+  totalPoints      Int       @default(0)
   // Points that may be spent on rewards. Only earned from quizzes scored at or
   // above the quality threshold — protects the prize economy from point farming.
-  redeemablePoints Int    @default(0)
-  streakDays    Int       @default(0)
-  isActive      Boolean   @default(true)
-  suspendedAt   DateTime?
-  suspendReason String?
-  lastActiveAt  DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  redeemablePoints Int       @default(0)
+  streakDays       Int       @default(0)
+  isActive         Boolean   @default(true)
+  suspendedAt      DateTime?
+  suspendReason    String?
+  lastActiveAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // Social login identifiers
   googleId   String? @unique
@@ -168,6 +179,7 @@ model User {
   notes                StudentNote[]
   subscriptions        Subscription[]    @relation("StudentSubscriptions")
   createdSubscriptions Subscription[]    @relation("SubscriptionCreator")
+  gameContents         GameContent[]     @relation("GameContentCreator")
 
   @@map("users")
 }
@@ -349,6 +361,40 @@ model Question {
   @@map("questions")
 }
 
+// ─── Game Content (elementary 1–6; teacher-generated, no textbook) ──────────
+// The Phase-0 content foundation for the elementary games. Unlike Question, it
+// is NOT tied to a Textbook/Chapter — content is generated from a topic prompt
+// or authored by the teacher, so there are no uploads. `payload` is a
+// type-discriminated JSON blob whose shape depends on `type`:
+//   PAIR     → { "pairs": [{ "left": "…", "right": "…" }, …] }
+//   CATEGORY → { "categories": [{ "label": "…", "items": ["…", …] }, …] }
+//   MCQ      → { "questions": [{ "question": "…", "options": ["…"], "correctAnswer": "…" }, …] }
+model GameContent {
+  id        String          @id @default(cuid())
+  type      GameContentType
+  status    QuestionStatus  @default(PUBLISHED)
+  title     String
+  subject   String
+  grade     Int // elementary band (1–6); classified via lib/grade-band
+  language  String          @default("en")
+  payload   Json            @default("{}")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Owner is the teacher who created it. Optional (like Textbook.uploadedBy) so
+  // AI-seeded/system content can exist without a human owner, and so the row
+  // survives if the account is removed. Role of the owner (TEACHER vs
+  // SCHOOL_ADMIN) is settled at onboarding (Phase 1), not here.
+  createdById String?
+  createdBy   User?   @relation("GameContentCreator", fields: [createdById], references: [id])
+
+  @@index([grade])
+  @@index([type])
+  @@index([subject])
+  @@index([createdById])
+  @@map("game_contents")
+}
+
 model Quiz {
   id                String    @id @default(cuid())
   mode              QuizMode  @default(SOLO)
@@ -509,7 +555,6 @@ model UserAchievement {
   @@map("user_achievements")
 }
 
-
 // ─── Reward Budget ──────────────────────────────────────
 
 model RewardBudget {
@@ -633,9 +678,13 @@ model PricingPlan {
   allowMultiplayer Boolean @default(true) // battle / group games (solo is always allowed)
   allowRewards     Boolean @default(true) // rewards catalogue & redemption
   allowLeaderboard Boolean @default(true) // leaderboard / rankings
+  // Elementary games (card games + tug-of-war). Column exists from Phase 0 so
+  // the entitlement dimension is present in the schema; the free-vs-PRO game
+  // split is wired through getEntitlements() in Phase 2 when the games ship.
+  allowGames       Boolean @default(true) // elementary game modes
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tiers         PricingTier[]
   subscriptions Subscription[]
@@ -669,14 +718,14 @@ model Subscription {
   studentId String?
   student   User?   @relation("StudentSubscriptions", fields: [studentId], references: [id], onDelete: Cascade)
 
-  status    SubscriptionStatus @default(ACTIVE)
-  startDate DateTime           @default(now())
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime           @default(now())
   // For a canceled-at-period-end sub this holds the paid-through date; the sub
   // stays live (access continues) until endDate passes, then it lapses.
-  endDate   DateTime?
+  endDate           DateTime?
   // When true, the plan was canceled but access continues until endDate (the
   // end of the already-paid period) instead of ending immediately.
-  cancelAtPeriodEnd Boolean @default(false)
+  cancelAtPeriodEnd Boolean            @default(false)
 
   // Snapshot of the computed price at assignment time (audit trail).
   amount               Float?

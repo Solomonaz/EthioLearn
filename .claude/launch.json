@@ -2,20 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
+      "name": "ethiolearn-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3001,
-      "autoPort": false,
-      "env": {
-        "PORT": "3001"
-      }
-    },
-    {
-      "name": "Prisma Studio",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "db:studio"],
-      "port": 5555
+      "port": 3001
     }
   ]
 }

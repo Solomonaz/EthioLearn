@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const validRoles = ["STUDENT"];
+    const validRoles = ["STUDENT", "TEACHER"];
     if (!validRoles.includes(role)) {
       return NextResponse.json(
         { error: "Invalid role" },

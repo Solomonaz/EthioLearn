@@ -20,7 +20,14 @@ export function MobileNav() {
   const t = useTranslations("nav");
   const ent = useEntitlements();
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/school-admin")) return null;
+  // Only students get a bottom bar; admins, school-admins, and teachers use the sidebar.
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/school-admin") ||
+    pathname.startsWith("/teacher")
+  ) {
+    return null;
+  }
 
   // Hide plan-locked destinations (Battle → multiplayer, Ranks → leaderboard).
   const navKeys = studentNavKeys.filter((item) => {

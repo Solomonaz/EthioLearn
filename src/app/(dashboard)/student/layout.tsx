@@ -21,6 +21,10 @@ export default async function StudentLayout({
     redirect("/school-admin");
   }
 
+  if (user.role === "TEACHER") {
+    redirect("/teacher");
+  }
+
   if (user.role !== "STUDENT") {
     redirect("/login");
   }

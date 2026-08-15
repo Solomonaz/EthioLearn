@@ -23,6 +23,8 @@ import {
   BookMarked,
   Building2,
   CreditCard,
+  PencilRuler,
+  Shuffle,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,8 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+type NavItem = { labelKey: string; href: string; icon: typeof Home; exact?: boolean };
+
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -41,8 +45,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
+  const isTeacher = pathname.startsWith("/teacher");
 
-  const studentNavItems = [
+  const studentNavItems: NavItem[] = [
     { labelKey: "dashboard",   href: "/student",                icon: Home,          exact: true },
     { labelKey: "quiz",        href: "/student/quiz",           icon: BookOpen },
     { labelKey: "aiTutor",     href: "/student/tutor",          icon: MessageSquare },
@@ -55,18 +60,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "quizHistory", href: "/student/history",        icon: History },
     { labelKey: "billing",     href: "/student/billing",        icon: CreditCard },
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
-    // Hide plan-locked features for restricted (individual) students.
   ].filter((item) => {
     if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
     if (item.labelKey === "rewards" && !ent.rewards) return false;
     if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;
-    // Pricing turned off platform-wide → hide the Billing page entirely.
     if (item.labelKey === "billing" && !ent.pricingEnabled) return false;
     return true;
   });
 
-  const superAdminNavItems = [
+  const superAdminNavItems: NavItem[] = [
     { labelKey: "dashboard",  href: "/admin",             icon: LayoutDashboard, exact: true },
     { labelKey: "schools",    href: "/admin/schools",      icon: Building2 },
     { labelKey: "students",   href: "/admin/students",     icon: Users },
@@ -79,7 +82,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "settings",   href: "/admin/settings",     icon: Settings },
   ];
 
-  const schoolAdminNavItems = [
+  const schoolAdminNavItems: NavItem[] = [
     { labelKey: "dashboard",  href: "/school-admin",              icon: LayoutDashboard, exact: true },
     { labelKey: "students",   href: "/school-admin/students",     icon: Users },
     { labelKey: "textbooks",  href: "/school-admin/textbooks",    icon: Library },
@@ -90,28 +93,31 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "settings",   href: "/school-admin/settings",     icon: Settings },
   ];
 
-  let navItems: typeof studentNavItems;
-  let sectionLabelKey: string;
+  const teacherNavItems: NavItem[] = [
+    { labelKey: "dashboard",     href: "/teacher",              icon: Home, exact: true },
+    { labelKey: "tugOfWar",      href: "/teacher/games/tug",    icon: Swords },
+    { labelKey: "teacherCreate", href: "/teacher/games/create", icon: PencilRuler },
+    { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
+  ];
 
+  let navItems: NavItem[] = studentNavItems;
+  let sectionLabelKey = "sectionStudent";
   if (isSchoolAdmin) {
     navItems = schoolAdminNavItems;
     sectionLabelKey = "sectionSchoolAdmin";
   } else if (isAdmin) {
     navItems = superAdminNavItems;
     sectionLabelKey = "sectionAdmin";
-  } else {
-    navItems = studentNavItems;
-    sectionLabelKey = "sectionStudent";
+  } else if (isTeacher) {
+    navItems = teacherNavItems;
+    sectionLabelKey = "sectionTeacher";
   }
 
   return (
     <>
       {/* Mobile overlay */}
       {isOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={onClose} />
       )}
 
       <aside
@@ -121,7 +127,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         )}
       >
         <nav className="flex h-full flex-col gap-1 overflow-y-auto p-4 pb-6">
-          {/* Section label */}
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             {t(sectionLabelKey as any)}
           </p>
@@ -130,7 +135,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             const isActive = item.exact
               ? pathname === item.href
               : pathname === item.href || pathname.startsWith(item.href + "/");
-
             return (
               <Link
                 key={item.href}

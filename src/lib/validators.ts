@@ -12,7 +12,7 @@ export const otpSchema = z
 export const registerSchema = z.object({
   phoneNumber: phoneNumberSchema,
   name: z.string().min(2, "Name must be at least 2 characters"),
-  role: z.enum(["STUDENT", "SCHOOL_ADMIN"]),
+  role: z.enum(["STUDENT", "SCHOOL_ADMIN", "TEACHER"]),
   grade: z.number().min(1).max(12).optional(),
   section: z.string().optional(),
   schoolId: z.string().optional(),

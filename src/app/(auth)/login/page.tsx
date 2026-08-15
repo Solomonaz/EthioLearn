@@ -49,6 +49,7 @@ function LoginForm() {
       const role = (session?.user as any)?.role;
       if (role === "SUPER_ADMIN") router.replace("/admin");
       else if (role === "SCHOOL_ADMIN") router.replace("/school-admin");
+      else if (role === "TEACHER") router.replace("/teacher");
       else router.replace("/student");
     }
   }, [status, session, router]);
@@ -103,16 +104,19 @@ function LoginForm() {
         const role = (sess?.user as any)?.role;
         const isSuperAdmin = role === "SUPER_ADMIN";
         const isSchoolAdmin = role === "SCHOOL_ADMIN";
+        const isTeacher = role === "TEACHER";
 
         if (callbackUrl) {
           const isSafeRelative = /^\/[^/]/.test(callbackUrl) && !callbackUrl.includes(":");
           const isAdminCb   = callbackUrl.startsWith("/admin");
           const isSchoolAdminCb = callbackUrl.startsWith("/school-admin");
+          const isTeacherCb = callbackUrl.startsWith("/teacher");
           const isStudentCb = callbackUrl.startsWith("/student");
           if (isSafeRelative && (
             (isSuperAdmin && isAdminCb) ||
             (isSchoolAdmin && isSchoolAdminCb) ||
-            (!isSuperAdmin && !isSchoolAdmin && isStudentCb)
+            (isTeacher && isTeacherCb) ||
+            (!isSuperAdmin && !isSchoolAdmin && !isTeacher && isStudentCb)
           )) {
             router.push(callbackUrl);
             return;
@@ -120,6 +124,7 @@ function LoginForm() {
         }
         if (isSuperAdmin) router.push("/admin");
         else if (isSchoolAdmin) router.push("/school-admin");
+        else if (isTeacher) router.push("/teacher");
         else router.push("/student");
       }
     } catch {

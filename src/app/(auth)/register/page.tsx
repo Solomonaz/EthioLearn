@@ -7,6 +7,7 @@ import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
+import { cn } from "@/lib/utils";
 
 const TelegramLoginButton = dynamic(
   () => import("@/components/auth/telegram-login").then((m) => m.TelegramLoginButton),
@@ -37,11 +38,13 @@ function RegisterForm() {
       const role = (session?.user as { role?: string } | undefined)?.role;
       if (role === "SUPER_ADMIN") router.replace("/admin");
       else if (role === "SCHOOL_ADMIN") router.replace("/school-admin");
+      else if (role === "TEACHER") router.replace("/teacher");
       else router.replace("/student");
     }
   }, [status, session, router]);
 
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [accountType, setAccountType] = useState<"student" | "teacher">("student");
   const [step, setStep]               = useState<"phone" | "otp" | "profile">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp]                 = useState("");
@@ -114,10 +117,16 @@ function RegisterForm() {
     setError("");
     setIsLoading(true);
     try {
+      const isTeacher = accountType === "teacher";
       const res  = await fetch("/api/auth/register", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ phoneNumber: "+251" + phoneNumber, name, role: "STUDENT", grade }),
+        // Teachers have no grade; students always send one.
+        body:    JSON.stringify(
+          isTeacher
+            ? { phoneNumber: "+251" + phoneNumber, name, role: "TEACHER" }
+            : { phoneNumber: "+251" + phoneNumber, name, role: "STUDENT", grade },
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -152,8 +161,46 @@ function RegisterForm() {
 
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
 
-          {/* ── Social sign-up buttons ───────────────────────────────────── */}
-          {SOCIAL_ENABLED && step === "phone" && (
+          {/* ── Account type: student vs teacher (choose before signing up) ── */}
+          {step === "phone" && (
+            <div className="mb-6">
+              <p className="mb-2 text-sm font-medium text-text-primary">{t("accountTypeQuestion")}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAccountType("student")}
+                  aria-pressed={accountType === "student"}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    accountType === "student"
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-border hover:bg-gray-50",
+                  )}
+                >
+                  <span className="block text-sm font-semibold text-text-primary">{t("accountStudent")}</span>
+                  <span className="mt-0.5 block text-xs text-text-secondary">{t("accountStudentHint")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccountType("teacher")}
+                  aria-pressed={accountType === "teacher"}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    accountType === "teacher"
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-border hover:bg-gray-50",
+                  )}
+                >
+                  <span className="block text-sm font-semibold text-text-primary">{t("accountTeacher")}</span>
+                  <span className="mt-0.5 block text-xs text-text-secondary">{t("accountTeacherHint")}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Social sign-up buttons (students only — social auto-creates a
+                student account) ─────────────────────────────────────────── */}
+          {SOCIAL_ENABLED && step === "phone" && accountType === "student" && (
             <div className="mb-6 space-y-3">
               {GOOGLE_ENABLED && (
                 <button
@@ -310,25 +357,28 @@ function RegisterForm() {
                         disabled={isLoading}
                       />
                     </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-text-primary">
-                        {t("grade")}
-                      </label>
-                      <select
-                        value={grade}
-                        onChange={(e) => setGrade(e.target.value)}
-                        className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                        required
-                        disabled={isLoading}
-                      >
-                        <option value="">{t("selectGradeOption")}</option>
-                        {Array.from({ length: 12 }, (_, i) => (
-                          <option key={i + 1} value={i + 1}>
-                            {t("gradeN", { grade: i + 1 })}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {/* Grade is a student-only field; teachers have no grade. */}
+                    {accountType === "student" && (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-text-primary">
+                          {t("grade")}
+                        </label>
+                        <select
+                          value={grade}
+                          onChange={(e) => setGrade(e.target.value)}
+                          className="w-full rounded-lg border border-border px-4 py-3 text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                          required
+                          disabled={isLoading}
+                        >
+                          <option value="">{t("selectGradeOption")}</option>
+                          {Array.from({ length: 12 }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>
+                              {t("gradeN", { grade: i + 1 })}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
                   <button

@@ -29,6 +29,8 @@ export default function AuthRedirectPage() {
       router.replace("/admin");
     } else if (role === "SCHOOL_ADMIN") {
       router.replace("/school-admin");
+    } else if (role === "TEACHER") {
+      router.replace("/teacher");
     } else {
       router.replace("/student");
     }
