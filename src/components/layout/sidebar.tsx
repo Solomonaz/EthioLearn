@@ -25,6 +25,7 @@ import {
   CreditCard,
   PencilRuler,
   Shuffle,
+  Grid3x3,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const teacherNavItems: NavItem[] = [
     { labelKey: "dashboard",     href: "/teacher",              icon: Home, exact: true },
     { labelKey: "tugOfWar",      href: "/teacher/games/tug",    icon: Swords },
+    { labelKey: "numberMemory",  href: "/teacher/games/memory", icon: Grid3x3 },
     { labelKey: "teacherCreate", href: "/teacher/games/create", icon: PencilRuler },
     { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
   ];

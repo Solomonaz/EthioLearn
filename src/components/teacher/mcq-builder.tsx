@@ -46,7 +46,7 @@ function blankEditing(): Editing {
   return { title: "", subject: "", grade: 1, language: "en", questions: [] };
 }
 
-export function McqBuilder() {
+export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
   const t = useTranslations("teacher");
   const g = useTranslations("games");
   const c = useTranslations("common");
@@ -64,6 +64,9 @@ export function McqBuilder() {
 
   useEffect(() => {
     load();
+    // Deep-link: open a specific set straight into the editor (from the dashboard).
+    if (initialEditId) openEdit(initialEditId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openNew = () => {
