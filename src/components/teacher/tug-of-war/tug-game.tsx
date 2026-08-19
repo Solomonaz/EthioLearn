@@ -195,13 +195,13 @@ export function TugGame({ match, onExit }: TugGameProps) {
   return (
     <div
       ref={wrapRef}
-      className="flex h-full flex-col overflow-hidden rounded-2xl bg-white"
+      className="flex h-full flex-col overflow-hidden rounded-2xl bg-surface"
     >
       {/* top bar */}
-      <div className="flex items-center justify-between gap-2 bg-white px-4 py-2">
+      <div className="flex items-center justify-between gap-2 bg-surface px-4 py-2">
         <button
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-primary hover:bg-border"
         >
           <X className="h-4 w-4" /> {t("exit")}
         </button>
@@ -209,7 +209,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
           <span
             className={cn(
               "rounded-full px-4 py-1 text-lg font-extrabold tabular-nums",
-              secondsLeft <= 10 ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-700",
+              secondsLeft <= 10 ? "bg-accent/15 text-accent" : "bg-border text-text-primary",
             )}
           >
             {mmss(secondsLeft)}
@@ -217,7 +217,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
         )}
         <button
           onClick={toggleFull}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-primary hover:bg-border"
         >
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFull ? t("minimize") : t("maximize")}
@@ -238,13 +238,13 @@ export function TugGame({ match, onExit }: TugGameProps) {
 
         {over && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/45 backdrop-blur-sm">
-            <div className="rounded-2xl bg-white px-10 py-8 text-center shadow-2xl">
-              <div className="text-2xl font-extrabold text-slate-800 sm:text-4xl">{winText}</div>
+            <div className="rounded-2xl bg-surface px-10 py-8 text-center shadow-2xl">
+              <div className="text-2xl font-extrabold text-text-primary sm:text-4xl">{winText}</div>
               <div className="mt-3 flex items-center justify-center gap-6 text-lg font-bold">
-                <span className="text-red-500">
+                <span className="text-accent">
                   {config.team1Name} · {state.correct[1]}
                 </span>
-                <span className="text-blue-500">
+                <span className="text-info">
                   {config.team2Name} · {state.correct[2]}
                 </span>
               </div>
@@ -257,7 +257,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
                 </button>
                 <button
                   onClick={onExit}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-200 px-6 py-3 text-base font-bold text-slate-700 hover:bg-slate-300"
+                  className="inline-flex items-center gap-2 rounded-xl bg-border px-6 py-3 text-base font-bold text-text-primary hover:bg-text-muted/40"
                 >
                   <X className="h-5 w-5" /> {t("exit")}
                 </button>
@@ -269,7 +269,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
 
       {/* dual answer panels */}
       {!over && (
-        <div className="grid shrink-0 grid-cols-2 gap-px bg-slate-200">
+        <div className="grid shrink-0 grid-cols-2 gap-px bg-border">
           <TeamPanel
             side={1}
             name={config.team1Name}
@@ -333,17 +333,17 @@ function TeamPanel({
   onPick: (idx: number) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const tint = side === 1 ? "bg-red-50" : "bg-blue-50";
-  const accent = side === 1 ? "text-red-600" : "text-blue-600";
-  const header = side === 1 ? "bg-red-500" : "bg-blue-500";
+  const tint = side === 1 ? "bg-accent/10" : "bg-info/10";
+  const accent = side === 1 ? "text-accent" : "text-info";
+  const header = side === 1 ? "bg-accent" : "bg-info";
 
   return (
     <div
       className={cn(
         "relative flex flex-col gap-2 p-3 transition-colors sm:p-4",
         tint,
-        flash === "correct" && "bg-green-100",
-        flash === "wrong" && "bg-red-100",
+        flash === "correct" && "bg-success/15",
+        flash === "wrong" && "bg-accent/15",
       )}
     >
       {/* header: name + streak */}
@@ -351,12 +351,12 @@ function TeamPanel({
         <span className={cn("rounded-lg px-3 py-1 text-sm font-bold text-white", header)}>{name}</span>
         <div className="flex items-center gap-2">
           {streak >= 2 && (
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">
+            <span className="rounded-full bg-secondary/20 px-2.5 py-0.5 text-xs font-bold text-secondary-dark">
               🔥 {t("mtStreak", { n: streak })}
             </span>
           )}
           {superFlash && (
-            <span className="animate-pulse rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-extrabold text-white">
+            <span className="animate-pulse rounded-full bg-secondary px-2.5 py-0.5 text-xs font-extrabold text-white">
               {t("mtSuper")}
             </span>
           )}
@@ -364,31 +364,31 @@ function TeamPanel({
       </div>
 
       {/* question */}
-      <p className="text-center text-2xl font-extrabold text-slate-800 sm:text-3xl">{question}</p>
+      <p className="text-center text-2xl font-extrabold text-text-primary sm:text-3xl">{question}</p>
 
       {mode === "keypad" ? (
         <>
           {/* input display */}
           <div
             className={cn(
-              "mx-auto flex h-11 w-40 items-center justify-center rounded-lg border-2 bg-white text-2xl font-bold tabular-nums",
-              flash === "wrong" ? "border-red-400 text-red-600" : "border-slate-200 text-slate-800",
+              "mx-auto flex h-11 w-40 items-center justify-center rounded-lg border-2 bg-surface text-2xl font-bold tabular-nums",
+              flash === "wrong" ? "border-accent text-accent" : "border-border text-text-primary",
             )}
           >
-            {input || <span className="text-slate-300">·</span>}
+            {input || <span className="text-text-muted">·</span>}
           </div>
           {/* keypad */}
           <div className="mx-auto grid w-full max-w-[15rem] grid-cols-3 gap-1.5">
             {KEYS.map((k) => (
               <KeyBtn key={k} onClick={() => onKey(k)}>{k}</KeyBtn>
             ))}
-            <KeyBtn onClick={() => onKey("back")} className="text-slate-500">
+            <KeyBtn onClick={() => onKey("back")} className="text-text-secondary">
               <Delete className="h-5 w-5" />
             </KeyBtn>
             <KeyBtn onClick={() => onKey("0")}>0</KeyBtn>
             <KeyBtn
               onClick={() => onKey("ok")}
-              className={cn("text-white", side === 1 ? "!bg-red-500 hover:!bg-red-600" : "!bg-blue-500 hover:!bg-blue-600")}
+              className={cn("text-white", side === 1 ? "!bg-accent hover:!bg-accent" : "!bg-info hover:!bg-info")}
             >
               <Check className="h-6 w-6" />
             </KeyBtn>
@@ -401,9 +401,9 @@ function TeamPanel({
               key={i}
               onClick={() => onPick(i)}
               className={cn(
-                "flex items-center justify-center rounded-xl border-2 border-slate-200 bg-white px-3 py-3 text-lg font-bold text-slate-700 shadow-sm transition active:scale-95",
+                "flex items-center justify-center rounded-xl border-2 border-border bg-surface px-3 py-3 text-lg font-bold text-text-primary shadow-sm transition active:scale-95",
                 accent,
-                "hover:border-slate-300",
+                "hover:border-border",
               )}
             >
               {opt}
@@ -428,7 +428,7 @@ function KeyBtn({
     <button
       onClick={onClick}
       className={cn(
-        "flex h-12 items-center justify-center rounded-lg bg-white text-xl font-bold text-slate-700 shadow-sm transition active:scale-90 hover:bg-slate-50",
+        "flex h-12 items-center justify-center rounded-lg bg-surface text-xl font-bold text-text-primary shadow-sm transition active:scale-90 hover:bg-background",
         className,
       )}
     >

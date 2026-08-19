@@ -234,56 +234,56 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
   const showControls = phase !== "intro";
 
   return (
-    <div ref={wrapRef} className="flex h-full flex-col items-center gap-3 overflow-y-auto rounded-2xl bg-slate-50 p-3 sm:p-4">
+    <div ref={wrapRef} className="flex h-full flex-col items-center gap-3 overflow-y-auto rounded-2xl bg-background p-3 sm:p-4">
       {/* top toolbar */}
       <div className="flex w-full max-w-2xl items-center justify-between">
         {onExit ? (
-          <button onClick={onExit} className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-100">
+          <button onClick={onExit} className="rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border">
             {t("exit")}
           </button>
         ) : (
           <span />
         )}
-        <button onClick={toggleFull} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-100">
+        <button onClick={toggleFull} className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border">
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFull ? t("minimize") : t("maximize")}
         </button>
       </div>
 
       {/* scoreboard */}
-      <div className="flex w-full max-w-2xl items-center justify-around rounded-2xl bg-white px-6 py-4 shadow-sm">
+      <div className="flex w-full max-w-2xl items-center justify-around rounded-2xl bg-surface px-6 py-4 shadow-sm">
         <div className="text-center">
-          <span className="text-sm text-slate-500">{t("level")}</span>{" "}
-          <span className="text-lg font-bold text-sky-500">{level}</span>
-          <span className="text-sm text-slate-400"> / {MAX_LEVEL}</span>
+          <span className="text-sm text-text-secondary">{t("level")}</span>{" "}
+          <span className="text-lg font-bold text-primary">{level}</span>
+          <span className="text-sm text-text-muted"> / {MAX_LEVEL}</span>
         </div>
-        <div className="h-8 w-px bg-slate-200" />
+        <div className="h-8 w-px bg-border" />
         <div className="text-center">
-          <span className="text-sm text-slate-500">{t("score")}</span>{" "}
-          <span className="text-lg font-bold text-slate-800 tabular-nums">{score}</span>
+          <span className="text-sm text-text-secondary">{t("score")}</span>{" "}
+          <span className="text-lg font-bold text-text-primary tabular-nums">{score}</span>
         </div>
-        <div className="h-8 w-px bg-slate-200" />
+        <div className="h-8 w-px bg-border" />
         <div className="text-center">
-          <span className="text-sm text-slate-500">{t("record")}</span>{" "}
-          <span className="text-lg font-bold text-amber-500 tabular-nums">{record}</span>
+          <span className="text-sm text-text-secondary">{t("record")}</span>{" "}
+          <span className="text-lg font-bold text-secondary-dark tabular-nums">{record}</span>
         </div>
       </div>
 
       {/* status / prompt bar */}
       {showControls && phase !== "over" && (
         <div className="flex w-full max-w-2xl items-center gap-3">
-          <div className="flex flex-1 flex-col gap-1.5 rounded-xl bg-white px-4 py-3 shadow-sm">
+          <div className="flex flex-1 flex-col gap-1.5 rounded-xl bg-surface px-4 py-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-700">
+              <span className="text-sm font-semibold text-text-primary">
                 {phase === "memorize" ? t("numRemember") : t("numOrder")}
               </span>
-              <span className="rounded-full bg-sky-500 px-2.5 py-0.5 text-xs font-bold text-white tabular-nums">
+              <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-white tabular-nums">
                 {phase === "memorize" ? Math.ceil(secondsLeft) : `${expected - 1}/${board.count}`}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-2 overflow-hidden rounded-full bg-border">
               <div
-                className={cn("h-full rounded-full transition-all", phase === "memorize" ? "bg-sky-500" : "bg-emerald-400")}
+                className={cn("h-full rounded-full transition-all", phase === "memorize" ? "bg-primary" : "bg-success")}
                 style={{
                   width:
                     phase === "memorize"
@@ -296,7 +296,7 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
           {phase === "memorize" && (
             <button
               onClick={startRecall}
-              className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-3 font-bold text-white shadow-sm hover:bg-sky-600"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 font-bold text-white shadow-sm hover:bg-primary-dark"
             >
               <Check className="h-5 w-5" /> {t("numReady")}
             </button>
@@ -333,10 +333,10 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
                   style={{ fontSize: boardSize ? Math.max(16, Math.round((boardSize / board.cols) * 0.4)) : undefined }}
                   className={cn(
                     "flex items-center justify-center rounded-xl font-extrabold text-white shadow-sm transition sm:rounded-2xl",
-                    state === "blank" && "bg-gradient-to-br from-amber-200 to-orange-300",
-                    state === "number" && "bg-gradient-to-br from-sky-400 to-blue-500",
-                    state === "correct" && "bg-gradient-to-br from-emerald-300 to-teal-400",
-                    state === "wrong" && "bg-gradient-to-br from-red-400 to-rose-500",
+                    state === "blank" && "bg-gradient-to-br from-secondary to-secondary-dark",
+                    state === "number" && "bg-gradient-to-br from-primary-light to-primary",
+                    state === "correct" && "bg-gradient-to-br from-success to-success",
+                    state === "wrong" && "bg-gradient-to-br from-error to-error",
                     clickable && "hover:brightness-105 active:scale-95",
                   )}
                 >
@@ -349,17 +349,17 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
           {/* result — centered overlay so it's always visible, any screen size */}
           {phase === "over" && result && (
             <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-white/95 p-6 text-center shadow-2xl backdrop-blur-sm">
-                <div className="text-2xl font-extrabold text-slate-800">
+              <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-surface/95 p-6 text-center shadow-2xl backdrop-blur-sm">
+                <div className="text-2xl font-extrabold text-text-primary">
                   {result === "won" ? t("numAllDone") : t("gameOver")}
                 </div>
-                <div className="text-lg font-bold text-slate-600">{t("scoreN", { n: score })}</div>
-                {newRecord && <div className="text-sm font-bold text-amber-500">{t("numNewRecord")}</div>}
+                <div className="text-lg font-bold text-text-secondary">{t("scoreN", { n: score })}</div>
+                {newRecord && <div className="text-sm font-bold text-secondary-dark">{t("numNewRecord")}</div>}
                 <div className="mt-1 flex items-center gap-2">
-                  <button onClick={startGame} className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 font-bold text-white hover:bg-sky-600">
+                  <button onClick={startGame} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 font-bold text-white hover:bg-primary-dark">
                     <RotateCcw className="h-4 w-4" /> {t("playAgain")}
                   </button>
-                  <button onClick={() => setPhase("intro")} className="rounded-xl bg-slate-200 px-5 py-2.5 font-bold text-slate-700 hover:bg-slate-300">
+                  <button onClick={() => setPhase("intro")} className="rounded-xl bg-border px-5 py-2.5 font-bold text-text-primary hover:bg-text-muted/40">
                     {t("numLeaderboard")}
                   </button>
                 </div>
@@ -387,13 +387,13 @@ function IntroPanel({
   leaderboard: Entry[];
   t: ReturnType<typeof useTranslations>;
 }) {
-  const medal = ["text-amber-500", "text-slate-400", "text-orange-400"];
+  const medal = ["text-secondary-dark", "text-text-muted", "text-warning"];
   return (
     <div className="grid w-full max-w-xl gap-4 sm:grid-cols-2">
-      <div className="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-sm">
         <div>
-          <h2 className="text-lg font-bold text-slate-800">{t("numTitle")}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t("numWatchSub")}</p>
+          <h2 className="text-lg font-bold text-text-primary">{t("numTitle")}</h2>
+          <p className="mt-1 text-sm text-text-secondary">{t("numWatchSub")}</p>
         </div>
         <Input
           label={t("numName")}
@@ -405,27 +405,27 @@ function IntroPanel({
         />
         <button
           onClick={onStart}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3 text-base font-bold text-white shadow-sm hover:bg-sky-600"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-base font-bold text-white shadow-sm hover:bg-primary-dark"
         >
           <Play className="h-5 w-5" /> {t("numStart")}
         </button>
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow-sm">
-        <h3 className="mb-3 flex items-center gap-2 font-bold text-slate-800">
-          <Trophy className="h-5 w-5 text-amber-500" /> {t("numLeaderboard")}
+      <div className="rounded-2xl bg-surface p-5 shadow-sm">
+        <h3 className="mb-3 flex items-center gap-2 font-bold text-text-primary">
+          <Trophy className="h-5 w-5 text-secondary-dark" /> {t("numLeaderboard")}
         </h3>
         {leaderboard.length === 0 ? (
-          <p className="text-sm text-slate-400">{t("numNoScores")}</p>
+          <p className="text-sm text-text-muted">{t("numNoScores")}</p>
         ) : (
           <ol className="space-y-1.5">
             {leaderboard.slice(0, 6).map((e, i) => (
               <li key={e.at} className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2">
-                  {i < 3 ? <Medal className={cn("h-4 w-4", medal[i])} /> : <span className="w-4 text-center text-xs text-slate-400">{i + 1}</span>}
-                  <span className="font-medium text-slate-700">{e.name}</span>
+                  {i < 3 ? <Medal className={cn("h-4 w-4", medal[i])} /> : <span className="w-4 text-center text-xs text-text-muted">{i + 1}</span>}
+                  <span className="font-medium text-text-primary">{e.name}</span>
                 </span>
-                <span className="font-bold tabular-nums text-slate-800">{e.score}</span>
+                <span className="font-bold tabular-nums text-text-primary">{e.score}</span>
               </li>
             ))}
           </ol>

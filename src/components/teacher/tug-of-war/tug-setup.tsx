@@ -368,7 +368,7 @@ export function TugSetup({
               </Button>
             </div>
             {aiRows && (
-              <p className="inline-flex items-center gap-2 rounded-lg bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-700">
+              <p className="inline-flex items-center gap-2 rounded-lg bg-success/10 px-3 py-1.5 text-sm font-semibold text-success">
                 <Check className="h-4 w-4" /> {t("mtReady", { n: aiRows.length })}
               </p>
             )}

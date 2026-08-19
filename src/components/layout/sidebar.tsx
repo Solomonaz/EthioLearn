@@ -26,6 +26,9 @@ import {
   PencilRuler,
   Shuffle,
   Grid3x3,
+  Bot,
+  Palette,
+  Puzzle,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -98,6 +101,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { labelKey: "dashboard",     href: "/teacher",              icon: Home, exact: true },
     { labelKey: "tugOfWar",      href: "/teacher/games/tug",    icon: Swords },
     { labelKey: "numberMemory",  href: "/teacher/games/memory", icon: Grid3x3 },
+    { labelKey: "routing",       href: "/teacher/games/routing", icon: Bot },
+    { labelKey: "findColor",     href: "/teacher/games/find-color", icon: Palette },
+    { labelKey: "findPair",      href: "/teacher/games/find-pair", icon: Puzzle },
     { labelKey: "teacherCreate", href: "/teacher/games/create", icon: PencilRuler },
     { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
   ];
