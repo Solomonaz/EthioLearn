@@ -266,7 +266,7 @@ export function FindColor({ onExit }: { onExit?: () => void }) {
         {onExit ? (
           <button
             onClick={onExit}
-            className="rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border"
+            className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm ring-1 ring-border hover:bg-border"
           >
             {t("exit")}
           </button>
@@ -275,7 +275,7 @@ export function FindColor({ onExit }: { onExit?: () => void }) {
         )}
         <button
           onClick={toggleFull}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border"
+          className="inline-flex items-center gap-1.5 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm ring-1 ring-border hover:bg-border"
         >
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFull ? t("minimize") : t("maximize")}

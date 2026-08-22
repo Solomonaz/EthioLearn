@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Maximize2, Minimize2, X, RotateCcw, Delete, Check } from "lucide-react";
+import { Maximize2, Minimize2, X, RotateCcw, Delete, Check, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   correctValue,
@@ -201,7 +201,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
       <div className="flex items-center justify-between gap-2 bg-surface px-4 py-2">
         <button
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-primary hover:bg-border"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-primary hover:bg-border"
         >
           <X className="h-4 w-4" /> {t("exit")}
         </button>
@@ -217,7 +217,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
         )}
         <button
           onClick={toggleFull}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-primary hover:bg-border"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-primary hover:bg-border"
         >
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFull ? t("minimize") : t("maximize")}
@@ -237,27 +237,30 @@ export function TugGame({ match, onExit }: TugGameProps) {
         />
 
         {over && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/45 backdrop-blur-sm">
-            <div className="rounded-2xl bg-surface px-10 py-8 text-center shadow-2xl">
-              <div className="text-2xl font-extrabold text-text-primary sm:text-4xl">{winText}</div>
-              <div className="mt-3 flex items-center justify-center gap-6 text-lg font-bold">
-                <span className="text-accent">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/50 p-4 backdrop-blur-sm">
+            <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface p-8 text-center shadow-2xl">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary-dark text-white shadow-md">
+                <Trophy className="h-8 w-8" />
+              </div>
+              <div className="text-2xl font-extrabold text-text-primary sm:text-3xl">{winText}</div>
+              <div className="flex w-full items-center justify-center gap-3">
+                <span className="flex-1 rounded-2xl bg-accent/10 py-2 text-base font-bold text-accent">
                   {config.team1Name} · {state.correct[1]}
                 </span>
-                <span className="text-info">
+                <span className="flex-1 rounded-2xl bg-info/10 py-2 text-base font-bold text-info">
                   {config.team2Name} · {state.correct[2]}
                 </span>
               </div>
-              <div className="mt-6 flex items-center justify-center gap-3">
+              <div className="mt-1 flex w-full flex-col gap-2.5">
                 <button
                   onClick={restart}
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-base font-bold text-white hover:bg-primary-dark"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-3.5 text-base font-bold text-white shadow-sm hover:bg-primary-dark"
                 >
                   <RotateCcw className="h-5 w-5" /> {t("playAgain")}
                 </button>
                 <button
                   onClick={onExit}
-                  className="inline-flex items-center gap-2 rounded-xl bg-border px-6 py-3 text-base font-bold text-text-primary hover:bg-text-muted/40"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-base font-bold text-text-primary hover:bg-border"
                 >
                   <X className="h-5 w-5" /> {t("exit")}
                 </button>

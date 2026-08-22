@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Calculator, FolderOpen, PencilLine, Sparkles, Plus, Trash2, Check, Play } from "lucide-react";
+import { Calculator, FolderOpen, PencilLine, Sparkles, Plus, Trash2, Check, Play, Swords } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -184,9 +184,21 @@ export function TugSetup({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">{t("tug")}</h1>
-        <p className="mt-1 text-text-secondary">{t("mtSubtitle")}</p>
+      <div
+        className="relative overflow-hidden rounded-3xl p-6 shadow-md"
+        style={{ backgroundImage: "linear-gradient(135deg,#1B5E20,#43A047)" }}
+      >
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/15" />
+        <div className="pointer-events-none absolute -bottom-10 left-24 h-28 w-28 rounded-full bg-black/10" />
+        <div className="relative flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/25 backdrop-blur-sm">
+            <Swords className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold text-white sm:text-3xl">{t("tug")} 💪</h1>
+            <p className="mt-0.5 text-sm font-medium text-white/85">{t("mtSubtitle")}</p>
+          </div>
+        </div>
       </div>
 
       {/* Source picker */}

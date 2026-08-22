@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Maximize2,
   Minimize2,
+  Trophy,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -241,7 +243,10 @@ function SetupCard({
   const t = useTranslations("games");
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-5 rounded-3xl bg-surface p-8 shadow-sm">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary text-white shadow-lg shadow-indigo-500/30">
+      <div
+        className="flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-lg"
+        style={{ backgroundImage: "linear-gradient(135deg,#0891B2,#22D3EE)" }}
+      >
         <Bot className="h-8 w-8" />
       </div>
       <div className="text-center">
@@ -428,7 +433,7 @@ export function RoutingAlgorithm() {
     <div ref={wrapRef} className="relative flex h-full flex-col gap-3 overflow-y-auto rounded-2xl bg-background p-3 sm:p-4">
       {/* top bar */}
       <div className="flex items-center justify-between gap-2">
-        <button onClick={() => setStep("players")} className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border">
+        <button onClick={() => setStep("players")} className="inline-flex items-center gap-1.5 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm ring-1 ring-border hover:bg-border">
           <Home className="h-4 w-4" /> {t("rtHome")}
         </button>
 
@@ -441,7 +446,7 @@ export function RoutingAlgorithm() {
             <ScorePlate label={t("record")} value={record} accent="amber" />
           )}
         </div>
-        <button onClick={toggleFull} title={isFull ? t("minimize") : t("maximize")} className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border">
+        <button onClick={toggleFull} title={isFull ? t("minimize") : t("maximize")} className="inline-flex items-center gap-1.5 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm ring-1 ring-border hover:bg-border">
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
         </button>
       </div>
@@ -460,22 +465,34 @@ export function RoutingAlgorithm() {
 
       {/* game over */}
       {over && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-surface p-8 text-center shadow-2xl">
-            <div className="text-2xl font-extrabold text-text-primary">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface p-8 text-center shadow-2xl">
+            <div
+              className={cn(
+                "flex h-16 w-16 items-center justify-center rounded-full text-white shadow-md",
+                players === 2 && winner !== 0 ? "bg-secondary-dark" : "bg-primary",
+              )}
+            >
+              {players === 2 && winner !== 0 ? <Trophy className="h-8 w-8" /> : <Clock className="h-8 w-8" />}
+            </div>
+            <h2 className="text-2xl font-extrabold text-text-primary sm:text-3xl">
               {players === 2 ? (winner === 0 ? t("rtDraw") : t("rtWinnerN", { n: winner })) : t("rtTimeUp")}
+            </h2>
+            <div className="text-4xl font-extrabold text-primary tabular-nums">
+              {players === 2 ? `${scores[1]} — ${scores[2]}` : scores[1]}
             </div>
-            <div className="text-lg font-bold text-text-secondary">
-              {players === 2
-                ? `${scores[1]} — ${scores[2]}`
-                : t("scoreN", { n: scores[1] })}
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <button onClick={beginPlay} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 font-bold text-white hover:bg-primary">
-                <RotateCcw className="h-4 w-4" /> {t("playAgain")}
+            <div className="mt-1 flex w-full flex-col gap-2.5">
+              <button
+                onClick={beginPlay}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3.5 font-bold text-white shadow-sm hover:bg-primary-dark"
+              >
+                <RotateCcw className="h-5 w-5" /> {t("playAgain")}
               </button>
-              <button onClick={() => setStep("players")} className="inline-flex items-center gap-2 rounded-xl bg-border px-5 py-2.5 font-bold text-text-primary hover:bg-text-muted/40">
-                <Home className="h-4 w-4" /> {t("rtHome")}
+              <button
+                onClick={() => setStep("players")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background px-5 py-3.5 font-bold text-text-primary hover:bg-border"
+              >
+                <Home className="h-5 w-5" /> {t("rtHome")}
               </button>
             </div>
           </div>

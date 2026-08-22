@@ -238,13 +238,13 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
       {/* top toolbar */}
       <div className="flex w-full max-w-2xl items-center justify-between">
         {onExit ? (
-          <button onClick={onExit} className="rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border">
+          <button onClick={onExit} className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm ring-1 ring-border hover:bg-border">
             {t("exit")}
           </button>
         ) : (
           <span />
         )}
-        <button onClick={toggleFull} className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border">
+        <button onClick={toggleFull} className="inline-flex items-center gap-1.5 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm ring-1 ring-border hover:bg-border">
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFull ? t("minimize") : t("maximize")}
         </button>
@@ -348,18 +348,34 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
 
           {/* result — centered overlay so it's always visible, any screen size */}
           {phase === "over" && result && (
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-surface/95 p-6 text-center shadow-2xl backdrop-blur-sm">
-                <div className="text-2xl font-extrabold text-text-primary">
-                  {result === "won" ? t("numAllDone") : t("gameOver")}
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+              <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface p-7 text-center shadow-2xl">
+                <div
+                  className={cn(
+                    "flex h-16 w-16 items-center justify-center rounded-full text-3xl text-white shadow-md",
+                    result === "won" ? "bg-secondary-dark" : "bg-primary",
+                  )}
+                >
+                  {result === "won" ? <Trophy className="h-8 w-8" /> : <RotateCcw className="h-8 w-8" />}
                 </div>
-                <div className="text-lg font-bold text-text-secondary">{t("scoreN", { n: score })}</div>
-                {newRecord && <div className="text-sm font-bold text-secondary-dark">{t("numNewRecord")}</div>}
-                <div className="mt-1 flex items-center gap-2">
-                  <button onClick={startGame} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 font-bold text-white hover:bg-primary-dark">
-                    <RotateCcw className="h-4 w-4" /> {t("playAgain")}
+                <h2 className="text-2xl font-extrabold text-text-primary">
+                  {result === "won" ? t("numAllDone") : t("gameOver")}
+                </h2>
+                <div className="text-5xl font-extrabold text-primary tabular-nums">{score}</div>
+                {newRecord && (
+                  <div className="text-sm font-bold text-secondary-dark">🏆 {t("numNewRecord")}</div>
+                )}
+                <div className="mt-1 flex w-full flex-col gap-2.5">
+                  <button
+                    onClick={startGame}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3.5 font-bold text-white shadow-sm hover:bg-primary-dark"
+                  >
+                    <RotateCcw className="h-5 w-5" /> {t("playAgain")}
                   </button>
-                  <button onClick={() => setPhase("intro")} className="rounded-xl bg-border px-5 py-2.5 font-bold text-text-primary hover:bg-text-muted/40">
+                  <button
+                    onClick={() => setPhase("intro")}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background px-5 py-3.5 font-bold text-text-primary hover:bg-border"
+                  >
                     {t("numLeaderboard")}
                   </button>
                 </div>

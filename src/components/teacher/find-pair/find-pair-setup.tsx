@@ -13,6 +13,7 @@ import {
   Play,
   Grid2x2,
   Columns2,
+  Puzzle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -200,9 +201,21 @@ export function FindPairSetup({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">{t("findPair")}</h1>
-        <p className="mt-1 text-text-secondary">{t("fpSubtitle")}</p>
+      <div
+        className="relative overflow-hidden rounded-3xl p-6 shadow-md"
+        style={{ backgroundImage: "linear-gradient(135deg,#7C3AED,#A78BFA)" }}
+      >
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/15" />
+        <div className="pointer-events-none absolute -bottom-10 left-24 h-28 w-28 rounded-full bg-black/10" />
+        <div className="relative flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/25 backdrop-blur-sm">
+            <Puzzle className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold text-white sm:text-3xl">{t("findPair")} 🧩</h1>
+            <p className="mt-0.5 text-sm font-medium text-white/85">{t("fpSubtitle")}</p>
+          </div>
+        </div>
       </div>
 
       {/* Mode: flip vs match */}

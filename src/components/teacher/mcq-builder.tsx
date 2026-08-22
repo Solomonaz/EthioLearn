@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Pencil, Play, ArrowLeft, Save } from "lucide-react";
+import { Plus, Trash2, Pencil, Play, ArrowLeft, Save, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -164,14 +164,29 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
   if (!editing) {
     return (
       <div className="mx-auto max-w-3xl space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">{t("createTitle")}</h1>
-            <p className="mt-1 text-text-secondary">{t("genSub")}</p>
+        <div
+          className="relative overflow-hidden rounded-3xl p-6 shadow-md"
+          style={{ backgroundImage: "linear-gradient(135deg,#1B5E20,#43A047)" }}
+        >
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/15" />
+          <div className="pointer-events-none absolute -bottom-10 left-24 h-28 w-28 rounded-full bg-black/10" />
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/25 backdrop-blur-sm">
+                <Sparkles className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-extrabold text-white sm:text-3xl">{t("createTitle")} ✨</h1>
+                <p className="mt-0.5 text-sm font-medium text-white/85">{t("genSub")}</p>
+              </div>
+            </div>
+            <button
+              onClick={openNew}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-primary shadow-sm transition hover:bg-white/90 active:scale-95"
+            >
+              <Plus className="h-4 w-4" /> {c("create")}
+            </button>
           </div>
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4" /> {c("create")}
-          </Button>
         </div>
 
         {sets === null ? (

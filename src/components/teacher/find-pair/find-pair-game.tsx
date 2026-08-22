@@ -289,7 +289,7 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
         {onExit ? (
           <button
             onClick={onExit}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border"
+            className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border"
           >
             {t("exit")}
           </button>
@@ -298,7 +298,7 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
         )}
         <button
           onClick={toggleFull}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm hover:bg-border"
         >
           {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFull ? t("minimize") : t("maximize")}
