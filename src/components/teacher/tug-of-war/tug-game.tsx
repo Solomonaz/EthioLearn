@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Maximize2, Minimize2, X, RotateCcw, Delete, Check, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 import {
   correctValue,
   drawFromDeck,
@@ -42,6 +43,8 @@ function mmss(total: number): string {
  */
 export function TugGame({ match, onExit }: TugGameProps) {
   const t = useTranslations("games");
+  const { playSfx } = useSound();
+  useBackgroundMusic("tug");
   const { config, mode, band, deck } = match;
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +90,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
       if (state.winner !== null) return;
       const { state: nextState, superPull } = registerPull(state, team, correct, config.target);
       setState(nextState);
+      playSfx(correct ? "correct" : "wrong");
 
       // lean toward the pulling side (only correct answers move the rope)
       if (correct) {
@@ -113,7 +117,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
       setQ((prev) => ({ ...prev, [team]: draw(prev[team === 1 ? 2 : 1]) }));
       setInput((prev) => ({ ...prev, [team]: "" }));
     },
-    [state, config.target, draw],
+    [state, config.target, draw, playSfx],
   );
 
   const submitKeypad = (team: Team) => {
@@ -155,6 +159,11 @@ export function TugGame({ match, onExit }: TugGameProps) {
     return () => clearInterval(id);
   }, [config.matchSeconds, over]);
 
+  // Celebrate when the match ends.
+  useEffect(() => {
+    if (over) playSfx("levelWin");
+  }, [over, playSfx]);
+
   useEffect(() => () => {
     // cleanup timers on unmount
     Object.values(flashTimers.current).forEach((x) => x && clearTimeout(x));
@@ -163,6 +172,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
   }, []);
 
   const restart = () => {
+    playSfx("click");
     setState(initialTugState());
     const first = draw();
     setQ({ 1: first, 2: draw(first) });
@@ -195,7 +205,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
   return (
     <div
       ref={wrapRef}
-      className="flex h-full flex-col overflow-hidden rounded-2xl bg-surface"
+      className="relative flex h-full flex-col overflow-hidden rounded-2xl bg-surface"
     >
       {/* top bar */}
       <div className="flex items-center justify-between gap-2 bg-surface px-4 py-2">
@@ -224,55 +234,32 @@ export function TugGame({ match, onExit }: TugGameProps) {
         </button>
       </div>
 
-      {/* stage */}
-      <div className="relative min-h-0 flex-1 bg-[#e3f4ff]">
-        <TugScene
-          offset={state.offset}
-          target={config.target}
-          team1Name={config.team1Name}
-          team2Name={config.team2Name}
-          pullingTeam={pulling}
-          superPull={superFlash !== null}
-          winner={over ? (state.winner as 1 | 2 | 0) : null}
-        />
+      {/* stage — the tug-of-war illustration. Only shown in fullscreen, where
+          there is room for it to read big; in the normal (windowed) view it
+          would be a useless sliver, so we hide it and give the panels the space. */}
+      {isFull && (
+        <div className="relative min-h-0 flex-1 bg-[#e3f4ff]">
+          <TugScene
+            offset={state.offset}
+            target={config.target}
+            team1Name={config.team1Name}
+            team2Name={config.team2Name}
+            pullingTeam={pulling}
+            superPull={superFlash !== null}
+            winner={over ? (state.winner as 1 | 2 | 0) : null}
+          />
+        </div>
+      )}
 
-        {over && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/50 p-4 backdrop-blur-sm">
-            <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface p-8 text-center shadow-2xl">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary-dark text-white shadow-md">
-                <Trophy className="h-8 w-8" />
-              </div>
-              <div className="text-2xl font-extrabold text-text-primary sm:text-3xl">{winText}</div>
-              <div className="flex w-full items-center justify-center gap-3">
-                <span className="flex-1 rounded-2xl bg-accent/10 py-2 text-base font-bold text-accent">
-                  {config.team1Name} · {state.correct[1]}
-                </span>
-                <span className="flex-1 rounded-2xl bg-info/10 py-2 text-base font-bold text-info">
-                  {config.team2Name} · {state.correct[2]}
-                </span>
-              </div>
-              <div className="mt-1 flex w-full flex-col gap-2.5">
-                <button
-                  onClick={restart}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-3.5 text-base font-bold text-white shadow-sm hover:bg-primary-dark"
-                >
-                  <RotateCcw className="h-5 w-5" /> {t("playAgain")}
-                </button>
-                <button
-                  onClick={onExit}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-base font-bold text-text-primary hover:bg-border"
-                >
-                  <X className="h-5 w-5" /> {t("exit")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* dual answer panels */}
+      {/* dual answer panels — sized to their content in fullscreen (so the stage
+          gets the rest); fill the whole area when the stage is hidden. */}
       {!over && (
-        <div className="grid shrink-0 grid-cols-2 gap-px bg-border">
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-px bg-border",
+            isFull ? "shrink-0" : "min-h-0 flex-1",
+          )}
+        >
           <TeamPanel
             side={1}
             name={config.team1Name}
@@ -301,6 +288,40 @@ export function TugGame({ match, onExit }: TugGameProps) {
             onPick={(i) => pickOption(2, i)}
             t={t}
           />
+        </div>
+      )}
+
+      {/* game-over overlay — covers the whole stage/panel area either way */}
+      {over && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-black/50 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-3xl bg-surface p-8 text-center shadow-2xl">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary-dark text-white shadow-md">
+              <Trophy className="h-8 w-8" />
+            </div>
+            <div className="text-2xl font-extrabold text-text-primary sm:text-3xl">{winText}</div>
+            <div className="flex w-full items-center justify-center gap-3">
+              <span className="flex-1 rounded-2xl bg-accent/10 py-2 text-base font-bold text-accent">
+                {config.team1Name} · {state.correct[1]}
+              </span>
+              <span className="flex-1 rounded-2xl bg-info/10 py-2 text-base font-bold text-info">
+                {config.team2Name} · {state.correct[2]}
+              </span>
+            </div>
+            <div className="mt-1 flex w-full flex-col gap-2.5">
+              <button
+                onClick={restart}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-3.5 text-base font-bold text-white shadow-sm hover:bg-primary-dark"
+              >
+                <RotateCcw className="h-5 w-5" /> {t("playAgain")}
+              </button>
+              <button
+                onClick={onExit}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background px-6 py-3.5 text-base font-bold text-text-primary hover:bg-border"
+              >
+                <X className="h-5 w-5" /> {t("exit")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -343,16 +364,16 @@ function TeamPanel({
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-2 p-3 transition-colors sm:p-4",
+        "relative flex min-h-0 flex-col justify-center gap-2 p-2.5 transition-colors sm:p-3",
         tint,
         flash === "correct" && "bg-success/15",
         flash === "wrong" && "bg-accent/15",
       )}
     >
-      {/* header: name + streak */}
-      <div className="flex items-center justify-between">
-        <span className={cn("rounded-lg px-3 py-1 text-sm font-bold text-white", header)}>{name}</span>
-        <div className="flex items-center gap-2">
+      {/* header: team badge centred over the question; streak/super float right */}
+      <div className="relative flex items-center justify-center">
+        <span className={cn("rounded-lg px-4 py-1 text-sm font-bold text-white shadow-sm", header)}>{name}</span>
+        <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-2">
           {streak >= 2 && (
             <span className="rounded-full bg-secondary/20 px-2.5 py-0.5 text-xs font-bold text-secondary-dark">
               🔥 {t("mtStreak", { n: streak })}
@@ -367,20 +388,25 @@ function TeamPanel({
       </div>
 
       {/* question */}
-      <p className="text-center text-2xl font-extrabold text-text-primary sm:text-3xl">{question}</p>
+      <p className="shrink-0 text-center text-2xl font-extrabold text-text-primary sm:text-3xl">{question}</p>
 
       {mode === "keypad" ? (
         <>
-          {/* input display */}
+          {/* input display — blinking caret makes the entry point obvious */}
           <div
             className={cn(
-              "mx-auto flex h-11 w-40 items-center justify-center rounded-lg border-2 bg-surface text-2xl font-bold tabular-nums",
+              "mx-auto flex h-11 w-40 shrink-0 items-center justify-center rounded-lg border-2 bg-surface text-2xl font-bold tabular-nums",
               flash === "wrong" ? "border-accent text-accent" : "border-border text-text-primary",
             )}
           >
-            {input || <span className="text-text-muted">·</span>}
+            {input || (
+              <span
+                className="h-6 w-[3px] animate-pulse rounded-full bg-text-muted/70"
+                aria-hidden
+              />
+            )}
           </div>
-          {/* keypad */}
+          {/* keypad — content-sized with fixed, comfortable keys */}
           <div className="mx-auto grid w-full max-w-[15rem] grid-cols-3 gap-1.5">
             {KEYS.map((k) => (
               <KeyBtn key={k} onClick={() => onKey(k)}>{k}</KeyBtn>
@@ -431,7 +457,7 @@ function KeyBtn({
     <button
       onClick={onClick}
       className={cn(
-        "flex h-12 items-center justify-center rounded-lg bg-surface text-xl font-bold text-text-primary shadow-sm transition active:scale-90 hover:bg-background",
+        "flex h-12 select-none items-center justify-center rounded-lg bg-surface text-xl font-bold text-text-primary shadow-sm transition hover:bg-background active:scale-95 active:bg-border/70 active:brightness-95 active:shadow-inner",
         className,
       )}
     >

@@ -19,6 +19,7 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 
 /**
  * Routing Algorithm — a single-screen logic game (grades 1–6).
@@ -82,6 +83,7 @@ function RoutingBoard({
   onSolve: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const { playSfx } = useSound();
   const [puzzle, setPuzzle] = useState(newPuzzle);
   const [robot, setRobot] = useState(puzzle.start);
   const [moves, setMoves] = useState<Dir[]>([]);
@@ -96,6 +98,7 @@ function RoutingBoard({
 
   const addMove = (dir: Dir) => {
     if (disabled || animating || moves.length >= 24) return;
+    playSfx("click");
     setMoves((m) => [...m, dir]);
   };
   const clean = () => {
@@ -116,6 +119,7 @@ function RoutingBoard({
       await sleep(260);
       if (pos === puzzle.goal) {
         setFlash("win");
+        playSfx("correct");
         onSolve();
         await sleep(450);
         setFlash(null);
@@ -125,6 +129,7 @@ function RoutingBoard({
       }
     }
     setFlash("fail");
+    playSfx("wrong");
     await sleep(500);
     setFlash(null);
     setRobot(puzzle.start);
@@ -265,6 +270,8 @@ type Step = "players" | "character" | "time" | "play";
 export function RoutingAlgorithm() {
   const t = useTranslations("games");
   const c = useTranslations("common");
+  const { playSfx } = useSound();
+  useBackgroundMusic("routing");
 
   const [step, setStep] = useState<Step>("players");
   const [players, setPlayers] = useState<1 | 2>(1);
@@ -300,6 +307,7 @@ export function RoutingAlgorithm() {
   }, []);
 
   const beginPlay = () => {
+    playSfx("click");
     setScores({ 1: 0, 2: 0 });
     setSecondsLeft(minutes * 60);
     setOver(false);
@@ -342,6 +350,11 @@ export function RoutingAlgorithm() {
   const addScore = useCallback((p: 1 | 2) => {
     setScores((s) => ({ ...s, [p]: s[p] + 1 }));
   }, []);
+
+  // Fanfare when the match clock runs out.
+  useEffect(() => {
+    if (over) playSfx("levelWin");
+  }, [over, playSfx]);
 
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 

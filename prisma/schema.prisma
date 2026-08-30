@@ -180,8 +180,26 @@ model User {
   subscriptions        Subscription[]    @relation("StudentSubscriptions")
   createdSubscriptions Subscription[]    @relation("SubscriptionCreator")
   gameContents         GameContent[]     @relation("GameContentCreator")
+  teachingAssignments  TeachingAssignment[] @relation("TeacherAssignments")
 
   @@map("users")
+}
+
+// ─── Teaching Assignments ───────────────────────────────────
+// What a teacher actually teaches. Ethiopian teachers commonly cover several
+// (subject, grade) PAIRS — e.g. Science in grade 3 AND Math in grade 4 — so a
+// single grade/subject on the user cannot express it. One row per pair.
+model TeachingAssignment {
+  id        String   @id @default(cuid())
+  teacherId String
+  teacher   User     @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   String // free-text (suggested from the Subject list), matching GameContent/Textbook
+  grade     Int
+  createdAt DateTime @default(now())
+
+  @@unique([teacherId, subject, grade])
+  @@index([teacherId])
+  @@map("teaching_assignments")
 }
 
 // ─── Student Notes (floating study scratchpad) ─────────────

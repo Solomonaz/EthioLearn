@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 
 /**
  * Find the Different Color — a single-screen focus/attention trainer.
@@ -103,6 +104,8 @@ function formatTime(secs: number): string {
 
 export function FindColor({ onExit }: { onExit?: () => void }) {
   const t = useTranslations("games");
+  const { playSfx } = useSound();
+  useBackgroundMusic("find-color");
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -153,8 +156,9 @@ export function FindColor({ onExit }: { onExit?: () => void }) {
       setNewRecord(isRecord);
       setElapsed(finalElapsed);
       setPhase("over");
+      playSfx(isRecord ? "levelWin" : "wrong");
     },
-    [name],
+    [name, playSfx],
   );
 
   // ── Countdown clock ───────────────────────────────────────
@@ -177,6 +181,7 @@ export function FindColor({ onExit }: { onExit?: () => void }) {
   }, [phase, finish]);
 
   const startGame = () => {
+    playSfx("click");
     const nm = name.trim() || "Player";
     setName(nm);
     try {
@@ -202,6 +207,7 @@ export function FindColor({ onExit }: { onExit?: () => void }) {
     const now = Date.now();
     if (cell === board.oddCell) {
       // correct — grow the grid, add points and a little time
+      playSfx("correct");
       deadlineRef.current = Math.min(
         deadlineRef.current + BONUS_TIME * 1000,
         now + TIME_CAP * 1000,
@@ -214,6 +220,7 @@ export function FindColor({ onExit }: { onExit?: () => void }) {
       setWrongCell(null);
     } else {
       // wrong — dock time and flash the tile
+      playSfx("wrong");
       deadlineRef.current -= PENALTY_TIME * 1000;
       setWrongCell(cell);
       window.setTimeout(() => setWrongCell((c) => (c === cell ? null : c)), 350);

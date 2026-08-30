@@ -27,17 +27,22 @@ export async function GET() {
     },
   });
 
-  const games = sets.map((s) => ({
-    id: s.id,
-    title: s.title,
-    subject: s.subject,
-    grade: s.grade,
-    language: s.language,
-    questionCount: Array.isArray((s.payload as any)?.questions)
-      ? (s.payload as any).questions.length
-      : 0,
-    updatedAt: s.updatedAt,
-  }));
+  const games = sets.map((s) => {
+    const questions = Array.isArray((s.payload as any)?.questions)
+      ? ((s.payload as any).questions as { question?: string }[])
+      : [];
+    return {
+      id: s.id,
+      title: s.title,
+      subject: s.subject,
+      grade: s.grade,
+      language: s.language,
+      questionCount: questions.length,
+      // Prompt text of each question, so the dashboard can search inside sets.
+      questions: questions.map((q) => (typeof q?.question === "string" ? q.question : "")),
+      updatedAt: s.updatedAt,
+    };
+  });
 
   return NextResponse.json({ games });
 }

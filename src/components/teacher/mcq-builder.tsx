@@ -40,6 +40,14 @@ interface Editing {
   questions: McqQ[];
 }
 
+interface Assignment {
+  id: string;
+  subject: string;
+  grade: number;
+}
+
+const DEFAULT_GRADES = [1, 2, 3, 4, 5, 6];
+
 const emptyDraft: McqQ = { text: "", options: ["", ""], correctIndex: 0 };
 
 function blankEditing(): Editing {
@@ -55,6 +63,7 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [draft, setDraft] = useState<McqQ>(emptyDraft);
   const [saving, setSaving] = useState(false);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
 
   const load = () =>
     fetch("/api/teacher/games")
@@ -64,14 +73,29 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
 
   useEffect(() => {
     load();
+    // The teacher's (subject, grade) pairs, used to pre-fill & suggest below.
+    fetch("/api/teacher/me/assignments")
+      .then((r) => (r.ok ? r.json() : { assignments: [] }))
+      .then((d) => setAssignments(d.assignments ?? []))
+      .catch(() => {});
     // Deep-link: open a specific set straight into the editor (from the dashboard).
     if (initialEditId) openEdit(initialEditId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Distinct subjects / grades the teacher teaches, for suggestions + defaults.
+  const teachSubjects = [...new Set(assignments.map((a) => a.subject))];
+  const teachGrades = [...new Set(assignments.map((a) => a.grade))].sort((a, b) => a - b);
+
   const openNew = () => {
     setDraft(emptyDraft);
-    setEditing(blankEditing());
+    const base = blankEditing();
+    // Default a new set to the teacher's first teaching pair, if any.
+    if (assignments.length > 0) {
+      base.subject = assignments[0].subject;
+      base.grade = assignments[0].grade;
+    }
+    setEditing(base);
   };
 
   const openEdit = async (id: string) => {
@@ -233,6 +257,31 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
         <ArrowLeft className="h-4 w-4" /> {c("back")}
       </button>
 
+      {/* Quick-pick from what the teacher teaches — fills subject + grade together */}
+      {assignments.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-text-secondary">{t("teachTitle")}:</span>
+          {assignments.map((a) => {
+            const active = editing.subject === a.subject && editing.grade === a.grade;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setEditing({ ...editing, subject: a.subject, grade: a.grade })}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold transition",
+                  active
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-primary/10 text-primary hover:bg-primary/20",
+                )}
+              >
+                {a.subject} · {t("gradeOption", { grade: a.grade })}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Input
@@ -242,12 +291,22 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
             onChange={(e) => setEditing({ ...editing, title: e.target.value })}
           />
         </div>
-        <Input
-          label={t("subjectLabel")}
-          placeholder={t("subjectPlaceholder")}
-          value={editing.subject}
-          onChange={(e) => setEditing({ ...editing, subject: e.target.value })}
-        />
+        <div>
+          <Input
+            label={t("subjectLabel")}
+            placeholder={t("subjectPlaceholder")}
+            value={editing.subject}
+            onChange={(e) => setEditing({ ...editing, subject: e.target.value })}
+            list={teachSubjects.length > 0 ? "mcq-subject-options" : undefined}
+          />
+          {teachSubjects.length > 0 && (
+            <datalist id="mcq-subject-options">
+              {teachSubjects.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          )}
+        </div>
         <div>
           <label className="mb-2 block text-sm font-medium text-text-primary">{t("gradeLabel")}</label>
           <select
@@ -255,11 +314,15 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
             onChange={(e) => setEditing({ ...editing, grade: Number(e.target.value) })}
             className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary"
           >
-            {[1, 2, 3, 4, 5, 6].map((gr) => (
-              <option key={gr} value={gr}>
-                {t("gradeOption", { grade: gr })}
-              </option>
-            ))}
+            {/* Prefer the grades the teacher teaches; always include the set's
+                current grade so an existing set stays selectable. */}
+            {[...new Set([...(teachGrades.length ? teachGrades : DEFAULT_GRADES), editing.grade])]
+              .sort((a, b) => a - b)
+              .map((gr) => (
+                <option key={gr} value={gr}>
+                  {t("gradeOption", { grade: gr })}
+                </option>
+              ))}
           </select>
         </div>
       </div>

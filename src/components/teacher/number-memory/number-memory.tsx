@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Maximize2, Minimize2, Check, Play, RotateCcw, Trophy, Medal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 
 /**
  * Number Memory — a single-screen memory/attention trainer (grades 1–6).
@@ -68,6 +69,8 @@ function loadLeaderboard(): Entry[] {
 
 export function NumberMemory({ onExit }: { onExit?: () => void }) {
   const t = useTranslations("games");
+  const { playSfx } = useSound();
+  useBackgroundMusic("memory");
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const [phase, setPhase] = useState<Phase>("intro");
@@ -110,6 +113,7 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
   }, []);
 
   const startGame = () => {
+    playSfx("click");
     const nm = name.trim() || "Player";
     setName(nm);
     try {
@@ -176,18 +180,22 @@ export function NumberMemory({ onExit }: { onExit?: () => void }) {
         setScore(total);
         setExpected(board.count + 1); // block further taps this level
         if (level >= MAX_LEVEL) {
+          playSfx("levelWin");
           finish("won", total);
         } else {
+          playSfx("correct");
           const nextLevel = level + 1;
           setLevel(nextLevel);
           setPhase("pause"); // brief lock so a stray tap can't advance/end
           setTimeout(() => beginLevel(nextLevel), 550);
         }
       } else {
+        playSfx("click"); // correct tile, level still in progress
         setExpected(expected + 1);
       }
     } else {
       // wrong tap — reveal the tile that was correct, end the run
+      playSfx("wrong");
       setWrongCell(cell);
       setPhase("over"); // freeze board immediately
       setTimeout(() => finish("over", score), 700);

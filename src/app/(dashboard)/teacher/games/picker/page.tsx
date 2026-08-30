@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Shuffle, RotateCcw, Dice5, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 
 /**
  * Random Picker — a free classroom hook. The teacher pastes a list (students,
@@ -12,6 +13,8 @@ import { cn } from "@/lib/utils";
  */
 export default function RandomPickerPage() {
   const t = useTranslations("teacher");
+  const { playSfx } = useSound();
+  useBackgroundMusic("picker");
   const [raw, setRaw] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
@@ -25,12 +28,14 @@ export default function RandomPickerPage() {
 
   const pick = () => {
     if (items.length < 2 || spinning) return;
+    playSfx("click");
     setSpinning(true);
     setSelected(null);
     let ticks = 0;
     const total = 18 + Math.floor(Math.random() * 8);
     timer.current = setInterval(() => {
       setDisplay(items[Math.floor(Math.random() * items.length)]);
+      playSfx("click"); // ratchet tick as names fly by (throttled internally)
       ticks += 1;
       if (ticks >= total) {
         if (timer.current) clearInterval(timer.current);
@@ -38,6 +43,7 @@ export default function RandomPickerPage() {
         setDisplay(winner);
         setSelected(winner);
         setSpinning(false);
+        playSfx("levelWin");
       }
     }, 80);
   };

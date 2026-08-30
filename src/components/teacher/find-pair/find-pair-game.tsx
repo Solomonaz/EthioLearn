@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 import {
   FP,
   boardSizeForRound,
@@ -35,6 +36,8 @@ function formatTime(secs: number): string {
 
 export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () => void }) {
   const t = useTranslations("games");
+  const { playSfx } = useSound();
+  useBackgroundMusic("find-pair");
   const { config } = match;
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -116,8 +119,9 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
     if (boardPairs.length > 0 && matched.size === boardPairs.length) {
       setScore((s) => s + FP.ROUND_BONUS * round);
       setPhase("roundclear");
+      playSfx("levelWin");
     }
-  }, [matched, phase, boardPairs.length, round]);
+  }, [matched, phase, boardPairs.length, round, playSfx]);
 
   useEffect(() => {
     if (phase !== "roundclear") return;
@@ -164,11 +168,13 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
     setMoves((m) => m + 1);
     const [a, b] = next.map((id) => cardById.get(id)!);
     if (a.pairId === b.pairId) {
+      playSfx("correct");
       setMatched((prev) => new Set(prev).add(a.pairId));
       setScore((s) => s + FP.MATCH_POINTS);
       setFound((f) => f + 1);
       setFlipped([]);
     } else {
+      playSfx("wrong");
       setLock(true);
       window.setTimeout(() => {
         setFlipped([]);
@@ -190,11 +196,13 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
     const left = cardById.get(pickedLeft) ?? columns.left.find((c) => c.id === pickedLeft);
     setMoves((m) => m + 1);
     if (left && left.pairId === card.pairId) {
+      playSfx("correct");
       setMatched((prev) => new Set(prev).add(card.pairId));
       setScore((s) => s + FP.MATCH_POINTS);
       setFound((f) => f + 1);
       setPickedLeft(null);
     } else {
+      playSfx("wrong");
       setWrong(card.id);
       window.setTimeout(() => setWrong((w) => (w === card.id ? null : w)), 500);
     }
@@ -202,6 +210,7 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
 
   // ── Restart ───────────────────────────────────────────────
   const restart = () => {
+    playSfx("click");
     setRound(1);
     setScore(0);
     setFound(0);

@@ -29,6 +29,8 @@ import {
   Bot,
   Palette,
   Puzzle,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
@@ -37,6 +39,9 @@ import { useEntitlements } from "@/hooks/use-entitlements";
 interface SidebarProps {
   isOpen: boolean;
   onClose?: () => void;
+  /** Teacher surface only: icon-rail collapsed state (desktop). */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 type NavItem = { labelKey: string; href: string; icon: typeof Home; exact?: boolean };
@@ -53,7 +58,7 @@ const TEACHER_COLORS: Record<string, string> = {
   randomPicker: "#10B981",
 };
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const t = useTranslations("nav");
   const ent = useEntitlements();
@@ -141,8 +146,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed z-30 w-64 transition-transform duration-200 md:translate-x-0",
+          "fixed z-30 transition-[transform,width] duration-200 md:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
+          // Collapsed rail only applies on desktop; the mobile drawer stays full width.
+          isTeacher && collapsed ? "w-64 md:w-[5rem]" : "w-64",
           isTeacher
             ? "bottom-3 left-3 top-3 rounded-3xl bg-surface shadow-xl ring-1 ring-border/60"
             : "left-0 top-16 h-[calc(100vh-4rem)] border-r border-border bg-surface",
@@ -155,6 +162,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClose={onClose}
             t={t}
             sectionLabelKey={sectionLabelKey}
+            collapsed={collapsed}
+            onToggleCollapse={onToggleCollapse}
           />
         ) : (
           <nav className="flex h-full flex-col gap-1 overflow-y-auto p-4 pb-6">
@@ -197,23 +206,63 @@ function TeacherSidebar({
   onClose,
   t,
   sectionLabelKey,
+  collapsed = false,
+  onToggleCollapse,
 }: {
   items: NavItem[];
   pathname: string;
   onClose?: () => void;
   t: ReturnType<typeof useTranslations>;
   sectionLabelKey: string;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
+  // `collapsed` only takes effect on desktop (md+); the mobile drawer always
+  // shows the full labels, so collapse styles are gated behind `md:`.
   return (
     <div className="flex h-full flex-col p-3">
-      <Link href="/teacher" onClick={onClose} className="mb-3 block px-1 pt-1">
-        <Logo size="sm" />
-      </Link>
-      <p className="mb-2 px-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+      {/* Header: logo + collapse toggle */}
+      <div
+        className={cn(
+          "mb-3 flex items-center gap-2 px-1 pt-1",
+          collapsed ? "justify-between md:justify-center" : "justify-between",
+        )}
+      >
+        <Link
+          href="/teacher"
+          onClick={onClose}
+          className={cn("block", collapsed && "md:hidden")}
+          aria-label="EthioLearn"
+        >
+          <Logo size="sm" />
+        </Link>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-border/60 hover:text-text-primary md:inline-flex"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+          </button>
+        )}
+      </div>
+
+      <p
+        className={cn(
+          "mb-2 px-3 text-xs font-bold uppercase tracking-wider text-text-muted",
+          collapsed && "md:hidden",
+        )}
+      >
         {t(sectionLabelKey as any)}
       </p>
 
-      <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto pb-2">
+      <nav className="scrollbar-slim flex flex-1 flex-col gap-1.5 overflow-y-auto pb-2 pr-1">
         {items.map((item) => {
           const isActive = item.exact
             ? pathname === item.href
@@ -224,24 +273,26 @@ function TeacherSidebar({
               key={item.href}
               href={item.href}
               onClick={onClose}
+              title={collapsed ? t(item.labelKey as any) : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold transition-all",
+                "group flex items-center gap-3 rounded-2xl px-2.5 py-2.5 text-sm font-semibold shadow-sm transition-all",
+                collapsed && "md:justify-center md:px-0",
                 isActive
-                  ? "bg-primary text-white shadow-md shadow-primary/25"
-                  : "text-text-primary hover:bg-surface hover:shadow-sm",
+                  ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/25"
+                  : "bg-surface text-text-primary hover:shadow-md",
               )}
             >
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
                 style={
                   isActive
-                    ? { backgroundColor: "rgba(255,255,255,0.22)" }
+                    ? { backgroundColor: "var(--color-primary)" }
                     : { backgroundColor: `${color}1f`, color }
                 }
               >
                 <item.icon className={cn("h-[18px] w-[18px]", isActive && "text-white")} />
               </span>
-              {t(item.labelKey as any)}
+              <span className={cn(collapsed && "md:hidden")}>{t(item.labelKey as any)}</span>
             </Link>
           );
         })}

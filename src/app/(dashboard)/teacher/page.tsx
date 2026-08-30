@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations, useLocale } from "next-intl";
 import {
@@ -32,10 +33,13 @@ import {
   ArrowRight,
   CalendarDays,
   Trophy,
+  Search,
+  SearchX,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useSound } from "@/hooks/use-sound";
 
 interface SetSummary {
   id: string;
@@ -44,6 +48,8 @@ interface SetSummary {
   grade: number;
   language: string;
   questionCount: number;
+  /** Prompt text of each question (for search); may be absent on older responses. */
+  questions?: string[];
   updatedAt: string;
 }
 
@@ -72,7 +78,16 @@ function subjectColor(subject: string): string {
 }
 
 export default function TeacherDashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <TeacherDashboardInner />
+    </Suspense>
+  );
+}
+
+function TeacherDashboardInner() {
   const { data: session } = useSession();
+  const { playSfx } = useSound();
   const t = useTranslations("teacher");
   const g = useTranslations("games");
   const nav = useTranslations("nav");
@@ -81,6 +96,7 @@ export default function TeacherDashboardPage() {
   const name = session?.user?.name ?? "";
 
   const [games, setGames] = useState<SetSummary[] | null>(null);
+  const [assignments, setAssignments] = useState<{ subject: string; grade: number }[]>([]);
 
   const load = () =>
     fetch("/api/teacher/games")
@@ -90,7 +106,23 @@ export default function TeacherDashboardPage() {
 
   useEffect(() => {
     load();
+    // What the teacher actually teaches — drives the Subjects & Grades cards.
+    fetch("/api/teacher/me/assignments")
+      .then((r) => (r.ok ? r.json() : { assignments: [] }))
+      .then((d) => setAssignments(d.assignments ?? []))
+      .catch(() => {});
   }, []);
+
+  // Distinct subjects / grades from the teacher's assignments (source of truth
+  // when set; otherwise we fall back to what's inferred from created game sets).
+  const teachSubjects = useMemo(
+    () => [...new Set(assignments.map((a) => a.subject.trim()).filter(Boolean))],
+    [assignments],
+  );
+  const teachGrades = useMemo(
+    () => [...new Set(assignments.map((a) => a.grade))].sort((a, b) => a - b),
+    [assignments],
+  );
 
   const stats = useMemo(() => {
     const list = games ?? [];
@@ -130,6 +162,38 @@ export default function TeacherDashboardPage() {
     };
   }, [games, g]);
 
+  // ── Search (driven by the ?q= param set by the teacher top bar) ──────
+  const searchParams = useSearchParams();
+  const query = (searchParams.get("q") ?? "").trim();
+  const isSearching = query.length > 0;
+
+  const results = useMemo(() => {
+    const q = query.toLowerCase();
+    if (!q) return { sets: [] as SetSummary[], questions: [] as { set: SetSummary; question: string }[] };
+    const list = games ?? [];
+
+    const sets = list.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.subject || "").toLowerCase().includes(q) ||
+        `grade ${s.grade}`.includes(q) ||
+        String(s.grade) === q,
+    );
+
+    const questions: { set: SetSummary; question: string }[] = [];
+    for (const s of list) {
+      for (const question of s.questions ?? []) {
+        if (question.toLowerCase().includes(q)) {
+          questions.push({ set: s, question });
+          if (questions.length >= 50) break;
+        }
+      }
+      if (questions.length >= 50) break;
+    }
+
+    return { sets, questions };
+  }, [games, query]);
+
   const del = async (id: string) => {
     if (!confirm(t("confirmDelete"))) return;
     const res = await fetch(`/api/teacher/games/${id}`, { method: "DELETE" });
@@ -149,13 +213,25 @@ export default function TeacherDashboardPage() {
     day: "numeric",
   });
 
+  // Prefer the teacher's real assignments; fall back to grades seen in sets.
+  const gradesForLabel = teachGrades.length > 0 ? teachGrades : stats.gradesArr;
   const gradesLabel = (() => {
-    const a = stats.gradesArr;
+    const a = gradesForLabel;
     if (a.length === 0) return t("dashNoGrades");
     if (a.length === 1) return t("gradeOption", { grade: a[0] });
     if (a.length === 2) return t("dashGrades2", { a: a[0], b: a[1] });
     return t("dashGradesRange", { a: a[0], b: a[a.length - 1] });
   })();
+
+  // Card values: real assignments when present, otherwise inferred from sets.
+  const subjectsCount = teachSubjects.length > 0 ? teachSubjects.length : stats.subjects;
+  const gradesCount = teachGrades.length > 0 ? teachGrades.length : stats.gradesArr.length;
+  const subjectsDelta =
+    teachSubjects.length > 0
+      ? t("dashTopSubject", { subject: teachSubjects[0] })
+      : stats.bySubject.length > 0
+        ? t("dashTopSubject", { subject: stats.bySubject[0].subject })
+        : t("dashInClass");
 
   const gameTiles: {
     href: string;
@@ -183,11 +259,160 @@ export default function TeacherDashboardPage() {
   }[] = [
     { label: t("dashSets"), value: games === null ? "…" : stats.totalSets, icon: Layers, color: "#1B5E20", delta: stats.recentSets > 0 ? t("dashThisWeek", { n: stats.recentSets }) : t("dashReady") },
     { label: t("dashQuestions"), value: games === null ? "…" : stats.totalQuestions, icon: ListChecks, color: "#F9A825", delta: stats.recentQuestions > 0 ? t("dashThisWeek", { n: stats.recentQuestions }) : t("dashAcrossSets", { n: stats.totalSets }) },
-    { label: t("dashSubjects"), value: games === null ? "…" : stats.subjects, icon: BookOpen, color: "#2563EB", delta: t("dashInClass") },
-    { label: t("dashGrades"), value: games === null ? "…" : stats.gradesArr.length, icon: GraduationCap, color: "#E11D48", delta: gradesLabel },
+    { label: t("dashSubjects"), value: games === null ? "…" : subjectsCount, icon: BookOpen, color: "#2563EB", delta: subjectsDelta },
+    { label: t("dashGrades"), value: games === null ? "…" : gradesCount, icon: GraduationCap, color: "#E11D48", delta: gradesLabel },
   ];
 
   const maxSubject = Math.max(1, ...stats.bySubject.map((s) => s.count));
+
+  /** Wrap the first occurrence of the query in the given text with a highlight. */
+  const highlight = (text: string) => {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="rounded bg-secondary/40 px-0.5 text-text-primary">
+          {text.slice(idx, idx + query.length)}
+        </mark>
+        {text.slice(idx + query.length)}
+      </>
+    );
+  };
+
+  // ── Search results view (replaces the dashboard while a query is active) ──
+  if (isSearching) {
+    const totalMatches = results.sets.length + results.questions.length;
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-xl font-extrabold text-text-primary sm:text-2xl">
+              <Search className="h-5 w-5 text-primary" />
+              <span className="truncate">{t("searchResultsFor", { q: query })}</span>
+            </h1>
+            <p className="mt-0.5 text-sm text-text-secondary">
+              {games === null ? c("loading") : t("searchMatchCount", { n: totalMatches })}
+            </p>
+          </div>
+          <Link
+            href="/teacher"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-secondary shadow-sm transition hover:border-primary/40 hover:text-primary"
+          >
+            <ArrowRight className="h-4 w-4 rotate-180" /> {t("searchBack")}
+          </Link>
+        </div>
+
+        {games === null ? (
+          <div className="flex justify-center py-16">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        ) : totalMatches === 0 ? (
+          <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <SearchX className="h-8 w-8" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-text-primary">{t("searchNoResults", { q: query })}</h3>
+              <p className="mt-1 text-text-secondary">{t("searchNoResultsDesc")}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Matching game sets */}
+            {results.sets.length > 0 && (
+              <section>
+                <h2 className="mb-3 flex items-center gap-2 text-base font-extrabold text-text-primary">
+                  <Layers className="h-5 w-5 text-primary" /> {t("searchGamesHeading")}
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                    {results.sets.length}
+                  </span>
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {results.sets.map((s) => (
+                    <div
+                      key={s.id}
+                      className="group flex flex-col rounded-2xl border border-border bg-surface p-4 shadow-sm transition hover:shadow-md"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="mt-1.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: subjectColor(s.subject || "—") }} />
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate font-bold text-text-primary">{highlight(s.title)}</h3>
+                          <p className="truncate text-sm text-text-secondary">{highlight(s.subject || "—")}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                          {t("gradeOption", { grade: s.grade })}
+                        </span>
+                        <span className="rounded-full bg-border/60 px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+                          {t("itemsCount", { count: s.questionCount })}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 border-t border-border pt-3">
+                        <Link
+                          href={`/teacher/games/tug?set=${s.id}`}
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white transition hover:bg-primary-dark"
+                        >
+                          <Play className="h-4 w-4" /> {g("play")}
+                        </Link>
+                        <Link
+                          href={`/teacher/games/create?edit=${s.id}`}
+                          title={c("edit")}
+                          className="rounded-lg p-2 text-text-muted transition hover:bg-border/50 hover:text-text-primary"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Matching questions */}
+            {results.questions.length > 0 && (
+              <section>
+                <h2 className="mb-3 flex items-center gap-2 text-base font-extrabold text-text-primary">
+                  <ListChecks className="h-5 w-5 text-secondary-dark" /> {t("searchQuestionsHeading")}
+                  <span className="rounded-full bg-secondary/20 px-2 py-0.5 text-xs font-bold text-secondary-dark">
+                    {results.questions.length}
+                  </span>
+                </h2>
+                <ul className="space-y-2">
+                  {results.questions.map(({ set, question }, i) => (
+                    <li
+                      key={`${set.id}-${i}`}
+                      className="flex items-start gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm transition hover:shadow-md"
+                    >
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-secondary/15 text-secondary-dark">
+                        <ListChecks className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-text-primary">{highlight(question)}</p>
+                        <p className="mt-0.5 truncate text-xs text-text-secondary">
+                          {t("searchInSet", { title: set.title })} · {t("gradeOption", { grade: set.grade })}
+                          {set.subject ? ` · ${set.subject}` : ""}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/teacher/games/create?edit=${set.id}`}
+                        title={c("edit")}
+                        className="shrink-0 rounded-lg p-2 text-text-muted transition hover:bg-border/50 hover:text-text-primary"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -341,6 +566,7 @@ export default function TeacherDashboardPage() {
             <Link
               key={game.href}
               href={game.href}
+              onClick={() => playSfx("click")}
               style={{ backgroundImage: game.grad }}
               className="group relative flex flex-col overflow-hidden rounded-3xl p-5 shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
             >

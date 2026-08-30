@@ -41,6 +41,30 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
+   Slim, unobtrusive scrollbar — ultra-thin track that only shows
+   the thumb, so scrollable panels (e.g. the teacher sidebar) keep
+   the soft, uncluttered look. Falls back gracefully everywhere.
+   ────────────────────────────────────────────────────────────── */
+.scrollbar-slim {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: color-mix(in srgb, var(--color-border) 80%, transparent) transparent;
+}
+.scrollbar-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: 9999px;
+}
+.scrollbar-slim::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-text-muted) 70%, transparent);
+}
+
+/* ──────────────────────────────────────────────────────────────
    Landing-page (futuristic) helpers — used by the marketing page.
    Hard-coded dark aesthetic, independent of the light/dark tokens.
    ────────────────────────────────────────────────────────────── */
