@@ -86,6 +86,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "quiz": "Take Quiz",
+    "grapher": "Graphing",
     "battle": "Battle Mode",
     "leaderboard": "Leaderboard",
     "rewards": "Rewards",
