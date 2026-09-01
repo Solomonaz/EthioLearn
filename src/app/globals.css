@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Make Tailwind's `dark:` variant follow the `.dark` class the ThemeProvider
+   toggles (not the OS preference), so components can opt into dark styling that
+   tracks the in-app theme switch. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #1B5E20;
   --color-primary-light: #4CAF50;

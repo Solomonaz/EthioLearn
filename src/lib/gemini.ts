@@ -51,9 +51,9 @@ export interface GeneratedQuestion {
 // ─── Client ─────────────────────────────────────────────
 
 // The Gemini model is configurable via env so it can be switched without code
-// changes — e.g. when a model loses free-tier quota (the "limit: 0" 429s) you
-// can point GEMINI_MODEL at gemini-2.5-flash / gemini-1.5-flash instead.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// changes — e.g. when a model loses free-tier quota (the "limit: 0" 429s) or is
+// retired, point GEMINI_MODEL at a current model (e.g. gemini-3.6-flash).
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -63,6 +63,107 @@ function getClient() {
     );
   }
   return new GoogleGenerativeAI(apiKey);
+}
+
+/**
+ * Explain a graph image for a student. Gemini's flash models are multimodal, so
+ * this can look at a photo/screenshot of a curve and describe it. Returns the
+ * model's raw reply, expected to be JSON:
+ *   { "explanation": string, "equations": string[] }
+ * where `equations` are 0–3 likely functions of x (mathjs syntax) the student
+ * can then plot. Callers parse it defensively.
+ */
+export async function explainGraphImage(
+  base64: string,
+  mimeType: string,
+): Promise<string> {
+  const client = getClient();
+  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const prompt =
+    "You are a friendly math tutor for a school student. The image shows a GRAPH. " +
+    "Identify it and describe it clearly.\n" +
+    "Prioritise a VISUAL MATCH for the equation: choose the function AND its " +
+    "vertical scale so the plotted curve LOOKS LIKE the drawing — the peak/valley " +
+    "heights and where it crosses the axes should match what you see, not just the " +
+    "roots. It is fine if the equation is approximate.\n" +
+    "Respond ONLY as JSON with EXACTLY this shape (plain text values, NO markdown, " +
+    "NO asterisks, NO bullet characters):\n" +
+    '{"summary": string, "features": [{"label": string, "value": string}], "equations": string[]}\n' +
+    "- summary: one or two friendly plain sentences (say 'approximate' if the drawing isn't an exact function).\n" +
+    "- features: short label/value pairs for what is visible, e.g. " +
+    '{"label":"x-intercepts","value":"x = -5, -1, and 4"}, plus y-intercept, ' +
+    "turning points (with coordinates), end behavior, and domain & range.\n" +
+    "- equations: the DISTINCT most-likely equation(s), at most 2, as expressions in " +
+    "x using mathjs syntax (^ powers, ln, log(x,10), sqrt, e^x, sin/cos/tan, abs), " +
+    "no 'y='. Scale them to visually match the graph. Never list the same function " +
+    "two ways (0.1*f and f/10 are identical — give it once).\n" +
+    "If the image is not a graph, put a short note in summary, features [], equations [].";
+  const result = await model.generateContent([
+    { text: prompt },
+    { inlineData: { mimeType, data: base64 } },
+  ]);
+  return result.response.text();
+}
+
+/**
+ * Read handwritten/printed equations from an image (e.g. a lasso-selected region
+ * of smartboard ink) and return the model's raw reply — a JSON array of
+ * plottable x-expressions. Callers parse it with `parseEquations`.
+ */
+export async function readEquationsFromImage(
+  base64: string,
+  mimeType: string,
+): Promise<string> {
+  const client = getClient();
+  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const prompt =
+    "Read the handwritten or printed math in this image. Output ONLY a JSON array " +
+    "of the equations as plottable expressions in x using mathjs syntax (^ for " +
+    "powers, ln(x), log(x,10), sqrt, e^x, sin/cos/tan, abs). Drop any 'y=' or " +
+    "'f(x)='. Keep letter coefficients/parameters (A, B, C, k, m, or a spelled-out " +
+    "Greek name like theta) as LITERAL symbols — do NOT replace them with numbers — " +
+    "so they can become interactive sliders. Always put an explicit '*' between a " +
+    "parameter and what follows and write functions with parentheses, e.g. " +
+    "'A*sin(x)+B', 'A*x^2+B*x+C', 'x^2+5*cos(theta)'. Use x as the only horizontal " +
+    "graph variable. At most 4 functions. No words, no markdown.";
+  const result = await model.generateContent([
+    { text: prompt },
+    { inlineData: { mimeType, data: base64 } },
+  ]);
+  return result.response.text();
+}
+
+/**
+ * Answer a student's follow-up question about a graph image they uploaded.
+ * Single-turn with optional prior Q&A passed as context. Returns plain text.
+ */
+export async function askAboutGraph(
+  base64: string,
+  mimeType: string,
+  question: string,
+  history: { role: "user" | "assistant"; text: string }[] = [],
+): Promise<string> {
+  const client = getClient();
+  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const ctx = history.length
+    ? "Earlier in this conversation:\n" +
+      history
+        .map((h) => `${h.role === "user" ? "Student" : "Tutor"}: ${h.text}`)
+        .join("\n") +
+      "\n\n"
+    : "";
+  const prompt =
+    "You are a friendly, encouraging math tutor. The image shows a GRAPH. Answer " +
+    "the student's question about THIS graph clearly and simply, in 1–3 short " +
+    "sentences of plain text (no markdown, no asterisks). " +
+    ctx +
+    "Student question: " +
+    question;
+  const result = await model.generateContent([
+    { text: prompt },
+    { inlineData: { mimeType, data: base64 } },
+  ]);
+  return result.response.text();
 }
 
 // ─── Prompt builder ─────────────────────────────────────

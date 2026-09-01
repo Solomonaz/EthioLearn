@@ -2,7 +2,11 @@ import { db } from "./db";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (refresh token lifetime)
+// Sliding inactivity window: a session stays valid as long as it is used at
+// least once every 30 days. `touchSession` (called on activity) pushes the
+// expiry forward, so only a full month of inactivity — or an explicit sign-out —
+// ends the session. Matches the JWT `maxAge` in auth.ts.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ── Device Name Parser ───────────────────────────────────────────────────────
 
@@ -165,11 +169,17 @@ export async function getUserSessions(userId: string) {
 }
 
 /**
- * Update the lastUsedAt timestamp for a session (fire-and-forget).
+ * Mark a session as used (fire-and-forget). Also slides the expiry forward so an
+ * active session never hits the fixed 30-day wall — it only expires after a full
+ * month with no activity.
  */
 export function touchSession(sessionId: string) {
+  const now = new Date();
   db.userSession
-    .update({ where: { sessionId }, data: { lastUsedAt: new Date() } })
+    .update({
+      where: { sessionId },
+      data: { lastUsedAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL_MS) },
+    })
     .catch(() => {}); // Non-fatal
 }
 

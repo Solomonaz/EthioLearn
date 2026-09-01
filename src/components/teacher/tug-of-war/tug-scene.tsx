@@ -27,59 +27,163 @@ export interface TugSceneProps {
 }
 
 // Team palettes (kept in sync with the answer panels: team 1 red, team 2 blue).
-const RED = { jersey: "#ef4444", dark: "#b91c1c", cap: "#991b1b", pants: "#3f3f46" };
-const BLUE = { jersey: "#3b82f6", dark: "#1d4ed8", cap: "#1e3a8a", pants: "#3f3f46" };
+// Both teams share navy shorts, red shoes and silver caps (per the reference).
+const RED = { jersey: "#ef4444", dark: "#c81e1e" };
+const BLUE = { jersey: "#2f6bef", dark: "#1e49b8" };
+const NAVY = "#1f2b44"; // shorts + legs
+const SHOE = "#e11d2f"; // shoes
+const SOLE = "#7f0f1c";
+const CAP = "#cbd2d8"; // silver caps
+const CAP_DARK = "#9aa3ac";
 const SKINS = ["#f4c9a3", "#e6b088", "#cf9464"];
 
 const GROUND = 335;
-const ROPE_Y = 232;
+const ROPE_Y = 253; // chest height of the players (below the shoulders)
 const MAX_SHIFT = 120; // px the formation slides at a full knockout
 
 // Team member base positions (before the whole rig slides).
 const TEAM1_X = [170, 250, 330];
 const TEAM2_X = [670, 750, 830];
 
+/**
+ * A flat-design tug-of-war player in a dynamic leaning-back lunge: front leg
+ * planted toward the rope, back leg extended, torso leaning away, both arms
+ * reaching forward to grip the rope. `facing` (+1/-1) points toward the rope, so
+ * the figure mirrors for each side. `lean` adds a small extra pull on the beat.
+ */
 function Kid({
   x,
-  facing,
+  facing: f,
   c,
   skin,
   lean,
 }: {
   x: number;
   facing: 1 | -1;
-  c: typeof RED;
+  c: { jersey: string; dark: string };
   skin: string;
-  lean: number; // degrees leaned back (away from rope)
+  lean: number;
 }) {
-  const rot = -facing * lean;
-  const gripFar = facing * 38;
-  const gripNear = facing * 24;
+  // Subtle body tilt on a pull (keeps the hands near the rope line).
+  const rot = -f * lean * 0.4;
+
+  // Key joints in local space (feet on the ground at y=0). The rope sits at
+  // chest height — below the shoulders — so the arms reach forward/down to it.
+  const gripY = ROPE_Y - GROUND; // ≈ -82 (chest level)
+  const hip: [number, number] = [f * -14, -50];
+  const sh: [number, number] = [f * -24, -90];
+  const head: [number, number] = [f * -30, -105];
+  const grip: [number, number] = [f * 44, gripY];
+  const elbow: [number, number] = [f * 12, gripY - 3];
+
+  const frontKnee: [number, number] = [f * 6, -28];
+  const frontFoot: [number, number] = [f * 26, -4];
+  const backKnee: [number, number] = [f * -32, -30];
+  const backFoot: [number, number] = [f * -48, -4];
+
+  const P = (p: [number, number]) => `${p[0]},${p[1]}`;
+
   return (
     <g transform={`translate(${x} ${GROUND})`}>
+      {/* ground shadow (stays flat, outside the lean) */}
+      <ellipse cx={f * -8} cy={3} rx={40} ry={5.5} fill="#000" opacity={0.09} />
+
       <g
-        style={{ transform: `rotate(${rot}deg)`, transformOrigin: "0px 0px", transition: "transform 200ms ease-out" }}
+        style={{
+          transform: `rotate(${rot}deg)`,
+          transformOrigin: "0px -30px",
+          transition: "transform 220ms ease-out",
+        }}
       >
-        {/* back leg (braced) + front leg */}
-        <line x1="0" y1="-52" x2={-facing * 16} y2="0" stroke={c.pants} strokeWidth="9" strokeLinecap="round" />
-        <line x1="0" y1="-52" x2={facing * 8} y2="0" stroke={c.pants} strokeWidth="9" strokeLinecap="round" />
-        {/* shoes */}
-        <ellipse cx={-facing * 16} cy="0" rx="7" ry="4" fill="#27272a" />
-        <ellipse cx={facing * 8} cy="0" rx="7" ry="4" fill="#27272a" />
-        {/* torso */}
-        <rect x="-13" y="-96" width="26" height="46" rx="9" fill={c.jersey} />
-        <rect x="-13" y="-70" width="26" height="8" fill={c.dark} opacity="0.6" />
-        {/* both arms gripping the rope */}
-        <line x1="0" y1="-90" x2={gripFar} y2={ROPE_Y - GROUND} stroke={c.dark} strokeWidth="7" strokeLinecap="round" />
-        <line x1="0" y1="-86" x2={gripNear} y2={ROPE_Y - GROUND} stroke={c.jersey} strokeWidth="7" strokeLinecap="round" />
-        <circle cx={gripFar} cy={ROPE_Y - GROUND} r="4.5" fill={skin} />
-        <circle cx={gripNear} cy={ROPE_Y - GROUND} r="4.5" fill={skin} />
-        {/* head + cap + face */}
-        <circle cx="0" cy="-112" r="13" fill={skin} />
-        <path d="M -13 -114 A 13 13 0 0 1 13 -114 Z" fill={c.cap} />
-        <rect x="-14" y="-115" width="28" height="4" rx="2" fill={c.cap} />
-        <circle cx={facing * 4} cy="-110" r="1.7" fill="#27272a" />
-        <path d={`M ${facing * 1} -103 q ${facing * 4} 3 ${facing * 7} 0`} stroke="#27272a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        {/* ── Back leg (extended, braced) ── */}
+        <polyline
+          points={`${P(hip)} ${P(backKnee)} ${P(backFoot)}`}
+          fill="none"
+          stroke={NAVY}
+          strokeWidth={13}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Back arm (behind torso), reaching to the rope */}
+        <polyline
+          points={`${f * -20},-86 ${elbow[0]},${elbow[1] + 3} ${grip[0]},${grip[1] + 2}`}
+          fill="none"
+          stroke={c.dark}
+          strokeWidth={9}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* ── Front leg (planted toward the rope) ── */}
+        <polyline
+          points={`${P(hip)} ${P(frontKnee)} ${P(frontFoot)}`}
+          fill="none"
+          stroke={NAVY}
+          strokeWidth={13}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Shoes */}
+        <g>
+          <ellipse cx={backFoot[0] + f * 4} cy={backFoot[1] + 3} rx={11} ry={5} fill={SHOE} />
+          <ellipse cx={backFoot[0] + f * 4} cy={backFoot[1] + 6} rx={11} ry={2.4} fill={SOLE} />
+          <ellipse cx={frontFoot[0] + f * 5} cy={frontFoot[1] + 3} rx={11} ry={5} fill={SHOE} />
+          <ellipse cx={frontFoot[0] + f * 5} cy={frontFoot[1] + 6} rx={11} ry={2.4} fill={SOLE} />
+        </g>
+
+        {/* shorts */}
+        <ellipse cx={hip[0]} cy={hip[1] + 2} rx={12} ry={11} fill={NAVY} />
+
+        {/* ── Torso (jersey) ── */}
+        <polyline
+          points={`${hip[0]},${hip[1] - 4} ${sh[0]},${sh[1]}`}
+          fill="none"
+          stroke={c.jersey}
+          strokeWidth={27}
+          strokeLinecap="round"
+        />
+        {/* subtle side-shade for depth */}
+        <polyline
+          points={`${hip[0] - f * 8},${hip[1] - 6} ${sh[0] - f * 8},${sh[1] + 2}`}
+          fill="none"
+          stroke={c.dark}
+          strokeWidth={8}
+          strokeLinecap="round"
+          opacity={0.5}
+        />
+
+        {/* ── Front arm (over torso) reaching the rope ── */}
+        <polyline
+          points={`${P(sh)} ${P(elbow)}`}
+          fill="none"
+          stroke={c.jersey}
+          strokeWidth={9.5}
+          strokeLinecap="round"
+        />
+        <polyline
+          points={`${P(elbow)} ${P(grip)}`}
+          fill="none"
+          stroke={skin}
+          strokeWidth={7}
+          strokeLinecap="round"
+        />
+        <circle cx={grip[0]} cy={grip[1]} r={5} fill={skin} />
+
+        {/* ── Neck + head ── */}
+        <line x1={sh[0]} y1={sh[1]} x2={head[0]} y2={head[1] + 8} stroke={skin} strokeWidth={7} strokeLinecap="round" />
+        <circle cx={head[0]} cy={head[1]} r={12} fill={skin} />
+        {/* eye, facing the rope */}
+        <circle cx={head[0] + f * 5} cy={head[1] - 1} r={1.7} fill="#27272a" />
+
+        {/* ── Cap (silver) ── */}
+        <path
+          d={`M ${head[0] - 12} ${head[1] - 4} A 12 12 0 0 1 ${head[0] + 12} ${head[1] - 4} Z`}
+          fill={CAP}
+        />
+        <rect x={head[0] - 12} y={head[1] - 5} width={24} height={3.2} rx={1.6} fill={CAP_DARK} />
+        {/* brim pointing toward the rope */}
+        <ellipse cx={head[0] + f * 15} cy={head[1] - 3.5} rx={9} ry={3} fill={CAP_DARK} />
       </g>
     </g>
   );

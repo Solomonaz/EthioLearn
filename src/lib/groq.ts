@@ -15,6 +15,11 @@ export { extractJson, validateQuestions, validateDetectedChapters };
 
 // ─── Client ─────────────────────────────────────────────
 
+// Configurable via env so the model can be swapped without code changes when
+// Groq retires one (they deprecated llama-3.3-70b-versatile). `openai/gpt-oss-20b`
+// is a current, fast, general model that fits the free-tier limits.
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+
 function getGroqClient() {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -39,7 +44,7 @@ export async function groqChat(
   try {
     const client = getGroqClient();
     const completion = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [
         ...(opts.system
           ? [{ role: "system" as const, content: opts.system }]
@@ -108,7 +113,7 @@ export async function groqGenerateQuestions(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const completion = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [
         {
           role: "system",
@@ -160,7 +165,7 @@ export async function groqDetectChapters(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const completion = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [
         {
           role: "system",
@@ -216,7 +221,7 @@ export async function groqTutorChatResponse(opts: {
   const systemPrompt = buildTutorSystemPrompt(opts);
 
   const completion = await client.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+    model: GROQ_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       ...opts.history,
@@ -243,7 +248,7 @@ export async function groqGenerateVideoScript(opts: {
   const client = getGroqClient();
 
   const completion = await client.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+    model: GROQ_MODEL,
     messages: [{ role: "user", content: buildVideoScriptPrompt(opts) }],
     temperature: 0.6,
     max_tokens: 3000,

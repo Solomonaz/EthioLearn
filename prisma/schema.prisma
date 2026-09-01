@@ -181,8 +181,26 @@ model User {
   createdSubscriptions Subscription[]    @relation("SubscriptionCreator")
   gameContents         GameContent[]     @relation("GameContentCreator")
   teachingAssignments  TeachingAssignment[] @relation("TeacherAssignments")
+  savedGraphs          SavedGraph[]      @relation("UserSavedGraphs")
 
   @@map("users")
+}
+
+// ─── Saved Graphs (grapher) ─────────────────────────────────
+// A student's saved set of graphed functions (with the viewing window), so they
+// can revisit or re-open a graph later.
+model SavedGraph {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserSavedGraphs", fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  expressions String[] // function expressions in x
+  view        Json? // { xMin, xMax, yMin, yMax }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@map("saved_graphs")
 }
 
 // ─── Teaching Assignments ───────────────────────────────────

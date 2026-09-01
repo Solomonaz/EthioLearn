@@ -71,7 +71,7 @@ export function AiQuizDemo() {
   const showQuestion = phase === "reveal" || phase === "done";
 
   return (
-    <div className="lp-ring w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-2xl backdrop-blur-xl">
+    <div className="lp-ring w-full max-w-md rounded-2xl border border-white/10 bg-[#0b1310] p-3 shadow-2xl">
       {/* Window chrome */}
       <div className="flex items-center gap-2 px-1.5 pb-3">
         <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />

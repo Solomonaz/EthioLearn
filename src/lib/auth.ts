@@ -288,9 +288,13 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 
 export const authOptions: NextAuthOptions = {
   session: {
-    strategy:    "jwt",
-    maxAge:      15 * 60,
-    updateAge:   10 * 60,
+    strategy: "jwt",
+    // Rolling 30-day session: stays signed in across refreshes and only expires
+    // after a full month of inactivity (or an explicit sign-out). Any activity
+    // re-issues the token, sliding the 30-day window forward. This is a learning
+    // app, not a financial one — long-lived sessions are the right trade-off.
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // roll the token at most once per day
   },
   pages: {
     signIn:  "/login",

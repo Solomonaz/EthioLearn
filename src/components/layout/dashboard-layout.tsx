@@ -21,10 +21,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const isTeacher = pathname.startsWith("/teacher");
 
-  // Restore the teacher sidebar collapsed preference (desktop only).
+  // Restore the sidebar collapsed preference (desktop only; default = open).
   useEffect(() => {
     try {
-      setCollapsed(localStorage.getItem("teacherSidebarCollapsed") === "1");
+      setCollapsed(localStorage.getItem("sidebarCollapsed") === "1");
     } catch {
       /* ignore unavailable storage */
     }
@@ -34,7 +34,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     setCollapsed((v) => {
       const next = !v;
       try {
-        localStorage.setItem("teacherSidebarCollapsed", next ? "1" : "0");
+        localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
       } catch {
         /* ignore unavailable storage */
       }
@@ -98,9 +98,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         onMenuToggle={() => setSidebarOpen((prev) => !prev)}
         isSidebarOpen={sidebarOpen}
       />
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        collapsed={collapsed}
+        onToggleCollapse={toggleCollapsed}
+      />
 
-      <main className="pb-20 md:ml-64 md:pb-0">
+      <main
+        className={cn(
+          "pb-20 transition-[margin] duration-200 md:pb-0",
+          collapsed ? "md:ml-20" : "md:ml-64",
+        )}
+      >
         <div className="p-4 sm:p-6 lg:p-8">{children}</div>
       </main>
 
