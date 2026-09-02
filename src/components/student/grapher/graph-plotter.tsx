@@ -30,6 +30,7 @@ import {
   Sun,
   Moon,
   SlidersHorizontal,
+  LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
@@ -212,6 +213,7 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
   // charcoal board, like a smartboard — independent of the app theme).
   const [boardDark, setBoardDark] = useState(false);
   const [card, setCard] = useState<{ x: number; y: number } | null>(null); // top-left of the graph card (null = centred default)
+  const [menuOpen, setMenuOpen] = useState(false); // tool dot expanded?
   const clipId = useId().replace(/[^a-zA-Z0-9]/g, "");
 
   // Board-local palette (explicit colours so the board look never depends on
@@ -268,6 +270,12 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
+
+  // Flip the board's local light/dark look, keeping the default ink visible.
+  const toggleDark = () => {
+    setPenColor((c) => (!boardDark ? (c === "#111827" ? "#ffffff" : c) : c === "#ffffff" ? "#111827" : c));
+    setBoardDark((d) => !d);
+  };
 
   // ── Compile visible functions (+ inequality parse) ────────
   const compiled = useMemo(
@@ -789,168 +797,11 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
   const originY = view.yMin <= 0 && view.yMax >= 0 ? sy(0) : null;
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
-      {/* ── Controls ─────────────────────────────────────── */}
-      <div className="w-full shrink-0 space-y-3 lg:w-80">
-        {/* Functions */}
-        <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-text-primary">Functions</h2>
-            <button
-              onClick={addFn}
-              disabled={fns.length >= 6}
-              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 disabled:opacity-40"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add
-            </button>
-          </div>
-          <div className="space-y-2">
-            {compiled.map((f) => (
-              <div key={f.id} className="flex items-center gap-2">
-                <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: f.color }} />
-                <div className="relative flex-1">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-text-muted">
-                    y=
-                  </span>
-                  <input
-                    value={f.expr}
-                    onChange={(e) => updateExpr(f.id, e.target.value)}
-                    placeholder="x^2 - 3   ·   y < x"
-                    spellCheck={false}
-                    className={cn(
-                      "w-full rounded-lg border bg-background py-2 pl-8 pr-2 font-mono text-sm text-text-primary outline-none transition focus:ring-2 focus:ring-primary/20",
-                      f.error ? "border-error focus:border-error" : "border-border focus:border-primary",
-                    )}
-                  />
-                </div>
-                <button onClick={() => addDerivative(f)} title="Add derivative (d/dx)" className="rounded-md p-1.5 text-text-muted hover:bg-border/50 hover:text-text-primary">
-                  <FunctionSquare className="h-4 w-4" />
-                </button>
-                <button onClick={() => toggleHidden(f.id)} title={f.hidden ? "Show" : "Hide"} className="rounded-md p-1.5 text-text-muted hover:bg-border/50 hover:text-text-primary">
-                  {f.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-                <button onClick={() => removeFn(f.id)} title="Remove" className="rounded-md p-1.5 text-text-muted hover:bg-error/10 hover:text-error">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-text-muted">
-            Try <code className="rounded bg-background px-1">x^2</code>, <code className="rounded bg-background px-1">ln(x)</code>,{" "}
-            <code className="rounded bg-background px-1">e^x</code>, <code className="rounded bg-background px-1">sin(x)</code>, or an
-            inequality like <code className="rounded bg-background px-1">y &lt; x^2</code>.
-          </p>
-        </div>
-
-        {/* Window */}
-        <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-bold text-text-primary">Window</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {(["xMin", "xMax", "yMin", "yMax"] as const).map((k) => (
-              <label key={k} className="text-xs font-medium text-text-secondary">
-                {k}
-                <input
-                  type="number"
-                  value={Math.round(view[k] * 100) / 100}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n)) setView((v) => ({ ...v, [k]: n }));
-                  }}
-                  className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </label>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <ToolBtn onClick={() => zoomBy(1 / 1.4)}><ZoomIn className="h-4 w-4" /> In</ToolBtn>
-            <ToolBtn onClick={() => zoomBy(1.4)}><ZoomOut className="h-4 w-4" /> Out</ToolBtn>
-            <ToolBtn onClick={fitY}><Maximize2 className="h-4 w-4" /> Fit Y</ToolBtn>
-            <ToolBtn onClick={() => { setView(DEFAULT_VIEW); setCard(null); }}><RotateCcw className="h-4 w-4" /> Reset</ToolBtn>
-            <ToolBtn onClick={() => setShowTable((s) => !s)} active={showTable}><TableIcon className="h-4 w-4" /> Table</ToolBtn>
-            <ToolBtn onClick={() => setAnalysis((s) => !s)} active={analysis}><Activity className="h-4 w-4" /> Analyse</ToolBtn>
-            <ToolBtn onClick={() => setPenMode((s) => !s)} active={penMode}><Pen className="h-4 w-4" /> Pen</ToolBtn>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <ToolBtn onClick={saveCurrent}><Save className="h-4 w-4" /> Save</ToolBtn>
-            <div className="relative">
-              <ToolBtn onClick={() => { if (!savedOpen) loadSavedList(); setSavedOpen((s) => !s); }} active={savedOpen}>
-                <FolderOpen className="h-4 w-4" /> Saved
-              </ToolBtn>
-              {savedOpen && (
-                <div className="absolute z-20 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-lg">
-                  {saved.length === 0 ? (
-                    <p className="px-2 py-2 text-xs text-text-muted">No saved graphs yet.</p>
-                  ) : (
-                    saved.map((g) => (
-                      <div key={g.id} className="flex items-center gap-1 rounded-lg px-1 hover:bg-border/40">
-                        <button onClick={() => openSaved(g)} className="min-w-0 flex-1 truncate py-1.5 pl-1.5 text-left font-mono text-xs text-text-primary">
-                          {g.title}
-                        </button>
-                        <button onClick={() => deleteSaved(g.id)} title="Delete" className="rounded-md p-1 text-text-muted hover:bg-error/10 hover:text-error">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-            <ToolBtn onClick={download}><Download className="h-4 w-4" /> PNG</ToolBtn>
-          </div>
-        </div>
-
-        {/* Analysis results */}
-        {analysis && (markers.roots.length > 0 || markers.inters.length > 0) && (
-          <div className="rounded-2xl border border-border bg-surface p-4 text-sm shadow-sm">
-            <h2 className="mb-2 text-sm font-bold text-text-primary">Analysis</h2>
-            {markers.roots.length > 0 && (
-              <p className="text-text-secondary">
-                <span className="font-semibold text-text-primary">Roots (x): </span>
-                {markers.roots.map((r) => fmt(r.x)).join(", ")}
-              </p>
-            )}
-            {markers.inters.length > 0 && (
-              <p className="mt-1 text-text-secondary">
-                <span className="font-semibold text-text-primary">Intersections: </span>
-                {markers.inters.map((p) => `(${fmt(p.x)}, ${fmt(p.y)})`).join(", ")}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* value table */}
-        {showTable && visibleForTable.length > 0 && (
-          <div className="overflow-x-auto rounded-2xl border border-border bg-surface p-3 shadow-sm">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-text-muted">
-                  <th className="px-2 py-1 text-left font-semibold">x</th>
-                  {visibleForTable.map((f) => (
-                    <th key={f.id} className="px-2 py-1 text-right font-semibold" style={{ color: f.color }}>y</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.map((r, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td className="px-2 py-1 font-mono text-text-secondary">{fmt(r.x)}</td>
-                    {r.ys.map((y, j) => (
-                      <td key={j} className="px-2 py-1 text-right font-mono text-text-primary">{y === null ? "—" : fmt(y)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ── Graph ────────────────────────────────────────── */}
-      <div
-        ref={boxRef}
-        className="relative min-h-[360px] flex-1 overflow-hidden rounded-2xl border border-border shadow-sm"
-        style={{ touchAction: "none", backgroundColor: bt.bg }}
-      >
+    <div
+      ref={boxRef}
+      className="relative h-[78vh] min-h-[560px] w-full overflow-hidden rounded-2xl border shadow-sm"
+      style={{ touchAction: "none", backgroundColor: bt.bg, borderColor: bt.cardBorder }}
+    >
         <svg
           ref={svgRef}
           width={W}
@@ -1043,41 +894,74 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
           )}
         </svg>
 
-        {/* Parameter sliders — live-adjust A, B, k … and the card re-plots */}
-        {showCard && allParams.length > 0 && (() => {
-          const panelW = 188;
-          const panelH = allParams.length * 30 + 34;
-          let left = cx + cardW + 10;
+        {/* View window + parameter sliders, beside the graph card (only when a
+            graph exists). xMin/xMax/yMin/yMax and any A,B,k parameters all live
+            here as sliders — the number panels are gone. */}
+        {showCard && (() => {
+          const rows = 4 + (allParams.length ? allParams.length + 1 : 0);
+          const panelW = 214;
+          const panelH = rows * 28 + 44;
+          let left = cx + cardW + 12;
           let top = cy;
-          if (left + panelW > W - 6) left = cx - panelW - 10; // try the left of the card
-          if (left < 6) {
-            left = Math.max(6, Math.min(cx, W - panelW - 6)); // else drop below the card
-            top = cy + cardH + 10;
+          if (left + panelW > W - 8) left = cx - panelW - 12; // try the left of the card
+          if (left < 8) {
+            left = Math.max(8, Math.min(cx, W - panelW - 8)); // else drop below the card
+            top = cy + cardH + 12;
           }
-          top = Math.max(6, Math.min(top, H - panelH - 6));
+          top = Math.max(8, Math.min(top, H - panelH - 8));
+          const setBound = (k: "xMin" | "xMax" | "yMin" | "yMax", v: number) =>
+            setView((vw) => {
+              if (k === "xMin") return { ...vw, xMin: Math.min(v, vw.xMax - 0.5) };
+              if (k === "xMax") return { ...vw, xMax: Math.max(v, vw.xMin + 0.5) };
+              if (k === "yMin") return { ...vw, yMin: Math.min(v, vw.yMax - 0.5) };
+              return { ...vw, yMax: Math.max(v, vw.yMin + 0.5) };
+            });
+          const clampShow = (n: number) => Math.max(-50, Math.min(50, n));
           return (
             <div
-              className="absolute z-10 flex flex-col gap-2 rounded-xl border p-2.5 shadow-lg backdrop-blur"
+              className="absolute z-10 flex flex-col gap-1.5 rounded-2xl border p-3 shadow-xl backdrop-blur"
               style={{ left, top, width: panelW, backgroundColor: bt.card, borderColor: bt.cardBorder }}
             >
-              <div className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: bt.label }}>
-                <SlidersHorizontal className="h-3.5 w-3.5" /> Parameters
+              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: bt.label }}>
+                <SlidersHorizontal className="h-3.5 w-3.5" /> View
               </div>
-              {allParams.map((p) => (
-                <div key={p} className="flex items-center gap-2">
-                  <span className="w-4 font-mono text-xs font-bold" style={{ color: bt.axis }}>{p}</span>
+              {(["xMin", "xMax", "yMin", "yMax"] as const).map((k) => (
+                <div key={k} className="flex items-center gap-2">
+                  <span className="w-9 font-mono text-[11px] font-bold" style={{ color: bt.axis }}>{k}</span>
                   <input
                     type="range"
-                    min={-10}
-                    max={10}
-                    step={0.1}
-                    value={paramScope[p]}
-                    onChange={(e) => setParamVals((v) => ({ ...v, [p]: Number(e.target.value) }))}
+                    min={-50}
+                    max={50}
+                    step={0.5}
+                    value={clampShow(view[k])}
+                    onChange={(e) => setBound(k, Number(e.target.value))}
                     className="h-1 flex-1 cursor-pointer accent-primary"
                   />
-                  <span className="w-9 text-right font-mono text-xs" style={{ color: bt.label }}>{fmt(paramScope[p])}</span>
+                  <span className="w-9 text-right font-mono text-[11px]" style={{ color: bt.label }}>{fmt(view[k])}</span>
                 </div>
               ))}
+              {allParams.length > 0 && (
+                <>
+                  <div className="mt-1 border-t pt-2 text-[11px] font-bold uppercase tracking-wide" style={{ color: bt.label, borderColor: bt.cardBorder }}>
+                    Parameters
+                  </div>
+                  {allParams.map((p) => (
+                    <div key={p} className="flex items-center gap-2">
+                      <span className="w-9 font-mono text-xs font-bold" style={{ color: bt.axis }}>{p}</span>
+                      <input
+                        type="range"
+                        min={-10}
+                        max={10}
+                        step={0.1}
+                        value={paramScope[p]}
+                        onChange={(e) => setParamVals((v) => ({ ...v, [p]: Number(e.target.value) }))}
+                        className="h-1 flex-1 cursor-pointer accent-primary"
+                      />
+                      <span className="w-9 text-right font-mono text-xs" style={{ color: bt.label }}>{fmt(paramScope[p])}</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           );
         })()}
@@ -1179,49 +1063,172 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
           </>
         )}
 
-        {/* Board controls (top-left): pen + fullscreen + light/dark toggle.
-            Styled from the board palette so they read on either board. The pen
-            lives here (not only in the sidebar) so it stays reachable when the
-            board is maximised. */}
-        <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5">
+        {/* Functions — add & edit equations, docked at the top of the board.
+            Hidden while drawing so the pen toolbar owns the top strip. */}
+        {!penMode && (
+        <div
+          className="absolute left-1/2 top-3 z-20 flex max-w-[calc(100%-24px)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-2xl border p-1.5 shadow-lg backdrop-blur"
+          style={{ backgroundColor: bt.card, borderColor: bt.cardBorder }}
+        >
+          {compiled.map((f) => (
+            <div key={f.id} className="flex items-center gap-1 rounded-xl border px-1.5 py-1" style={{ borderColor: bt.cardBorder }}>
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: f.color, opacity: f.hidden ? 0.3 : 1 }} />
+              <span className="font-mono text-xs font-semibold" style={{ color: bt.label }}>y=</span>
+              <input
+                value={f.expr}
+                onChange={(e) => updateExpr(f.id, e.target.value)}
+                placeholder="x^2 - 3"
+                spellCheck={false}
+                className="w-24 bg-transparent font-mono text-sm outline-none sm:w-32"
+                style={{ color: f.error ? "#ef4444" : bt.axis }}
+              />
+              <button onClick={() => addDerivative(f)} title="Add derivative (d/dx)" className={cn("rounded p-1 transition", boardDark ? "hover:bg-white/10" : "hover:bg-black/5")} style={{ color: bt.label }}>
+                <FunctionSquare className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => toggleHidden(f.id)} title={f.hidden ? "Show" : "Hide"} className={cn("rounded p-1 transition", boardDark ? "hover:bg-white/10" : "hover:bg-black/5")} style={{ color: bt.label }}>
+                {f.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={() => removeFn(f.id)} title="Remove" className={cn("rounded p-1 transition", boardDark ? "hover:bg-white/10" : "hover:bg-black/5")} style={{ color: bt.label }}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
           <button
-            onClick={() => setPenMode((p) => !p)}
-            title={penMode ? "Exit pen" : "Pen / draw"}
-            aria-label={penMode ? "Exit pen mode" : "Enter pen mode"}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm backdrop-blur transition hover:brightness-110"
-            style={
-              penMode
-                ? { backgroundColor: "#166534", borderColor: "#166534", color: "#ffffff" }
-                : { backgroundColor: boardDark ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)", borderColor: bt.grid, color: bt.axis }
-            }
+            onClick={addFn}
+            disabled={fns.length >= 6}
+            className="inline-flex items-center gap-1 rounded-xl bg-primary px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-primary-dark disabled:opacity-40"
           >
-            <Pen className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" /> Add
           </button>
-          <button
-            onClick={toggleFull}
-            title={isFull ? "Exit fullscreen" : "Fullscreen"}
-            aria-label={isFull ? "Exit fullscreen" : "Fullscreen"}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm backdrop-blur transition hover:brightness-110"
-            style={{ backgroundColor: boardDark ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)", borderColor: bt.grid, color: bt.axis }}
+        </div>
+        )}
+
+        {/* Analysis results (floating) */}
+        {analysis && (markers.roots.length > 0 || markers.inters.length > 0) && (
+          <div
+            className="absolute left-4 top-20 z-20 max-w-[46%] rounded-2xl border p-3 text-xs shadow-xl backdrop-blur"
+            style={{ backgroundColor: bt.card, borderColor: bt.cardBorder }}
           >
-            {isFull ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={() => {
-              // Swap the default black/white ink so the pen stays visible.
-              setPenColor((c) => (!boardDark ? (c === "#111827" ? "#ffffff" : c) : c === "#ffffff" ? "#111827" : c));
-              setBoardDark((d) => !d);
-            }}
-            title={boardDark ? "Light board" : "Dark board"}
-            aria-label={boardDark ? "Switch to light board" : "Switch to dark board"}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm backdrop-blur transition hover:brightness-110"
-            style={{ backgroundColor: boardDark ? "rgba(30,41,59,0.9)" : "rgba(255,255,255,0.9)", borderColor: bt.grid, color: bt.axis }}
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: bt.label }}>Analysis</div>
+            {markers.roots.length > 0 && (
+              <p style={{ color: bt.axis }}>
+                <span className="font-semibold">Roots (x): </span>
+                {markers.roots.map((r) => fmt(r.x)).join(", ")}
+              </p>
+            )}
+            {markers.inters.length > 0 && (
+              <p className="mt-1" style={{ color: bt.axis }}>
+                <span className="font-semibold">Intersections: </span>
+                {markers.inters.map((p) => `(${fmt(p.x)}, ${fmt(p.y)})`).join(", ")}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Value table (floating) */}
+        {showTable && visibleForTable.length > 0 && (
+          <div
+            className="absolute bottom-4 left-4 z-20 max-h-[42%] max-w-[48%] overflow-auto rounded-2xl border p-2.5 shadow-xl backdrop-blur"
+            style={{ backgroundColor: bt.card, borderColor: bt.cardBorder }}
           >
-            {boardDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: bt.label }}>Table</span>
+              <button onClick={() => setShowTable(false)} title="Close" style={{ color: bt.label }}><X className="h-3.5 w-3.5" /></button>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="px-2 py-1 text-left font-semibold" style={{ color: bt.label }}>x</th>
+                  {visibleForTable.map((f) => (
+                    <th key={f.id} className="px-2 py-1 text-right font-semibold" style={{ color: f.color }}>y</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r, i) => (
+                  <tr key={i} style={{ borderTop: `1px solid ${bt.cardBorder}` }}>
+                    <td className="px-2 py-1 font-mono" style={{ color: bt.label }}>{fmt(r.x)}</td>
+                    {r.ys.map((y, j) => (
+                      <td key={j} className="px-2 py-1 text-right font-mono" style={{ color: bt.axis }}>{y === null ? "—" : fmt(y)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Saved graphs (floating) */}
+        {savedOpen && (
+          <div
+            className="absolute bottom-4 left-1/2 z-30 max-h-[52%] w-64 -translate-x-1/2 overflow-y-auto rounded-2xl border p-1.5 shadow-xl backdrop-blur"
+            style={{ backgroundColor: bt.card, borderColor: bt.cardBorder }}
+          >
+            <div className="mb-1 flex items-center justify-between px-1.5 pt-1">
+              <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: bt.label }}>Saved graphs</span>
+              <button onClick={() => setSavedOpen(false)} title="Close" style={{ color: bt.label }}><X className="h-3.5 w-3.5" /></button>
+            </div>
+            {saved.length === 0 ? (
+              <p className="px-2 py-2 text-xs" style={{ color: bt.label }}>No saved graphs yet.</p>
+            ) : (
+              saved.map((g) => (
+                <div key={g.id} className={cn("flex items-center gap-1 rounded-lg px-1", boardDark ? "hover:bg-white/10" : "hover:bg-black/5")}>
+                  <button onClick={() => openSaved(g)} className="min-w-0 flex-1 truncate py-1.5 pl-1.5 text-left font-mono text-xs" style={{ color: bt.axis }}>{g.title}</button>
+                  <button onClick={() => deleteSaved(g.id)} title="Delete" className="rounded-md p-1" style={{ color: bt.label }}><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Tool dot — tap to expand every graph tool (keeps the board clean) */}
+        <div className="absolute bottom-4 right-4 z-40 flex flex-col items-end gap-2">
+          {menuOpen && (
+            <div
+              className="mb-1 grid w-[240px] grid-cols-3 gap-1 rounded-2xl border p-2 shadow-2xl backdrop-blur"
+              style={{ backgroundColor: bt.card, borderColor: bt.cardBorder }}
+            >
+              {[
+                { icon: ZoomIn, label: "In", onClick: () => zoomBy(1 / 1.4) },
+                { icon: ZoomOut, label: "Out", onClick: () => zoomBy(1.4) },
+                { icon: Maximize2, label: "Fit Y", onClick: fitY },
+                { icon: RotateCcw, label: "Reset", onClick: () => { setView(DEFAULT_VIEW); setCard(null); } },
+                { icon: TableIcon, label: "Table", onClick: () => setShowTable((s) => !s), active: showTable },
+                { icon: Activity, label: "Analyse", onClick: () => setAnalysis((s) => !s), active: analysis },
+                { icon: Pen, label: "Pen", onClick: () => { setPenMode((p) => !p); setMenuOpen(false); }, active: penMode },
+                { icon: Save, label: "Save", onClick: saveCurrent },
+                { icon: FolderOpen, label: "Saved", onClick: () => { if (!savedOpen) loadSavedList(); setSavedOpen((s) => !s); }, active: savedOpen },
+                { icon: Download, label: "PNG", onClick: download },
+                { icon: isFull ? Shrink : Expand, label: isFull ? "Window" : "Full", onClick: toggleFull },
+                { icon: boardDark ? Sun : Moon, label: boardDark ? "Light" : "Dark", onClick: toggleDark },
+              ].map((t) => (
+                <button
+                  key={t.label}
+                  onClick={t.onClick}
+                  title={t.label}
+                  className={cn(
+                    "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition",
+                    !t.active && (boardDark ? "hover:bg-white/10" : "hover:bg-black/5"),
+                  )}
+                  style={t.active ? { backgroundColor: "#2563eb", color: "#ffffff" } : { color: bt.axis }}
+                >
+                  <t.icon className="h-4 w-4" />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setMenuOpen((m) => !m)}
+            title={menuOpen ? "Close tools" : "Tools"}
+            aria-label={menuOpen ? "Close tools" : "Open tools"}
+            className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-2xl transition hover:brightness-110 active:scale-95"
+            style={{ backgroundImage: "linear-gradient(135deg,#2563eb,#7c3aed)" }}
+          >
+            {menuOpen ? <X className="h-6 w-6" /> : <LayoutGrid className="h-6 w-6" />}
           </button>
         </div>
       </div>
-    </div>
   );
 }
 
@@ -1244,20 +1251,6 @@ function PenIconBtn({
       className={cn(
         "flex h-8 w-8 items-center justify-center rounded-lg transition",
         active ? "bg-primary text-white" : "text-text-secondary hover:bg-border/50 hover:text-text-primary",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ToolBtn({ children, onClick, active }: { children: React.ReactNode; onClick: () => void; active?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition",
-        active ? "bg-primary text-white" : "bg-background text-text-secondary ring-1 ring-border hover:bg-border/50",
       )}
     >
       {children}
