@@ -30,6 +30,7 @@ import {
   Palette,
   Puzzle,
   LineChart,
+  Boxes,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -72,6 +73,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "dashboard",   href: "/student",                icon: Home,          exact: true },
     { labelKey: "quiz",        href: "/student/quiz",           icon: BookOpen },
     { labelKey: "grapher",     href: "/student/grapher",        icon: LineChart },
+    { labelKey: "geometry",    href: "/student/geometry",       icon: Boxes },
     { labelKey: "aiTutor",     href: "/student/tutor",          icon: MessageSquare },
     { labelKey: "battle",      href: "/student/battle",         icon: Swords },
     { labelKey: "leaderboard", href: "/student/leaderboard",    icon: Trophy },

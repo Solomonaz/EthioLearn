@@ -134,6 +134,28 @@ export async function readEquationsFromImage(
 }
 
 /**
+ * Read a sketch/drawing/photo of a 3D shape and name the solid it represents,
+ * as a JSON spec the geometry explorer can build. Returns the model's raw reply.
+ */
+export async function readSolidFromImage(base64: string, mimeType: string): Promise<string> {
+  const client = getClient();
+  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const prompt =
+    "This image is a sketch, drawing or photo of a single 3D solid. Identify the solid. " +
+    'Output ONLY a JSON object: {"shape": string, "sides": number, "label": string}. ' +
+    '"shape" must be exactly one of: cube, cuboid, sphere, cylinder, cone, tetrahedron, octahedron, ' +
+    "square-pyramid, triangular-prism, prism, pyramid, antiprism, bipyramid. " +
+    'Include "sides" (an integer 3-12) ONLY for prism/pyramid/antiprism/bipyramid, giving how many sides the base ' +
+    'polygon has (a hexagonal prism → {"shape":"prism","sides":6}). "label" is a short human name like "Hexagonal prism". ' +
+    "No words, no markdown, JSON only.";
+  const result = await model.generateContent([
+    { text: prompt },
+    { inlineData: { mimeType, data: base64 } },
+  ]);
+  return result.response.text();
+}
+
+/**
  * Answer a student's follow-up question about a graph image they uploaded.
  * Single-turn with optional prior Q&A passed as context. Returns plain text.
  */
