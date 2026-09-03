@@ -13,6 +13,7 @@ interface Settings {
   aiVideoEnabled: boolean;
   aiQuizGenEnabled: boolean;
   aiAdaptiveEnabled: boolean;
+  aiMathToolsEnabled: boolean;
   pricingEnabled: boolean;
 }
 
@@ -199,6 +200,13 @@ export function PlatformSettingsPanel() {
             checked={settings.aiAdaptiveEnabled}
             disabled={aiOff}
             onChange={(v) => update("aiAdaptiveEnabled", v)}
+          />
+          <Row
+            label="AI in Graphing & 3D Geometry"
+            desc="Natural-language graphing, graph-photo explanations, and the 3D geometry AI helper."
+            checked={settings.aiMathToolsEnabled}
+            disabled={aiOff}
+            onChange={(v) => update("aiMathToolsEnabled", v)}
           />
         </div>
 

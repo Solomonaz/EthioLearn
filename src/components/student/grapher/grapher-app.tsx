@@ -9,6 +9,7 @@ import {
   MessageCircleQuestion,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import { GraphPlotter } from "./graph-plotter";
 
 /** Render text with numeric values (incl. negatives/decimals) tinted. */
@@ -64,6 +65,12 @@ export function GrapherApp({
   initial?: string[];
   standalone?: boolean;
 }) {
+  // AI helpers here (natural-language graphing, graph-photo explanations) are
+  // governed by the global "AI in Graphing & 3D Geometry" switch. Optimistic
+  // while loading so the common (AI-on) case never flashes the bar away.
+  const ent = useEntitlements();
+  const aiTools = ent.aiFeatures.aiMathTools;
+
   const seedInitial = (initial ?? []).filter((s) => s.trim());
   const [seed, setSeed] = useState<string[]>(seedInitial.length ? seedInitial : ["x^2"]);
   const [nonce, setNonce] = useState(0); // remounts the plotter with a new seed
@@ -192,9 +199,13 @@ export function GrapherApp({
 
   return (
     <div className="space-y-4">
-      {/* Compact command bar — type/describe to graph, or upload a graph to explain. */}
+      {/* Compact command bar — type/describe to graph, or upload a graph to explain.
+          The AI pieces are hidden when AI is off platform-wide; the bar only
+          renders if it has something to show (an AI tool, or the pop-out button). */}
+      {(aiTools || !standalone) && (
       <div className="flex flex-col gap-2.5 rounded-2xl border border-border bg-surface p-2.5 shadow-sm lg:flex-row lg:items-center">
         {/* Ask AI to graph it */}
+        {aiTools && (
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Sparkles className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
@@ -220,11 +231,13 @@ export function GrapherApp({
             {aiLoading ? "Drawing…" : "Draw it"}
           </button>
         </div>
+        )}
 
-        <div className="hidden h-7 w-px shrink-0 bg-border lg:block" />
+        {aiTools && <div className="hidden h-7 w-px shrink-0 bg-border lg:block" />}
 
         {/* Explain a graph + open in window */}
         <div className="flex items-center gap-2">
+          {aiTools && (
           <button
             onClick={() => fileRef.current?.click()}
             disabled={imgLoading}
@@ -238,6 +251,7 @@ export function GrapherApp({
             )}
             {imgLoading ? "Reading…" : "Explain a graph"}
           </button>
+          )}
           {!standalone && (
             <button
               onClick={openWindow}
@@ -251,6 +265,7 @@ export function GrapherApp({
           )}
         </div>
       </div>
+      )}
 
       <input
         ref={fileRef}
@@ -356,7 +371,7 @@ export function GrapherApp({
           </div>
         )}
 
-      <GraphPlotter key={nonce} initial={seed} />
+      <GraphPlotter initial={seed} seedKey={nonce} aiTools={aiTools} />
     </div>
   );
 }

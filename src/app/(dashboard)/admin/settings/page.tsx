@@ -52,8 +52,10 @@ interface UserData {
 export default function AdminSettingsPage() {
   const t = useTranslations("admin");
   const tq = useTranslations("quiz");
+  const tNav = useTranslations("nav");
   const basePath = useAdminBasePath();
   const [school, setSchool] = useState<SchoolData | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,18 +79,25 @@ export default function AdminSettingsPage() {
           fetch("/api/auth/session"),
         ]);
 
-        if (!settingsRes.ok) throw new Error("Failed to load school settings");
+        if (!settingsRes.ok) throw new Error("Failed to load settings");
         const settingsData = await settingsRes.json();
-        setSchool(settingsData.school);
-        setName(settingsData.school.name);
-        setRegion(settingsData.school.region);
-        setCity(settingsData.school.city);
-        setType(settingsData.school.type);
 
-        if (settingsData.school.gameConfig) {
-          setMaxPlayersPerRoom(settingsData.school.gameConfig.maxPlayersPerRoom);
-          setTimePerQuestion(settingsData.school.gameConfig.timePerQuestion);
-          setDefaultDifficulty(settingsData.school.gameConfig.defaultDifficulty);
+        // Super admins have no school of their own — this page shows them only
+        // the platform-wide controls, so skip the school-scoped form entirely.
+        if (settingsData.isSuperAdmin || !settingsData.school) {
+          setIsSuperAdmin(!!settingsData.isSuperAdmin);
+        } else {
+          setSchool(settingsData.school);
+          setName(settingsData.school.name);
+          setRegion(settingsData.school.region);
+          setCity(settingsData.school.city);
+          setType(settingsData.school.type);
+
+          if (settingsData.school.gameConfig) {
+            setMaxPlayersPerRoom(settingsData.school.gameConfig.maxPlayersPerRoom);
+            setTimePerQuestion(settingsData.school.gameConfig.timePerQuestion);
+            setDefaultDifficulty(settingsData.school.gameConfig.defaultDifficulty);
+          }
         }
 
         if (userRes.ok) {
@@ -174,6 +183,64 @@ export default function AdminSettingsPage() {
       {/* Global AI / pricing kill-switches (SUPER_ADMIN only; self-hides otherwise) */}
       <PlatformSettingsPanel />
 
+      {isSuperAdmin ? (
+        /* Super admins have no school of their own — show only their account.
+           Everything school-scoped lives under the Schools tab. */
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-text-primary">{t("adminAccount")}</h2>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <User className="h-4 w-4 text-text-muted" />
+                <div>
+                  <p className="text-xs text-text-muted">{t("adminName")}</p>
+                  <p className="text-sm font-medium text-text-primary">{currentUser?.name ?? "N/A"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Phone className="h-4 w-4 text-text-muted" />
+                <div>
+                  <p className="text-xs text-text-muted">{t("adminPhone")}</p>
+                  <p className="text-sm font-medium text-text-primary">{currentUser?.phoneNumber ?? "N/A"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Shield className="h-4 w-4 text-text-muted" />
+                <div>
+                  <p className="text-xs text-text-muted">{t("adminRole")}</p>
+                  <Badge variant="info">{currentUser?.role ?? "N/A"}</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-text-primary">{tNav("schools")}</h2>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-text-secondary">
+                As a super admin you manage every school individually — their info, game settings,
+                students and textbooks — from the Schools tab.
+              </p>
+              <Link href={`${basePath}/schools`}>
+                <Button variant="outline" className="w-full justify-start gap-2">
+                  <Building2 className="h-4 w-4" />
+                  {tNav("schools")}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
       <div className="grid gap-6 lg:grid-cols-2">
         {/* School Info Card */}
         <Card>
@@ -390,6 +457,7 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }

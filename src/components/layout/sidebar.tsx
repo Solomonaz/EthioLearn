@@ -86,6 +86,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
   ].filter((item) => {
     if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
+    if ((item.labelKey === "grapher" || item.labelKey === "geometry") && !ent.mathTools) return false;
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
     if (item.labelKey === "rewards" && !ent.rewards) return false;
     if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;

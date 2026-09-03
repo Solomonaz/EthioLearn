@@ -7,13 +7,14 @@ export interface EntitlementsInfo {
   multiplayer: boolean;
   rewards: boolean;
   leaderboard: boolean;
+  mathTools: boolean;
   isIndependent: boolean;
   isSchoolStudent: boolean;
   planName: string | null;
   /** Paid plans / billing enabled platform-wide. Off = hide billing UI. */
   pricingEnabled: boolean;
   /** Effective per-AI-feature switches (master AND per-feature). */
-  aiFeatures: { aiTutor: boolean; aiVideo: boolean; aiQuizGen: boolean; aiAdaptive: boolean };
+  aiFeatures: { aiTutor: boolean; aiVideo: boolean; aiQuizGen: boolean; aiAdaptive: boolean; aiMathTools: boolean };
   loading: boolean;
 }
 
@@ -24,11 +25,12 @@ const DEFAULT: EntitlementsInfo = {
   multiplayer: true,
   rewards: true,
   leaderboard: true,
+  mathTools: true,
   isIndependent: false,
   isSchoolStudent: false,
   planName: null,
   pricingEnabled: true,
-  aiFeatures: { aiTutor: true, aiVideo: true, aiQuizGen: true, aiAdaptive: true },
+  aiFeatures: { aiTutor: true, aiVideo: true, aiQuizGen: true, aiAdaptive: true, aiMathTools: true },
   loading: true,
 };
 
@@ -51,6 +53,7 @@ export function useEntitlements(): EntitlementsInfo {
             multiplayer: !!d.multiplayer,
             rewards: !!d.rewards,
             leaderboard: !!d.leaderboard,
+            mathTools: !!d.mathTools,
             isIndependent: !!d.isIndependent,
             isSchoolStudent: !!d.isSchoolStudent,
             planName: d.planName ?? null,
@@ -60,6 +63,7 @@ export function useEntitlements(): EntitlementsInfo {
               aiVideo: d.aiFeatures?.aiVideo !== false,
               aiQuizGen: d.aiFeatures?.aiQuizGen !== false,
               aiAdaptive: d.aiFeatures?.aiAdaptive !== false,
+              aiMathTools: d.aiFeatures?.aiMathTools !== false,
             },
             loading: false,
           });

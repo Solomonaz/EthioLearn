@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { UpgradeNotice } from "@/components/student/upgrade-notice";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 // WebGL/three.js is client-only — load it without SSR.
 const GeometryLab = dynamic(
@@ -14,6 +16,13 @@ const GeometryLab = dynamic(
 );
 
 export default function GeometryPage() {
+  const ent = useEntitlements();
+
+  // Plan gating — the 3D geometry lab requires a plan that includes the math tools.
+  if (!ent.loading && !ent.mathTools) {
+    return <UpgradeNotice feature="3D Geometry" planName={ent.planName} />;
+  }
+
   return (
     <div className="mx-auto max-w-6xl">
       <GeometryLab />

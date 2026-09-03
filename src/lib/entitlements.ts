@@ -23,6 +23,8 @@ export interface Entitlements {
   rewards: boolean;
   /** Leaderboard / rankings. */
   leaderboard: boolean;
+  /** Graphing calculator & 3D geometry lab. */
+  mathTools: boolean;
 }
 
 export const FULL_ACCESS: Entitlements = {
@@ -30,14 +32,16 @@ export const FULL_ACCESS: Entitlements = {
   multiplayer: true,
   rewards: true,
   leaderboard: true,
+  mathTools: true,
 };
 // Individual student with no (or a free) plan: solo only — no AI, no multiplayer,
-// no rewards, no leaderboard.
+// no rewards, no leaderboard, no advanced math tools.
 export const FREE_TIER: Entitlements = {
   ai: false,
   multiplayer: false,
   rewards: false,
   leaderboard: false,
+  mathTools: false,
 };
 
 const LIVE_STATUSES = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
@@ -88,6 +92,7 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
           allowMultiplayer: true,
           allowRewards: true,
           allowLeaderboard: true,
+          allowMathTools: true,
         },
       },
     },
@@ -99,6 +104,7 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
     multiplayer: sub.plan.allowMultiplayer,
     rewards: sub.plan.allowRewards,
     leaderboard: sub.plan.allowLeaderboard,
+    mathTools: sub.plan.allowMathTools,
   });
 }
 
@@ -108,6 +114,7 @@ export const UPGRADE_MESSAGES = {
   multiplayer: "Battle mode isn't included in your current plan. Upgrade to a full-access plan to play against others.",
   rewards: "Rewards aren't included in your current plan. Upgrade to a full-access plan to earn and redeem rewards.",
   leaderboard: "The leaderboard isn't included in your current plan. Upgrade to a full-access plan to see rankings.",
+  mathTools: "The graphing calculator and 3D geometry lab aren't included in your current plan. Upgrade to a full-access plan to use them.",
 } as const;
 
 export type EntitlementKey = keyof Entitlements;

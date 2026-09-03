@@ -10,6 +10,7 @@ const BOOLEAN_KEYS = [
   "aiVideoEnabled",
   "aiQuizGenEnabled",
   "aiAdaptiveEnabled",
+  "aiMathToolsEnabled",
   "pricingEnabled",
 ] as const;
 
@@ -60,6 +61,7 @@ export async function PATCH(request: Request) {
       aiVideoEnabled: true,
       aiQuizGenEnabled: true,
       aiAdaptiveEnabled: true,
+      aiMathToolsEnabled: true,
       pricingEnabled: true,
     },
   });

@@ -7,6 +7,7 @@ export interface PlatformSettings {
   aiVideoEnabled: boolean;
   aiQuizGenEnabled: boolean;
   aiAdaptiveEnabled: boolean;
+  aiMathToolsEnabled: boolean;
   pricingEnabled: boolean;
 }
 
@@ -16,6 +17,7 @@ export interface EffectiveAiFlags {
   aiVideo: boolean;
   aiQuizGen: boolean;
   aiAdaptive: boolean;
+  aiMathTools: boolean;
 }
 
 const SINGLETON_ID = "singleton";
@@ -26,6 +28,7 @@ const DEFAULTS: PlatformSettings = {
   aiVideoEnabled: true,
   aiQuizGenEnabled: true,
   aiAdaptiveEnabled: true,
+  aiMathToolsEnabled: true,
   pricingEnabled: true,
 };
 
@@ -46,6 +49,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
         aiVideoEnabled: true,
         aiQuizGenEnabled: true,
         aiAdaptiveEnabled: true,
+        aiMathToolsEnabled: true,
         pricingEnabled: true,
       },
     });
@@ -62,6 +66,7 @@ export function effectiveAiFlags(s: PlatformSettings): EffectiveAiFlags {
     aiVideo: s.aiEnabled && s.aiVideoEnabled,
     aiQuizGen: s.aiEnabled && s.aiQuizGenEnabled,
     aiAdaptive: s.aiEnabled && s.aiAdaptiveEnabled,
+    aiMathTools: s.aiEnabled && s.aiMathToolsEnabled,
   };
 }
 

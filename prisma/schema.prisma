@@ -246,6 +246,7 @@ model PlatformSettings {
   aiVideoEnabled    Boolean  @default(true) // AI video tutorials
   aiQuizGenEnabled  Boolean  @default(true) // AI question / quiz generation
   aiAdaptiveEnabled Boolean  @default(true) // adaptive difficulty
+  aiMathToolsEnabled Boolean @default(true) // AI in the graphing calculator & 3D geometry lab
   pricingEnabled    Boolean  @default(true) // paid plans & billing — off = free for all
   updatedAt         DateTime @updatedAt
 
@@ -714,6 +715,7 @@ model PricingPlan {
   allowMultiplayer Boolean @default(true) // battle / group games (solo is always allowed)
   allowRewards     Boolean @default(true) // rewards catalogue & redemption
   allowLeaderboard Boolean @default(true) // leaderboard / rankings
+  allowMathTools   Boolean @default(true) // graphing calculator & 3D geometry lab
   // Elementary games (card games + tug-of-war). Column exists from Phase 0 so
   // the entitlement dimension is present in the schema; the free-vs-PRO game
   // split is wired through getEntitlements() in Phase 2 when the games ship.

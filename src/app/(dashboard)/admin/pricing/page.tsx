@@ -45,6 +45,7 @@ interface Plan {
   allowMultiplayer: boolean;
   allowRewards: boolean;
   allowLeaderboard: boolean;
+  allowMathTools: boolean;
   tiers: Tier[];
   _count?: { subscriptions: number };
 }
@@ -76,6 +77,7 @@ interface EditorState {
   allowMultiplayer: boolean;
   allowRewards: boolean;
   allowLeaderboard: boolean;
+  allowMathTools: boolean;
   tiers: TierRow[];
 }
 
@@ -96,6 +98,7 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
     allowMultiplayer: true,
     allowRewards: true,
     allowLeaderboard: true,
+    allowMathTools: true,
     tiers: [{ minStudents: "1", maxStudents: "", price: "" }],
   };
 }
@@ -117,6 +120,7 @@ function editorFromPlan(plan: Plan): EditorState {
     allowMultiplayer: plan.allowMultiplayer ?? true,
     allowRewards: plan.allowRewards ?? true,
     allowLeaderboard: plan.allowLeaderboard ?? true,
+    allowMathTools: plan.allowMathTools ?? true,
     tiers:
       plan.tiers.length > 0
         ? plan.tiers.map((t) => ({
@@ -178,6 +182,7 @@ export default function AdminPricingPage() {
       allowMultiplayer: editor.allowMultiplayer,
       allowRewards: editor.allowRewards,
       allowLeaderboard: editor.allowLeaderboard,
+      allowMathTools: editor.allowMathTools,
       features: editor.features
         .split(",")
         .map((f) => f.trim())
@@ -387,6 +392,9 @@ function PlanSection({
                       </span>
                       <span className={plan.allowLeaderboard ? "text-success" : "text-text-muted"}>
                         {plan.allowLeaderboard ? "✓" : "✗"} Leaderboard
+                      </span>
+                      <span className={plan.allowMathTools ? "text-success" : "text-text-muted"}>
+                        {plan.allowMathTools ? "✓" : "✗"} Graphing &amp; 3D Geometry
                       </span>
                     </div>
                   )}
@@ -643,6 +651,16 @@ function PlanEditor({
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 />
                 Leaderboard (rankings)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={editor.allowMathTools}
+                  onChange={(e) => set({ allowMathTools: e.target.checked })}
+                  disabled={saving}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                Graphing &amp; 3D Geometry (graphing calculator + 3D geometry lab)
               </label>
             </div>
           </Field>

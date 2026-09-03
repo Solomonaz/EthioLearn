@@ -183,7 +183,17 @@ function fmt(v: number): string {
   return String(Math.round(v * 1000) / 1000);
 }
 
-export function GraphPlotter({ initial }: { initial?: string[] }) {
+export function GraphPlotter({
+  initial,
+  seedKey,
+  // The smart-pen (handwrite an equation → AI recognises & graphs it) is an AI
+  // feature, so it's hidden when AI is off platform-wide. Defaults on.
+  aiTools = true,
+}: {
+  initial?: string[];
+  seedKey?: number;
+  aiTools?: boolean;
+}) {
   const [fns, setFns] = useState<Fn[]>(() => {
     const seed = (initial ?? []).filter((s) => s.trim()).slice(0, 6);
     return (seed.length ? seed : ["x^2"]).map((expr, i) => ({
@@ -206,6 +216,12 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const drawingRef = useRef<string | null>(null);
   const [isFull, setIsFull] = useState(false);
+
+  // If AI gets turned off (or the plan doesn't include it), leave pen mode so
+  // the AI handwriting toolbar can't be reached while it's hidden.
+  useEffect(() => {
+    if (!aiTools) setPenMode(false);
+  }, [aiTools]);
 
   // The surface is a blank board; a plotted graph appears as a self-contained,
   // movable card (its own mini coordinate plane) — it never takes over the
@@ -232,6 +248,7 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
   // ── Measure the plot area ─────────────────────────────────
   const boxRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
   const [size, setSize] = useState({ w: 640, h: 420 });
   useEffect(() => {
     const el = boxRef.current;
@@ -241,6 +258,33 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
     return () => ro.disconnect();
   }, []);
   const { w: W, h: H } = size;
+
+  // Apply a fresh AI/explain seed WITHOUT remounting, so the student's ink,
+  // sliders and view survive. `seedKey` bumps whenever new equations arrive;
+  // the first run is skipped because useState already seeded the functions.
+  const seededOnce = useRef(false);
+  useEffect(() => {
+    if (!seededOnce.current) {
+      seededOnce.current = true;
+      return;
+    }
+    const seed = (initial ?? []).filter((s) => s.trim()).slice(0, 6);
+    if (!seed.length) return;
+    setFns(seed.map((expr, i) => ({ id: uid(), expr, color: COLORS[i % COLORS.length] })));
+    setHover(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedKey]);
+
+  // Wheel-zoom needs a NON-passive listener so preventDefault works (React's
+  // onWheel can be passive). Attach once; the handler is refreshed each render
+  // via wheelRef so it always sees current state.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const h = (e: WheelEvent) => wheelRef.current(e);
+    el.addEventListener("wheel", h, { passive: false });
+    return () => el.removeEventListener("wheel", h);
+  }, []);
 
   // Graph-card geometry: a bounded panel that scales with the board but caps,
   // so the plot stays a compact widget instead of covering the whole surface.
@@ -613,9 +657,13 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
     });
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  // Kept fresh every render so the native (non-passive) wheel listener above
+  // always sees current penMode / card geometry without re-binding.
+  wheelRef.current = (e: WheelEvent) => {
     if (penMode) return; // don't shift the board while drawing
-    const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+    const el = svgRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     const bx = e.clientX - rect.left;
     const by = e.clientY - rect.top;
     if (!inCard(bx, by)) return; // only the card zooms; the board is inert
@@ -638,7 +686,15 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
     const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
     if (move.current) {
       const m = move.current;
-      setCard({ x: m.ox + (e.clientX - m.x), y: m.oy + (e.clientY - m.y) });
+      // Clamp so at least `margin` px of the card always stays on the board —
+      // otherwise it can be dragged out of reach (only Reset would recover it).
+      const margin = 48;
+      const nx = m.ox + (e.clientX - m.x);
+      const ny = m.oy + (e.clientY - m.y);
+      setCard({
+        x: Math.max(margin - cardW, Math.min(nx, W - margin)),
+        y: Math.max(margin - cardH, Math.min(ny, H - margin)),
+      });
       setHover(null);
       return;
     }
@@ -807,7 +863,6 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
           width={W}
           height={H}
           className={cn("block select-none", penMode ? "cursor-crosshair" : "cursor-default")}
-          onWheel={onWheel}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -916,7 +971,13 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
               if (k === "yMin") return { ...vw, yMin: Math.min(v, vw.yMax - 0.5) };
               return { ...vw, yMax: Math.max(v, vw.yMin + 0.5) };
             });
-          const clampShow = (n: number) => Math.max(-50, Math.min(50, n));
+          // The view sliders track the current window: their extent grows as the
+          // student zooms out, so a zoomed view is always representable (no pinning
+          // at ±50, no sudden snap when nudging a slider after zooming out).
+          const vmag = Math.max(10, Math.abs(view.xMin), Math.abs(view.xMax), Math.abs(view.yMin), Math.abs(view.yMax));
+          const bound = Math.ceil((vmag * 1.15) / 10) * 10;
+          const bstep = bound > 120 ? 1 : 0.5;
+          const clampShow = (n: number) => Math.max(-bound, Math.min(bound, n));
           return (
             <div
               className="absolute z-10 flex flex-col gap-1.5 rounded-2xl border p-3 shadow-xl backdrop-blur"
@@ -930,9 +991,9 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
                   <span className="w-9 font-mono text-[11px] font-bold" style={{ color: bt.axis }}>{k}</span>
                   <input
                     type="range"
-                    min={-50}
-                    max={50}
-                    step={0.5}
+                    min={-bound}
+                    max={bound}
+                    step={bstep}
                     value={clampShow(view[k])}
                     onChange={(e) => setBound(k, Number(e.target.value))}
                     className="h-1 flex-1 cursor-pointer accent-primary"
@@ -1201,7 +1262,10 @@ export function GraphPlotter({ initial }: { initial?: string[] }) {
                 { icon: Download, label: "PNG", onClick: download },
                 { icon: isFull ? Shrink : Expand, label: isFull ? "Window" : "Full", onClick: toggleFull },
                 { icon: boardDark ? Sun : Moon, label: boardDark ? "Light" : "Dark", onClick: toggleDark },
-              ].map((t) => (
+              ]
+                // Smart-pen (handwrite → AI graphs it) is hidden when AI is off.
+                .filter((t) => aiTools || t.label !== "Pen")
+                .map((t) => (
                 <button
                   key={t.label}
                   onClick={t.onClick}

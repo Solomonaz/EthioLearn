@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { getEntitlements } from "@/lib/entitlements";
 import { chatWithTutor } from "@/lib/ai-provider";
 
 /**
@@ -16,8 +17,11 @@ export async function POST(request: NextRequest) {
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  if (!(await isAiFeatureEnabled("aiTutor"))) {
+  if (!(await isAiFeatureEnabled("aiMathTools"))) {
     return NextResponse.json({ error: "AI is turned off" }, { status: 403 });
+  }
+  if (!(await getEntitlements(user)).mathTools) {
+    return NextResponse.json({ error: "The 3D geometry lab isn't included in your plan." }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
@@ -26,13 +30,21 @@ export async function POST(request: NextRequest) {
   if (!question) return NextResponse.json({ error: "Ask a question" }, { status: 400 });
   if (question.length > 500) return NextResponse.json({ error: "Please keep it short" }, { status: 400 });
 
-  const facts =
-    `The student is looking at a 3D solid in an interactive geometry explorer.\n` +
-    `Solid: ${ctx.name ?? "unknown"}.\n` +
-    `Vertices (V): ${ctx.V}, Edges (E): ${ctx.E}, Faces (F): ${ctx.F}.\n` +
-    `Surface area ≈ ${ctx.surfaceArea} square units, Volume ≈ ${ctx.volume} cubic units (abstract units).\n` +
-    (ctx.selectedFace ? `They have selected a face: a ${ctx.selectedFace.sides}-sided polygon of area ≈ ${ctx.selectedFace.area} u².\n` : "") +
-    (ctx.selectedVertex ? `They have selected a vertex at (${(ctx.selectedVertex as number[]).join(", ")}).\n` : "");
+  const hasCounts =
+    Number.isFinite(Number(ctx.V)) && Number.isFinite(Number(ctx.E)) && Number.isFinite(Number(ctx.F));
+  const isEmpty = !hasCounts && (ctx.name == null || ctx.name === "empty board");
+
+  const facts = isEmpty
+    ? `The student has an empty 3D geometry board (no solid on it yet) in an interactive explorer. ` +
+      `They can draw a shape, pick a preset, or build one from vertex/edge/face counts.\n`
+    : `The student is looking at a 3D solid in an interactive geometry explorer.\n` +
+      `Solid: ${ctx.name ?? "unknown"}.\n` +
+      (hasCounts ? `Vertices (V): ${ctx.V}, Edges (E): ${ctx.E}, Faces (F): ${ctx.F}.\n` : "") +
+      (ctx.surfaceArea != null
+        ? `Surface area ≈ ${ctx.surfaceArea} square units, Volume ≈ ${ctx.volume} cubic units (abstract units).\n`
+        : "") +
+      (ctx.selectedFace ? `They have selected a face: a ${ctx.selectedFace.sides}-sided polygon of area ≈ ${ctx.selectedFace.area} u².\n` : "") +
+      (ctx.selectedVertex ? `They have selected a vertex at (${(ctx.selectedVertex as number[]).join(", ")}).\n` : "");
 
   const instruction =
     facts +

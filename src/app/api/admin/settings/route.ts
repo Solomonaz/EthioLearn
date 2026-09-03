@@ -9,9 +9,16 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  // A super admin does not own a school — they oversee ALL schools from the
+  // Schools tab. This page shows them only the platform-wide controls, so we
+  // return no school and never bind them to one.
+  if (user.role === "SUPER_ADMIN") {
+    return NextResponse.json({ isSuperAdmin: true, school: null });
+  }
+
   let schoolId = user.schoolId;
 
-  // Self-healing: If admin has no schoolId, find or create one
+  // Self-healing: a school admin missing a schoolId gets attached to a school.
   if (!schoolId) {
     const existingSchool = await db.school.findFirst();
     if (existingSchool) {
@@ -28,13 +35,11 @@ export async function GET() {
       schoolId = newSchool.id;
     }
 
-    // Link the user to the school for future requests (skip for env_super_admin — no DB row)
-    if (user.id !== "env_super_admin") {
-      await db.user.update({
-        where: { id: user.id },
-        data: { schoolId },
-      });
-    }
+    // Link the school admin to the school for future requests.
+    await db.user.update({
+      where: { id: user.id },
+      data: { schoolId },
+    });
   }
 
   const school = await db.school.findUnique({
@@ -64,7 +69,15 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  // For env_super_admin, resolve schoolId the same way GET does
+  // Super admins don't edit a single school from here — they manage each school
+  // individually under the Schools tab. Guard the endpoint accordingly.
+  if (user.role === "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "Super admins manage schools from the Schools tab, not here." },
+      { status: 403 }
+    );
+  }
+
   let schoolId = user.schoolId;
   if (!schoolId) {
     const existingSchool = await db.school.findFirst();

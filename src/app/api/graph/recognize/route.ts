@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  if (!(await isAiFeatureEnabled("aiTutor"))) {
+  if (!(await isAiFeatureEnabled("aiMathTools"))) {
     return NextResponse.json({ error: "Turn on AI to recognise handwriting." }, { status: 403 });
   }
 

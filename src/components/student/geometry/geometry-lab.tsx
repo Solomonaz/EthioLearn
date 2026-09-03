@@ -8,7 +8,6 @@ import {
   RotateCcw,
   Grid3x3,
   Scissors,
-  MousePointerClick,
   Layers,
   Circle,
   Ban,
@@ -29,9 +28,13 @@ import {
   ChevronDown,
   Sun,
   Moon,
+  Pen,
+  Trash2,
+  GripHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import {
   SOLIDS,
   computeStats,
@@ -48,6 +51,7 @@ import {
   polygonFromPoints,
   inscribedSphere,
   type SolidDef,
+  type SolidStats,
   type Vec3,
 } from "./solids";
 
@@ -56,6 +60,8 @@ type Axis = "x" | "y" | "z";
 interface SliceObj { id: string; points: Vec3[]; color: string; }
 
 const SLICE_COLORS = ["#06b6d4", "#ef4444", "#f59e0b", "#22c55e", "#8b5cf6", "#ec4899", "#3b82f6", "#0ea5e9"];
+// Stand-in stats for the empty (no-solid) teaching board.
+const EMPTY_STATS: SolidStats = { V: 0, E: 0, F: 0, edges: [], faceAreas: [], surfaceArea: 0, volume: 0 };
 let sliceCounter = 0;
 const freshSliceId = () => `s${++sliceCounter}`;
 
@@ -139,7 +145,14 @@ function faceTriangles(def: SolidDef, face: number[]): number[] {
 }
 
 export function GeometryLab() {
-  const [solidId, setSolidId] = useState(SOLIDS[0].id);
+  // The AI helpers here (sketch→3D recognition and the "Ask AI" panel) are
+  // governed by the global "AI in Graphing & 3D Geometry" switch. Optimistic
+  // while loading so the common (AI-on) case never flashes the tools away.
+  const ent = useEntitlements();
+  const aiTools = ent.aiFeatures.aiMathTools;
+
+  // Empty by default: the board opens as a blank teaching board (no solid).
+  const [solidId, setSolidId] = useState<string>("");
   const [customSolids, setCustomSolids] = useState<SolidDef[]>([]);
   const [pickMode, setPickMode] = useState<PickMode>("face");
   const [wireframe, setWireframe] = useState(true);
@@ -175,26 +188,43 @@ export function GeometryLab() {
   const active = chats.find((c) => c.id === activeChat) ?? chats[0];
   const msgs = active?.msgs ?? [];
 
-  // Make-a-shape-with-AI panel (describe / sketch / upload → build a solid).
-  const [shapeOpen, setShapeOpen] = useState(false);
+  // Shape-from-AI state (describe / upload → build a solid). These now live
+  // inside Draw mode — the standalone "Make" panel was merged into Draw.
   const [shapePrompt, setShapePrompt] = useState("");
   const [shapeLoading, setShapeLoading] = useState(false);
   const [shapeMsg, setShapeMsg] = useState<string | null>(null);
-  const [hasInk, setHasInk] = useState(false);
-  const sketchRef = useRef<HTMLCanvasElement>(null);
-  const drawingRef = useRef(false);
-  const lastPt = useRef<{ x: number; y: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Full-board pen: draw a shape on the board → convert it to a 3D solid.
+  const [drawOn, setDrawOn] = useState(false);
+  const [drawTool, setDrawTool] = useState<"pen" | "eraser">("pen");
+  const [drawHasInk, setDrawHasInk] = useState(false);
+  const drawRef = useRef<HTMLCanvasElement>(null);
+  const bDraw = useRef(false);
+  const bLast = useRef<{ x: number; y: number } | null>(null);
+  // The draw toolbar is a movable card: the student can park it anywhere so it
+  // never covers the part of the board they're drawing on (null = default spot).
+  const [barPos, setBarPos] = useState<{ x: number; y: number } | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const barDrag = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
+
   const allSolids = useMemo(() => [...SOLIDS, ...customSolids], [customSolids]);
-  const def = useMemo(() => allSolids.find((s) => s.id === solidId) ?? SOLIDS[0], [allSolids, solidId]);
-  const stats = useMemo(() => computeStats(def), [def]);
+  // `def` is null when the board is empty (the default blank teaching board).
+  const def = useMemo(() => allSolids.find((s) => s.id === solidId) ?? null, [allSolids, solidId]);
+  const stats = useMemo(() => (def ? computeStats(def) : EMPTY_STATS), [def]);
   const extent = useMemo(() => {
+    if (!def) return 3;
     if (def.curved) return Math.max(def.curved.r, (def.curved.h || 0) / 2) + 0.2;
     return Math.max(1, ...def.vertices.flatMap((v) => v.map(Math.abs)));
   }, [def]);
-  const proj = useMemo(() => (selFace == null ? null : projectFace(def, selFace)), [def, selFace]);
-  const sphere = useMemo(() => (inscribed ? inscribedSphere(def) : null), [inscribed, def]);
+  // Guard against a stale selFace: when the solid changes to one with fewer
+  // faces (or a curved/empty solid with none), this memo runs during render
+  // before the reset effect can clear selFace, so bail out if it no longer exists.
+  const proj = useMemo(
+    () => (!def || selFace == null || !def.faces[selFace] ? null : projectFace(def, selFace)),
+    [def, selFace],
+  );
+  const sphere = useMemo(() => (inscribed && def ? inscribedSphere(def) : null), [inscribed, def]);
   const polygons = useMemo(
     () => slices.map((s) => ({ id: s.id, color: s.color, poly: polygonFromPoints(s.points, sphere) })),
     [slices, sphere],
@@ -205,6 +235,30 @@ export function GeometryLab() {
   const mountRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
+
+  // ── Drag the draw toolbar card around the board ───────────
+  const barDown = (e: React.PointerEvent) => {
+    const board = boardRef.current, card = barRef.current;
+    if (!board || !card) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const b = board.getBoundingClientRect(), c = card.getBoundingClientRect();
+    const ox = c.left - b.left, oy = c.top - b.top;
+    barDrag.current = { px: e.clientX, py: e.clientY, ox, oy };
+    setBarPos({ x: ox, y: oy }); // pin at the current spot (switch off the centred default)
+  };
+  const barMove = (e: React.PointerEvent) => {
+    const d = barDrag.current, board = boardRef.current, card = barRef.current;
+    if (!d || !board || !card) return;
+    const b = board.getBoundingClientRect();
+    const m = 8;
+    const nx = Math.max(m, Math.min(d.ox + (e.clientX - d.px), b.width - card.offsetWidth - m));
+    const ny = Math.max(m, Math.min(d.oy + (e.clientY - d.py), b.height - card.offsetHeight - m));
+    setBarPos({ x: nx, y: ny });
+  };
+  const barUp = (e: React.PointerEvent) => {
+    barDrag.current = null;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
   const pickModeRef = useRef(pickMode);
   pickModeRef.current = pickMode;
   const sliceRef = useRef({ on: sliceOn, active: activeSlice });
@@ -232,14 +286,19 @@ export function GeometryLab() {
   }, [chats]);
 
   // ── Build / rebuild the current solid into the scene ──────
-  const buildSolid = useCallback((eng: Engine, d: SolidDef, edgeColor: string) => {
+  const buildSolid = useCallback((eng: Engine, d: SolidDef | null, edgeColor: string) => {
     // clear previous
     eng.group.clear();
     eng.mesh?.geometry.dispose();
     (eng.mesh?.material as THREE.Material | undefined)?.dispose();
     eng.edges?.geometry.dispose();
+    eng.mesh = null;
+    eng.edges = null;
     eng.vertexMeshes = [];
     eng.triToFace = [];
+
+    // Empty board (the default teaching-board state): nothing to draw.
+    if (!d) { eng.def = null; return; }
 
     // Curved (smooth) solids use three's own geometry — no polygon faces/vertices.
     if (d.curved) {
@@ -367,7 +426,7 @@ export function GeometryLab() {
     };
     engineRef.current = eng;
 
-    buildSolid(eng, SOLIDS.find((s) => s.id === solidId) ?? SOLIDS[0], C.edge.light);
+    buildSolid(eng, def, dark ? C.edge.dark : C.edge.light);
 
     // click-vs-drag aware picking
     let downX = 0, downY = 0;
@@ -389,12 +448,13 @@ export function GeometryLab() {
     };
     const onUp = (e: PointerEvent) => {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // was a drag
-      if (!eng.def || eng.def.curved) return; // smooth solids have no pickable faces/vertices
+      if (!eng.def) return;
       const rect = renderer.domElement.getBoundingClientRect();
       const px = e.clientX - rect.left, py = e.clientY - rect.top;
 
       // Slice mode: tap ANYWHERE on the surface to drop a plane point (snap to a
-      // nearby corner for precision). Tap an existing point to remove it.
+      // nearby corner for precision). Tap an existing point to remove it. Works
+      // on smooth solids too (cylinder/cone/sphere) — the points define a plane.
       if (sliceRef.current.on) {
         const aid = sliceRef.current.active;
         if (!aid) return;
@@ -414,6 +474,8 @@ export function GeometryLab() {
         return;
       }
 
+      // Face/vertex picking below needs a polyhedron (smooth solids have none).
+      if (eng.def.curved) return;
       const mode = pickModeRef.current;
       if (mode === "off") return;
       if (mode === "vertex") {
@@ -517,7 +579,7 @@ export function GeometryLab() {
   useEffect(() => {
     const m = engineRef.current?.mesh?.material as THREE.MeshStandardMaterial | undefined;
     if (!m) return;
-    const seeThrough = (sliceOn || inscribed || slices.length > 0) && !def.curved;
+    const seeThrough = (sliceOn || inscribed || slices.length > 0) && !!def;
     m.opacity = seeThrough ? 0.24 : 0.82;
     m.depthWrite = !seeThrough;
   }, [sliceOn, inscribed, slices.length, def]);
@@ -544,7 +606,7 @@ export function GeometryLab() {
       (m.material as THREE.MeshBasicMaterial).color.set(sel ? C.vertexSel : C.vertex);
       m.scale.setScalar(sel ? 1.9 : 1);
     });
-    if (selFace != null) {
+    if (selFace != null && eng.def.faces[selFace]) {
       const tris = faceTriangles(eng.def, eng.def.faces[selFace]);
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(tris, 3));
@@ -672,7 +734,7 @@ export function GeometryLab() {
 
   const removeCustom = (id: string) => {
     setCustomSolids((cs) => cs.filter((s) => s.id !== id));
-    if (solidId === id) setSolidId(SOLIDS[0].id);
+    if (solidId === id) setSolidId(""); // back to the blank teaching board
   };
 
   const buildFromCounts = () => {
@@ -725,14 +787,16 @@ export function GeometryLab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: q,
-          context: {
-            name: def.name,
-            V: stats.V, E: stats.E, F: stats.F,
-            surfaceArea: round2(stats.surfaceArea),
-            volume: round2(stats.volume),
-            selectedFace: selFace != null && proj ? { sides: proj.sideCount, area: round2(stats.faceAreas[selFace]) } : null,
-            selectedVertex: selVertex != null ? def.vertices[selVertex].map(round2) : null,
-          },
+          context: def
+            ? {
+                name: def.name,
+                V: stats.V, E: stats.E, F: stats.F,
+                surfaceArea: round2(stats.surfaceArea),
+                volume: round2(stats.volume),
+                selectedFace: selFace != null && proj ? { sides: proj.sideCount, area: round2(stats.faceAreas[selFace]) } : null,
+                selectedVertex: selVertex != null ? def.vertices[selVertex].map(round2) : null,
+              }
+            : { name: "empty board" },
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -753,7 +817,7 @@ export function GeometryLab() {
     if (SOLIDS.some((s) => s.id === d.id)) setSolidId(d.id);
     else { setCustomSolids((cs) => [...cs, d]); setSolidId(d.id); }
     setShapeMsg(null);
-    setShapeOpen(false);
+    setDrawOn(false); // reveal the freshly built solid (any create path exits draw)
     return true;
   };
 
@@ -780,48 +844,6 @@ export function GeometryLab() {
   const describeShape = () => {
     const prompt = shapePrompt.trim();
     if (prompt) postShape({ prompt }, () => setShapePrompt(""));
-  };
-
-  // Sketch pad
-  const sketchXY = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const cv = sketchRef.current!;
-    const rect = cv.getBoundingClientRect();
-    return { x: (e.clientX - rect.left) * (cv.width / rect.width), y: (e.clientY - rect.top) * (cv.height / rect.height) };
-  };
-  const sketchDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    sketchRef.current?.setPointerCapture(e.pointerId);
-    drawingRef.current = true;
-    lastPt.current = sketchXY(e);
-  };
-  const sketchMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current) return;
-    const cv = sketchRef.current;
-    const ctx = cv?.getContext("2d");
-    if (!cv || !ctx) return;
-    const p = sketchXY(e);
-    const a = lastPt.current ?? p;
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 3;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    lastPt.current = p;
-    if (!hasInk) setHasInk(true);
-  };
-  const sketchUp = () => { drawingRef.current = false; lastPt.current = null; };
-  const clearSketch = () => {
-    const cv = sketchRef.current;
-    const ctx = cv?.getContext("2d");
-    if (cv && ctx) { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height); }
-    setHasInk(false);
-    setShapeMsg(null);
-  };
-  const recognizeSketch = () => {
-    const cv = sketchRef.current;
-    if (cv && hasInk) postShape({ image: cv.toDataURL("image/jpeg", 0.9), mimeType: "image/jpeg" });
   };
 
   // Upload a photo/drawing
@@ -856,14 +878,60 @@ export function GeometryLab() {
     finally { if (fileRef.current) fileRef.current.value = ""; }
   };
 
-  // Give the sketch pad a white ground whenever it opens.
+  // ── Full-board pen mode ───────────────────────────────────
   useEffect(() => {
-    if (!shapeOpen) return;
-    const cv = sketchRef.current;
+    if (!drawOn) return;
+    const cv = drawRef.current;
+    const board = boardRef.current;
+    if (!cv) return;
+    cv.width = board?.clientWidth || 900;
+    cv.height = board?.clientHeight || 560;
+    const ctx = cv.getContext("2d");
+    if (ctx) { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height); }
+    setDrawHasInk(false);
+    setShapeMsg(null);
+  }, [drawOn]);
+
+  const drawXY = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const cv = drawRef.current!;
+    const r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height) };
+  };
+  const drawDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    drawRef.current?.setPointerCapture(e.pointerId);
+    bDraw.current = true;
+    bLast.current = drawXY(e);
+  };
+  const drawMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!bDraw.current) return;
+    const cv = drawRef.current;
+    const ctx = cv?.getContext("2d");
+    if (!cv || !ctx) return;
+    const p = drawXY(e);
+    const a = bLast.current ?? p;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.strokeStyle = drawTool === "eraser" ? "#ffffff" : "#111827";
+    ctx.lineWidth = drawTool === "eraser" ? 26 : 3.5;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    bLast.current = p;
+    if (!drawHasInk) setDrawHasInk(true);
+  };
+  const drawUp = () => { bDraw.current = false; bLast.current = null; };
+  const clearDraw = () => {
+    const cv = drawRef.current;
     const ctx = cv?.getContext("2d");
     if (cv && ctx) { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height); }
-    setHasInk(false);
-  }, [shapeOpen]);
+    setDrawHasInk(false);
+    setShapeMsg(null);
+  };
+  const convertDraw = () => {
+    const cv = drawRef.current;
+    if (cv && drawHasInk) postShape({ image: cv.toDataURL("image/jpeg", 0.92), mimeType: "image/jpeg" }, () => setDrawOn(false));
+  };
 
   const euler = stats.V - stats.E + stats.F;
 
@@ -876,8 +944,14 @@ export function GeometryLab() {
     { icon: RotateCcw, label: "Reset", onClick: resetView, active: false },
     { icon: isFull ? Minimize : Maximize, label: isFull ? "Window" : "Full", onClick: toggleFull, active: false },
     { icon: dark ? Sun : Moon, label: dark ? "Light" : "Dark", onClick: () => setDark((d) => !d), active: false },
-    { icon: Wand2, label: "Make", onClick: () => { setShapeOpen((o) => !o); setAiOpen(false); }, active: shapeOpen },
-    { icon: Sparkles, label: "Ask AI", onClick: () => { setAiOpen((o) => !o); setShapeOpen(false); }, active: aiOpen },
+    // Sketch→3D ("Draw") and the "Ask AI" panel both need AI — hidden when the
+    // global AI switch (or its Graphing & 3D Geometry sub-switch) is off.
+    ...(aiTools
+      ? [
+          { icon: Pen, label: "Draw", onClick: () => { setDrawOn((o) => !o); setAiOpen(false); setMenuOpen(false); }, active: drawOn },
+          { icon: Sparkles, label: "Ask AI", onClick: () => { setAiOpen((o) => !o); setDrawOn(false); }, active: aiOpen },
+        ]
+      : []),
   ];
 
   return (
@@ -894,18 +968,28 @@ export function GeometryLab() {
           onClick={() => setShapesOpen((o) => !o)}
           className="inline-flex items-center gap-1.5 rounded-2xl border border-border bg-surface/95 px-3 py-2 text-sm font-semibold text-text-primary shadow-lg backdrop-blur transition hover:border-primary/40"
         >
-          <Box className="h-4 w-4 text-primary" /> {def.name}
+          {drawOn ? <Pen className="h-4 w-4 text-primary" /> : <Box className="h-4 w-4 text-primary" />}
+          {drawOn ? "Drawing" : def ? def.name : "Empty board"}
           <ChevronDown className={cn("h-4 w-4 text-text-muted transition", shapesOpen && "rotate-180")} />
         </button>
         {shapesOpen && (
           <div className="mt-1.5 flex w-64 flex-wrap items-center gap-1.5 rounded-2xl border border-border bg-surface/95 p-2 shadow-xl backdrop-blur">
+            <button
+              onClick={() => { setSolidId(""); setShapesOpen(false); setDrawOn(false); }}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition",
+                def == null && !drawOn ? "bg-primary text-white" : "bg-background text-text-secondary ring-1 ring-border hover:text-text-primary",
+              )}
+            >
+              <Eraser className="h-3.5 w-3.5" /> Empty board
+            </button>
             {allSolids.map((s) => {
               const custom = customSolids.some((c) => c.id === s.id);
-              const on = solidId === s.id;
+              const on = !drawOn && solidId === s.id;
               return (
                 <div key={s.id} className={cn("flex items-center rounded-xl", on ? "bg-primary" : "bg-background ring-1 ring-border")}>
                   <button
-                    onClick={() => { setSolidId(s.id); setShapesOpen(false); }}
+                    onClick={() => { setSolidId(s.id); setShapesOpen(false); setDrawOn(false); }}
                     className={cn("inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition", on ? "text-white" : "text-text-secondary hover:text-text-primary")}
                   >
                     <Box className="h-3.5 w-3.5" /> {s.name}
@@ -1081,9 +1165,16 @@ export function GeometryLab() {
       {/* Info panel (bottom-left) */}
       <div className="absolute bottom-3 left-3 z-20 w-60 rounded-2xl border border-border bg-surface/95 p-3 text-xs shadow-lg backdrop-blur">
         <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-text-primary">
-          <Box className="h-4 w-4 text-primary" /> {def.name}
+          {drawOn ? <Pen className="h-4 w-4 text-primary" /> : <Box className="h-4 w-4 text-primary" />}
+          {drawOn ? "Drawing" : def ? def.name : "Teaching board"}
         </div>
-        <p className="mb-2 leading-relaxed text-text-secondary">{def.blurb}</p>
+        <p className="mb-2 leading-relaxed text-text-secondary">
+          {drawOn
+            ? "Draw, describe, or upload a shape — it becomes a full 3D solid with every tool (slice, inscribe, faces…)."
+            : def
+              ? def.blurb
+              : "A blank board — draw a shape, pick one, make one with AI, or type V, E and F below to build a solid."}
+        </p>
         <div className="grid grid-cols-3 gap-1.5 text-center">
           {(["V", "E", "F"] as const).map((k) => (
             <div key={k} className="rounded-lg bg-background py-1 ring-1 ring-border">
@@ -1108,12 +1199,14 @@ export function GeometryLab() {
           </button>
         )}
         {buildMsg && <p className="mt-1 text-[10px] leading-snug text-error">{buildMsg}</p>}
-        <div className="mt-2 space-y-0.5 border-t border-border pt-2 text-text-secondary">
-          <Row k="Euler (V−E+F)" v={`${euler}`} good={euler === 2} />
-          <Row k="Surface area" v={`${round2(stats.surfaceArea)} u²`} />
-          <Row k="Volume" v={`${round2(stats.volume)} u³`} />
-        </div>
-        {selFace != null && proj && (
+        {def && (
+          <div className="mt-2 space-y-0.5 border-t border-border pt-2 text-text-secondary">
+            <Row k="Euler (V−E+F)" v={`${euler}`} good={euler === 2} />
+            <Row k="Surface area" v={`${round2(stats.surfaceArea)} u²`} />
+            <Row k="Volume" v={`${round2(stats.volume)} u³`} />
+          </div>
+        )}
+        {def && selFace != null && proj && (
           <div className="mt-2 space-y-0.5 border-t border-border pt-2">
             <div className="font-semibold text-text-primary">Selected face</div>
             <Row k="Shape" v={`${proj.sideCount}-gon`} />
@@ -1121,7 +1214,7 @@ export function GeometryLab() {
             <Row k="Sides" v={proj.sides.map((s) => round2(s)).join(", ")} />
           </div>
         )}
-        {selVertex != null && (
+        {def && selVertex != null && (
           <div className="mt-2 space-y-0.5 border-t border-border pt-2">
             <div className="font-semibold text-text-primary">Selected vertex</div>
             <Row k="Position" v={`(${def.vertices[selVertex].map((c) => round2(c)).join(", ")})`} />
@@ -1129,15 +1222,9 @@ export function GeometryLab() {
         )}
       </div>
 
-      {/* Hint (curved solids have no action pill) */}
-      {!aiOpen && !shapeOpen && def.curved && (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-text-primary/70 px-2.5 py-1 text-[11px] font-medium text-white">
-          <MousePointerClick className="h-3.5 w-3.5" /> Drag to orbit · scroll to zoom
-        </div>
-      )}
-
-      {/* Contextual action bar (below the shape) */}
-      {!aiOpen && !shapeOpen && !def.curved && (
+      {/* Contextual action bar (below the shape) — shown for ANY solid, curved
+          included: Slice / Inscribe / Shade / Clear all work on smooth solids too. */}
+      {!aiOpen && !drawOn && def && (
         <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-surface/95 px-1.5 py-1 shadow-lg backdrop-blur">
           <PillBtn active={sliceOn} onClick={toggleSlice} title="Tap points anywhere on the shape to cut a slice"><Scissors className="h-4 w-4" /> Slice</PillBtn>
           <PillBtn active={inscribed} onClick={() => setInscribed((v) => !v)} title="Inscribe a sphere inside"><Circle className="h-4 w-4" /> Inscribe</PillBtn>
@@ -1163,7 +1250,7 @@ export function GeometryLab() {
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <div className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-text-primary">
               <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-              <span className="truncate">Ask AI · {def.name}</span>
+              <span className="truncate">Ask AI · {def ? def.name : "Teaching board"}</span>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <button onClick={newChat} title="Start a new chat" className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-2 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20">
@@ -1238,69 +1325,6 @@ export function GeometryLab() {
         </div>
       )}
 
-      {/* Make a solid with AI — describe, sketch, or upload a photo */}
-      {shapeOpen && (
-        <div className="absolute bottom-3 left-1/2 z-50 w-[min(380px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-border bg-surface p-3 shadow-2xl">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-sm font-bold text-text-primary">
-              <Wand2 className="h-4 w-4 text-primary" /> Make a 3D shape
-            </div>
-            <button onClick={() => setShapeOpen(false)} title="Close"><X className="h-4 w-4 text-text-muted" /></button>
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              value={shapePrompt}
-              onChange={(e) => setShapePrompt(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && describeShape()}
-              placeholder="Describe it — e.g. a hexagonal prism, a cone…"
-              maxLength={300}
-              className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
-            <button
-              onClick={describeShape}
-              disabled={shapeLoading || !shapePrompt.trim()}
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {shapeLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <ArrowRight className="h-4 w-4" />}
-            </button>
-          </div>
-
-          <div className="my-2 flex items-center gap-2 text-[11px] text-text-muted">
-            <span className="h-px flex-1 bg-border" /> or draw / upload it <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <canvas
-            ref={sketchRef}
-            width={320}
-            height={180}
-            onPointerDown={sketchDown}
-            onPointerMove={sketchMove}
-            onPointerUp={sketchUp}
-            onPointerLeave={sketchUp}
-            className="w-full cursor-crosshair touch-none rounded-lg border border-border bg-white"
-          />
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <button onClick={clearSketch} className="inline-flex items-center gap-1 rounded-lg bg-background px-2.5 py-1.5 text-xs font-semibold text-text-secondary ring-1 ring-border transition hover:bg-border/40">
-              <Eraser className="h-3.5 w-3.5" /> Clear
-            </button>
-            <button
-              onClick={recognizeSketch}
-              disabled={shapeLoading || !hasInk}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-secondary-dark px-3 py-1.5 text-xs font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {shapeLoading ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Wand2 className="h-3.5 w-3.5" />}
-              Recognise sketch
-            </button>
-            <button onClick={() => fileRef.current?.click()} title="Upload a photo/drawing" className="inline-flex items-center gap-1 rounded-lg bg-background px-2.5 py-1.5 text-xs font-semibold text-text-secondary ring-1 ring-border transition hover:bg-border/40">
-              <Camera className="h-3.5 w-3.5" /> Upload
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onFilePick(e.target.files?.[0])} />
-          </div>
-          {shapeMsg && <p className="mt-1.5 text-[11px] leading-snug text-error">{shapeMsg}</p>}
-        </div>
-      )}
-
       {/* Tool dot — tap to expand every tool (keeps the board clean) */}
       <div className="absolute bottom-3 right-3 z-40 flex flex-col items-end gap-2">
         {menuOpen && (
@@ -1332,6 +1356,139 @@ export function GeometryLab() {
           {menuOpen ? <X className="h-6 w-6" /> : <LayoutGrid className="h-6 w-6" />}
         </button>
       </div>
+
+      {/* Draw mode — the SAME board becomes a white sketch surface. The canvas
+          sits below the board chrome (z-10), so the shape picker, tool menu and
+          info panel stay on top and every board feature is reachable while
+          drawing. The pen controls take the same bottom slot the shape toolbar
+          uses, so the board just swaps its contextual toolbar per mode. */}
+      {drawOn && (
+        <>
+          <canvas
+            ref={drawRef}
+            onPointerDown={drawDown}
+            onPointerMove={drawMove}
+            onPointerUp={drawUp}
+            onPointerLeave={drawUp}
+            className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none bg-white"
+          />
+          {!drawHasInk && (
+            <div className="pointer-events-none absolute left-1/2 top-[36%] z-10 flex w-72 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2.5 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Pen className="h-6 w-6" />
+              </span>
+              <p className="text-sm font-semibold text-slate-500">Draw your shape here</p>
+              <p className="text-xs leading-relaxed text-slate-400">
+                a cube, pyramid, prism… then tap <span className="font-semibold text-slate-600">Convert to 3D</span> — or describe / upload it below
+              </p>
+            </div>
+          )}
+
+          {/* Draw toolbar — a MOVABLE card: drag the grip to park it anywhere so
+              it never covers the part of the board you're drawing on. */}
+          <div
+            ref={barRef}
+            className={cn(
+              "absolute z-30 w-[min(560px,calc(100%-24px))] rounded-2xl border border-border bg-surface/95 shadow-xl backdrop-blur",
+              barPos ? "" : "bottom-4 left-1/2 -translate-x-1/2",
+            )}
+            style={barPos ? { left: barPos.x, top: barPos.y } : undefined}
+          >
+            <div
+              onPointerDown={barDown}
+              onPointerMove={barMove}
+              onPointerUp={barUp}
+              title="Drag to move this toolbar"
+              className="flex touch-none cursor-move items-center justify-center rounded-t-2xl py-1 text-text-muted transition hover:text-text-secondary"
+            >
+              <GripHorizontal className="h-4 w-4" />
+            </div>
+            <div className="px-2 pb-2">
+            {/* sketch tools + the primary "make it 3D" action */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="flex items-center rounded-xl bg-background p-1 ring-1 ring-border">
+                {([["pen", Pen, "Pen"], ["eraser", Eraser, "Eraser"]] as const).map(([tool, Icon, label]) => (
+                  <button
+                    key={tool}
+                    onClick={() => setDrawTool(tool)}
+                    title={label}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition",
+                      drawTool === tool ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" /> {label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={clearDraw}
+                title="Clear the drawing"
+                aria-label="Clear the drawing"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-text-muted ring-1 ring-border transition hover:bg-border/40 hover:text-text-primary"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={convertDraw}
+                disabled={shapeLoading || !drawHasInk}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {shapeLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Wand2 className="h-4 w-4" />}
+                Convert to 3D
+              </button>
+              <button
+                onClick={() => setDrawOn(false)}
+                title="Exit draw"
+                aria-label="Exit draw"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-text-muted transition hover:bg-border/40 hover:text-text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="my-2 flex items-center gap-2">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">or make it from</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            {/* describe it / upload a photo (the old "Make" options, now here) */}
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 items-center gap-2 rounded-xl bg-background px-3 ring-1 ring-border transition focus-within:ring-2 focus-within:ring-primary/30">
+                <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                <input
+                  value={shapePrompt}
+                  onChange={(e) => setShapePrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && describeShape()}
+                  placeholder="Describe a shape — e.g. a hexagonal prism"
+                  maxLength={300}
+                  className="min-w-0 flex-1 bg-transparent py-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                />
+                <button
+                  onClick={describeShape}
+                  disabled={shapeLoading || !shapePrompt.trim()}
+                  title="Build from your description"
+                  aria-label="Build from description"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary p-1.5 text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {shapeLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <ArrowRight className="h-4 w-4" />}
+                </button>
+              </div>
+              <button
+                onClick={() => fileRef.current?.click()}
+                title="Upload a photo or drawing of a shape"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-text-secondary ring-1 ring-border transition hover:bg-border/40 hover:text-text-primary"
+              >
+                <Camera className="h-4 w-4" /> Upload
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onFilePick(e.target.files?.[0])} />
+            </div>
+            {shapeMsg && <p className="mt-2 px-1 text-center text-[11px] leading-snug text-error">{shapeMsg}</p>}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

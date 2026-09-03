@@ -203,6 +203,7 @@ export interface PlanInputData {
   allowMultiplayer: boolean;
   allowRewards: boolean;
   allowLeaderboard: boolean;
+  allowMathTools: boolean;
 }
 
 /**
@@ -246,6 +247,7 @@ export function parsePlanInput(
   const allowMultiplayer = body.allowMultiplayer === undefined ? true : Boolean(body.allowMultiplayer);
   const allowRewards = body.allowRewards === undefined ? true : Boolean(body.allowRewards);
   const allowLeaderboard = body.allowLeaderboard === undefined ? true : Boolean(body.allowLeaderboard);
+  const allowMathTools = body.allowMathTools === undefined ? true : Boolean(body.allowMathTools);
   const features = Array.isArray(body.features)
     ? body.features.map((f) => String(f).trim()).filter(Boolean)
     : [];
@@ -301,6 +303,7 @@ export function parsePlanInput(
       allowMultiplayer,
       allowRewards,
       allowLeaderboard,
+      allowMathTools,
     },
     tiers,
   };

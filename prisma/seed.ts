@@ -1132,13 +1132,13 @@ async function main() {
   await upsertStudentPlan("Free", {
     description: "Solo quizzes and solo games. No AI features.",
     price: 0, isActive: true, sortOrder: 0,
-    allowAi: false, allowMultiplayer: false, allowRewards: false, allowLeaderboard: false,
+    allowAi: false, allowMultiplayer: false, allowRewards: false, allowLeaderboard: false, allowMathTools: false,
     features: ["Solo quizzes from the question bank", "Daily challenges", "Solo games", "Progress tracking"],
   });
   await upsertStudentPlan("Full Access", {
-    description: "Everything: AI tutor, AI videos, AI quizzes, battle mode, rewards, and leaderboard.",
+    description: "Everything: AI tutor, AI videos, AI quizzes, battle mode, rewards, leaderboard, graphing, and 3D geometry.",
     price: 99, isActive: true, sortOrder: 1,
-    allowAi: true, allowMultiplayer: true, allowRewards: true, allowLeaderboard: true,
+    allowAi: true, allowMultiplayer: true, allowRewards: true, allowLeaderboard: true, allowMathTools: true,
     features: [
       "Everything in Free",
       "AI Tutor & AI video tutorials",
@@ -1148,6 +1148,7 @@ async function main() {
       "Battle mode (multiplayer)",
       "Rewards & redemption",
       "Leaderboard & rankings",
+      "Graphing calculator & 3D geometry lab",
     ],
   });
   console.log(`  Student plans: Free, Full Access`);
@@ -1353,6 +1354,7 @@ async function main() {
     for (let i = 0; i < numQuizzes; i++) {
       const chapter = allChapters[Math.floor(Math.random() * allChapters.length)];
       const questions = chapter.questions.slice(0, Math.floor(Math.random() * 5) + 3); // 3-7 questions
+      if (questions.length === 0) continue; // skip empty chapters (avoids score = n/0 = Infinity)
       const correctCount = Math.floor(Math.random() * questions.length) + 1;
       const score = Math.round((correctCount / questions.length) * 100);
       const pointsPerQ = 10 + Math.floor(Math.random() * 20);

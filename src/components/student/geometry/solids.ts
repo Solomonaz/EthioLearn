@@ -422,9 +422,18 @@ export function planeFromPoints(a: Vec3, b: Vec3, c: Vec3): { p0: Vec3; n: Vec3 
   return { p0: a, n: norm(nn) };
 }
 
-/** Largest sphere that fits inside a convex solid (centre = vertex centroid). */
+/** Largest sphere that fits inside a solid (centre = vertex centroid for
+ *  polyhedra; the exact insphere for smooth solids). */
 export function inscribedSphere(def: SolidDef): { center: Vec3; r: number } | null {
-  if (def.curved || def.vertices.length === 0) return null;
+  if (def.curved) {
+    const { type, r, h } = def.curved;
+    if (type === "sphere") return { center: [0, 0, 0], r: r * 0.995 }; // concentric
+    if (type === "cylinder") return { center: [0, 0, 0], r: Math.min(r, h / 2) };
+    // cone (apex up, base at y=-h/2): insphere = incircle of the axial triangle.
+    const rr = (r * h) / (Math.hypot(r, h) + r);
+    return { center: [0, -h / 2 + rr, 0], r: rr };
+  }
+  if (def.vertices.length === 0) return null;
   const center: Vec3 = [0, 0, 0];
   for (const v of def.vertices) { center[0] += v[0]; center[1] += v[1]; center[2] += v[2]; }
   center[0] /= def.vertices.length; center[1] /= def.vertices.length; center[2] /= def.vertices.length;
