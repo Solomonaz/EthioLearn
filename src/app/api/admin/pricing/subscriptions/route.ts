@@ -156,6 +156,7 @@ export async function POST(req: NextRequest) {
         status,
         startDate,
         endDate,
+        billingInterval: plan.billingInterval,
         amount: priced.amount,
         currency: plan.currency,
         studentCountSnapshot,

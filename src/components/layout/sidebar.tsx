@@ -31,6 +31,7 @@ import {
   Puzzle,
   LineChart,
   Boxes,
+  Receipt,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -103,6 +104,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "questions",  href: "/admin/questions",    icon: HelpCircle },
     { labelKey: "rewards",    href: "/admin/rewards",      icon: Gift },
     { labelKey: "pricing",    href: "/admin/pricing",      icon: CreditCard },
+    { labelKey: "payments",   href: "/admin/payments",     icon: Receipt },
     { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
     { labelKey: "settings",   href: "/admin/settings",     icon: Settings },
   ];

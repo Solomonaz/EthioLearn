@@ -59,6 +59,35 @@ export async function notifyRewardApproved(
   );
 }
 
+export async function notifyPaymentApproved(
+  userId: string,
+  planName: string,
+  endsAt: Date | null,
+) {
+  const until = endsAt ? ` It's active until ${endsAt.toLocaleDateString()}.` : "";
+  return createNotification(
+    userId,
+    "payment",
+    "Payment approved 🎉",
+    `Your payment was approved and your ${planName} plan is now active.${until}`,
+    { planName },
+  );
+}
+
+export async function notifyPaymentRejected(
+  userId: string,
+  planName: string,
+  reason?: string | null,
+) {
+  return createNotification(
+    userId,
+    "payment",
+    "Payment could not be verified",
+    `Your payment for the ${planName} plan wasn't approved.${reason ? ` Reason: ${reason}` : ""} You can submit a new payment.`,
+    { planName, reason: reason ?? null },
+  );
+}
+
 export async function notifyBattleInvite(
   userId: string,
   roomCode: string,

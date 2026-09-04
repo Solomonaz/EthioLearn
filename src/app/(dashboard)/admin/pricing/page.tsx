@@ -19,7 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/sonner";
-import { formatMoney, billingIntervalLabel, type BillingInterval } from "@/lib/pricing";
+import {
+  formatMoney,
+  billingIntervalLabel,
+  studentIntervalPrice,
+  type BillingInterval,
+} from "@/lib/pricing";
 
 // ── Types ──────────────────────────────────────────────────
 interface Tier {
@@ -46,6 +51,8 @@ interface Plan {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  quarterlyDiscountPct: number;
+  yearlyDiscountPct: number;
   tiers: Tier[];
   _count?: { subscriptions: number };
 }
@@ -78,6 +85,8 @@ interface EditorState {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  quarterlyDiscountPct: string;
+  yearlyDiscountPct: string;
   tiers: TierRow[];
 }
 
@@ -99,6 +108,8 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
     allowRewards: true,
     allowLeaderboard: true,
     allowMathTools: true,
+    quarterlyDiscountPct: "0",
+    yearlyDiscountPct: "0",
     tiers: [{ minStudents: "1", maxStudents: "", price: "" }],
   };
 }
@@ -121,6 +132,8 @@ function editorFromPlan(plan: Plan): EditorState {
     allowRewards: plan.allowRewards ?? true,
     allowLeaderboard: plan.allowLeaderboard ?? true,
     allowMathTools: plan.allowMathTools ?? true,
+    quarterlyDiscountPct: String(plan.quarterlyDiscountPct ?? 0),
+    yearlyDiscountPct: String(plan.yearlyDiscountPct ?? 0),
     tiers:
       plan.tiers.length > 0
         ? plan.tiers.map((t) => ({
@@ -183,6 +196,8 @@ export default function AdminPricingPage() {
       allowRewards: editor.allowRewards,
       allowLeaderboard: editor.allowLeaderboard,
       allowMathTools: editor.allowMathTools,
+      quarterlyDiscountPct: Number(editor.quarterlyDiscountPct) || 0,
+      yearlyDiscountPct: Number(editor.yearlyDiscountPct) || 0,
       features: editor.features
         .split(",")
         .map((f) => f.trim())
@@ -379,6 +394,36 @@ function PlanSection({
                     <p className="mt-0.5 text-sm text-text-secondary">{plan.description}</p>
                   )}
                   <p className="mt-1 text-sm text-text-primary">{priceSummary(plan)}</p>
+                  {plan.audience === "STUDENT" &&
+                    (plan.quarterlyDiscountPct > 0 || plan.yearlyDiscountPct > 0) && (
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        {plan.quarterlyDiscountPct > 0 && (
+                          <>
+                            3-month{" "}
+                            <span className="font-semibold text-text-primary">
+                              {formatMoney(
+                                studentIntervalPrice(plan.price, "QUARTERLY", plan.quarterlyDiscountPct, plan.yearlyDiscountPct).total,
+                                plan.currency,
+                              )}
+                            </span>{" "}
+                            <span className="text-success">(−{plan.quarterlyDiscountPct}%)</span>
+                          </>
+                        )}
+                        {plan.quarterlyDiscountPct > 0 && plan.yearlyDiscountPct > 0 && " · "}
+                        {plan.yearlyDiscountPct > 0 && (
+                          <>
+                            Yearly{" "}
+                            <span className="font-semibold text-text-primary">
+                              {formatMoney(
+                                studentIntervalPrice(plan.price, "YEARLY", plan.quarterlyDiscountPct, plan.yearlyDiscountPct).total,
+                                plan.currency,
+                              )}
+                            </span>{" "}
+                            <span className="text-success">(−{plan.yearlyDiscountPct}%)</span>
+                          </>
+                        )}
+                      </p>
+                    )}
                   {plan.audience === "STUDENT" && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
                       <span className={plan.allowAi ? "text-success" : "text-text-muted"}>
@@ -503,20 +548,28 @@ function PlanEditor({
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Billing Interval">
-            <select
-              className={selectClass}
-              value={editor.billingInterval}
-              onChange={(e) => set({ billingInterval: e.target.value as BillingInterval })}
-              disabled={saving}
-            >
-              {INTERVAL_OPTIONS.map((i) => (
-                <option key={i} value={i}>
-                  {i.charAt(0) + i.slice(1).toLowerCase().replace("_", " ")}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {isSchool ? (
+            <Field label="Billing Interval">
+              <select
+                className={selectClass}
+                value={editor.billingInterval}
+                onChange={(e) => set({ billingInterval: e.target.value as BillingInterval })}
+                disabled={saving}
+              >
+                {INTERVAL_OPTIONS.map((i) => (
+                  <option key={i} value={i}>
+                    {i.charAt(0) + i.slice(1).toLowerCase().replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <Field label="Billing">
+              <div className="rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm text-text-secondary">
+                Priced monthly — students can also pay 3-monthly or yearly at the discounts below.
+              </div>
+            </Field>
+          )}
           <Field label="Trial Days">
             <Input type="number" min={0} value={editor.trialDays} onChange={(e) => set({ trialDays: e.target.value })} disabled={saving} />
           </Field>
@@ -551,11 +604,20 @@ function PlanEditor({
         {/* Price input for FLAT / PER_STUDENT */}
         {editor.pricingModel !== "TIERED" && (
           <Field
-            label={editor.pricingModel === "PER_STUDENT" ? `Price per student (${editor.currency})` : `Price (${editor.currency})`}
+            label={
+              editor.pricingModel === "PER_STUDENT"
+                ? `Price per student (${editor.currency})`
+                : isSchool
+                  ? `Price (${editor.currency})`
+                  : `Monthly price (${editor.currency})`
+            }
           >
             <Input type="number" min={0} step="0.01" value={editor.price} onChange={(e) => set({ price: e.target.value })} disabled={saving} placeholder="0" />
           </Field>
         )}
+
+        {/* Multi-cycle discounts + live preview — STUDENT plans only. */}
+        {!isSchool && <CycleDiscounts editor={editor} set={set} saving={saving} />}
 
         {/* Tier editor for TIERED */}
         {editor.pricingModel === "TIERED" && (
@@ -688,6 +750,81 @@ function PlanEditor({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Student-plan multi-cycle discount editor + live price preview.
+function CycleDiscounts({
+  editor,
+  set,
+  saving,
+}: {
+  editor: EditorState;
+  set: (patch: Partial<EditorState>) => void;
+  saving: boolean;
+}) {
+  const monthly = Number(editor.price) || 0;
+  const q = Number(editor.quarterlyDiscountPct) || 0;
+  const y = Number(editor.yearlyDiscountPct) || 0;
+  const cur = editor.currency || "ETB";
+  const rows: { label: string; interval: BillingInterval }[] = [
+    { label: "Monthly", interval: "MONTHLY" },
+    { label: "Every 3 months", interval: "QUARTERLY" },
+    { label: "Yearly", interval: "YEARLY" },
+  ];
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-background/40 p-3">
+      <p className="text-xs font-semibold uppercase text-text-muted">Longer-cycle discounts</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="3-month discount (%)">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={editor.quarterlyDiscountPct}
+            onChange={(e) => set({ quarterlyDiscountPct: e.target.value })}
+            disabled={saving}
+            placeholder="0"
+          />
+        </Field>
+        <Field label="Yearly discount (%)">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={editor.yearlyDiscountPct}
+            onChange={(e) => set({ yearlyDiscountPct: e.target.value })}
+            disabled={saving}
+            placeholder="0"
+          />
+        </Field>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold uppercase text-text-muted">What students pay</p>
+        {rows.map((r) => {
+          const p = studentIntervalPrice(monthly, r.interval, q, y);
+          return (
+            <div key={r.interval} className="flex items-center justify-between gap-2 text-sm">
+              <span className="text-text-secondary">{r.label}</span>
+              <span className="flex items-center gap-2">
+                {p.discountPct > 0 && (
+                  <span className="text-xs text-text-muted line-through">
+                    {formatMoney(p.undiscounted, cur)}
+                  </span>
+                )}
+                <span className="font-semibold text-text-primary">{formatMoney(p.total, cur)}</span>
+                {p.discountPct > 0 && (
+                  <span className="rounded bg-success/10 px-1.5 py-0.5 text-xs font-semibold text-success">
+                    Save {p.discountPct}%
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

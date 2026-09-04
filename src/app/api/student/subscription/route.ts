@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { computeCurrentPeriodEnd, intervalRecurs } from "@/lib/pricing";
+import {
+  computeCurrentPeriodEnd,
+  intervalRecurs,
+  studentIntervalPrice,
+  STUDENT_BILLING_INTERVALS,
+  type StudentBillingInterval,
+} from "@/lib/pricing";
 
 // Statuses that count as a live/current subscription.
 const LIVE_STATUSES = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
@@ -89,7 +95,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  let body: { planId?: string };
+  let body: { planId?: string; billingInterval?: string };
   try {
     body = await req.json();
   } catch {
@@ -99,42 +105,76 @@ export async function POST(req: Request) {
   const planId = typeof body.planId === "string" ? body.planId : "";
   if (!planId) return NextResponse.json({ error: "planId is required" }, { status: 400 });
 
+  // The chosen billing cycle (monthly / 3-month / yearly). Defaults to monthly.
+  const billingInterval: StudentBillingInterval =
+    STUDENT_BILLING_INTERVALS.includes(body.billingInterval as StudentBillingInterval)
+      ? (body.billingInterval as StudentBillingInterval)
+      : "MONTHLY";
+
   const plan = await db.pricingPlan.findUnique({ where: { id: planId } });
   if (!plan || plan.audience !== "STUDENT" || !plan.isActive) {
     return NextResponse.json({ error: "That plan is not available" }, { status: 404 });
   }
 
+  // Price for the chosen cycle (base monthly price × months, less the cycle's
+  // configured discount).
+  const priced = studentIntervalPrice(
+    plan.price,
+    billingInterval,
+    plan.quarterlyDiscountPct,
+    plan.yearlyDiscountPct,
+  );
+
+  // Only the free plan self-activates here. A paid plan must be paid for and
+  // approved by an admin — the student submits proof via /api/student/payments.
+  if (priced.total > 0) {
+    return NextResponse.json(
+      { error: "This plan requires payment. Submit your payment for approval to activate it." },
+      { status: 402 },
+    );
+  }
+
+  // A paid plan is a FIXED TERM: it runs until the end of the chosen cycle, then
+  // lapses (the GET above expires it) and the student drops back to Free. A free
+  // plan is indefinite (no end date); a trial ends when the trial does.
   const startDate = new Date();
   let status: "ACTIVE" | "TRIAL" = "ACTIVE";
   let endDate: Date | null = null;
   if (plan.trialDays > 0) {
     status = "TRIAL";
     endDate = new Date(startDate.getTime() + plan.trialDays * 24 * 60 * 60 * 1000);
+  } else if (priced.total > 0) {
+    endDate = computeCurrentPeriodEnd(startDate, billingInterval);
+  }
+
+  // Lock: while a PAID plan is still live, the student can't switch plans/cycles
+  // or start a new one — they're committed until it ends. (Choosing Free, or
+  // subscribing again once the paid term has lapsed, is fine.)
+  const existingLive = await db.subscription.findFirst({
+    where: {
+      studentId: user.id,
+      status: { in: [...LIVE_STATUSES] },
+      OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+    },
+    orderBy: { createdAt: "desc" },
+    include: { plan: { select: { name: true } } },
+  });
+  if (existingLive && (existingLive.amount ?? 0) > 0) {
+    const until = existingLive.endDate
+      ? new Date(existingLive.endDate).toLocaleDateString()
+      : null;
+    return NextResponse.json(
+      {
+        error: `Your ${existingLive.plan.name} plan is active${until ? ` until ${until}` : ""}. You can change plans after it ends.`,
+      },
+      { status: 409 },
+    );
   }
 
   const planInclude = { plan: { include: { tiers: { orderBy: { minStudents: "asc" as const } } } } };
 
   const subscription = await db.$transaction(async (tx) => {
-    // Re-selecting the plan you're already on clears any pending cancellation
-    // (i.e. "Resume subscription") instead of starting a brand-new one.
-    const currentLive = await tx.subscription.findFirst({
-      where: {
-        studentId: user.id,
-        status: { in: [...LIVE_STATUSES] },
-        OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (currentLive && currentLive.planId === plan.id) {
-      return tx.subscription.update({
-        where: { id: currentLive.id },
-        data: { cancelAtPeriodEnd: false, status: "ACTIVE", endDate: null },
-        include: planInclude,
-      });
-    }
-
-    // Switching to a different plan → end current live subscriptions first.
+    // End any current (free) live subscription, then start the chosen one.
     await tx.subscription.updateMany({
       where: { studentId: user.id, status: { in: [...LIVE_STATUSES] } },
       data: { status: "EXPIRED", endDate: new Date(), cancelAtPeriodEnd: false },
@@ -147,7 +187,8 @@ export async function POST(req: Request) {
         status,
         startDate,
         endDate,
-        amount: plan.price, // student plans are FLAT
+        billingInterval,
+        amount: priced.total, // base monthly × months, less the cycle discount
         currency: plan.currency,
         createdById: user.id,
       },
@@ -186,6 +227,20 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "No active subscription to cancel" }, { status: 404 });
   }
 
+  // A paid plan is a committed fixed term — no early cancellation. It simply runs
+  // to its end date, then lapses back to Free on its own. (Trials can still be
+  // ended early below.)
+  const currentIsPaid = (current.amount ?? current.plan.price ?? 0) > 0;
+  if (current.status !== "TRIAL" && currentIsPaid) {
+    const until = current.endDate ? new Date(current.endDate).toLocaleDateString() : null;
+    return NextResponse.json(
+      {
+        error: `Your plan is active${until ? ` until ${until}` : ""} and can't be canceled early. It will return to Free automatically when the term ends.`,
+      },
+      { status: 409 },
+    );
+  }
+
   // Decide when the cancellation takes effect.
   // - Trial → keep access until the trial ends (its existing endDate).
   // - Paid recurring plan → keep access until the end of the current paid period.
@@ -194,8 +249,9 @@ export async function DELETE(req: Request) {
   let effectiveEnd: Date | null;
   if (current.status === "TRIAL") {
     effectiveEnd = current.endDate ?? new Date();
-  } else if (isPaid && intervalRecurs(current.plan.billingInterval)) {
-    effectiveEnd = computeCurrentPeriodEnd(current.startDate, current.plan.billingInterval);
+  } else if (isPaid && intervalRecurs(current.billingInterval)) {
+    // Use the cycle the student actually chose, not just the plan's base interval.
+    effectiveEnd = computeCurrentPeriodEnd(current.startDate, current.billingInterval);
   } else {
     effectiveEnd = null; // cancel immediately
   }

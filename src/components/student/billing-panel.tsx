@@ -1,16 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Crown, Gift, ShieldCheck, RefreshCw, Lock, Headphones, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/sonner";
+import { PaymentModal } from "@/components/student/payment-modal";
 import {
   formatMoney,
   billingIntervalLabel,
+  studentIntervalPrice,
+  STUDENT_BILLING_INTERVALS,
   type BillingInterval,
+  type StudentBillingInterval,
 } from "@/lib/pricing";
+
+interface PendingPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  billingInterval: BillingInterval;
+  plan: { name: string };
+}
 
 interface Plan {
   id: string;
@@ -21,6 +33,29 @@ interface Plan {
   billingInterval: BillingInterval;
   trialDays: number;
   features: string[];
+  quarterlyDiscountPct: number;
+  yearlyDiscountPct: number;
+  allowAi: boolean;
+  allowMultiplayer: boolean;
+  allowRewards: boolean;
+  allowLeaderboard: boolean;
+  allowMathTools: boolean;
+}
+
+/**
+ * The feature bullets to show on a plan card. Admin-entered `features` win;
+ * otherwise we derive a list from what the plan unlocks, so a plan with no
+ * hand-written features (e.g. Premium Student) still shows what it includes.
+ */
+function planFeatures(p: Plan): string[] {
+  if (p.features && p.features.length > 0) return p.features;
+  const f: string[] = ["Solo quizzes, daily challenges & solo games", "Progress tracking"];
+  if (p.allowAi) f.push("AI Tutor, AI videos & AI-generated quizzes");
+  if (p.allowMathTools) f.push("Graphing calculator & 3D geometry lab");
+  if (p.allowMultiplayer) f.push("Battle mode (multiplayer)");
+  if (p.allowRewards) f.push("Rewards & redemption");
+  if (p.allowLeaderboard) f.push("Leaderboard & rankings");
+  return f;
 }
 interface Subscription {
   id: string;
@@ -28,18 +63,18 @@ interface Subscription {
   startDate: string;
   endDate: string | null;
   cancelAtPeriodEnd: boolean;
+  billingInterval: BillingInterval;
   amount: number | null;
   currency: string;
   plan: Plan;
 }
 
-const STATUS_VARIANT: Record<string, "success" | "warning" | "error" | "default" | "info"> = {
-  ACTIVE: "success",
-  TRIAL: "info",
-  PAST_DUE: "warning",
-  CANCELED: "default",
-  EXPIRED: "default",
-};
+// The billing cycles offered to students, with labels for the toggle.
+const CYCLES: { value: StudentBillingInterval; label: string }[] = [
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "QUARTERLY", label: "3 months" },
+  { value: "YEARLY", label: "Yearly" },
+];
 
 /**
  * Self-service billing for INDEPENDENT students (no school). Renders nothing
@@ -52,17 +87,35 @@ export function StudentBillingPanel() {
   const [current, setCurrent] = useState<Subscription | null>(null);
   const [defaultPlanId, setDefaultPlanId] = useState<string | null>(null);
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
-  const [canceling, setCanceling] = useState(false);
+  // The billing cycle the student is currently viewing / would subscribe on.
+  const [selectedCycle, setSelectedCycle] = useState<StudentBillingInterval>("MONTHLY");
+  // A payment awaiting admin review (locks the cards until it's resolved).
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  // The plan a student is paying for right now (opens the payment modal).
+  const [payFor, setPayFor] = useState<{ plan: Plan; interval: StudentBillingInterval; amount: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/student/subscription");
-      const data = res.ok ? await res.json() : { eligible: false };
+      const [subRes, payRes] = await Promise.all([
+        fetch("/api/student/subscription"),
+        fetch("/api/student/payments"),
+      ]);
+      const data = subRes.ok ? await subRes.json() : { eligible: false };
       setEligible(!!data.eligible);
       setPlans(data.plans ?? []);
       setCurrent(data.subscription ?? null);
       setDefaultPlanId(data.defaultPlanId ?? null);
+      // If the student is on a live PAID plan, the cycle is locked to it — show it.
+      const sub = data.subscription;
+      if (sub && (sub.amount ?? 0) > 0 && STUDENT_BILLING_INTERVALS.includes(sub.billingInterval)) {
+        setSelectedCycle(sub.billingInterval);
+      }
+      const payData = payRes.ok ? await payRes.json() : null;
+      setPendingPayment(payData?.pending ?? null);
+      if (payData?.pending && STUDENT_BILLING_INTERVALS.includes(payData.pending.billingInterval)) {
+        setSelectedCycle(payData.pending.billingInterval);
+      }
     } catch {
       setEligible(false);
     } finally {
@@ -74,13 +127,13 @@ export function StudentBillingPanel() {
     load();
   }, [load]);
 
-  async function choosePlan(planId: string) {
+  async function choosePlan(planId: string, cycle: StudentBillingInterval = selectedCycle) {
     setBusyPlanId(planId);
     try {
       const res = await fetch("/api/student/subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, billingInterval: cycle }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -95,28 +148,6 @@ export function StudentBillingPanel() {
     }
   }
 
-  async function cancelPlan() {
-    if (!window.confirm("Cancel your plan? You'll keep access until the end of your paid period.")) return;
-    setCanceling(true);
-    try {
-      const res = await fetch("/api/student/subscription", { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to cancel");
-      }
-      const data = await res.json().catch(() => ({}));
-      if (data.cancelAtPeriodEnd && data.endsAt) {
-        toast.success(`Canceled. You keep access until ${new Date(data.endsAt).toLocaleDateString()}.`);
-      } else {
-        toast.success("Plan canceled.");
-      }
-      await load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setCanceling(false);
-    }
-  }
 
   // Show a spinner while loading; hidden entirely for school-managed students
   // (the billing page renders its own school message in that case).
@@ -139,33 +170,64 @@ export function StudentBillingPanel() {
   // The plan to render as "current": the live one, or the Free default.
   const currentPlan = liveCurrent?.plan ?? defaultPlan;
 
+  // Display order: the Free/default plan first, then the rest cheapest → dearest.
+  const sortedPlans = [...plans].sort((a, b) => {
+    if (a.id === defaultPlanId) return -1;
+    if (b.id === defaultPlanId) return 1;
+    return (a.price ?? 0) - (b.price ?? 0);
+  });
+
+  const hasPaidPlan = plans.some((p) => (p.price ?? 0) > 0);
+  const gridCols = sortedPlans.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2";
+  // "Locked" = the student is on a live PAID plan (committed for its term), OR a
+  // payment is awaiting review. Either way the plan cards can't be actioned.
+  const onPaidTerm = onPaidPlan && !!liveCurrent;
+  const locked = onPaidTerm || !!pendingPayment;
+  const termEnds = liveCurrent?.endDate ? new Date(liveCurrent.endDate).toLocaleDateString() : null;
+
+  // Choosing a plan: Free activates instantly; a paid plan opens the payment modal.
+  function selectPlan(p: Plan, priced: { total: number }, cycle: StudentBillingInterval) {
+    if (priced.total <= 0) {
+      choosePlan(p.id, cycle);
+    } else {
+      setPayFor({ plan: p, interval: cycle, amount: priced.total });
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Current-plan summary banner */}
-      {onPaidPlan && liveCurrent ? (
+      {currentPlan && (
         <div
           className={
-            "rounded-xl border p-4 " +
-            (liveCurrent.cancelAtPeriodEnd ? "border-warning/40 bg-warning/5" : "border-border bg-background/60")
+            "rounded-2xl border p-4 sm:px-5 " +
+            (liveCurrent?.cancelAtPeriodEnd ? "border-warning/40 bg-warning/5" : "border-border bg-surface")
           }
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-success" />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success/10">
+                <CheckCircle2 className="h-5 w-5 text-success" />
+              </span>
               <span className="text-sm text-text-secondary">Current plan:</span>
-              <span className="font-semibold text-text-primary">{liveCurrent.plan.name}</span>
-              <Badge variant={liveCurrent.cancelAtPeriodEnd ? "warning" : STATUS_VARIANT[liveCurrent.status] ?? "default"}>
-                {liveCurrent.cancelAtPeriodEnd ? "Canceling" : liveCurrent.status}
+              <span className="font-semibold text-text-primary">{currentPlan.name}</span>
+              <Badge variant={liveCurrent?.cancelAtPeriodEnd ? "warning" : "success"}>
+                {liveCurrent?.cancelAtPeriodEnd ? "Canceling" : liveCurrent ? liveCurrent.status : "Active"}
               </Badge>
             </div>
             <span className="text-sm text-text-secondary">
-              {formatMoney(liveCurrent.amount, liveCurrent.currency)}
-              {billingIntervalLabel(liveCurrent.plan.billingInterval)}
-              {" · Started "}
-              {new Date(liveCurrent.startDate).toLocaleDateString()}
+              {liveCurrent ? (
+                <>
+                  {formatMoney(liveCurrent.amount, liveCurrent.currency)}
+                  {billingIntervalLabel(liveCurrent.billingInterval)}
+                  {termEnds ? ` · Active until ${termEnds}` : ` · Started ${new Date(liveCurrent.startDate).toLocaleDateString()}`}
+                </>
+              ) : (
+                "Upgrade anytime to unlock more."
+              )}
             </span>
           </div>
-          {liveCurrent.cancelAtPeriodEnd && liveCurrent.endDate && (
+          {liveCurrent?.cancelAtPeriodEnd && liveCurrent.endDate && (
             <p className="mt-2 text-sm text-warning">
               Your plan is canceled but stays active until{" "}
               <strong>{new Date(liveCurrent.endDate).toLocaleDateString()}</strong> — you keep full
@@ -173,70 +235,192 @@ export function StudentBillingPanel() {
             </p>
           )}
         </div>
-      ) : currentPlan ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/60 p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <span className="text-sm text-text-secondary">Current plan:</span>
-            <span className="font-semibold text-text-primary">{currentPlan.name}</span>
-            <Badge variant="success">Active</Badge>
+      )}
+
+      {/* Payment under review */}
+      {pendingPayment && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning/40 bg-warning/5 p-4 sm:px-5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/15">
+              <Spinner size="sm" className="text-warning" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-text-primary">
+                Payment under review — {pendingPayment.plan.name}
+              </p>
+              <p className="text-xs text-text-secondary">
+                We’ve received your {formatMoney(pendingPayment.amount, pendingPayment.currency)} payment.
+                Your plan activates once an admin confirms it.
+              </p>
+            </div>
           </div>
-          <span className="text-sm text-text-secondary">Upgrade anytime to unlock more.</span>
+          <Badge variant="warning">Pending</Badge>
         </div>
-      ) : null}
+      )}
+
+      {/* Billing-cycle toggle — pay monthly, or save with a longer cycle. */}
+      {hasPaidPlan && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-text-secondary">Billing cycle:</span>
+          <div className="inline-flex rounded-xl border border-border bg-surface p-1">
+            {CYCLES.map((c) => {
+              // Best discount available at this cycle across paid plans (for the toggle hint).
+              const bestSave = Math.max(
+                0,
+                ...plans.map((p) =>
+                  studentIntervalPrice(p.price, c.value, p.quarterlyDiscountPct, p.yearlyDiscountPct).discountPct,
+                ),
+              );
+              const active = selectedCycle === c.value;
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setSelectedCycle(c.value)}
+                  className={
+                    "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed " +
+                    (active ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary") +
+                    (locked && !active ? " opacity-40" : "")
+                  }
+                >
+                  {c.label}
+                  {bestSave > 0 && (
+                    <span
+                      className={
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-bold " +
+                        (active ? "bg-white/20 text-white" : "bg-success/10 text-success")
+                      }
+                    >
+                      -{bestSave}%
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Available plans — prominent cards */}
       {plans.length === 0 ? (
         <p className="text-sm text-text-secondary">No plans are available right now.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {plans.map((p) => {
-            const isCurrent = p.id === currentPlanId;
+        <div className={"grid items-stretch gap-6 " + gridCols}>
+          {sortedPlans.map((p) => {
+            const isFree = (p.price ?? 0) <= 0;
+            const priced = studentIntervalPrice(
+              p.price,
+              selectedCycle,
+              p.quarterlyDiscountPct,
+              p.yearlyDiscountPct,
+            );
+            const isCurrentPlan = p.id === currentPlanId;
+            // Already on exactly this plan+cycle? (Free ignores cycle.)
+            const isExactCurrent = isFree
+              ? isCurrentPlan
+              : !!liveCurrent && liveCurrent.plan.id === p.id && liveCurrent.billingInterval === selectedCycle;
+            const cycleLabel = CYCLES.find((c) => c.value === selectedCycle)?.label ?? "";
+            const feats = planFeatures(p);
+            const twoColFeatures = feats.length > 4;
+            const PlanIcon = isFree ? Gift : Crown;
+
             return (
               <div
                 key={p.id}
                 className={
-                  "flex flex-col rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md " +
-                  (isCurrent ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border")
+                  "relative flex h-full flex-col overflow-hidden rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md sm:p-7 " +
+                  (isCurrentPlan
+                    ? "border-primary/50 bg-gradient-to-br from-primary/[0.07] to-transparent ring-1 ring-primary/25"
+                    : "border-border bg-surface")
                 }
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-lg font-semibold text-text-primary">{p.name}</span>
-                  {isCurrent && <Badge variant="success">Current</Badge>}
-                </div>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-text-primary">
-                    {formatMoney(p.price, p.currency)}
-                  </span>
-                  <span className="text-sm text-text-secondary">
-                    {billingIntervalLabel(p.billingInterval)}
-                  </span>
-                </div>
-                {p.trialDays > 0 && (
-                  <p className="mt-1 text-xs font-medium text-success">{p.trialDays}-day free trial</p>
+                {/* Current-plan corner ribbon */}
+                {isCurrentPlan && (
+                  <div className="absolute right-0 top-0 rounded-bl-xl bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Current plan
+                  </div>
                 )}
+
+                {/* Icon badge */}
+                <span
+                  className={
+                    "flex h-12 w-12 items-center justify-center rounded-full " +
+                    (isFree ? "bg-success/10 text-success" : "bg-primary text-white")
+                  }
+                >
+                  <PlanIcon className="h-6 w-6" />
+                </span>
+
+                {/* Name */}
+                <h3 className="mt-5 text-xl font-bold text-text-primary">{p.name}</h3>
+
+                {/* Price */}
+                <div className="mt-1.5 flex items-baseline gap-1.5">
+                  <span className="text-4xl font-extrabold text-primary">
+                    {isFree ? `0 ${p.currency}` : formatMoney(priced.total, p.currency)}
+                  </span>
+                  <span className="text-sm font-medium text-text-secondary">
+                    {billingIntervalLabel(selectedCycle)}
+                  </span>
+                </div>
+                {!isFree && priced.discountPct > 0 && (
+                  <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-text-muted line-through">
+                      {formatMoney(priced.undiscounted, p.currency)}
+                    </span>
+                    <span className="rounded-full bg-success/10 px-2 py-0.5 font-semibold text-success">
+                      Save {priced.discountPct}% ({formatMoney(priced.savings, p.currency)})
+                    </span>
+                  </p>
+                )}
+                {!isFree && selectedCycle !== "MONTHLY" && (
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    {formatMoney(p.price, p.currency)}/mo billed {cycleLabel.toLowerCase()}
+                  </p>
+                )}
+                {p.trialDays > 0 && !isExactCurrent && (
+                  <p className="mt-1.5 text-xs font-semibold text-success">{p.trialDays}-day free trial</p>
+                )}
+
+                {/* Description */}
                 {p.description && (
-                  <p className="mt-2 text-sm text-text-secondary">{p.description}</p>
+                  <p className="mt-4 text-sm leading-relaxed text-text-secondary">{p.description}</p>
                 )}
-                {p.features.length > 0 && (
-                  <ul className="mt-4 space-y-2">
-                    {p.features.map((f, i) => (
+
+                {/* Divider */}
+                <div className="my-5 h-px bg-border" />
+
+                {/* Features */}
+                {feats.length > 0 && (
+                  <ul className={"grid gap-x-5 gap-y-2.5 " + (twoColFeatures ? "sm:grid-cols-2" : "grid-cols-1")}>
+                    {feats.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        {f}
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                        <span>{f}</span>
                       </li>
                     ))}
                   </ul>
                 )}
+
+                {/* CTA */}
                 <div className="mt-auto pt-6">
                   <Button
-                    variant={isCurrent ? "outline" : "primary"}
-                    className="w-full"
-                    disabled={isCurrent}
+                    variant={isExactCurrent || !isFree ? "primary" : "outline"}
+                    className="w-full gap-1.5"
+                    disabled={isExactCurrent || locked}
                     isLoading={busyPlanId === p.id}
-                    onClick={() => choosePlan(p.id)}
+                    onClick={() => selectPlan(p, priced, selectedCycle)}
                   >
-                    {isCurrent ? "Current plan" : onPaidPlan ? "Switch to this plan" : "Choose plan"}
+                    {isExactCurrent ? (
+                      <>
+                        Current plan <Check className="h-4 w-4" />
+                      </>
+                    ) : locked ? (
+                      "Unavailable"
+                    ) : (
+                      "Choose plan"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -245,23 +429,62 @@ export function StudentBillingPanel() {
         </div>
       )}
 
-      {/* Cancel at period end, or resume a pending cancellation. */}
-      {onPaidPlan && liveCurrent && (
-        <div>
-          {liveCurrent.cancelAtPeriodEnd ? (
-            <Button
-              variant="outline"
-              onClick={() => choosePlan(liveCurrent.plan.id)}
-              isLoading={busyPlanId === liveCurrent.plan.id}
-            >
-              Resume subscription
-            </Button>
-          ) : (
-            <Button variant="ghost" onClick={cancelPlan} isLoading={canceling} className="text-error hover:bg-red-50">
-              Cancel subscription
-            </Button>
-          )}
+      {/* Committed-term notice — a paid plan runs its term, then reverts to Free. */}
+      {onPaidTerm && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-border bg-background/50 px-4 py-3 text-sm text-text-secondary">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+          <span>
+            You’re on <strong className="text-text-primary">{liveCurrent!.plan.name}</strong>
+            {termEnds && (
+              <>
+                {" "}
+                until <strong className="text-text-primary">{termEnds}</strong>
+              </>
+            )}
+            . Your plan can’t be changed or canceled during this term — it will automatically return
+            to the <strong className="text-text-primary">Free</strong> plan when it ends, and you can
+            subscribe again then.
+          </span>
         </div>
+      )}
+
+      {/* Trust bar */}
+      <div className="grid grid-cols-2 gap-5 border-t border-border pt-6 sm:grid-cols-4">
+        {[
+          { icon: ShieldCheck, title: "Secure payments", sub: "100% secure & encrypted" },
+          { icon: RefreshCw, title: "No auto-renewal", sub: "Reverts to Free after the term" },
+          { icon: Lock, title: "Privacy first", sub: "Your data is safe" },
+          { icon: Headphones, title: "Need help?", sub: "We’re here for you" },
+        ].map((it) => (
+          <div key={it.title} className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+              <it.icon className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-text-primary">{it.title}</p>
+              <p className="truncate text-xs text-text-secondary">{it.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Payment modal (step 2) — opens when a paid plan is chosen. */}
+      {payFor && (
+        <PaymentModal
+          plan={{
+            id: payFor.plan.id,
+            name: payFor.plan.name,
+            currency: payFor.plan.currency,
+            trialDays: payFor.plan.trialDays,
+          }}
+          interval={payFor.interval}
+          amount={payFor.amount}
+          onClose={() => setPayFor(null)}
+          onSubmitted={() => {
+            setPayFor(null);
+            load();
+          }}
+        />
       )}
     </div>
   );

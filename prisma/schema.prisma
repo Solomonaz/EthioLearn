@@ -132,6 +132,13 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
+// Manual (off-platform) payment proof submitted by a student, reviewed by an admin.
+enum PaymentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─── Models ──────────────────────────────────────────────
 
 model User {
@@ -179,6 +186,8 @@ model User {
   notes                StudentNote[]
   subscriptions        Subscription[]    @relation("StudentSubscriptions")
   createdSubscriptions Subscription[]    @relation("SubscriptionCreator")
+  paymentRequests      PaymentRequest[]  @relation("StudentPayments")
+  reviewedPayments     PaymentRequest[]  @relation("PaymentReviewer")
   gameContents         GameContent[]     @relation("GameContentCreator")
   teachingAssignments  TeachingAssignment[] @relation("TeacherAssignments")
   savedGraphs          SavedGraph[]      @relation("UserSavedGraphs")
@@ -703,6 +712,12 @@ model PricingPlan {
   price           Float?
   currency        String          @default("ETB")
   billingInterval BillingInterval @default(MONTHLY)
+  // STUDENT plans: `price` is the MONTHLY price and these give a percentage
+  // discount off the multi-month total when a student picks a longer cycle
+  // (0 = no discount, so 3-month = 3×monthly and yearly = 12×monthly). School
+  // plans ignore these. 0–100.
+  quarterlyDiscountPct Int         @default(0)
+  yearlyDiscountPct    Int         @default(0)
   trialDays       Int             @default(0)
   features        String[]        @default([])
   isActive        Boolean         @default(true) // available for assignment
@@ -724,8 +739,9 @@ model PricingPlan {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tiers         PricingTier[]
-  subscriptions Subscription[]
+  tiers           PricingTier[]
+  subscriptions   Subscription[]
+  paymentRequests PaymentRequest[]
 
   @@index([audience])
   @@map("pricing_plans")
@@ -757,6 +773,10 @@ model Subscription {
   student   User?   @relation("StudentSubscriptions", fields: [studentId], references: [id], onDelete: Cascade)
 
   status            SubscriptionStatus @default(ACTIVE)
+  // The billing cycle the subscriber actually chose (student plans let them pick
+  // monthly / quarterly / yearly). Snapshotted here so renewal & cancel-at-
+  // period-end math uses the chosen cycle, not just the plan's base interval.
+  billingInterval   BillingInterval    @default(MONTHLY)
   startDate         DateTime           @default(now())
   // For a canceled-at-period-end sub this holds the paid-through date; the sub
   // stays live (access continues) until endDate passes, then it lapses.
@@ -781,4 +801,59 @@ model Subscription {
   @@index([studentId])
   @@index([planId])
   @@map("subscriptions")
+}
+
+// Admin-configurable payee accounts shown to students on the payment step
+// (e.g. Telebirr / CBE / BOA). The student pays here off-platform, then submits
+// proof (transaction ref + receipt) which an admin reviews.
+model PaymentAccount {
+  id            String   @id @default(cuid())
+  method        String // display label, e.g. "Telebirr", "CBE", "BOA", "Safaricom"
+  accountName   String // account holder name
+  accountNumber String // phone / account number
+  instructions  String? // optional note shown to the student
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payment_accounts")
+}
+
+// A manual payment submitted by an INDEPENDENT student to activate a paid plan.
+// It sits in PENDING until an admin approves (which creates the subscription) or
+// rejects. Amount/interval are snapshotted so approval doesn't depend on the plan
+// being unchanged in the meantime.
+model PaymentRequest {
+  id              String          @id @default(cuid())
+  studentId       String
+  student         User            @relation("StudentPayments", fields: [studentId], references: [id], onDelete: Cascade)
+  planId          String
+  plan            PricingPlan     @relation(fields: [planId], references: [id])
+  billingInterval BillingInterval @default(MONTHLY)
+  amount          Float
+  currency        String          @default("ETB")
+
+  // Proof of payment.
+  methodLabel   String // which method the student says they paid with
+  transactionRef String
+  receiptData   String  @db.Text // base64 data URL of the receipt image
+  receiptName   String?
+  receiptType   String?
+
+  status       PaymentRequestStatus @default(PENDING)
+  adminNote    String? // rejection reason / note
+  reviewedById String?
+  reviewedBy   User?                @relation("PaymentReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  // The subscription created when this payment is approved.
+  subscriptionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([status])
+  @@map("payment_requests")
 }

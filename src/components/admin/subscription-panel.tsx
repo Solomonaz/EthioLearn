@@ -36,6 +36,7 @@ interface Subscription {
   status: string;
   startDate: string;
   endDate: string | null;
+  billingInterval: BillingInterval | null;
   amount: number | null;
   currency: string;
   studentCountSnapshot: number | null;
@@ -200,7 +201,7 @@ export function SubscriptionPanel({
                   <span className="text-lg font-semibold text-text-primary">
                     {formatMoney(current.amount, current.currency)}
                     <span className="text-xs font-normal text-text-secondary">
-                      {billingIntervalLabel(current.plan.billingInterval)}
+                      {billingIntervalLabel(current.billingInterval ?? current.plan.billingInterval)}
                     </span>
                   </span>
                 </div>

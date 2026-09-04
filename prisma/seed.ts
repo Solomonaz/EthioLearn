@@ -1138,6 +1138,8 @@ async function main() {
   await upsertStudentPlan("Full Access", {
     description: "Everything: AI tutor, AI videos, AI quizzes, battle mode, rewards, leaderboard, graphing, and 3D geometry.",
     price: 99, isActive: true, sortOrder: 1,
+    // 99 ETB/month. Longer cycles save: 3-month −10%, yearly −20% (admin-editable).
+    quarterlyDiscountPct: 10, yearlyDiscountPct: 20,
     allowAi: true, allowMultiplayer: true, allowRewards: true, allowLeaderboard: true, allowMathTools: true,
     features: [
       "Everything in Free",
@@ -1152,6 +1154,23 @@ async function main() {
     ],
   });
   console.log(`  Student plans: Free, Full Access`);
+
+  // 2d. A payee account so the manual-payment flow works out of the box.
+  //     (Edit / replace this in Admin → Payments.)
+  const existingAccount = await prisma.paymentAccount.findFirst();
+  if (!existingAccount) {
+    await prisma.paymentAccount.create({
+      data: {
+        method: "Telebirr",
+        accountName: "EthioLearn",
+        accountNumber: "0900000000",
+        instructions: "Send the exact amount, then paste your transaction number and upload the receipt.",
+        isActive: true,
+        sortOrder: 0,
+      },
+    });
+    console.log(`  Payment account: Telebirr (placeholder — edit in Admin → Payments)`);
+  }
 
   // 3. Create test student
   const student = await prisma.user.upsert({

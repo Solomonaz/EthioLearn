@@ -141,6 +141,55 @@ export function intervalRecurs(interval: BillingInterval): boolean {
   return INTERVAL_MONTHS[interval] != null;
 }
 
+// ─── Student multi-cycle pricing ───────────────────────────────
+// A student plan is priced monthly; students may pay for a longer cycle at a
+// configured discount. These are the cycles offered in the student billing UI.
+export const STUDENT_BILLING_INTERVALS = ["MONTHLY", "QUARTERLY", "YEARLY"] as const;
+export type StudentBillingInterval = (typeof STUDENT_BILLING_INTERVALS)[number];
+
+export interface IntervalPrice {
+  interval: BillingInterval;
+  months: number;
+  /** Straight monthly × months, before any discount. */
+  undiscounted: number;
+  /** Discount percent applied for this cycle (0 for monthly). */
+  discountPct: number;
+  /** Amount actually charged for the whole cycle. */
+  total: number;
+  /** Money saved versus paying monthly across the same span. */
+  savings: number;
+}
+
+/** Clamp a percentage to a whole number in [0, 100]. */
+export function clampPercent(v: unknown): number {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(100, Math.max(0, n));
+}
+
+/**
+ * Price a STUDENT plan for a chosen billing cycle. `monthlyPrice` is the plan's
+ * base (monthly) price; quarterly and yearly apply their configured % discount
+ * off the straight multiple. Monthly is always full price.
+ */
+export function studentIntervalPrice(
+  monthlyPrice: number | null | undefined,
+  interval: BillingInterval,
+  quarterlyDiscountPct = 0,
+  yearlyDiscountPct = 0,
+): IntervalPrice {
+  const months = INTERVAL_MONTHS[interval] ?? 1;
+  const base = Math.max(0, monthlyPrice ?? 0) * months;
+  const pct =
+    interval === "QUARTERLY"
+      ? clampPercent(quarterlyDiscountPct)
+      : interval === "YEARLY"
+        ? clampPercent(yearlyDiscountPct)
+        : 0;
+  const total = Math.round(base * (1 - pct / 100));
+  return { interval, months, undiscounted: base, discountPct: pct, total, savings: base - total };
+}
+
 /**
  * The end of the billing period that currently contains `now`, computed by
  * advancing from `startDate` one interval at a time until strictly after `now`.
@@ -204,6 +253,8 @@ export interface PlanInputData {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  quarterlyDiscountPct: number;
+  yearlyDiscountPct: number;
 }
 
 /**
@@ -231,9 +282,18 @@ export function parsePlanInput(
     return { error: "School plans must use PER_STUDENT or TIERED pricing" };
   }
 
-  const billingInterval = BILLING_INTERVALS.includes(body.billingInterval as BillingInterval)
-    ? (body.billingInterval as BillingInterval)
-    : "MONTHLY";
+  // Student plans are priced MONTHLY at the base — longer cycles are derived from
+  // the discounts below, so the base interval is always monthly for them.
+  const billingInterval: BillingInterval =
+    audience === "STUDENT"
+      ? "MONTHLY"
+      : BILLING_INTERVALS.includes(body.billingInterval as BillingInterval)
+        ? (body.billingInterval as BillingInterval)
+        : "MONTHLY";
+
+  // Multi-cycle discounts (student plans only; harmless 0 for school plans).
+  const quarterlyDiscountPct = clampPercent(body.quarterlyDiscountPct);
+  const yearlyDiscountPct = clampPercent(body.yearlyDiscountPct);
 
   const currency =
     typeof body.currency === "string" && body.currency.trim() ? body.currency.trim() : "ETB";
@@ -304,6 +364,8 @@ export function parsePlanInput(
       allowRewards,
       allowLeaderboard,
       allowMathTools,
+      quarterlyDiscountPct,
+      yearlyDiscountPct,
     },
     tiers,
   };
