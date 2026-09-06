@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -8,6 +9,19 @@ import { tagChunksWithBloomLevel } from "@/lib/bloom-tagger";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * A PROCESSING run older than this is treated as dead and may be restarted.
+ * Without it, a timeout or crash (which never reaches the catch block that sets
+ * FAILED) left the textbook stuck on PROCESSING forever — permanently
+ * unprocessable without editing the database by hand.
+ */
+const STALE_PROCESSING_MS = 30 * 60 * 1000; // 30 minutes
+
+/** Fingerprint of a chapter's text — lets an unchanged chapter be skipped. */
+function hashContent(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
 }
 
 /**
@@ -43,6 +57,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       grade: true,
       schoolId: true,
       chunkingStatus: true,
+      updatedAt: true,
     } as any,
   })) as any;
 
@@ -59,18 +74,39 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Don't re-process if already processing
+  // Don't re-process if a run is genuinely still in flight — but treat a run
+  // that has been PROCESSING beyond STALE_PROCESSING_MS as dead and allow a
+  // restart, so a crashed run can't strand the textbook permanently.
   if ((textbook as any).chunkingStatus === "PROCESSING") {
-    return NextResponse.json(
-      { error: "Processing is already in progress for this textbook." },
-      { status: 409 }
+    const startedAt = (textbook as any).updatedAt as Date | undefined;
+    const ageMs = startedAt ? Date.now() - new Date(startedAt).getTime() : Infinity;
+
+    if (ageMs < STALE_PROCESSING_MS) {
+      return NextResponse.json(
+        {
+          error: "Processing is already in progress for this textbook.",
+          retryAfterMs: STALE_PROCESSING_MS - ageMs,
+        },
+        { status: 409 }
+      );
+    }
+
+    console.warn(
+      `[Process] Textbook ${textbookId} stuck in PROCESSING for ${Math.round(ageMs / 60000)} minutes — ` +
+      `treating as a dead run and restarting.`
     );
   }
 
   // Get all chapters with content
   const chapters = (await db.chapter.findMany({
     where: { textbookId },
-    select: { id: true, title: true, content: true, chapterNumber: true },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      chapterNumber: true,
+      contentHash: true,
+    },
     orderBy: { chapterNumber: "asc" },
   })) as any;
 
@@ -110,14 +146,48 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 
     let totalChunks = 0;
     let totalEmbeddings = 0;
+    let skippedChapters = 0;
     const chapterResults: {
       chapterId: string;
       chapterTitle: string;
       chunkCount: number;
       embeddingsStored: number;
+      skipped?: boolean;
     }[] = [];
 
     for (const chapter of chaptersWithContent) {
+      // ── Change detection ────────────────────────────────────────────────
+      // Re-processing used to re-chunk, re-Bloom-tag and re-embed every
+      // chapter unconditionally, so clicking "Process" twice cost twice. Skip
+      // any chapter whose text is byte-identical to the last successful run
+      // AND whose chunks are already stored.
+      const currentHash = hashContent(chapter.content!);
+      if (chapter.contentHash === currentHash) {
+        const existing: { count: bigint }[] = await db.$queryRawUnsafe(
+          `SELECT COUNT(*)::bigint AS count FROM content_chunks
+           WHERE "chapterId" = $1 AND embedding IS NOT NULL`,
+          chapter.id
+        );
+        const existingCount = Number(existing[0]?.count ?? 0);
+
+        if (existingCount > 0) {
+          console.log(
+            `[Process] Skipping "${chapter.title}" — content unchanged, ${existingCount} chunks already embedded.`
+          );
+          totalChunks += existingCount;
+          totalEmbeddings += existingCount;
+          chapterResults.push({
+            chapterId: chapter.id,
+            chapterTitle: chapter.title,
+            chunkCount: existingCount,
+            embeddingsStored: existingCount,
+            skipped: true,
+          });
+          skippedChapters++;
+          continue;
+        }
+      }
+
       const chunks = chunkContent(chapter.content!);
 
       if (chunks.length === 0) {
@@ -155,25 +225,32 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
         `[Process] Generating embeddings for ${chunks.length} chunks...`
       );
 
+      // Chapter text is a stored passage, not a search string — embed it as
+      // RETRIEVAL_DOCUMENT so it pairs correctly with RETRIEVAL_QUERY at
+      // search time.
       const embeddingResults = await generateEmbeddings(
-        chunks.map((c) => c.content)
+        chunks.map((c) => c.content),
+        "RETRIEVAL_DOCUMENT"
       );
       const embeddings = embeddingResults.map((r) => r.embedding);
+      const providers = embeddingResults.map((r) => r.provider);
 
-      // Step 5: Store in DB
+      // Step 5: Store in DB (with provenance, so degraded vectors are visible)
       const stored = await storeChunkEmbeddings(
         chapter.id,
         taggedChunks,
-        embeddings
+        embeddings,
+        providers
       );
 
-      // Update chapter bloom levels
+      // Update chapter bloom levels, and record the content fingerprint so the
+      // next run can skip this chapter if nothing changed.
       const uniqueBlooms = Array.from(
         new Set(bloomTags.map((t: any) => t.bloomLevel))
       );
       await db.chapter.update({
         where: { id: chapter.id },
-        data: { bloomLevels: uniqueBlooms } as any,
+        data: { bloomLevels: uniqueBlooms, contentHash: currentHash } as any,
       });
 
       totalChunks += chunks.length;
@@ -202,6 +279,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       textbookId,
       textbookTitle: (textbook as any).title,
       chaptersProcessed: (chaptersWithContent as any[]).length,
+      chaptersSkippedUnchanged: skippedChapters,
       totalChunks,
       totalEmbeddings,
       pgvectorEnabled: true,

@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { extractTextFromFile } from "@/lib/extract-text";
-import {
-  detectChapters,
-  splitTextByChapters,
-} from "@/lib/ai-provider";
+import { splitTextByChapters } from "@/lib/ai-provider";
+import { detectChaptersFullText } from "@/lib/chapter-detection";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 
 // Simple in-memory rate limiter
@@ -108,15 +106,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate at least one AI provider is configured (Gemini, Cerebras, NVIDIA, or Groq).
+  // Validate at least one AI provider is configured (Gemini, NVIDIA, or Groq).
   if (
     !process.env.GEMINI_API_KEY &&
     !process.env.GROQ_API_KEY &&
-    !process.env.CEREBRAS_API_KEY &&
     !process.env.NVIDIA_API_KEY
   ) {
     return NextResponse.json(
-      { error: "No AI API key configured. Set GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY." },
+      { error: "No AI API key configured. Set GEMINI_API_KEY, GROQ_API_KEY, or NVIDIA_API_KEY." },
       { status: 500 }
     );
   }
@@ -132,8 +129,14 @@ export async function POST(request: NextRequest) {
     let detectedChapters: any[] = [];
     let provider = "fallback";
 
+    let detectionWarnings: string[] = [];
+
     try {
-      const result = await detectChapters({
+      // Scans the WHOLE document — windowed AI passes plus a deterministic
+      // heading sweep, unioned (see lib/chapter-detection). The previous call
+      // saw only the first 50k characters, so on a long textbook every chapter
+      // past roughly page 25 went undetected.
+      const result = await detectChaptersFullText({
         content: extraction.text,
         subject: subject.trim(),
         grade,
@@ -141,10 +144,18 @@ export async function POST(request: NextRequest) {
       });
       detectedChapters = result.chapters;
       provider = result.provider;
-      console.log(`[Create With AI] Chapter detection used: ${provider}`);
+      detectionWarnings = result.warnings;
+      console.log(
+        `[Create With AI] Detection: ${result.chapters.length} chapters via ${provider} ` +
+        `(strategy: ${result.strategy}, ${result.windowsScanned} AI call(s)); ` +
+        `${result.recoveredByScan} recovered by scan.`
+      );
     } catch (aiError) {
       console.warn("[Create With AI] AI Chapter detection failed. Falling back to single chapter.", aiError);
       detectedChapters = [{ chapterNumber: 1, title: "Full Textbook Content" }];
+      detectionWarnings = [
+        "Automatic chapter detection failed — the whole book was kept as a single chapter. Split it manually before generating questions.",
+      ];
     }
 
     // 3. Split text by chapter boundaries (if fallback, returns the whole text)
@@ -161,6 +172,10 @@ export async function POST(request: NextRequest) {
         pageCount: extraction.pageCount,
         fullText: extraction.text,
       },
+      // Extraction problems (OCR truncation) plus detection problems (failed
+      // windows, implausibly large chapters) — shown to the admin before they
+      // commit the split.
+      warnings: [...(extraction.warnings ?? []), ...detectionWarnings],
       chapters: chaptersWithContent.map((ch) => ({
         chapterNumber: ch.chapterNumber,
         title: ch.title,

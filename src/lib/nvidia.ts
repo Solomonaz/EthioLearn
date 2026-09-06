@@ -3,7 +3,7 @@
  *
  * Uses the OpenAI-compatible REST API via fetch (no extra dependency). Added as
  * an additional fallback: its ~40 RPM free tier (no hard credit cap, no card)
- * is the highest of the free providers, so it survives Gemini/Cerebras/Groq
+ * is the highest of the free providers, so it survives Gemini/Groq
  * rate limits. Get a free key at https://build.nvidia.com and set NVIDIA_API_KEY
  * (optionally NVIDIA_MODEL) in .env.
  */
@@ -25,9 +25,22 @@ import {
 } from "./groq";
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-// Default to a widely-available NIM model. Override with NVIDIA_MODEL if your
-// account/catalog exposes a different set (see https://build.nvidia.com/models).
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct";
+// Default NIM model. Override with NVIDIA_MODEL if your account/catalog exposes
+// a different set (see https://build.nvidia.com/models).
+//
+// Was meta/llama-3.3-70b-instruct, which NVIDIA retired on 2026-08-26 and now
+// answers 410 Gone — so every question-generation call was failing through this
+// provider before finding a fallback.
+//
+// Chosen by testing the catalogue against the exact call this file makes,
+// json_object response_format included:
+//   nvidia/nemotron-3-super-120b-a12b      → valid JSON, ~2.7s   ← selected
+//   nvidia/llama-3.1-nemotron-70b-instruct → 404, listed but not servable
+//   nvidia/nemotron-3.5-lightning-30b-a3b  → emits reasoning text, invalid JSON
+//   mistralai/mistral-nemotron             → timed out at 45s
+// Re-test with the same criteria if this one is ever retired: the whole chain
+// depends on the model honouring JSON mode.
+const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
 
 export function hasNvidiaKey(): boolean {
   return !!process.env.NVIDIA_API_KEY;
@@ -68,7 +81,7 @@ async function nvidiaChatCompletion(
 }
 
 /**
- * Generic JSON chat helper mirroring `cerebrasChat`/`groqChat`/`ollamaChat`.
+ * Generic JSON chat helper mirroring `groqChat`/`ollamaChat`.
  * Returns null if the key is missing or the request fails, so callers can
  * fall through to the next provider.
  */

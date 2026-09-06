@@ -68,13 +68,15 @@ export default function TutorPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initial load: Fetch Textbooks matching student grade
+  // Initial load: fetch the textbooks in the student's study scope — their own
+  // grade plus the lower grades of the same exam cycle (see lib/grade-scope).
+  // Each card shows its grade, so a grade 12 can pick a grade 9 book to revise.
   useEffect(() => {
     if (!session?.user?.grade) return;
 
     async function init() {
       try {
-        const res = await fetch(`/api/textbooks?grade=${session?.user?.grade}`);
+        const res = await fetch(`/api/textbooks`);
         const data = await res.json();
         setTextbooks(data.textbooks || []);
       } catch (err) {

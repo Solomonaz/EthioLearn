@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { getDailyMessage } from "@/lib/motivational-messages";
+import { getStudyScope } from "@/lib/grade-scope";
 
 export async function GET() {
   const user = await requireCompleteProfile();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Subjects span the student's whole study scope, not just their enrollment
+  // grade — a grade 8 sits an exam drawn from grades 7–8, a grade 12 from
+  // grades 9–12 (see lib/grade-scope).
+  const studyScope = getStudyScope(user.grade);
 
   // ── Parallel data fetches ──────────────────────────────────────────────────
   const [recentQuizzes, quizStats, pointsSum, textbooks, quizAnswers] =
@@ -43,7 +49,7 @@ export async function GET() {
 
       // 4. Available subjects
       db.textbook.findMany({
-        where: user.grade ? { grade: user.grade } : {},
+        where: studyScope.length > 0 ? { grade: { in: studyScope } } : {},
         select: {
           id: true,
           title: true,

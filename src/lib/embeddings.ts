@@ -7,6 +7,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "./db";
+import { isOllamaEnabled } from "./ollama";
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -14,15 +15,55 @@ const EMBEDDING_MODEL = "gemini-embedding-001";
 const EMBEDDING_DIMENSIONS = 768;
 const BATCH_SIZE = 50; // Gemini supports up to 100, use 50 for safety
 
+// Gemini's REST batch endpoint. The typed SDK exposes `batchEmbedContents` but
+// its EmbedContentRequest has no `outputDimensionality`, so we call REST
+// directly: one HTTP request per BATCH_SIZE chunks, asking for exactly the
+// dimensions we store instead of fetching 3072 and throwing 75% away.
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+// Transient-failure retry. A single 429 mid-upload must NOT permanently demote
+// the provider for the rest of the process — that used to silently switch a
+// whole textbook over to the non-semantic fingerprint fallback.
+const MAX_EMBED_ATTEMPTS = 4;
+const RETRY_BASE_DELAY_MS = 500;
+
+/**
+ * Fingerprint vectors are a last-resort offline stand-in, not embeddings. In
+ * production, storing them corrupts retrieval silently, so they are refused
+ * unless explicitly allowed. Set ALLOW_FINGERPRINT_EMBEDDINGS=true to permit.
+ */
+const ALLOW_FINGERPRINT =
+  process.env.ALLOW_FINGERPRINT_EMBEDDINGS === "true" ||
+  process.env.NODE_ENV !== "production";
+
+/** Which system produced a vector. Vectors from different sources are NOT comparable. */
+export type EmbeddingProvider = "gemini" | "ollama" | "fingerprint";
+
+export class EmbeddingUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmbeddingUnavailableError";
+  }
+}
+
 // ─── Ollama config ───────────────────────────────────────
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const OLLAMA_EMBEDDING_MODEL = "bge-m3";
+
+/** Identifier stored in ContentChunk.embeddingModel, for provenance. */
+const PROVIDER_MODEL_ID: Record<EmbeddingProvider, string> = {
+  gemini: EMBEDDING_MODEL,
+  ollama: OLLAMA_EMBEDDING_MODEL,
+  fingerprint: "ngram-fingerprint-v1",
+};
 
 // ─── Types ──────────────────────────────────────────────
 
 export interface EmbeddingResult {
   text: string;
   embedding: number[];
+  /** Which system produced this vector — persisted for provenance. */
+  provider: EmbeddingProvider;
 }
 
 export interface SemanticSearchResult {
@@ -85,6 +126,25 @@ async function ensureCorrectVectorDimension(): Promise<void> {
 
       // Only rebuild on a genuine, non-empty mismatch (double-checked under lock).
       if (actualType && actualType !== expectedType) {
+        // This rebuild DROPS the column — every embedding in the database is
+        // destroyed and the whole corpus must be re-embedded (which costs real
+        // API spend). Automatic in dev; in production it requires an explicit
+        // opt-in so a stray EMBEDDING_DIMENSIONS edit can't wipe the corpus on
+        // the next deploy.
+        const rebuildAllowed =
+          process.env.NODE_ENV !== "production" ||
+          process.env.ALLOW_VECTOR_COLUMN_REBUILD === "true";
+
+        if (!rebuildAllowed) {
+          console.error(
+            `[Embeddings] REFUSING automatic vector column rebuild: DB has ${actualType}, ` +
+            `code expects ${expectedType}. Dropping the column would destroy every stored ` +
+            `embedding. Set ALLOW_VECTOR_COLUMN_REBUILD=true to permit it, then re-process ` +
+            `all textbooks.`
+          );
+          return;
+        }
+
         console.warn(
           `[Embeddings] Vector column dimension mismatch: DB has ${actualType}, ` +
           `code expects ${expectedType}. Rebuilding column (existing embeddings cleared)…`
@@ -134,14 +194,13 @@ function ngramFingerprint(text: string, dims: number): number[] {
 
 // ─── Provider priority ───────────────────────────────────
 // Production: no Ollama → Gemini is primary.
-// Local dev:  set OLLAMA_BASE_URL to restore Ollama as primary.
+// Local dev:  set OLLAMA_ENABLED=true to use local bge-m3 embeddings.
 // Override:   set EMBEDDING_PROVIDER=gemini|ollama|auto (default: auto)
+// "ollama" forces it on; "auto" defers to the shared guard in lib/ollama.
 const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER ?? "auto";
 const ollamaEnabled =
   EMBEDDING_PROVIDER === "ollama" ||
-  (EMBEDDING_PROVIDER === "auto" &&
-    !!process.env.OLLAMA_BASE_URL &&
-    process.env.OLLAMA_BASE_URL !== "http://localhost:11434");
+  (EMBEDDING_PROVIDER === "auto" && isOllamaEnabled());
 
 // ─── Runtime capability flags ────────────────────────────
 // Try each provider once per process and cache the result to avoid
@@ -149,40 +208,108 @@ const ollamaEnabled =
 let geminiEmbeddingsAvailable: boolean | null = null;
 let ollamaEmbeddingsAvailable: boolean | null = ollamaEnabled ? null : false;
 
-async function tryGeminiEmbedding(text: string): Promise<number[] | null> {
+function l2normalise(values: number[]): number[] {
+  const norm = Math.sqrt(values.reduce((s, v) => s + v * v, 0)) || 1;
+  return values.map((v) => v / norm);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Embed a whole batch of texts in ONE Gemini request.
+ *
+ * This used to issue one HTTP call per text (50 parallel calls per "batch"),
+ * which multiplied request count by ~50 and was the main driver of rate-limit
+ * 429s on large textbooks. `:batchEmbedContents` takes the whole batch at once.
+ *
+ * `taskType` matters for quality: retrieval is asymmetric, so stored passages
+ * must be embedded as RETRIEVAL_DOCUMENT and the search string as
+ * RETRIEVAL_QUERY. Neither was previously set, which measurably weakens recall.
+ *
+ * Returns null only after exhausting retries — transient failures are retried
+ * with exponential backoff rather than permanently demoting the provider.
+ */
+async function tryGeminiEmbeddings(
+  texts: string[],
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_DOCUMENT"
+): Promise<number[][] | null> {
   if (geminiEmbeddingsAvailable === false) return null;
-  if (!process.env.GEMINI_API_KEY) {
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     geminiEmbeddingsAvailable = false;
     return null;
   }
-  try {
-    const client = getClient();
-    const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
-    const result = await model.embedContent(text);
-    geminiEmbeddingsAvailable = true;
 
-    const values = result.embedding.values;
+  const body = JSON.stringify({
+    requests: texts.map((text) => ({
+      model: `models/${EMBEDDING_MODEL}`,
+      content: { parts: [{ text }] },
+      taskType,
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+    })),
+  });
 
-    // gemini-embedding-001 defaults to 3072 dimensions. Slice to
-    // EMBEDDING_DIMENSIONS (768) and re-normalise. This is safe because Gemini
-    // uses Matryoshka Representation Learning — the first N dimensions are
-    // always a complete, meaningful embedding at that smaller size.
-    if (values.length > EMBEDDING_DIMENSIONS) {
-      const sliced = values.slice(0, EMBEDDING_DIMENSIONS);
-      const norm = Math.sqrt(sliced.reduce((s, v) => s + v * v, 0)) || 1;
-      return sliced.map((v) => v / norm);
-    }
+  let lastError = "";
 
-    return values;
-  } catch {
-    if (geminiEmbeddingsAvailable === null) {
-      console.warn(
-        `[Embeddings] Gemini embedding model "${EMBEDDING_MODEL}" unavailable — trying Ollama ${OLLAMA_EMBEDDING_MODEL} fallback.`
+  for (let attempt = 1; attempt <= MAX_EMBED_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(
+        `${GEMINI_API_BASE}/models/${EMBEDDING_MODEL}:batchEmbedContents?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          signal: AbortSignal.timeout(60_000),
+        }
       );
+
+      if (response.ok) {
+        const data = (await response.json()) as { embeddings?: { values: number[] }[] };
+        const embeddings = data.embeddings;
+
+        if (Array.isArray(embeddings) && embeddings.length === texts.length) {
+          geminiEmbeddingsAvailable = true;
+          // outputDimensionality is honoured server-side; slice defensively in
+          // case the API returns the full 3072. Truncation is valid here —
+          // gemini-embedding-001 uses Matryoshka Representation Learning, so
+          // the leading N dimensions are a complete embedding on their own —
+          // but it must be re-normalised afterwards.
+          return embeddings.map((e) =>
+            l2normalise(
+              e.values.length > EMBEDDING_DIMENSIONS
+                ? e.values.slice(0, EMBEDDING_DIMENSIONS)
+                : e.values
+            )
+          );
+        }
+
+        lastError = `malformed response (expected ${texts.length} embeddings, got ${embeddings?.length ?? 0})`;
+      } else {
+        lastError = `HTTP ${response.status}`;
+        // 4xx other than 429 is a request problem — retrying won't help.
+        if (response.status !== 429 && response.status < 500) break;
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "unknown error";
     }
-    geminiEmbeddingsAvailable = false;
-    return null;
+
+    if (attempt < MAX_EMBED_ATTEMPTS) {
+      const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(
+        `[Embeddings] Gemini batch failed (${lastError}) — retry ${attempt}/${MAX_EMBED_ATTEMPTS - 1} in ${delay}ms`
+      );
+      await sleep(delay);
+    }
   }
+
+  console.warn(
+    `[Embeddings] Gemini embedding unavailable after ${MAX_EMBED_ATTEMPTS} attempts (${lastError}).`
+  );
+  // NOTE: deliberately does NOT latch geminiEmbeddingsAvailable=false here.
+  // A rate-limit burst on one batch must not silently downgrade every later
+  // chunk in the book to a non-semantic fallback.
+  return null;
 }
 
 // Ollama /api/embed supports batching — send all texts in one request.
@@ -235,10 +362,13 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
 
 // ─── Single Embedding ───────────────────────────────────
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_QUERY"
+): Promise<number[]> {
   // Gemini first (available in all environments with GEMINI_API_KEY)
-  const gemini = await tryGeminiEmbedding(text);
-  if (gemini) return gemini;
+  const gemini = await tryGeminiEmbeddings([text], taskType);
+  if (gemini) return gemini[0];
 
   // Ollama second (local dev only, skipped in production unless OLLAMA_BASE_URL set)
   const ollama = await tryOllamaEmbeddings([text]);
@@ -252,7 +382,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 // → n-gram fingerprint (fully offline fallback).
 
 export async function generateEmbeddings(
-  texts: string[]
+  texts: string[],
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_DOCUMENT"
 ): Promise<EmbeddingResult[]> {
   if (texts.length === 0) return [];
 
@@ -261,30 +392,55 @@ export async function generateEmbeddings(
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
     const batch = texts.slice(i, i + BATCH_SIZE);
 
-    // 1. Gemini — primary in all environments (uses GEMINI_API_KEY)
-    if (geminiEmbeddingsAvailable !== false) {
-      const geminiResults = await Promise.all(
-        batch.map(async (text) => ({ text, embedding: await tryGeminiEmbedding(text) }))
+    // 1. Gemini — ONE request for the whole batch (not one per text).
+    const geminiResults = await tryGeminiEmbeddings(batch, taskType);
+    if (geminiResults) {
+      results.push(
+        ...batch.map((text, j) => ({
+          text,
+          embedding: geminiResults[j],
+          provider: "gemini" as const,
+        }))
       );
-
-      if (geminiResults.every((r) => r.embedding !== null)) {
-        results.push(...geminiResults.map((r) => ({ text: r.text, embedding: r.embedding! })));
-        if (i + BATCH_SIZE < texts.length) {
-          await new Promise((r) => setTimeout(r, 200)); // respect rate limits between batches
-        }
-        continue;
-      }
+      if (i + BATCH_SIZE < texts.length) await sleep(200); // be polite between batches
+      continue;
     }
 
     // 2. Ollama BGE-M3 — local dev fallback (skipped in production unless OLLAMA_BASE_URL set)
     const ollamaResults = await tryOllamaEmbeddings(batch);
     if (ollamaResults) {
-      results.push(...batch.map((text, j) => ({ text, embedding: ollamaResults[j] })));
+      results.push(
+        ...batch.map((text, j) => ({
+          text,
+          embedding: ollamaResults[j],
+          provider: "ollama" as const,
+        }))
+      );
       continue;
     }
 
-    // 3. n-gram fingerprint — always works, fully offline, zero cost
-    results.push(...batch.map((text) => ({ text, embedding: ngramFingerprint(text, EMBEDDING_DIMENSIONS) })));
+    // 3. n-gram fingerprint — offline stand-in, NOT a semantic embedding.
+    // Refused in production: silently persisting these makes the AI tutor's
+    // retrieval near-random with nothing anywhere reporting a problem.
+    if (!ALLOW_FINGERPRINT) {
+      throw new EmbeddingUnavailableError(
+        "No embedding provider is available (Gemini failed after retries, Ollama not configured). " +
+          "Refusing to store non-semantic fingerprint vectors. Check GEMINI_API_KEY and quota, " +
+          "then re-run processing. Set ALLOW_FINGERPRINT_EMBEDDINGS=true only for offline testing."
+      );
+    }
+
+    console.warn(
+      `[Embeddings] Falling back to n-gram fingerprints for ${batch.length} chunk(s) — ` +
+        `these are NOT semantic and will be marked as such.`
+    );
+    results.push(
+      ...batch.map((text) => ({
+        text,
+        embedding: ngramFingerprint(text, EMBEDDING_DIMENSIONS),
+        provider: "fingerprint" as const,
+      }))
+    );
   }
 
   return results;
@@ -294,12 +450,20 @@ export async function generateEmbeddings(
 
 export async function storeChunkEmbeddings(
   chapterId: string,
-  chunks: { chunkIndex: number; content: string; tokenCount: number; bloomLevel?: string }[],
-  embeddings: number[][]
+  chunks: {
+    chunkIndex: number;
+    content: string;
+    tokenCount: number;
+    bloomLevel?: string;
+    contentHash?: string;
+  }[],
+  embeddings: number[][],
+  providers?: EmbeddingProvider[]
 ): Promise<number> {
   if (chunks.length !== embeddings.length) {
     throw new Error("Chunks and embeddings arrays must have the same length");
   }
+  if (chunks.length === 0) return 0;
 
   // Ensure the vector column has the correct dimension before inserting.
   // Fixes the case where the DB was provisioned with vector(1024) (Ollama/BGE-M3)
@@ -312,55 +476,66 @@ export async function storeChunkEmbeddings(
     chapterId
   );
 
-  let stored = 0;
+  // ── Single multi-row INSERT ───────────────────────────────────────────────
+  // Previously one round trip per chunk — 600 sequential inserts for a large
+  // textbook. Building one statement keeps it to a single round trip.
+  //
+  // There is deliberately NO "insert without the embedding" fallback any more.
+  // That path wrote rows whose embedding was NULL, which semanticSearch filters
+  // out — so the content became permanently invisible to the AI tutor while the
+  // pipeline still reported success. A failure here now propagates, the
+  // textbook is marked FAILED, and the admin can retry.
+  const columns = 8;
+  const values: unknown[] = [];
+  const rows: string[] = [];
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    const embedding = embeddings[i];
-    const vectorStr = `[${embedding.join(",")}]`;
+  chunks.forEach((chunk, i) => {
+    const base = i * columns;
+    rows.push(
+      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}::vector, $${base + 8}, NOW())`
+    );
+    values.push(
+      `chunk_${chapterId}_${chunk.chunkIndex}`,
+      chapterId,
+      chunk.chunkIndex,
+      chunk.content,
+      chunk.tokenCount,
+      chunk.bloomLevel || null,
+      `[${embeddings[i].join(",")}]`,
+      PROVIDER_MODEL_ID[providers?.[i] ?? "gemini"]
+    );
+  });
 
-    try {
-      // Use raw SQL to insert with vector type
-      await db.$executeRawUnsafe(
-        `INSERT INTO content_chunks (id, "chapterId", "chunkIndex", content, "tokenCount", "bloomLevel", embedding, "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7::vector, NOW())`,
-        `chunk_${chapterId}_${chunk.chunkIndex}`,
-        chapterId,
-        chunk.chunkIndex,
-        chunk.content,
-        chunk.tokenCount,
-        chunk.bloomLevel || null,
-        vectorStr
-      );
-      stored++;
-    } catch (error) {
-      console.error(
-        `[Embeddings] Failed to store chunk ${chunk.chunkIndex}:`,
-        error
-      );
-      // Fallback: store without embedding (pgvector might not be enabled)
-      try {
-        await db.$executeRawUnsafe(
-          `INSERT INTO content_chunks (id, "chapterId", "chunkIndex", content, "tokenCount", "bloomLevel", "createdAt")
-           VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-          `chunk_${chapterId}_${chunk.chunkIndex}`,
-          chapterId,
-          chunk.chunkIndex,
-          chunk.content,
-          chunk.tokenCount,
-          chunk.bloomLevel || null
-        );
-        stored++;
-      } catch (err2) {
-        console.error(
-          `[Embeddings] Fallback insert also failed for chunk ${chunk.chunkIndex}:`,
-          err2
-        );
-      }
-    }
+  await db.$executeRawUnsafe(
+    `INSERT INTO content_chunks
+       (id, "chapterId", "chunkIndex", content, "tokenCount", "bloomLevel", embedding, "embeddingModel", "createdAt")
+     VALUES ${rows.join(", ")}`,
+    ...values
+  );
+
+  return chunks.length;
+}
+
+/**
+ * Chunks in a chapter whose embeddings came from the non-semantic fingerprint
+ * fallback, or from a model other than the current one. Lets the admin UI show
+ * "this book needs re-embedding" instead of silently serving bad retrieval.
+ */
+export async function countStaleEmbeddings(textbookId: string): Promise<number> {
+  try {
+    const rows: { count: bigint }[] = await db.$queryRawUnsafe(
+      `SELECT COUNT(*)::bigint AS count
+       FROM content_chunks cc
+       JOIN chapters ch ON ch.id = cc."chapterId"
+       WHERE ch."textbookId" = $1
+         AND (cc."embeddingModel" IS DISTINCT FROM $2 OR cc.embedding IS NULL)`,
+      textbookId,
+      EMBEDDING_MODEL
+    );
+    return Number(rows[0]?.count ?? 0);
+  } catch {
+    return 0;
   }
-
-  return stored;
 }
 
 // ─── Semantic Search (cosine similarity via pgvector) ──

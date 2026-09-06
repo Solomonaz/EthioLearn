@@ -693,6 +693,12 @@ model ContentChunk {
   bloomLevel String?
   embedding  Unsupported("vector(768)")?
 
+  // Which model produced `embedding`. Vectors from different models are NOT
+  // comparable, so this records provenance: it lets a re-embed find rows built
+  // by an older model, and lets the admin UI surface a book whose chunks were
+  // embedded by the offline fingerprint fallback (which is not semantic at all).
+  embeddingModel String?
+
   createdAt DateTime @default(now())
 
   @@unique([chapterId, chunkIndex])

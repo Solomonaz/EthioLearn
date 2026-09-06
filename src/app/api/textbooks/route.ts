@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { resolveGradeScope } from "@/lib/grade-scope";
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -20,10 +21,23 @@ export async function GET(request: Request) {
     chapters: { some: {} },
   };
 
-  // Grade filter — parse safely and skip if invalid
-  if (grade) {
-    const gradeNum = parseInt(grade, 10);
-    if (!isNaN(gradeNum)) where.grade = gradeNum;
+  // ── Grade scoping (see lib/grade-scope) ──────────────────────────────────
+  // A student may open their own grade plus the lower grades in the same cycle
+  // — the grade 8 exam is drawn from grades 7–8, ESSLCE from grades 9–12. The
+  // requested grade is only ever a *narrowing* of that scope: anything outside
+  // it is dropped, so this can no longer be widened from the query string.
+  const requestedGrade = grade ? parseInt(grade, 10) : null;
+  const scope = resolveGradeScope(user, Number.isNaN(requestedGrade) ? null : requestedGrade);
+  if (scope !== null) {
+    if (scope.length === 0) {
+      // Either a grade outside the student's scope, or a student with no grade
+      // set yet — both show nothing rather than falling back to everything.
+      return NextResponse.json({ textbooks: [] });
+    }
+    where.grade = { in: scope };
+  } else if (requestedGrade !== null && !Number.isNaN(requestedGrade)) {
+    // Non-students (admins, teachers) keep the old free-form grade filter.
+    where.grade = requestedGrade;
   }
 
   if (subject) where.subject = subject;

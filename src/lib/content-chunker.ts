@@ -12,7 +12,22 @@
 
 const MIN_CHUNK_TOKENS = 500;
 const MAX_CHUNK_TOKENS = 1000;
-const CHARS_PER_TOKEN = 4; // reasonable approximation
+
+// ── Token estimation ────────────────────────────────────
+// "~4 chars per token" is an ENGLISH rule and badly undercounts Ethiopic.
+// Amharic sits in U+1200–U+137F: 3 UTF-8 bytes per character, and BPE
+// tokenizers split it far more finely than Latin text — a 50-character Amharic
+// sentence is ~130 bytes and tokenizes to roughly 3–4× what the /4 rule
+// predicts. Undercounting there produces oversized chunks that overflow model
+// context and blow past cost estimates, so each script is counted separately.
+const CHARS_PER_TOKEN = 4; // Latin / ASCII
+const CHARS_PER_TOKEN_ETHIOPIC = 1.5; // Ge'ez script (Amharic, Tigrinya)
+const CHARS_PER_TOKEN_OTHER = 2; // other non-ASCII
+
+// Overlap carried from the end of one chunk into the start of the next, so a
+// fact spanning a boundary is still retrievable from at least one chunk.
+// ~12% of the maximum, sentence-aligned so overlap never starts mid-sentence.
+const OVERLAP_TOKENS = 120;
 
 const MIN_CHUNK_CHARS = MIN_CHUNK_TOKENS * CHARS_PER_TOKEN; // 2000
 const MAX_CHUNK_CHARS = MAX_CHUNK_TOKENS * CHARS_PER_TOKEN; // 4000
@@ -27,8 +42,29 @@ export interface ContentChunk {
 
 // ─── Helpers ────────────────────────────────────────────
 
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+/**
+ * Estimate token count, weighting each script by how finely it tokenizes.
+ * Latin text stays on the familiar ~4-chars-per-token rule; Ethiopic is counted
+ * far more conservatively (see CHARS_PER_TOKEN_ETHIOPIC).
+ */
+export function estimateTokens(text: string): number {
+  let latin = 0;
+  let ethiopic = 0;
+  let other = 0;
+
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp < 0x80) latin++;
+    // Ethiopic + Ethiopic Supplement/Extended
+    else if ((cp >= 0x1200 && cp <= 0x139f) || (cp >= 0x2d80 && cp <= 0x2ddf)) ethiopic++;
+    else other++;
+  }
+
+  return Math.ceil(
+    latin / CHARS_PER_TOKEN +
+      ethiopic / CHARS_PER_TOKEN_ETHIOPIC +
+      other / CHARS_PER_TOKEN_OTHER,
+  );
 }
 
 /**
@@ -172,7 +208,47 @@ export function chunkContent(text: string): ContentChunk[] {
     }
   }
 
-  return chunks;
+  return applyOverlap(chunks);
+}
+
+/**
+ * Carry the tail of each chunk into the start of the next one.
+ *
+ * Chunks are otherwise disjoint, so a fact whose sentences straddle a boundary
+ * is in neither chunk in full and retrieval misses it. Taking whole sentences
+ * from the end of the previous chunk — up to OVERLAP_TOKENS — means every
+ * boundary-spanning statement lives complete in at least one chunk.
+ *
+ * `content` grows, so `tokenCount` is recomputed. Chunk 0 is never modified.
+ */
+function applyOverlap(chunks: ContentChunk[]): ContentChunk[] {
+  if (chunks.length < 2) return chunks;
+
+  return chunks.map((chunk, i) => {
+    if (i === 0) return chunk;
+
+    const prevSentences = splitIntoSentences(chunks[i - 1].content);
+    const carried: string[] = [];
+    let carriedTokens = 0;
+
+    // Walk backwards through the previous chunk taking whole sentences.
+    for (let s = prevSentences.length - 1; s >= 0; s--) {
+      const sentence = prevSentences[s];
+      const cost = estimateTokens(sentence);
+      if (carriedTokens + cost > OVERLAP_TOKENS) break;
+      carried.unshift(sentence);
+      carriedTokens += cost;
+    }
+
+    if (carried.length === 0) return chunk;
+
+    const content = carried.join(" ") + "\n\n" + chunk.content;
+    return {
+      chunkIndex: chunk.chunkIndex,
+      content,
+      tokenCount: estimateTokens(content),
+    };
+  });
 }
 
 /**

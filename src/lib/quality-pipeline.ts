@@ -14,9 +14,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
-import { ollamaChat } from "./ollama";
+import { ollamaChat, isOllamaEnabled } from "./ollama";
 import { groqChat } from "./groq";
-import { cerebrasChat } from "./cerebras";
 import { nvidiaChat } from "./nvidia";
 
 // ─── Types ──────────────────────────────────────────────
@@ -84,11 +83,8 @@ const RELEVANCE_THRESHOLD = 0.5;
 const DUPLICATE_THRESHOLD = 0.75; // Lowered from 0.85 to catch near-duplicates
 const MIN_QUESTION_LENGTH = 15;
 
-// Skip Ollama chat in production when OLLAMA_BASE_URL is absent or still localhost.
-// Mirrors the same guard used in embeddings.ts.
-const ollamaChatEnabled =
-  !!process.env.OLLAMA_BASE_URL &&
-  process.env.OLLAMA_BASE_URL !== "http://localhost:11434";
+// Shared guard from lib/ollama — off in production, on when OLLAMA_ENABLED=true.
+const ollamaChatEnabled = isOllamaEnabled();
 
 // Compound question endings that are invalid for MCQ / TRUE_FALSE (Q12)
 const COMPOUND_QUESTION_PATTERNS = [
@@ -548,26 +544,84 @@ type ChatFn = (
 // respond (→ fail closed).
 async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<string> {
   const providers: { name: string; fn: ChatFn }[] = [
+    // NOTE: Cerebras was removed (free tier returns 402), so in production the
+    // independent-verifier pool is Groq + NVIDIA. The verifier still avoids the
+    // generating provider, but with only two the critic is always the other one.
     { name: "groq", fn: (p, o) => groqChat(p, o) },
-    { name: "cerebras", fn: (p, o) => cerebrasChat(p, o) },
     { name: "nvidia", fn: (p, o) => nvidiaChat(p, o) },
   ];
-  if (ollamaChatEnabled) providers.push({ name: "ollama", fn: (p) => ollamaChat(p) });
-
+  // Preference order:
+  //   1. a cloud provider that did NOT generate these questions (true second opinion)
+  //   2. the generating provider itself — not independent, but a real check,
+  //      and seconds rather than minutes
+  //   3. local Ollama LAST
+  //
+  // Ollama is last deliberately. It used to sit ahead of the generating
+  // provider, so when the independent cloud verifier failed, verification fell
+  // to CPU inference and took 203s where Groq answers in about 10 — turning a
+  // one-minute quiz into a four-minute wait. Preferring a fast non-independent
+  // check over a slow independent one is the right trade here: the alternative
+  // the student actually experiences is giving up.
   const ordered = [
     ...providers.filter((p) => p.name !== avoidProvider),
     ...providers.filter((p) => p.name === avoidProvider),
+    ...(ollamaChatEnabled
+      ? [{ name: "ollama", fn: (p: string) => ollamaChat(p) as Promise<string | null> }]
+      : []),
   ];
 
-  for (const p of ordered) {
-    try {
-      const out = await p.fn(prompt, { temperature: 0.1, maxTokens: 1200 });
-      if (out && out.trim()) return out;
-    } catch {
-      /* try the next provider */
+  // Retry the whole chain with backoff before giving up.
+  //
+  // Generation and verification run back to back inside one request, so they
+  // compete for the SAME per-minute token budget: a quiz spends 3–4 provider
+  // calls in quick succession. When the pool is thin (Gemini's free tier allows
+  // 20 requests/day, so a single 429 from Groq can leave nothing) the verifier
+  // was the step that lost — every question came back UNVERIFIED, fail-closed
+  // dropped them all, and the student saw a hard error for what was really a
+  // transient rate limit. A short wait is usually enough for the window to roll.
+  const RETRY_DELAYS_MS = [0, 2_000, 6_000];
+
+  for (const [attempt, delay] of RETRY_DELAYS_MS.entries()) {
+    if (delay > 0) {
+      console.warn(
+        `[Quality] No verifier reachable — retrying in ${delay}ms (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length}).`
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    for (const p of ordered) {
+      try {
+        const out = await p.fn(prompt, { temperature: 0.1, maxTokens: 1200 });
+        // A non-empty string is NOT success. Accepting one was the bug: NVIDIA
+        // answers this prompt with prose or a malformed object rather than the
+        // verdict schema, and because that is "non-empty" the chain stopped
+        // there — never reaching Ollama or Groq. The unusable reply then failed
+        // to parse, every question came back UNVERIFIED, fail-closed dropped
+        // them all, and the student saw an error while two working verifiers
+        // sat untried. Only a reply that actually yields verdicts counts.
+        if (out && out.trim() && hasUsableVerdicts(out)) return out;
+        if (out && out.trim()) {
+          console.warn(
+            `[Quality] Verifier "${p.name}" replied but produced no usable verdicts — trying the next provider.`
+          );
+        }
+      } catch {
+        /* try the next provider */
+      }
     }
   }
+
   return "";
+}
+
+/** Does this raw reply actually contain the verdict array the caller needs? */
+function hasUsableVerdicts(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.verdicts) && parsed.verdicts.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function buildVerifyPrompt(

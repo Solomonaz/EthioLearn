@@ -1,8 +1,47 @@
 import { Difficulty } from "@prisma/client";
+import { isInExamMatrix } from "./grade-scope";
 
 export function getPointsForDifficulty(difficulty: Difficulty): number {
   const map: Record<Difficulty, number> = { EASY: 10, MEDIUM: 20, HARD: 30 };
   return map[difficulty];
+}
+
+// ── Content-grade weighting (see lib/grade-scope) ────────────────────────────
+// Students can open more than their own grade — a grade 8 needs grade 7, a
+// grade 12 needs grades 9–11 — but the difficulty→points map is grade-blind, so
+// an unweighted EASY question is worth 10 points whether it came from grade 9
+// or grade 12. Without this, widening access would let a senior student climb
+// their own grade's leaderboard on junior content.
+//
+// Two separate guards, because "below my grade" and "not on my exam" are
+// different things:
+//
+//   1. OUT OF EXAM MATRIX → this content isn't on any exam the student sits
+//      this year (a grade 10 revising grade 9). Real study, so it still scores,
+//      but at a fraction, and never toward the prize balance.
+//   2. BELOW ENROLLMENT GRADE → capped per day in the submit route, even when
+//      it IS exam content. A grade 12 revising grade 9 chemistry is doing
+//      exactly what ESSLCE asks; a grade 12 grinding grade 9 EASY questions all
+//      afternoon is farming. The ceiling separates the two by volume.
+//
+// Content with no resolvable grade fails open at 1.0 — legacy or teacher-
+// authored material shouldn't silently stop paying out.
+
+/** Points multiplier for correct answers on content outside the exam matrix. */
+export const OUT_OF_MATRIX_POINTS_FACTOR = 0.25;
+
+/**
+ * Per-question multiplier for where the content sits relative to the student.
+ * 1.0 when the content is on their exam matrix (or its grade is unknown),
+ * `OUT_OF_MATRIX_POINTS_FACTOR` when it is scope-legal review but off-matrix.
+ */
+export function getContentGradeFactor(
+  userGrade: number | null | undefined,
+  contentGrade: number | null | undefined
+): number {
+  if (contentGrade == null) return 1;
+  if (userGrade == null) return 1;
+  return isInExamMatrix(userGrade, contentGrade) ? 1 : OUT_OF_MATRIX_POINTS_FACTOR;
 }
 
 export function getStreakMultiplier(consecutiveCorrect: number): number {

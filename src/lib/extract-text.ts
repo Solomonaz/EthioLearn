@@ -24,6 +24,12 @@ export interface ExtractionResult {
   flaggedPages?: number[];
   /** Per-page OCR details, only set when usedOcr=true */
   pageOcrDetails?: PageOcrInfo[];
+  /** True when the PDF exceeded the OCR page cap and pages were NOT read. */
+  truncated?: boolean;
+  /** How many trailing pages were skipped by the OCR cap. */
+  pagesSkipped?: number;
+  /** Human-readable warnings to show the admin after upload. */
+  warnings?: string[];
 }
 
 // ─── Main Entry ─────────────────────────────────────────
@@ -117,6 +123,19 @@ async function extractFromPdfWithOcr(
       );
     }
 
+    const warnings: string[] = [];
+    if (ocrResult.truncated) {
+      warnings.push(
+        `Only the first ${ocrResult.pageCount} of ${ocrResult.totalPagesInDocument} pages were read — ` +
+        `${ocrResult.pagesSkipped} page(s) were skipped by the OCR limit. Split this file and upload the rest separately.`
+      );
+    }
+    if (ocrResult.flaggedPages.length > 0) {
+      warnings.push(
+        `${ocrResult.flaggedPages.length} page(s) scanned below 80% OCR confidence and may contain errors.`
+      );
+    }
+
     return {
       text: ocrResult.text,
       pageCount: ocrResult.pageCount,
@@ -124,6 +143,9 @@ async function extractFromPdfWithOcr(
       usedOcr: true,
       ocrConfidence: ocrResult.averageConfidence,
       flaggedPages: ocrResult.flaggedPages,
+      truncated: ocrResult.truncated,
+      pagesSkipped: ocrResult.pagesSkipped,
+      warnings,
       pageOcrDetails: ocrResult.pageResults.map((p) => ({
         page: p.page,
         confidence: p.confidence,

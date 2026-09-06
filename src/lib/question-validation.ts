@@ -2,7 +2,7 @@
  * Shared validation for AI-generated questions and detected chapters.
  *
  * This is the single source of truth used by every provider (Gemini, Groq,
- * Cerebras, NVIDIA). Previously gemini.ts and groq.ts each held an identical
+ * NVIDIA). Previously gemini.ts and groq.ts each held an identical
  * copy of this logic, which could silently drift apart. Centralising it keeps
  * every provider's output held to exactly the same standard.
  */

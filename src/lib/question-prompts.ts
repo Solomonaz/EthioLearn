@@ -19,7 +19,7 @@
 import type { GenerateOptions } from "./gemini";
 
 // Single shared content window for question generation so every provider
-// (Gemini, Groq, Cerebras, NVIDIA) sees the SAME slice of chapter text and
+// (Gemini, Groq, NVIDIA) sees the SAME slice of chapter text and
 // therefore produces comparable questions regardless of which one answers.
 export const QUESTION_CONTENT_CHARS = 30000;
 
@@ -336,6 +336,32 @@ const FORMAT_RULES = `QUESTION-TYPE FORMAT RULES:
      RIGHT: ["Roman conquest of Greece", "Philip II defeats the Greek city-states", …]
      (The correctAnswer still encodes the true order; the options must not.)`;
 
+/**
+ * Keep only the format rules for the question types actually requested.
+ *
+ * FORMAT_RULES documents all five types, and the whole block was sent every
+ * time — so asking for 5 MCQs still shipped the MATCH_PAIRS and ORDERING specs.
+ * That mattered: the built prompt reached 23,727 characters for a 2,018-character
+ * chapter (91% instructions), landing at ~8,182 tokens against Groq's 8,000 TPM
+ * limit. Generation then failed with a 413 no matter how short the chapter was.
+ *
+ * Dropping the irrelevant sections is quality-neutral — a model generating MCQs
+ * has no use for the ORDERING rules — and takes the request back under the cap.
+ */
+function formatRulesFor(types: string[]): string {
+  const wanted = new Set(types.map((t) => t.toUpperCase()));
+  const [header, ...sections] = FORMAT_RULES.split(/\n(?=\d+\. [A-Z_]+\n)/);
+
+  const kept = sections.filter((section) => {
+    const name = section.match(/^\d+\.\s+([A-Z_]+)/)?.[1];
+    return name ? wanted.has(name) : true;
+  });
+
+  // Renumber so the model never sees "1. MCQ" followed by "4. MATCH_PAIRS".
+  const renumbered = kept.map((sec, i) => sec.replace(/^\d+\./, `${i + 1}.`));
+  return [header, ...renumbered].join("\n");
+}
+
 // ─── Quantitative subjects (Physics, Maths, Chemistry …) ───────────────────
 
 /**
@@ -449,7 +475,7 @@ ${DIFFICULTY_RUBRIC}
 
 ${QUALITY_RULES}
 
-${FORMAT_RULES}
+${formatRulesFor(types)}
 ${quantitativeBlock}
 DIFFICULTY TARGET FOR THIS BATCH:
 ${difficultyInstruction}

@@ -8,6 +8,9 @@ import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { isInStudyScope } from "@/lib/grade-scope";
+import { selectGenerationContent } from "@/lib/generation-content";
+import { QUESTION_CONTENT_CHARS } from "@/lib/question-prompts";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -67,6 +70,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
     }
 
+    // Grade scoping — same rule as the bank route: a student may only generate
+    // from a grade inside their study scope (see lib/grade-scope).
+    if (user.role === "STUDENT" && !isInStudyScope(user.grade, textbook.grade)) {
+      return NextResponse.json(
+        { error: "That grade isn't part of your study scope.", code: "GRADE_OUT_OF_SCOPE" },
+        { status: 403 }
+      );
+    }
+
     let finalContent = "";
     let finalTitle = "";
     let targetChapterId: string | null = null;
@@ -105,6 +117,24 @@ export async function POST(request: Request) {
       finalTitle = chapter.title;
       finalContent = chapter.content || textbook.content || "";
       targetChapterId = chapter.id;
+
+      // Spend the prompt's character budget across the WHOLE chapter instead of
+      // its opening 30k. Rotation advances with the chapter's existing question
+      // count so repeated generation sweeps new material each time.
+      const priorQuestions = await db.question.count({
+        where: { chapterId: chapter.id },
+      });
+      const selected = await selectGenerationContent({
+        chapterId: chapter.id,
+        fallbackContent: finalContent,
+        budgetChars: QUESTION_CONTENT_CHARS,
+        rotation: priorQuestions,
+      });
+      finalContent = selected.content;
+      console.log(
+        `[Generate AI] Content strategy: ${selected.strategy} ` +
+        `(${selected.chunksUsed}/${selected.chunksAvailable} chunks, rotation ${priorQuestions})`
+      );
     }
 
     if (!finalContent || finalContent.length < 100) {
@@ -149,10 +179,47 @@ export async function POST(request: Request) {
       .slice(0, count);
 
     if (aiQuestions.length === 0) {
-      return NextResponse.json(
-        { error: "Couldn't produce verified questions right now. Please try again." },
-        { status: 502 }
+      // Two very different failures used to share one message.
+      //
+      //   UNVERIFIED — the independent solver could not be reached at all
+      //                (rate limit / exhausted quota). Nothing is wrong with
+      //                the questions; the check simply never ran. Transient.
+      //   rejected   — the solver ran and DISAGREED with the answer key, or
+      //                the chapter is too thin to build sound questions from.
+      //                Retrying changes nothing.
+      //
+      // Telling the student "try again" when the content is the problem sends
+      // them into a loop, and blaming the content when a provider was merely
+      // busy is simply wrong.
+      const unverifiable = verdicts.filter((v) => v?.flag === "UNVERIFIED").length;
+      const providersUnavailable = unverifiable > rawQuestions.length / 2;
+
+      console.warn(
+        `[Generate AI] 0 of ${rawQuestions.length} questions served — ` +
+        `${unverifiable} unverifiable (provider unreachable), ` +
+        `${rawQuestions.length - unverifiable} rejected by the solver.`
       );
+
+      return providersUnavailable
+        ? NextResponse.json(
+            {
+              error:
+                "The AI is busy right now and couldn't double-check the questions. Please try again in a minute.",
+              code: "VERIFIER_UNAVAILABLE",
+              retryable: true,
+            },
+            { status: 503, headers: { "Retry-After": "60" } }
+          )
+        : NextResponse.json(
+            {
+              error:
+                "Couldn't build questions that passed our accuracy check for this chapter. " +
+                "It may have too little content — try another chapter, or a different question type.",
+              code: "NO_QUESTIONS_PASSED_REVIEW",
+              retryable: false,
+            },
+            { status: 502 }
+          );
     }
 
     // 4. Save to DB (Filtered by Deduplication)
@@ -213,6 +280,16 @@ export async function POST(request: Request) {
         };
       }),
       adaptiveCalibrated: body.difficulty === "ADAPTIVE" ? difficulty : undefined,
+      // A quiz can legitimately come back shorter than requested: questions the
+      // independent solver rejected are dropped rather than served. Reporting
+      // the shortfall stops a 3-question quiz looking like a silent bug, and
+      // tells the student why without exposing the rejected questions.
+      requestedQuestions: count,
+      deliveredQuestions: allQuizQuestions.length,
+      shortfallReason:
+        allQuizQuestions.length < count
+          ? "Some generated questions didn't pass our accuracy check and were left out."
+          : undefined,
     });
   } catch (error) {
     console.error("[Student AI Generation Error]", error);

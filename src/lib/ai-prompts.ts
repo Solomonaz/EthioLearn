@@ -1,6 +1,6 @@
 /**
  * Shared prompt builders for the AI Tutor chat and animated video-tutorial
- * scripts. Centralising these means every provider (Gemini, Groq, Cerebras,
+ * scripts. Centralising these means every provider (Gemini, Groq,
  * NVIDIA) sends the SAME instructions and uses the SAME content window, so a
  * mid-session provider failover no longer changes the character of the output.
  *

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { calculateQuizPoints, calculateXPLevel, getAccuracyFactor } from "@/lib/points";
+import { calculateQuizPoints, calculateXPLevel, getAccuracyFactor, getContentGradeFactor } from "@/lib/points";
+import { getBelowGradeScope } from "@/lib/grade-scope";
 import { Difficulty } from "@prisma/client";
 import { notifyLevelUp } from "@/lib/notifications";
 import { checkAndAwardAchievements } from "@/lib/achievements";
@@ -24,6 +25,15 @@ const MIN_MS_PER_QUESTION = 3000;
 // fraction of the points for the leaderboard (and nothing toward prizes) — so
 // retaking the same quiz over and over can't be used to farm points.
 const REVIEW_POINTS_FACTOR = 0.25;
+// Students may study below their enrollment grade (a grade 8 needs grade 7, a
+// grade 12 needs 9–11 — see lib/grade-scope). That content is legitimate, and
+// for exam years it is literally what the exam tests, so it is NOT devalued.
+// But it is also the easiest material available to them, so the number of
+// below-grade questions that can SCORE in a day is capped. Past the ceiling
+// the quiz still runs and still records progress and mastery — it just stops
+// paying points. Tune this number; 60 ≈ six 10-question quizzes of revision,
+// generous for real exam prep and short of an afternoon of grinding.
+const MAX_BELOW_GRADE_SCORED_QUESTIONS_PER_DAY = 60;
 
 interface SubmittedAnswer {
   questionId: string;
@@ -131,6 +141,7 @@ export async function POST(
           videoUrl: null as string | null,
           questionText: "",
           options: [] as unknown,
+          chapterId: null as string | null,
         };
       }
 
@@ -166,6 +177,7 @@ export async function POST(
         videoUrl: question.videoUrl ?? null,
         questionText: question.questionText,
         options: (question.options as unknown[]).map(normalizeOption),
+        chapterId: question.chapterId,
       };
     });
 
@@ -234,9 +246,86 @@ export async function POST(
     });
     const masteredBefore = new Set(priorCorrect.map((a) => a.questionId));
 
-    // Per-answer review weight: new-correct = full, repeat-correct = review, wrong = 0.
-    const reviewWeight = gradedAnswers.map((a) =>
-      a.isCorrect ? (masteredBefore.has(a.questionId) ? REVIEW_POINTS_FACTOR : 1) : 0,
+    // ── Content-grade weighting (see lib/grade-scope) ───────────────────────
+    // A student's study scope spans several grades — a grade 8 may open grade
+    // 7, a grade 12 may open 9–11 — so the questions in one quiz can come from
+    // below their enrollment grade. Resolve each question's grade through
+    // chapter → textbook, then apply the two guards: content off the student's
+    // exam matrix scores at a fraction and never toward prizes, and below-grade
+    // content is capped by volume per day.
+    const answerChapterIds = [
+      ...new Set(
+        gradedAnswers.map((a) => a.chapterId).filter((c): c is string => !!c),
+      ),
+    ];
+    const chapterRows = answerChapterIds.length
+      ? await db.chapter.findMany({
+          where: { id: { in: answerChapterIds } },
+          select: { id: true, textbook: { select: { grade: true } } },
+        })
+      : [];
+    const gradeByChapter = new Map(
+      chapterRows.map((c) => [c.id, c.textbook?.grade ?? null]),
+    );
+
+    // Only students are grade-scoped; staff taking a quiz score unweighted.
+    const userGrade = user.role === "STUDENT" ? user.grade ?? null : null;
+    const belowGrades = getBelowGradeScope(userGrade);
+    const contentGrades = gradedAnswers.map((a) =>
+      a.chapterId ? gradeByChapter.get(a.chapterId) ?? null : null,
+    );
+
+    // Below-grade scoring budget left today. Counted over already-completed
+    // quizzes, so starting a fresh quiz can't reset it.
+    let belowGradeBudget = Number.POSITIVE_INFINITY;
+    if (belowGrades.length > 0) {
+      const belowAnsweredToday = await db.quizAnswer.count({
+        where: {
+          quiz: {
+            studentId: user.id,
+            completedAt: { gte: todayStart, lt: tomorrowStart },
+          },
+          question: { chapter: { textbook: { grade: { in: belowGrades } } } },
+        },
+      });
+      belowGradeBudget = Math.max(
+        0,
+        MAX_BELOW_GRADE_SCORED_QUESTIONS_PER_DAY - belowAnsweredToday,
+      );
+    }
+
+    // Per-answer grade factor. Below-grade answers draw the daily budget down
+    // in order; once it is spent, the remainder score zero.
+    let belowGradeUsed = 0;
+    let belowGradeCapped = 0;
+    const gradeFactor = gradedAnswers.map((a, i) => {
+      const contentGrade = contentGrades[i];
+      if (contentGrade == null || userGrade == null) return 1;
+      if (contentGrade < userGrade) {
+        if (belowGradeUsed >= belowGradeBudget) {
+          belowGradeCapped++;
+          return 0;
+        }
+        belowGradeUsed++;
+      }
+      return getContentGradeFactor(userGrade, contentGrade);
+    });
+
+    // Performance bonuses scale with content value too — a flawless run through
+    // below-grade revision shouldn't pay the same perfect-score bonus as one
+    // through the student's own grade.
+    const meanGradeFactor =
+      gradeFactor.length > 0
+        ? gradeFactor.reduce((s, f) => s + f, 0) / gradeFactor.length
+        : 1;
+
+    // Per-answer review weight: new-correct = full, repeat-correct = review,
+    // wrong = 0 — then scaled by where the content sits for this student.
+    const reviewWeight = gradedAnswers.map((a, i) =>
+      a.isCorrect
+        ? (masteredBefore.has(a.questionId) ? REVIEW_POINTS_FACTOR : 1) *
+          gradeFactor[i]
+        : 0,
     );
     const weightedBaseArr = breakdown.map((b, i) => (b ?? 0) * reviewWeight[i]);
     const weightedBase = weightedBaseArr.reduce((s, n) => s + n, 0);
@@ -250,12 +339,15 @@ export async function POST(
     ).length;
     const noveltyFactor =
       gradedAnswers.length > 0 ? newCorrectCount / gradedAnswers.length : 0;
-    // Base points from newly-mastered questions only — the sole source of prize points.
-    const newBase = breakdown.reduce(
-      (s, b, i) =>
-        s + (gradedAnswers[i].isCorrect && !masteredBefore.has(gradedAnswers[i].questionId) ? (b ?? 0) : 0),
-      0,
-    );
+    // Base points from newly-mastered questions only — the sole source of prize
+    // points. Restricted further to full-value content: on the student's exam
+    // matrix AND inside the daily below-grade ceiling. Off-matrix revision
+    // still earns leaderboard points (at REVIEW rate) but never prize points.
+    const newBase = breakdown.reduce((s, b, i) => {
+      const a = gradedAnswers[i];
+      const freshlyMastered = a.isCorrect && !masteredBefore.has(a.questionId);
+      return s + (freshlyMastered && gradeFactor[i] === 1 ? (b ?? 0) : 0);
+    }, 0);
 
     // Scale points by accuracy (60% → 0.6×, 100% → 1.0×) so a marginal pass
     // earns proportionally less. Zeroed entirely when an anti-gaming rule fires.
@@ -266,9 +358,14 @@ export async function POST(
     // Leaderboard/XP points: review-weighted base + novelty-scaled performance
     // bonuses + login-streak bonus, all scaled by accuracy.
     const totalPointsEarned = Math.round(
-      (weightedBase + performanceBonuses * noveltyFactor + streakBonus) * accuracyFactor,
+      (weightedBase +
+        performanceBonuses * noveltyFactor * meanGradeFactor +
+        streakBonus) *
+        accuracyFactor,
     );
-    const effectiveSpeedBonus = Math.round(speedBonus * noveltyFactor * accuracyFactor);
+    const effectiveSpeedBonus = Math.round(
+      speedBonus * noveltyFactor * meanGradeFactor * accuracyFactor,
+    );
     const effectiveStreakBonus = Math.round(streakBonus * accuracyFactor);
 
     // Prize-eligible points: only NEW mastery on quality quizzes contributes.
@@ -277,7 +374,10 @@ export async function POST(
     // excluded — prizes come from mastery, not from showing up.
     const redeemableEarned =
       !pointsBlocked && score >= QUALITY_SCORE_FOR_REWARDS
-        ? Math.round((newBase + performanceBonuses * noveltyFactor) * accuracyFactor)
+        ? Math.round(
+            (newBase + performanceBonuses * noveltyFactor * meanGradeFactor) *
+              accuracyFactor,
+          )
         : 0;
 
     const repeatCount = gradedAnswers.filter((a) => masteredBefore.has(a.questionId)).length;
@@ -466,6 +566,11 @@ export async function POST(
       repeatQuestions: repeatCount,
       newQuestions: newCorrectCount,
       pointsReducedForRepeats: repeatCount > 0,
+      // Grade-scope weighting — lets the results screen explain why a revision
+      // quiz paid less than the raw difficulty would suggest.
+      offMatrixQuestions: gradeFactor.filter((f) => f > 0 && f < 1).length,
+      belowGradeCappedQuestions: belowGradeCapped,
+      belowGradeCapReached: belowGradeCapped > 0,
       newTotalPoints: updatedUser.totalPoints,
       newXPLevel,
       retryChapterId,

@@ -1,5 +1,5 @@
 /**
- * Unified AI provider: Gemini → Cerebras → NVIDIA → Groq fallback chain (production).
+ * Unified AI provider: Groq → NVIDIA → Gemini fallback chain (production).
  * Ollama Mistral is available as a local-dev-only tertiary fallback when
  * OLLAMA_BASE_URL is set to a non-localhost address.
  *
@@ -14,9 +14,8 @@ import {
   splitTextByChapters,
 } from "./gemini";
 import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript } from "./groq";
-import { cerebrasGenerateQuestions, cerebrasDetectChapters, hasCerebrasKey } from "./cerebras";
 import { nvidiaGenerateQuestions, nvidiaDetectChapters, hasNvidiaKey } from "./nvidia";
-import { ollamaGenerateQuestions, ollamaDetectChapters } from "./ollama";
+import { ollamaGenerateQuestions, ollamaDetectChapters, isOllamaEnabled } from "./ollama";
 
 import type {
   GenerateOptions,
@@ -56,53 +55,33 @@ function hasGeminiKey(): boolean {
   return !!process.env.GEMINI_API_KEY;
 }
 
-// Mirrors the same guard in embeddings.ts and quality-pipeline.ts.
-// Ollama is only enabled in local dev when OLLAMA_BASE_URL is explicitly set
-// to a non-localhost address. In production this always returns false.
+// Enablement lives in lib/ollama (isOllamaEnabled) so there is ONE definition
+// instead of four slightly different copies of the same string comparison.
 function hasOllama(): boolean {
-  return (
-    !!process.env.OLLAMA_BASE_URL &&
-    process.env.OLLAMA_BASE_URL !== "http://localhost:11434"
-  );
+  return isOllamaEnabled();
 }
 
-// ─── Generate Questions (NVIDIA → Gemini → Cerebras → Groq → Ollama) ────────
+// ─── Generate Questions (Groq → NVIDIA → Gemini → Ollama) ──────────────────
 //
-// NVIDIA NIM is primary: it has the highest free-tier RPM and no hard credit
-// cap, so it keeps working even when Gemini's free tier returns "limit: 0" 429s
-// and Cerebras hits its per-minute token cap on large textbook content. Gemini
-// (1M TPM when available) and Cerebras remain high-capacity fallbacks; Groq is a
-// fast last resort before local Ollama.
+// Cerebras was removed from every chain: its free tier returns 402 Payment
+// Required, so it only ever added a failed call and a delay before the real
+// provider ran.
+//
+// Groq is first — fast and reliable for the small per-batch payloads
+// generateQuestionsBatched sends. NVIDIA follows as the high-RPM capacity
+// fallback, then Gemini (whose free tier has been returning "limit: 0" 429s),
+// then local Ollama in dev.
 
 export async function generateQuestions(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "cerebras" | "nvidia" | "groq" | "ollama" }> {
+): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
   // Every provider in the chain falls through to the next on ANY failure —
   // rate-limit OR transient error (500, parse failure, bad key). Failing fast
   // on a non-429 error would waste the configured fallbacks, so the last
   // error is captured and surfaced only if the ENTIRE chain is exhausted.
   let lastError: unknown = null;
 
-  // Ordered for small, batched requests: Cerebras and Groq are fast and reliable
-  // for the small per-batch payloads generateQuestionsBatched sends. NVIDIA's
-  // 70B model is slow (often times out on real chapter content) so it sits
-  // third, and Gemini — currently returning free-tier "limit: 0" 429s — is
-  // near the end so it doesn't waste a slot when it's unavailable.
-
-  // 1. Cerebras — fast, separate free-tier quota; best for small batches.
-  if (hasCerebrasKey()) {
-    try {
-      const questions = await cerebrasGenerateQuestions(opts);
-      return { questions, provider: "cerebras" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Cerebras failed (${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
-      );
-    }
-  }
-
-  // 2. Groq — fast; small batched requests fit its 12K TPM free tier.
+  // 1. Groq — fast; small batched requests fit its 12K TPM free tier.
   if (hasGroqKey()) {
     try {
       const questions = await groqGenerateQuestions(opts);
@@ -115,7 +94,7 @@ export async function generateQuestions(
     }
   }
 
-  // 3. NVIDIA NIM — high RPM, no hard cap, but slow; a capacity fallback.
+  // 2. NVIDIA NIM — high RPM, no hard cap, but slow; a capacity fallback.
   if (hasNvidiaKey()) {
     try {
       const questions = await nvidiaGenerateQuestions(opts);
@@ -128,7 +107,7 @@ export async function generateQuestions(
     }
   }
 
-  // 4. Gemini — 1M TPM when available (currently limit: 0 on the free tier).
+  // 3. Gemini — 1M TPM when available (currently limit: 0 on the free tier).
   if (hasGeminiKey()) {
     try {
       const questions = await generateQuestionsFromContent(opts);
@@ -141,7 +120,7 @@ export async function generateQuestions(
     }
   }
 
-  // 5. Ollama Mistral — local dev only, skipped in production
+  // 4. Ollama Mistral — local dev only, skipped in production
   if (hasOllama()) {
     try {
       const questions = await ollamaGenerateQuestions(opts);
@@ -160,7 +139,7 @@ export async function generateQuestions(
     (lastError
       ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}. `
       : "No AI provider is configured. ") +
-    "Add a free NVIDIA_API_KEY (https://build.nvidia.com) or CEREBRAS_API_KEY (https://cloud.cerebras.ai) for more capacity, or wait a moment and try again."
+    "Add a free NVIDIA_API_KEY (https://build.nvidia.com) or GROQ_API_KEY (https://console.groq.com) for more capacity, or wait a moment and try again."
   );
 }
 
@@ -168,14 +147,14 @@ export async function generateQuestions(
 //
 // A single large request (e.g. 20 questions from a full chapter) becomes one
 // ~20K-token call: NVIDIA is slow enough to hit its 60s timeout, and the smaller
-// free tiers (Groq's 12K TPM, Cerebras's per-minute cap) reject it outright.
+// free tiers (Groq's 12K TPM) reject it outright.
 // Splitting into small batches keeps every provider call fast and within limits,
 // and returns whatever succeeded even if one batch fails.
 const QUESTION_BATCH_SIZE = 5;
 
 export async function generateQuestionsBatched(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "cerebras" | "nvidia" | "groq" | "ollama" }> {
+): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
   const total = Math.max(1, opts.count ?? 10);
   if (total <= QUESTION_BATCH_SIZE) return generateQuestions(opts);
 
@@ -186,7 +165,7 @@ export async function generateQuestionsBatched(
 
   // Give each batch a different, capped slice of the chapter so every call
   // sends little text — small enough for the free-tier per-minute token limits
-  // (Groq 12K, Cerebras) and fast — and the questions cover the whole chapter
+  // (Groq 12K) and fast — and the questions cover the whole chapter
   // instead of all being drawn from the opening pages.
   const content = opts.content ?? "";
   const canSplit = content.length > 6000;
@@ -196,7 +175,7 @@ export async function generateQuestionsBatched(
   // Run sequentially: firing every batch at once trips the providers' per-minute
   // token caps simultaneously. Spread over time, each small batch succeeds.
   const all: GeneratedQuestion[] = [];
-  let usedProvider: "gemini" | "cerebras" | "nvidia" | "groq" | "ollama" | undefined;
+  let usedProvider: "gemini" | "nvidia" | "groq" | "ollama" | undefined;
   let lastError: unknown = null;
 
   for (let i = 0; i < batches.length; i++) {
@@ -226,37 +205,34 @@ export async function generateQuestionsBatched(
       ? lastError
       : new Error("All AI providers failed for question generation.");
   }
-  return { questions: all.slice(0, total), provider: usedProvider ?? "cerebras" };
+  return { questions: all.slice(0, total), provider: usedProvider ?? "groq" };
 }
 
-// ─── Detect Chapters (NVIDIA → Gemini → Cerebras → Groq → Ollama) ─
+// ─── Detect Chapters (Gemini → Groq → NVIDIA → Ollama) ─
 //
 // Same reasoning as generateQuestions: chapter detection sends up to 50K chars
 // of content (~12,500 tokens). NVIDIA is primary so a large textbook upload
-// doesn't cascade through Gemini's dead free tier and Cerebras's token cap first.
+// doesn't cascade through Gemini's dead free tier first.
 
 export async function detectChapters(
   opts: DetectChaptersOptions
-): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "cerebras" | "nvidia" | "groq" | "ollama" }> {
+): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
   // Same fall-through-on-any-error policy as generateQuestions: a transient
   // (non-429) failure from any provider must not abort the whole chain.
   let lastError: unknown = null;
 
-  // 1. NVIDIA NIM — highest free-tier RPM, no hard credit cap; reliable primary
-  //    when Gemini's free tier is unavailable (limit: 0).
-  if (hasNvidiaKey()) {
-    try {
-      const chapters = await nvidiaDetectChapters(opts);
-      return { chapters, provider: "nvidia" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] NVIDIA failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Gemini…`
-      );
-    }
-  }
+  // NVIDIA is deliberately NOT tried first for chapter detection, unlike
+  // question generation where it remains the primary.
+  //
+  // The current NIM model (nvidia/nemotron-3-super-120b-a12b) generates
+  // questions well but fails this task badly: asked to detect two units it
+  // returned malformed JSON AND invented "UNIT 5: ???" … "UNIT 18: ???".
+  // Every other servable NIM model tested either 404s or emits reasoning text
+  // instead of JSON. Detection feeds chapter creation, so a hallucinated
+  // chapter is a corrupt split — and calling it first also burned ~30s per
+  // window before falling through. Left last as a desperation fallback only.
 
-  // 2. Gemini — 1M TPM handles large textbook content when available.
+  // 1. Gemini — 1M TPM handles large textbook content when available.
   if (hasGeminiKey()) {
     try {
       const chapters = await detectChaptersFromContent(opts);
@@ -264,25 +240,12 @@ export async function detectChapters(
     } catch (err) {
       lastError = err;
       console.warn(
-        `[AI Provider] Gemini failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Cerebras…`
+        `[AI Provider] Gemini failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
       );
     }
   }
 
-  // 3. Cerebras — fast, separate free-tier quota. Any failure falls through.
-  if (hasCerebrasKey()) {
-    try {
-      const chapters = await cerebrasDetectChapters(opts);
-      return { chapters, provider: "cerebras" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Cerebras failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
-      );
-    }
-  }
-
-  // 4. Groq — fast fallback
+  // 2. Groq — fast fallback
   if (hasGroqKey()) {
     try {
       const chapters = await groqDetectChapters(opts);
@@ -295,7 +258,24 @@ export async function detectChapters(
     }
   }
 
-  // 5. Ollama Mistral — local dev only, skipped in production
+  // 3. NVIDIA — last resort only (see the note at the top of this function:
+  //    the available NIM models hallucinate chapters or won't emit JSON).
+  if (hasNvidiaKey()) {
+    try {
+      const chapters = await nvidiaDetectChapters(opts);
+      console.warn(
+        "[AI Provider] Chapter detection fell through to NVIDIA — verify the resulting split manually."
+      );
+      return { chapters, provider: "nvidia" };
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `[AI Provider] NVIDIA failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Ollama Mistral…`
+      );
+    }
+  }
+
+  // 4. Ollama Mistral — local dev only, skipped in production
   if (hasOllama()) {
     try {
       const chapters = await ollamaDetectChapters(opts);
@@ -327,8 +307,8 @@ export async function chatWithTutor(opts: {
   chapterTitle: string;
   subject: string;
   grade: number;
-}): Promise<{ response: string; provider: "gemini" | "groq" | "cerebras" | "nvidia" }> {
-  // Groq (fast) → Gemini → Cerebras → NVIDIA. Every provider falls through on
+}): Promise<{ response: string; provider: "gemini" | "groq" | "nvidia" }> {
+  // Groq (fast) → Gemini → NVIDIA. Every provider falls through on
   // ANY error so the tutor keeps working even if Groq AND Gemini are down —
   // it previously had no capacity fallback beyond those two.
   let lastError: unknown = null;
@@ -366,23 +346,11 @@ export async function chatWithTutor(opts: {
       return { response, provider: "gemini" };
     } catch (err) {
       lastError = err;
-      console.warn(`[AI Provider] Gemini failed (Tutor: ${err instanceof Error ? err.message : String(err)}), falling back to Cerebras…`);
+      console.warn(`[AI Provider] Gemini failed (Tutor: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
     }
   }
 
-  // 3. Cerebras — capacity fallback
-  if (hasCerebrasKey()) {
-    try {
-      const { cerebrasTutorChat } = await import("./cerebras");
-      const response = await cerebrasTutorChat(chatOpts);
-      return { response, provider: "cerebras" };
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] Cerebras failed (Tutor: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
-    }
-  }
-
-  // 4. NVIDIA — final capacity fallback
+  // 3. NVIDIA — final capacity fallback
   if (hasNvidiaKey()) {
     try {
       const { nvidiaTutorChat } = await import("./nvidia");
@@ -410,8 +378,8 @@ export async function generateVideoTutorial(opts: {
   subject: string;
   grade: number;
   topic?: string;
-}): Promise<{ script: VideoScript; provider: "gemini" | "groq" | "cerebras" | "nvidia" }> {
-  // Groq (fast) → Gemini → Cerebras → NVIDIA, falling through on ANY error so
+}): Promise<{ script: VideoScript; provider: "gemini" | "groq" | "nvidia" }> {
+  // Groq (fast) → Gemini → NVIDIA, falling through on ANY error so
   // a video can still be produced when the first providers are unavailable.
   let lastError: unknown = null;
 
@@ -434,23 +402,11 @@ export async function generateVideoTutorial(opts: {
       return { script, provider: "gemini" };
     } catch (err) {
       lastError = err;
-      console.warn(`[AI Provider] Gemini failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to Cerebras…`);
+      console.warn(`[AI Provider] Gemini failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
     }
   }
 
-  // 3. Cerebras — capacity fallback
-  if (hasCerebrasKey()) {
-    try {
-      const { cerebrasGenerateVideoScript } = await import("./cerebras");
-      const script = await cerebrasGenerateVideoScript(opts);
-      return { script, provider: "cerebras" };
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] Cerebras failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
-    }
-  }
-
-  // 4. NVIDIA — final capacity fallback
+  // 3. NVIDIA — final capacity fallback
   if (hasNvidiaKey()) {
     try {
       const { nvidiaGenerateVideoScript } = await import("./nvidia");

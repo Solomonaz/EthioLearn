@@ -12,19 +12,32 @@ import type {
 import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
 import { shuffleArray } from "./utils";
 
-const BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+const DEFAULT_BASE_URL = "http://localhost:11434";
+const BASE_URL = process.env.OLLAMA_BASE_URL ?? DEFAULT_BASE_URL;
 export const OLLAMA_CHAT_MODEL = "mistral";
 
 /**
  * Whether Ollama should be used as a provider at all.
+ * SINGLE SOURCE OF TRUTH — ai-provider, embeddings and quality-pipeline all
+ * defer to this rather than re-implementing the check.
  *
- * A localhost URL is treated as "dev only": local Ollama runs on CPU and is
- * far slower than the cloud providers (Groq/Gemini), so it must not sit ahead
- * of them in a latency-sensitive pipeline. Ollama is only enabled when pointed
- * at a real (non-localhost) host — matching the embeddings pipeline's gate.
+ * Local Ollama runs on CPU and is far slower than Groq/Gemini, so it always
+ * sits LAST in every chain and never runs in production.
+ *
+ * Previously enablement was inferred from the URL not being the localhost
+ * default — which meant a perfectly normal local setup (Ollama on
+ * http://localhost:11434) was the one configuration that silently disabled it.
+ * Intent is now explicit: set OLLAMA_ENABLED=true.
  */
 export function isOllamaEnabled(): boolean {
-  return !!process.env.OLLAMA_BASE_URL && BASE_URL !== "http://localhost:11434";
+  // Local inference is a development convenience — never serve users from it.
+  if (process.env.NODE_ENV === "production") return false;
+
+  // Explicit opt-in.
+  if (process.env.OLLAMA_ENABLED === "true") return true;
+
+  // Back-compat: pointing the URL at a non-default host was the old opt-in.
+  return !!process.env.OLLAMA_BASE_URL && BASE_URL !== DEFAULT_BASE_URL;
 }
 
 /**
@@ -35,6 +48,17 @@ export function isOllamaEnabled(): boolean {
  * `timeoutMs` defaults to 10 min for heavyweight local generation (questions),
  * but latency-sensitive callers should pass a short value so a slow or hung
  * Ollama can't dominate the pipeline.
+ *
+ * STREAMING IS REQUIRED, not a nicety. With `stream: false` Ollama sends no
+ * response headers until the entire generation is finished, and Node's HTTP
+ * client (undici) enforces a 300-second headersTimeout that this code cannot
+ * raise through `fetch`. CPU inference on a 7B model routinely exceeds that on
+ * a real question-generation prompt, so every such call died at ~307s with an
+ * opaque "fetch failed" — while `timeoutMs` (600s) was never reached.
+ *
+ * Streaming makes headers arrive immediately and then delivers a token at a
+ * time, so neither headersTimeout nor the per-chunk bodyTimeout can trip while
+ * the model is actively producing output. `timeoutMs` becomes the real limit.
  */
 export async function ollamaChat(
   prompt: string,
@@ -48,7 +72,7 @@ export async function ollamaChat(
         model: OLLAMA_CHAT_MODEL,
         messages: [{ role: "user", content: prompt }],
         format: "json",
-        stream: false,
+        stream: true,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -57,9 +81,49 @@ export async function ollamaChat(
       console.warn(`[Ollama] Chat request failed: ${res.status} ${res.statusText}`);
       return null;
     }
+    if (!res.body) {
+      console.warn("[Ollama] Chat response had no body.");
+      return null;
+    }
 
-    const data = await res.json() as { message?: { content?: string } };
-    return data?.message?.content ?? null;
+    // Ollama streams newline-delimited JSON objects, each carrying one token in
+    // `message.content`, until an object with `done: true`.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let content = "";
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Keep the trailing partial line in the buffer for the next chunk.
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const obj = JSON.parse(trimmed) as {
+            message?: { content?: string };
+            done?: boolean;
+            error?: string;
+          };
+          if (obj.error) {
+            console.warn(`[Ollama] Stream reported an error: ${obj.error}`);
+            return null;
+          }
+          if (obj.message?.content) content += obj.message.content;
+        } catch {
+          // A malformed line mid-stream isn't fatal — keep reading.
+        }
+      }
+    }
+
+    return content.length > 0 ? content : null;
   } catch (err) {
     console.warn(`[Ollama] Unreachable or timed out: ${err instanceof Error ? err.message : String(err)}`);
     return null;

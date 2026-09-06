@@ -6,6 +6,7 @@ import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { isInStudyScope } from "@/lib/grade-scope";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -78,11 +79,31 @@ export async function POST(request: Request) {
     // Build query filter — only PUBLISHED questions (not DRAFT AI-generated ones)
     const where: any = { status: "PUBLISHED" };
 
+    // ── Grade scoping (see lib/grade-scope) ────────────────────────────────
+    // The client sends a chapter/textbook id, so the grade must be resolved
+    // server-side and checked against the student's study scope — otherwise a
+    // crafted request could pull questions from any grade on the platform.
+    // Staff (non-students) have no study scope and are not restricted.
+    const enforceScope = user.role === "STUDENT";
+
     if (chapterId === "all") {
       if (!textbookId) {
         return NextResponse.json(
           { error: "Textbook ID is required for cumulative quizzes" },
           { status: 400 }
+        );
+      }
+      const textbook = await db.textbook.findUnique({
+        where: { id: textbookId },
+        select: { grade: true },
+      });
+      if (!textbook) {
+        return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
+      }
+      if (enforceScope && !isInStudyScope(user.grade, textbook.grade)) {
+        return NextResponse.json(
+          { error: "That grade isn't part of your study scope.", code: "GRADE_OUT_OF_SCOPE" },
+          { status: 403 }
         );
       }
       // Get all chapter IDs for this textbook
@@ -92,15 +113,21 @@ export async function POST(request: Request) {
       });
       where.chapterId = { in: chapters.map((c) => c.id) };
     } else {
-      // Verify chapter exists
+      // Verify chapter exists — and resolve its grade for the scope check
       const chapterExists = await db.chapter.findUnique({
         where: { id: chapterId },
-        select: { id: true },
+        select: { id: true, textbook: { select: { grade: true } } },
       });
       if (!chapterExists) {
         return NextResponse.json(
           { error: "Chapter not found" },
           { status: 404 }
+        );
+      }
+      if (enforceScope && !isInStudyScope(user.grade, chapterExists.textbook?.grade)) {
+        return NextResponse.json(
+          { error: "That grade isn't part of your study scope.", code: "GRADE_OUT_OF_SCOPE" },
+          { status: 403 }
         );
       }
       where.chapterId = chapterId;

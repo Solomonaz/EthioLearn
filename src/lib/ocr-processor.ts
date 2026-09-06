@@ -24,6 +24,12 @@ export interface OcrExtractionResult {
   pageResults: PageOcrResult[];
   averageConfidence: number;
   flaggedPages: number[];
+  /** Total pages in the source PDF, before the MAX_PAGES_FOR_OCR cap. */
+  totalPagesInDocument: number;
+  /** True when the document was longer than the cap and pages were NOT read. */
+  truncated: boolean;
+  /** How many pages at the end of the document were skipped. */
+  pagesSkipped: number;
 }
 
 // ─── Constants ──────────────────────────────────────────
@@ -51,12 +57,23 @@ export async function extractTextWithOcr(
 
   // 1. Convert PDF to images
   let pageImages: Uint8Array[];
+  let totalPagesInDocument = 0;
   try {
     const result = await pdfImgConvert.convert(pdfBuffer, {
       width: 1200, // Good balance of quality vs speed
       height: 1600,
     });
+    totalPagesInDocument = result.length;
     pageImages = result.slice(0, MAX_PAGES_FOR_OCR) as Uint8Array[];
+    if (totalPagesInDocument > MAX_PAGES_FOR_OCR) {
+      // Silently dropping the tail of a scanned textbook used to look like a
+      // clean success — a 250-page book lost 60% of its content with nothing
+      // reported. Surfaced in the result so the caller can warn the admin.
+      console.warn(
+        `[OCR] Document has ${totalPagesInDocument} pages but the OCR cap is ` +
+        `${MAX_PAGES_FOR_OCR}. Pages ${MAX_PAGES_FOR_OCR + 1}–${totalPagesInDocument} were NOT read.`
+      );
+    }
   } catch (error) {
     throw new Error(
       `Failed to convert PDF to images for OCR: ${
@@ -131,5 +148,8 @@ export async function extractTextWithOcr(
     pageResults,
     averageConfidence,
     flaggedPages,
+    totalPagesInDocument,
+    truncated: totalPagesInDocument > pageResults.length,
+    pagesSkipped: Math.max(0, totalPagesInDocument - pageResults.length),
   };
 }

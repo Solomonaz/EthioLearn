@@ -27,6 +27,7 @@ import { useTranslations } from "next-intl";
 import { useQuizStore } from "@/stores/quiz-store";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { cn, buildQuickPresets } from "@/lib/utils";
+import { getStudyScope, isExamGrade } from "@/lib/grade-scope";
 
 interface Textbook {
   id: string;
@@ -118,16 +119,34 @@ export default function QuizLauncherPage() {
   const [selectedCount, setSelectedCount] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<QuizMode>("SOLO");
 
+  // ── Grade scope (see lib/grade-scope) ──────────────────────────────────────
+  // Exam grades study across their whole cycle: grade 8 sits an exam drawn from
+  // grades 7–8, grade 12 from grades 9–12. Show a chip per grade in scope,
+  // defaulted to the student's own grade so nothing changes for everyone else.
+  const userGrade = (session?.user as { grade?: number | null } | undefined)?.grade ?? null;
+  const studyScope = getStudyScope(userGrade);
+  const [gradeFilter, setGradeFilter] = useState<number | null>(null);
+
+  // Default the chip to the student's own grade once the session resolves.
+  useEffect(() => {
+    if (userGrade != null && gradeFilter === null) setGradeFilter(userGrade);
+  }, [userGrade, gradeFilter]);
+
+  const visibleTextbooks =
+    gradeFilter == null
+      ? textbooks
+      : textbooks.filter((tb) => tb.grade === gradeFilter);
+
   // Fetch textbooks on mount — wait for full session auth before reading grade
   useEffect(() => {
     if (sessionStatus !== "authenticated") return;
 
     async function fetchTextbooks() {
       try {
-        const grade = (session?.user as any)?.grade;
-        const params = new URLSearchParams();
-        if (grade) params.set("grade", String(grade));
-        const res = await fetch(`/api/textbooks?${params.toString()}`);
+        // No grade param — the API returns the student's whole study scope
+        // (their grade plus the lower grades of the same exam cycle). The
+        // grade chips below narrow it client-side.
+        const res = await fetch(`/api/textbooks`);
         if (!res.ok) throw new Error("Failed to load subjects");
         const data = await res.json();
         setTextbooks(data.textbooks ?? []);
@@ -337,11 +356,48 @@ export default function QuizLauncherPage() {
       {/* Step 1: Select Subject */}
       {step === 0 && (
         <div className="space-y-3">
+          {/* Grade chips — only shown when the student's exam cycle spans more
+              than one grade (i.e. every grade except the first of a cycle). */}
+          {studyScope.length > 1 && !loadingTextbooks && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {studyScope.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => {
+                      setGradeFilter(g);
+                      setSelectedTextbook(null);
+                      setSelectedChapter(null);
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                      gradeFilter === g
+                        ? "border-primary bg-primary text-white"
+                        : "border-border bg-surface text-text-secondary hover:border-primary/40 hover:text-text-primary",
+                    )}
+                  >
+                    Grade {g}
+                    {g === userGrade && (
+                      <span className="ml-1 opacity-70">&middot; yours</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {isExamGrade(userGrade) && (
+                <p className="text-xs text-text-secondary">
+                  Your Grade {userGrade} exam draws from Grade{" "}
+                  {studyScope[0]}&ndash;{userGrade}, so all of it is here.
+                </p>
+              )}
+            </div>
+          )}
+
           {loadingTextbooks ? (
             <div className="flex justify-center py-12">
               <Spinner size="lg" className="text-primary" />
             </div>
-          ) : textbooks.length === 0 ? (
+          ) : visibleTextbooks.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center">
                 <BookOpen className="mx-auto mb-2 h-10 w-10 text-text-secondary/40" />
@@ -351,7 +407,7 @@ export default function QuizLauncherPage() {
               </CardContent>
             </Card>
           ) : (
-            textbooks.map((tb) => (
+            visibleTextbooks.map((tb) => (
               <Card
                 key={tb.id}
                 className={cn(

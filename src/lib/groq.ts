@@ -9,7 +9,7 @@ import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
 import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
 
-// Re-export the shared validators so Cerebras/NVIDIA can keep importing them
+// Re-export the shared validators so NVIDIA can keep importing them
 // from "./groq" (their historical import path) without change.
 export { extractJson, validateQuestions, validateDetectedChapters };
 

@@ -96,6 +96,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       contentLength: result.text.length,
       wordCount: result.wordCount,
       pageCount: result.pageCount,
+      // Extraction problems the admin must see — chiefly a scanned PDF longer
+      // than the OCR page cap, whose tail was never read. Reporting a clean
+      // success there used to hide the loss of most of the book.
+      usedOcr: result.usedOcr ?? false,
+      ocrConfidence: result.ocrConfidence,
+      truncated: result.truncated ?? false,
+      pagesSkipped: result.pagesSkipped ?? 0,
+      warnings: result.warnings ?? [],
     });
   } catch (error) {
     console.error("[File Upload Error]", error);

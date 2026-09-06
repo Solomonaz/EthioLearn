@@ -5,6 +5,8 @@ import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateQuestionsBatched } from "@/lib/ai-provider";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { selectGenerationContent } from "@/lib/generation-content";
+import { QUESTION_CONTENT_CHARS } from "@/lib/question-prompts";
 
 interface RouteParams {
   params: Promise<{ id: string; chapterId: string }>;
@@ -91,6 +93,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
     finalTitle = chapter.title;
     finalContent = chapter.content || textbook.content || "";
+
+    // Draw from across the whole chapter rather than its opening 30k — see
+    // lib/generation-content. Rotation advances with the existing question
+    // count so repeat generations reach new material.
+    const priorQuestions = await db.question.count({ where: { chapterId: chapter.id } });
+    const selected = await selectGenerationContent({
+      chapterId: chapter.id,
+      fallbackContent: finalContent,
+      budgetChars: QUESTION_CONTENT_CHARS,
+      rotation: priorQuestions,
+    });
+    finalContent = selected.content;
+    console.log(
+      `[Admin Generate] Content strategy: ${selected.strategy} ` +
+      `(${selected.chunksUsed}/${selected.chunksAvailable} chunks, rotation ${priorQuestions})`
+    );
   }
 
   if (!finalContent || finalContent.length < 100) {
@@ -125,15 +143,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     : ["MCQ" as const];
 
   // Check at least one AI provider is configured. The provider chain supports
-  // Gemini, Cerebras, NVIDIA and Groq — accept ANY of them, not just the first two.
+  // Gemini, NVIDIA and Groq — accept ANY of them, not just the first two.
   if (
     !process.env.GEMINI_API_KEY &&
     !process.env.GROQ_API_KEY &&
-    !process.env.CEREBRAS_API_KEY &&
     !process.env.NVIDIA_API_KEY
   ) {
     return NextResponse.json(
-      { error: "AI generation is not configured. Set GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY." },
+      { error: "AI generation is not configured. Set GEMINI_API_KEY, GROQ_API_KEY, or NVIDIA_API_KEY." },
       { status: 503 }
     );
   }
