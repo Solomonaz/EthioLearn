@@ -134,12 +134,20 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   });
 
   try {
-    // Step 1: Enable pgvector
+    // Step 1: Enable pgvector.
+    //
+    // Run this unconditionally. enablePgvector() does three idempotent things —
+    // CREATE EXTENSION IF NOT EXISTS, the vector-column dimension repair, and
+    // CREATE INDEX IF NOT EXISTS on the HNSW index — and only the first is
+    // about the extension. Gating the whole call on "is the extension missing?"
+    // meant that on any database where pgvector was installed by other means
+    // (a pgvector Docker image, a managed add-on) the HNSW index was never
+    // created, so every similarity query fell back to a sequential scan.
     const pgvectorEnabled = await isPgvectorAvailable();
     if (!pgvectorEnabled) {
       console.log("[Process] Enabling pgvector extension...");
-      await enablePgvector();
     }
+    await enablePgvector();
 
     // Step 2: Chunk all chapters
     console.log(`[Process] Chunking ${chaptersWithContent.length} chapters...`);

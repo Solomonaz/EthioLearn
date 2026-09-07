@@ -11,12 +11,12 @@
  * Questions are flagged but included — admin decides final disposition.
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import Groq from "groq-sdk";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
 import { ollamaChat, isOllamaEnabled } from "./ollama";
 import { groqChat } from "./groq";
 import { nvidiaChat } from "./nvidia";
+import { geminiChat, GEMINI_FAST_MODEL } from "./gemini";
+import type { UsageFeature } from "./usage-logger";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -281,18 +281,13 @@ Return JSON only — no markdown, no code fences:
 
   let rawText = "";
 
-  // 1. Groq — fast, high rate limits, always available in production
+  // 1. Groq — fast, high rate limits, always available in production.
+  //    Goes through groqChat so the model id comes from GROQ_MODEL in one
+  //    place; this call site used to pin llama-3.3-70b-versatile, which Groq
+  //    has since decommissioned (404) while groq.ts had already moved on.
   if (process.env.GROQ_API_KEY) {
     try {
-      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-      const res = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        max_tokens: 2048,
-        response_format: { type: "json_object" },
-      });
-      rawText = res.choices[0]?.message?.content ?? "";
+      rawText = (await groqChat(prompt, { temperature: 0.1, maxTokens: 2048, feature: "quality-check" })) ?? "";
       if (rawText) console.info("[Quality Pipeline] AI checks via groq");
     } catch (err) {
       console.warn("[Quality Pipeline] Groq failed AI checks:", err instanceof Error ? err.message : String(err));
@@ -302,12 +297,12 @@ Return JSON only — no markdown, no code fences:
   // 2. Gemini — fallback (lower free-tier rate limits than Groq)
   if (!rawText && process.env.GEMINI_API_KEY) {
     try {
-      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = client.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 2048 },
-      });
-      rawText = (await model.generateContent(prompt)).response.text();
+      rawText = (await geminiChat(prompt, {
+        model: GEMINI_FAST_MODEL,
+        temperature: 0.1,
+        maxTokens: 2048,
+        feature: "quality-check",
+      })) ?? "";
       if (rawText) console.info("[Quality Pipeline] AI checks via gemini");
     } catch (err) {
       if (String(err).includes("429")) {
@@ -536,7 +531,7 @@ const VERIFY_BATCH_SIZE = 8;
 
 type ChatFn = (
   prompt: string,
-  opts?: { temperature?: number; maxTokens?: number },
+  opts?: { temperature?: number; maxTokens?: number; feature?: UsageFeature },
 ) => Promise<string | null>;
 
 // Try providers in an order that puts the generator's own provider LAST, so the
@@ -544,9 +539,12 @@ type ChatFn = (
 // respond (→ fail closed).
 async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<string> {
   const providers: { name: string; fn: ChatFn }[] = [
-    // NOTE: Cerebras was removed (free tier returns 402), so in production the
-    // independent-verifier pool is Groq + NVIDIA. The verifier still avoids the
-    // generating provider, but with only two the critic is always the other one.
+    // NOTE: Cerebras was removed (free tier returns 402). Gemini leads the pool
+    // to match every other chain, but `avoidProvider` still outranks this order:
+    // when Gemini generated the questions it is demoted so the critic is a
+    // different model. In the common case (Gemini generates) the verifier is
+    // therefore Groq — which is the point of the blind cross-check.
+    { name: "gemini", fn: (p, o) => geminiChat(p, o) },
     { name: "groq", fn: (p, o) => groqChat(p, o) },
     { name: "nvidia", fn: (p, o) => nvidiaChat(p, o) },
   ];
@@ -591,7 +589,7 @@ async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<
 
     for (const p of ordered) {
       try {
-        const out = await p.fn(prompt, { temperature: 0.1, maxTokens: 1200 });
+        const out = await p.fn(prompt, { temperature: 0.1, maxTokens: 1200, feature: "answer-verification" });
         // A non-empty string is NOT success. Accepting one was the bug: NVIDIA
         // answers this prompt with prose or a malformed object rather than the
         // verdict schema, and because that is "non-empty" the chain stopped

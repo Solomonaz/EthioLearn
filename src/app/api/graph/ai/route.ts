@@ -8,7 +8,7 @@ import { parseEquations } from "@/lib/graph-parse";
 /**
  * POST /api/graph/ai — turn a natural-language math request into plottable
  * expressions for the grapher. e.g. "the natural log of x and its reciprocal"
- * → ["ln(x)", "1/x"]. Uses the free AI provider chain (Groq → Gemini → …),
+ * → ["ln(x)", "1/x"]. Uses the shared AI provider chain (Gemini → Groq → …),
  * gated by the platform AI switch. Always returns a clean string[] of
  * mathjs-compatible expressions in terms of x.
  */

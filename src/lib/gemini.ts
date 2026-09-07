@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
 import { validateQuestions, validateDetectedChapters } from "./question-validation";
+import { logUsage, geminiUsage, type UsageFeature } from "./usage-logger";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -50,10 +51,57 @@ export interface GeneratedQuestion {
 
 // ─── Client ─────────────────────────────────────────────
 
-// The Gemini model is configurable via env so it can be switched without code
-// changes — e.g. when a model loses free-tier quota (the "limit: 0" 429s) or is
-// retired, point GEMINI_MODEL at a current model (e.g. gemini-3.6-flash).
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+// Two model tiers, both overridable via env so a model can be switched without
+// a code change — e.g. when one loses free-tier quota (the "limit: 0" 429s) or
+// reaches its shutdown date.
+//
+// FLAGSHIP — work whose quality decides whether content ships: question
+// generation, chapter detection, the independent verifier, video scripts, and
+// every vision task (graph/equation/solid reading). gemini-3.8-flash is the
+// newest stable Flash and is priced identically to 3.6-flash ($0.75/$3.75 per
+// 1M through 2026), so there is no reason to sit on the older one.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+
+// FAST — high-volume or latency-sensitive work where flagship reasoning is not
+// what decides the outcome: Bloom tagging (one call per chunk batch across a
+// whole book), the post-generation quality checks, and the tutor-chat fallback.
+// gemini-3.1-flash-lite is a third of the flagship's input price and 40% of its
+// output price, which is what keeps whole-book tagging cheap.
+export const GEMINI_FAST_MODEL = process.env.GEMINI_FAST_MODEL || "gemini-3.1-flash-lite";
+
+/**
+ * Hard cap on how much the model is allowed to "think" before answering.
+ *
+ * Gemini 3.x Flash reasons before it replies, and those thinking tokens are
+ * billed as output AND charged against maxOutputTokens. Measured against the
+ * real question-generation prompt (24,886 chars, 5 questions):
+ *
+ *   no cap, maxOutputTokens 4096  → 3,928 thinking + 161 answer  → MAX_TOKENS,
+ *                                    truncated JSON, 3 failed retries
+ *   no cap, maxOutputTokens 8192  → 7,860 thinking + 328 answer  → MAX_TOKENS
+ *   no cap, maxOutputTokens 16384 → 11,448 thinking + 1,146 answer → parsed
+ *   capped, maxOutputTokens 4096  →     0 thinking +   792 answer → parsed
+ *
+ * Raising the ceiling does not fix it — thinking simply grows to fill whatever
+ * it is given, so the JSON stays starved while the bill grows ~14x. Every task
+ * here is structured extraction against text we supply, which is exactly the
+ * shape that does not need extended reasoning; the quality pipeline is what
+ * guards correctness. Set GEMINI_THINKING_BUDGET to raise it if a task ever
+ * genuinely needs deliberation.
+ */
+const THINKING_BUDGET = Number(process.env.GEMINI_THINKING_BUDGET ?? 512);
+
+/**
+ * Merge the thinking cap into a generationConfig.
+ *
+ * The cast is deliberate: `thinkingConfig` is a real REST field that this SDK
+ * forwards verbatim, but @google/generative-ai@0.24.1 predates it and does not
+ * declare it on GenerationConfig. Verified against the live API — the same call
+ * reports thoughtsTokenCount 3,929 without it and 0 with it.
+ */
+function withThinkingCap<T extends object>(cfg: T): T {
+  return { ...cfg, thinkingConfig: { thinkingBudget: THINKING_BUDGET } } as T;
+}
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -63,6 +111,55 @@ function getClient() {
     );
   }
   return new GoogleGenerativeAI(apiKey);
+}
+
+/**
+ * Send a prompt to Gemini and return the raw response text (JSON mode).
+ *
+ * A general-purpose helper mirroring `groqChat` / `nvidiaChat` so any pipeline
+ * can use Gemini as its primary provider without rebuilding a client inline.
+ * Returns null when GEMINI_API_KEY is missing or the request fails, letting
+ * callers fall through to the next provider in their chain.
+ */
+export async function geminiChat(
+  prompt: string,
+  opts: {
+    system?: string;
+    temperature?: number;
+    maxTokens?: number;
+    model?: string;
+    /** Which feature this call serves, for token-usage attribution. Shared
+     *  helper, so the feature varies by caller (bloom tagging, quality checks,
+     *  answer verification …); defaults to quality-check. */
+    feature?: UsageFeature;
+  } = {}
+): Promise<string | null> {
+  if (!process.env.GEMINI_API_KEY) return null;
+  const modelId = opts.model ?? GEMINI_MODEL;
+  try {
+    const model = getClient().getGenerativeModel({
+      model: modelId,
+      ...(opts.system ? { systemInstruction: opts.system } : {}),
+      generationConfig: withThinkingCap({
+        responseMimeType: "application/json",
+        temperature: opts.temperature ?? 0.2,
+        maxOutputTokens: opts.maxTokens ?? 4096,
+      }),
+    });
+    const result = await model.generateContent(prompt);
+    logUsage({
+      feature: opts.feature ?? "quality-check",
+      provider: "gemini",
+      model: modelId,
+      usage: geminiUsage(result.response),
+    });
+    return result.response.text() || null;
+  } catch (err) {
+    console.warn(
+      `[Gemini] Chat request failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
 }
 
 /**
@@ -78,7 +175,10 @@ export async function explainGraphImage(
   mimeType: string,
 ): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = client.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: withThinkingCap({}),
+  });
   const prompt =
     "You are a friendly math tutor for a school student. The image shows a GRAPH. " +
     "Identify it and describe it clearly.\n" +
@@ -102,6 +202,7 @@ export async function explainGraphImage(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
+  logUsage({ feature: "vision-graph", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
   return result.response.text();
 }
 
@@ -115,7 +216,10 @@ export async function readEquationsFromImage(
   mimeType: string,
 ): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = client.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: withThinkingCap({}),
+  });
   const prompt =
     "Read the handwritten or printed math in this image. Output ONLY a JSON array " +
     "of the equations as plottable expressions in x using mathjs syntax (^ for " +
@@ -130,6 +234,7 @@ export async function readEquationsFromImage(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
+  logUsage({ feature: "vision-equation", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
   return result.response.text();
 }
 
@@ -139,7 +244,10 @@ export async function readEquationsFromImage(
  */
 export async function readSolidFromImage(base64: string, mimeType: string): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = client.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: withThinkingCap({}),
+  });
   const prompt =
     "This image is a sketch, drawing or photo of a single 3D solid. Identify the solid. " +
     'Output ONLY a JSON object: {"shape": string, "sides": number, "label": string}. ' +
@@ -152,6 +260,7 @@ export async function readSolidFromImage(base64: string, mimeType: string): Prom
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
+  logUsage({ feature: "vision-solid", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
   return result.response.text();
 }
 
@@ -166,7 +275,10 @@ export async function askAboutGraph(
   history: { role: "user" | "assistant"; text: string }[] = [],
 ): Promise<string> {
   const client = getClient();
-  const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = client.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: withThinkingCap({}),
+  });
   const ctx = history.length
     ? "Earlier in this conversation:\n" +
       history
@@ -185,6 +297,7 @@ export async function askAboutGraph(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
+  logUsage({ feature: "graph-qa", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
   return result.response.text();
 }
 
@@ -204,11 +317,11 @@ export async function generateQuestionsFromContent(
   const client = getClient();
   const model = client.getGenerativeModel({
     model: GEMINI_MODEL,
-    generationConfig: {
+    generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       temperature: 0.7,
       maxOutputTokens: 4096,
-    },
+    }),
   });
 
   const prompt = buildPrompt(opts);
@@ -217,6 +330,9 @@ export async function generateQuestionsFromContent(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent(prompt);
+      // Log before parsing: a call that returns unparseable JSON still spent
+      // tokens, and a retry issues a fresh billable call.
+      logUsage({ feature: "question-generation", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
       const text = result.response.text();
       const parsed = JSON.parse(text);
       const questions = validateQuestions(parsed);
@@ -288,11 +404,11 @@ export async function detectChaptersFromContent(
   const client = getClient();
   const model = client.getGenerativeModel({
     model: GEMINI_MODEL,
-    generationConfig: {
+    generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       temperature: 0.3,
       maxOutputTokens: 4096,
-    },
+    }),
   });
 
   const prompt = buildChapterDetectionPrompt(opts);
@@ -301,6 +417,7 @@ export async function detectChaptersFromContent(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent(prompt);
+      logUsage({ feature: "chapter-detection", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
       const text = result.response.text();
       const parsed = JSON.parse(text);
       const chapters = validateDetectedChapters(parsed);
@@ -442,17 +559,78 @@ function findAllTitlePositions(
 }
 
 /**
- * Detect the end of a Table-of-Contents / front-matter region, if present.
+ * Locate every occurrence of a title in `fullText`, sharing one normalised
+ * index over many lookups.
  *
- * A contents page lists most chapter titles bunched together near the very
- * front of the document, separated by only a line or two — far tighter than a
- * real chapter, which runs for tens of thousands of characters. We build the
- * initial cluster from each chapter's FIRST occurrence and, if several titles
- * are packed into a span much smaller than one chapter's worth of text near
- * the start, return the cluster's end position so those occurrences can be
- * discarded. Returns 0 when there is no such cluster (e.g. no contents page).
+ * Exported so chapter DETECTION and chapter SPLITTING agree on where a title
+ * sits. They used to disagree: detection ordered chapters with a raw
+ * `indexOf` on the unnormalised text, which cannot match a title the PDF broke
+ * across a line ("Polynomial \nfunctions"), while splitting used this
+ * normalised search, which can. A title located in two different places by the
+ * two passes produces chapter numbers that contradict the boundaries.
  */
-function findFrontMatterCutoff(
+export function createTitleLocator(fullText: string): (title: string) => number[] {
+  const { normText, indexMap } = buildNormWithMap(fullText);
+  return (title: string) => findAllTitlePositions(normText, indexMap, title);
+}
+
+// A contents page is typeset with dot leaders ("Circles ........ 280"). They
+// cluster densely there and essentially nowhere else, which makes them a far
+// sharper front-matter signal than the positions of the titles themselves.
+const TOC_MIN_LEADERS = 5;          // fewer than this is not a contents page
+const TOC_LEADER_GAP = 3_000;       // chars; larger gaps end the cluster
+const TOC_MAX_SHARE = 0.2;          // a contents page lives near the front
+
+/**
+ * Detect where a Table-of-Contents / front-matter region ends, from the text
+ * alone — no chapter list needed.
+ *
+ * The previous title-cluster heuristic could not work on a real textbook: it
+ * grew a cluster from each title's FIRST occurrence and stopped at the first
+ * large gap, so it ended at whichever title happened to come last in the
+ * preface sentence and left the rest of the contents page live. Worse, the
+ * contents page and the first chapter are ADJACENT — in a measured Grade 10
+ * Mathematics textbook only 593 characters apart — so no gap-based rule can
+ * separate them.
+ *
+ * Dot leaders can. In that same book, 53 of the document's 57 dot-leader runs
+ * fall between characters 4,900 and 8,557, the next is 223,000 characters
+ * later, and Unit 1 starts at 8,604 — a clean boundary.
+ *
+ * Returns 0 when there is no such cluster (a document with no contents page,
+ * or one typeset without leaders), leaving callers to fall back on position.
+ */
+export function detectFrontMatterEnd(fullText: string): number {
+  const leaders: { start: number; end: number }[] = [];
+  const re = /[.·]{4,}|(?:\.\s){4,}|…+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(fullText)) !== null) {
+    leaders.push({ start: m.index, end: m.index + m[0].length });
+    // A contents page is at the front; no need to scan the whole book.
+    if (m.index > fullText.length * TOC_MAX_SHARE) break;
+  }
+  if (leaders.length < TOC_MIN_LEADERS) return 0;
+
+  // Take only the FIRST cluster — later dot-leader runs are body text.
+  let end = leaders[0].end;
+  let count = 1;
+  for (let i = 1; i < leaders.length; i++) {
+    if (leaders[i].start - end > TOC_LEADER_GAP) break;
+    end = leaders[i].end;
+    count++;
+  }
+
+  if (count < TOC_MIN_LEADERS) return 0;
+  if (end > fullText.length * TOC_MAX_SHARE) return 0;
+  return end;
+}
+
+/**
+ * Fall back to the old title-cluster rule when there are no dot leaders: if
+ * several chapter titles are bunched into a span far smaller than one
+ * chapter's worth of text near the start, that span is a contents page.
+ */
+function findTitleClusterCutoff(
   candidatesPerChapter: number[][],
   textLen: number,
   chapterCount: number
@@ -483,6 +661,186 @@ function findFrontMatterCutoff(
   return 0;
 }
 
+// Cost of leaving a chapter unplaced. Large enough that the search only drops
+// a chapter when no strictly-increasing chain can include it.
+const UNPLACED_PENALTY = 1_000;
+// A segment shorter than this share of the average chapter is a sliver, not a
+// chapter — the signature of a boundary landing on a contents-page line.
+const SLIVER_FLOOR_SHARE = 0.25;
+// How many repeats of a title inside one chapter's worth of text count as a
+// fully-supported chapter opening (running page headers).
+const FULL_SUPPORT_REPEATS = 5;
+
+/**
+ * Score for one chapter's span. Zero for any healthy length, increasingly
+ * negative below the sliver floor.
+ *
+ * Rewarding length outright — scoring every segment by log(length) — looks
+ * reasonable and is wrong: it makes EVEN chapters beat CORRECT ones. Measured
+ * on the Grade 10 Mathematics textbook it slid the Unit 2/3 boundary 11,550
+ * characters late purely to trade size from the book's largest unit to its
+ * smallest neighbour. Real textbook units are not equal, so the objective must
+ * be flat across the normal range and only bite near zero.
+ */
+function spanScore(length: number, floor: number): number {
+  if (length >= floor) return 0;
+  return -UNPLACED_PENALTY * (1 - Math.max(0, length) / floor);
+}
+
+/**
+ * Choose ONE position per chapter, strictly increasing.
+ *
+ * Picking each title's first or last occurrence independently cannot work,
+ * because both are systematically wrong in opposite directions:
+ *
+ *   first → the Table-of-Contents entry, so a chapter gets the handful of
+ *           characters between two contents lines (measured: "Circles" was
+ *           assigned 73 characters — literally its contents-page line);
+ *   last  → the final running page header of that unit, which sits at the
+ *           unit's END, so the chapter starts where it should stop.
+ *
+ * Scoring whole assignments removes both. The objective is lexicographic:
+ *
+ *   1. avoid slivers — no chapter is left with a few dozen characters while
+ *      its neighbour holds a hundred thousand;
+ *   2. among assignments that are equally healthy, prefer positions with
+ *      SUPPORT: a real chapter opening is followed by that title repeating as
+ *      a running page header on every page of the unit, whereas a passing
+ *      cross-reference in another chapter stands alone;
+ *   3. failing that, prefer the earliest position — a chapter starts at its
+ *      first body heading, not at a later repeat of it.
+ *
+ * Chapters with no candidate, or that no increasing chain can place, come back
+ * as null for the caller's neighbour-inference path.
+ */
+function chooseChapterPositions(
+  candidatesPerChapter: number[][],
+  textLen: number
+): (number | null)[] {
+  const n = candidatesPerChapter.length;
+  const chosen: (number | null)[] = new Array(n).fill(null);
+
+  const active = candidatesPerChapter
+    .map((list, i) => ({ i, list }))
+    .filter((e) => e.list.length > 0);
+  if (active.length === 0) return chosen;
+
+  const floor = (textLen / Math.max(1, n)) * SLIVER_FLOOR_SHARE;
+
+  // Tie-break value of each candidate, in [-0.5, 1]: how strongly the document
+  // supports it as a chapter opening, less a nudge towards earlier positions.
+  const prefer = active.map(({ list }) =>
+    list.map((pos) => {
+      const repeats = list.filter((p) => p >= pos && p < pos + floor).length;
+      const support = Math.min(1, repeats / FULL_SUPPORT_REPEATS);
+      return support - 0.5 * (pos / textLen);
+    })
+  );
+
+  // Lexicographic comparison: health first, then preference.
+  const EPS = 1e-9;
+  const better = (aH: number, aP: number, bH: number, bP: number) =>
+    aH > bH + EPS || (Math.abs(aH - bH) <= EPS && aP > bP);
+
+  // health[k][j] / pref[k][j] = best suffix score with active[k] at candidate j.
+  const health: number[][] = active.map((e) => new Array(e.list.length).fill(-Infinity));
+  const pref: number[][] = active.map((e) => new Array(e.list.length).fill(-Infinity));
+  // Reconstruction pointers: which chapter the chain resumes at, and which
+  // of that chapter's candidates it takes. -1 means the chain ends here.
+  const nextK: number[][] = active.map((e) => new Array(e.list.length).fill(-1));
+  const nextJ: number[][] = active.map((e) => new Array(e.list.length).fill(-1));
+  // How far ahead a skip may look for the chapter that closes the open segment.
+  const maxSkip = active.length;
+
+  for (let k = active.length - 1; k >= 0; k--) {
+    const list = active[k].list;
+    for (let j = 0; j < list.length; j++) {
+      const pos = list[j];
+      const ownPref = prefer[k][j];
+
+      if (k === active.length - 1) {
+        health[k][j] = spanScore(textLen - pos, floor);
+        pref[k][j] = ownPref;
+        continue;
+      }
+
+      let bestH = -Infinity;
+      let bestP = -Infinity;
+      let bestK = -1;
+      let bestJ = -1;
+
+      // Place some later chapter next; every chapter skipped over costs
+      // UNPLACED_PENALTY, so the chain stays as complete as it can be.
+      for (let k2 = k + 1; k2 < Math.min(active.length, k + 1 + maxSkip); k2++) {
+        const skipped = k2 - k - 1;
+        const list2 = active[k2].list;
+        for (let j2 = 0; j2 < list2.length; j2++) {
+          if (list2[j2] <= pos) continue;
+          const h =
+            spanScore(list2[j2] - pos, floor) +
+            health[k2][j2] -
+            skipped * UNPLACED_PENALTY;
+          const p = ownPref + pref[k2][j2];
+          if (better(h, p, bestH, bestP)) {
+            bestH = h;
+            bestP = p;
+            bestK = k2;
+            bestJ = j2;
+          }
+        }
+      }
+
+      // Or end the chain here, leaving every later chapter unplaced.
+      const tailH =
+        spanScore(textLen - pos, floor) -
+        (active.length - k - 1) * UNPLACED_PENALTY;
+      if (better(tailH, ownPref, bestH, bestP)) {
+        bestH = tailH;
+        bestP = ownPref;
+        bestK = -1;
+        bestJ = -1;
+      }
+
+      health[k][j] = bestH;
+      pref[k][j] = bestP;
+      nextK[k][j] = bestK;
+      nextJ[k][j] = bestJ;
+    }
+  }
+
+  // Best opening chapter — anything before it is unplaced and costs the same
+  // penalty, so compare on the full score.
+  let startK = -1;
+  let startJ = -1;
+  let bestH = -Infinity;
+  let bestP = -Infinity;
+  for (let k = 0; k < active.length; k++) {
+    for (let j = 0; j < active[k].list.length; j++) {
+      const h = health[k][j] - k * UNPLACED_PENALTY;
+      if (better(h, pref[k][j], bestH, bestP)) {
+        bestH = h;
+        bestP = pref[k][j];
+        startK = k;
+        startJ = j;
+      }
+    }
+  }
+  if (startJ === -1) return chosen;
+
+  let k = startK;
+  let j = startJ;
+  for (;;) {
+    chosen[active[k].i] = active[k].list[j];
+    const k2 = nextK[k][j];
+    const j2 = nextJ[k][j];
+    if (k2 < 0 || j2 < 0) break;
+    k = k2;
+    j = j2;
+  }
+
+  return chosen;
+}
+
 export function splitTextByChapters(
   fullText: string,
   chapters: DetectedChapter[]
@@ -506,31 +864,25 @@ export function splitTextByChapters(
   const rawCandidates = ordered.map((ch) =>
     findAllTitlePositions(normText, indexMap, ch.title)
   );
-  const frontCutoff = findFrontMatterCutoff(
-    rawCandidates,
-    fullText.length,
-    ordered.length
-  );
-  const candidates =
-    frontCutoff > 0
-      ? rawCandidates.map((list) => list.filter((p) => p > frontCutoff))
-      : rawCandidates;
+  // Dot leaders pin the contents page precisely; the title-cluster rule is the
+  // fallback for documents typeset without them.
+  const frontCutoff =
+    detectFrontMatterEnd(fullText) ||
+    findTitleClusterCutoff(rawCandidates, fullText.length, ordered.length);
+  // Never let the cutoff strip a chapter's ONLY occurrence — a book whose
+  // contents page is its only mention of a unit would otherwise lose it.
+  const candidates = rawCandidates.map((list) => {
+    if (frontCutoff <= 0) return list;
+    const after = list.filter((p) => p > frontCutoff);
+    return after.length > 0 ? after : list;
+  });
 
-  // 2. Choose one position per chapter, scanning from the LAST chapter
-  //    backwards and always taking the latest occurrence that still precedes
-  //    the next chapter's start. This skips the Table-of-Contents cluster
-  //    (where every title is bunched together at the front) in favour of the
-  //    real body headings, while a later chapter's start caps any stray
-  //    in-text cross-reference to an earlier chapter's title.
-  const chosen: (number | null)[] = new Array(ordered.length).fill(null);
-  let upperBound = fullText.length;
-  for (let i = ordered.length - 1; i >= 0; i--) {
-    const valid = candidates[i].filter((p) => p < upperBound);
-    if (valid.length > 0) {
-      chosen[i] = valid[valid.length - 1];
-      upperBound = chosen[i]!;
-    }
-  }
+  // 2. Choose one position per chapter as a whole assignment — strictly
+  //    increasing, and scored so that no chapter is left with a sliver of
+  //    text while its neighbour holds the rest. Picking each title's first
+  //    occurrence lands on the contents page; picking its last lands on the
+  //    unit's final running page header. Scoring the chain avoids both.
+  const chosen = chooseChapterPositions(candidates, fullText.length);
 
   const found = ordered
     .map((chapter, i) => ({ chapter, position: chosen[i] }))
@@ -608,19 +960,20 @@ export async function tutorResponseFromContent(opts: {
 }): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: GEMINI_FAST_MODEL,
     systemInstruction: buildTutorSystemPrompt(opts),
   });
 
   const chat = model.startChat({
     history: opts.history,
-    generationConfig: {
+    generationConfig: withThinkingCap({
       temperature: 0.7,
       maxOutputTokens: 2048,
-    },
+    }),
   });
 
   const result = await chat.sendMessage(opts.message);
+  logUsage({ feature: "tutor-chat", provider: "gemini", model: GEMINI_FAST_MODEL, usage: geminiUsage(result.response) });
   return result.response.text();
 }
 
@@ -671,13 +1024,14 @@ export async function generateVideoScript(opts: {
   const client = getClient();
   const model = client.getGenerativeModel({
     model: GEMINI_MODEL,
-    generationConfig: {
+    generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       maxOutputTokens: 5000,
       temperature: 0.6,
-    },
+    }),
   });
 
   const result = await model.generateContent(buildVideoScriptPrompt(opts));
+  logUsage({ feature: "video-script", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
   return parseVideoScript(result.response.text());
 }

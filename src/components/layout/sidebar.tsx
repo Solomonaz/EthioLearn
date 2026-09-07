@@ -32,6 +32,7 @@ import {
   LineChart,
   Boxes,
   Receipt,
+  Coins,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -106,6 +107,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "pricing",    href: "/admin/pricing",      icon: CreditCard },
     { labelKey: "payments",   href: "/admin/payments",     icon: Receipt },
     { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
+    { labelKey: "aiUsage",    href: "/admin/usage",        icon: Coins },
     { labelKey: "settings",   href: "/admin/settings",     icon: Settings },
   ];
 

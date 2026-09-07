@@ -291,7 +291,14 @@ export default function QuizLauncherPage() {
       if (data.adaptiveInsights) {
         setAdaptiveInsights(data.adaptiveInsights);
       }
-      startQuiz(data.quizId, data.questions, data.mode ?? selectedMode);
+      // `shortfallReason` is set when the independent solver rejected some
+      // questions, so the quiz is shorter than the student asked for.
+      startQuiz(
+        data.quizId,
+        data.questions,
+        data.mode ?? selectedMode,
+        data.deliveredQuestions < data.requestedQuestions ? data.shortfallReason : null
+      );
       router.push(`/student/quiz/${data.quizId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate quiz");

@@ -1,12 +1,16 @@
 "use client";
 
 /**
- * The Tug of War stage — a bright, flat cartoon scene (no neon, no filters).
+ * The Tug of War stage — a flat, illustrated scene on a plain white field.
  *
  * Both teams grip ONE rope; a red marker sits at the rope's centre. As a team
  * wins pulls, the whole formation (both teams + rope) SLIDES toward the winning
- * side, dragging the losing team over the centre line — so the kids actually
- * move during win and lose. The pulling side leans back harder for a beat.
+ * side, dragging the losing team over the centre line — so the players actually
+ * move during win and lose. The pulling side strains harder for a beat.
+ *
+ * The players wear habesha dress: cream cotton tunic and trousers with a wide
+ * tibeb band at the hem, cuffs and across the chest. The tibeb carries the team
+ * colour (red / blue), which is what tells the two sides apart.
  *
  * Everything is derived from props so the game component owns all state.
  * `offset` is in pull steps (+ = team 1/left leading).
@@ -17,218 +21,211 @@ export interface TugSceneProps {
   offset: number;
   /** Steps to a knockout (defines how far the formation can slide). */
   target: number;
-  team1Name: string;
-  team2Name: string;
-  /** Team that just pulled — leans back for emphasis. */
+  /** Team that just pulled — strains harder for emphasis. */
   pullingTeam: 1 | 2 | null;
   superPull?: boolean;
   /** 1 / 2 winner, 0 draw, null in-play. */
   winner?: 1 | 2 | 0 | null;
 }
 
-// Team palettes (kept in sync with the answer panels: team 1 red, team 2 blue).
-// Both teams share navy shorts, red shoes and silver caps (per the reference).
-const RED = { jersey: "#ef4444", dark: "#c81e1e" };
-const BLUE = { jersey: "#2f6bef", dark: "#1e49b8" };
-const NAVY = "#1f2b44"; // shorts + legs
-const SHOE = "#e11d2f"; // shoes
-const SOLE = "#7f0f1c";
-const CAP = "#cbd2d8"; // silver caps
-const CAP_DARK = "#9aa3ac";
-const SKINS = ["#f4c9a3", "#e6b088", "#cf9464"];
+// Team tibeb (the embroidered band) — team 1 red, team 2 blue, matching the
+// answer cards.
+const RED = { tibeb: "#d92d2d", dark: "#a01c1c" };
+const BLUE = { tibeb: "#2f6bef", dark: "#1e49b8" };
+
+const CLOTH = "#FBF7EE"; // habesha cotton
+const CLOTH_LINE = "#C9BCA3"; // outline so the white cloth reads on white
+const CLOTH_SHADE = "#EDE5D6";
+const GOLD = "#E3B23C"; // gold thread in the tibeb
+const HAIR = "#241A14";
+const SANDAL = "#6B4A2F";
+const SANDAL_DARK = "#4A3220";
+const SKINS = ["#9C6239", "#7E4E2C", "#B87A4A"];
 
 const GROUND = 335;
-const ROPE_Y = 253; // chest height of the players (below the shoulders)
-const MAX_SHIFT = 120; // px the formation slides at a full knockout
+const ROPE_Y = 253; // chest height — where every hand grips
+const MAX_SHIFT = 52; // px the formation slides at a full knockout
 
 // Team member base positions (before the whole rig slides).
-const TEAM1_X = [170, 250, 330];
-const TEAM2_X = [670, 750, 830];
+const TEAM1_X = [306, 368, 430];
+const TEAM2_X = [570, 632, 694];
 
 /**
- * A flat-design tug-of-war player in a dynamic leaning-back lunge: front leg
- * planted toward the rope, back leg extended, torso leaning away, both arms
- * reaching forward to grip the rope. `facing` (+1/-1) points toward the rope, so
- * the figure mirrors for each side. `lean` adds a small extra pull on the beat.
+ * One player, drawn facing right (toward the rope) with feet on y = 0; the
+ * caller mirrors the whole figure for the other team.
+ *
+ * The pose is a real tug stance, not a walk: the body is thrown back about 30°
+ * off vertical, hips driven forward under the rope, front leg bent and braced,
+ * back leg extended and digging in, arms locked straight onto the rope at chest
+ * height, head back and mouth open with the strain.
  */
-function Kid({
+function Player({
   x,
   facing: f,
-  c,
+  team,
   skin,
   lean,
 }: {
   x: number;
   facing: 1 | -1;
-  c: { jersey: string; dark: string };
+  team: { tibeb: string; dark: string };
   skin: string;
   lean: number;
 }) {
-  // Subtle body tilt on a pull (keeps the hands near the rope line).
-  const rot = -f * lean * 0.4;
-
-  // Key joints in local space (feet on the ground at y=0). The rope sits at
-  // chest height — below the shoulders — so the arms reach forward/down to it.
-  const gripY = ROPE_Y - GROUND; // ≈ -82 (chest level)
-  const hip: [number, number] = [f * -14, -50];
-  const sh: [number, number] = [f * -24, -90];
-  const head: [number, number] = [f * -30, -105];
-  const grip: [number, number] = [f * 44, gripY];
-  const elbow: [number, number] = [f * 12, gripY - 3];
-
-  const frontKnee: [number, number] = [f * 6, -28];
-  const frontFoot: [number, number] = [f * 26, -4];
-  const backKnee: [number, number] = [f * -32, -30];
-  const backFoot: [number, number] = [f * -48, -4];
-
-  const P = (p: [number, number]) => `${p[0]},${p[1]}`;
+  // Extra backward tilt on the beat (negative = top swings away from the rope).
+  const rot = -lean * 0.35;
 
   return (
     <g transform={`translate(${x} ${GROUND})`}>
-      {/* ground shadow (stays flat, outside the lean) */}
-      <ellipse cx={f * -8} cy={3} rx={40} ry={5.5} fill="#000" opacity={0.09} />
+      {/* ground shadow — stays flat, outside the strain tilt */}
+      <ellipse cx={-14} cy={2} rx={46} ry={5.5} fill="#0f172a" opacity={0.08} />
 
-      <g
-        style={{
-          transform: `rotate(${rot}deg)`,
-          transformOrigin: "0px -30px",
-          transition: "transform 220ms ease-out",
-        }}
-      >
-        {/* ── Back leg (extended, braced) ── */}
-        <polyline
-          points={`${P(hip)} ${P(backKnee)} ${P(backFoot)}`}
-          fill="none"
-          stroke={NAVY}
-          strokeWidth={13}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Back arm (behind torso), reaching to the rope */}
-        <polyline
-          points={`${f * -20},-86 ${elbow[0]},${elbow[1] + 3} ${grip[0]},${grip[1] + 2}`}
-          fill="none"
-          stroke={c.dark}
-          strokeWidth={9}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      <g transform={`scale(${f} 1)`}>
+        <g
+          style={{
+            transform: `rotate(${rot}deg)`,
+            transformOrigin: "0px -45px",
+            transition: "transform 220ms ease-out",
+          }}
+        >
+          {/* ── Back leg — extended behind, digging in ── */}
+          <polyline
+            points="-14,-52 -38,-28 -60,-8"
+            fill="none"
+            stroke={CLOTH_LINE}
+            strokeWidth={17.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <polyline
+            points="-14,-52 -38,-28 -60,-8"
+            fill="none"
+            stroke={CLOTH_SHADE}
+            strokeWidth={14}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <polyline points="-53,-15 -60,-8" fill="none" stroke={team.tibeb} strokeWidth={14} strokeLinecap="butt" />
+          <path d="M -68,-9 L -46,-6 Q -41,-4 -46,-1 L -68,-1 Z" fill={SANDAL} />
+          <path d="M -68,-3 L -46,-3 Q -42,-2.5 -46,-1 L -68,-1 Z" fill={SANDAL_DARK} />
 
-        {/* ── Front leg (planted toward the rope) ── */}
-        <polyline
-          points={`${P(hip)} ${P(frontKnee)} ${P(frontFoot)}`}
-          fill="none"
-          stroke={NAVY}
-          strokeWidth={13}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+          {/* ── Back arm — behind the torso, locked straight on the rope ── */}
+          <polyline points="-42,-104 -6,-97" fill="none" stroke={CLOTH_LINE} strokeWidth={14.5} strokeLinecap="round" />
+          <polyline points="-42,-104 -6,-97" fill="none" stroke={CLOTH_SHADE} strokeWidth={11.5} strokeLinecap="round" />
+          <polyline points="-11,-98 -6,-97" fill="none" stroke={team.dark} strokeWidth={11.5} strokeLinecap="butt" />
+          <polyline points="-6,-97 30,-84" fill="none" stroke={skin} strokeWidth={8.5} strokeLinecap="round" />
+          <circle cx={31} cy={-84} r={5.8} fill={skin} />
 
-        {/* Shoes */}
-        <g>
-          <ellipse cx={backFoot[0] + f * 4} cy={backFoot[1] + 3} rx={11} ry={5} fill={SHOE} />
-          <ellipse cx={backFoot[0] + f * 4} cy={backFoot[1] + 6} rx={11} ry={2.4} fill={SOLE} />
-          <ellipse cx={frontFoot[0] + f * 5} cy={frontFoot[1] + 3} rx={11} ry={5} fill={SHOE} />
-          <ellipse cx={frontFoot[0] + f * 5} cy={frontFoot[1] + 6} rx={11} ry={2.4} fill={SOLE} />
+          {/* ── Front leg — bent and braced, taking the load ── */}
+          <polyline
+            points="4,-58 22,-34 36,-10"
+            fill="none"
+            stroke={CLOTH_LINE}
+            strokeWidth={18.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <polyline
+            points="4,-58 22,-34 36,-10"
+            fill="none"
+            stroke={CLOTH}
+            strokeWidth={15}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <polyline points="29,-17 36,-10" fill="none" stroke={team.tibeb} strokeWidth={15} strokeLinecap="butt" />
+          <path d="M 28,-11 L 50,-8 Q 55,-6 50,-2 L 28,-2 Z" fill={SANDAL} />
+          <path d="M 28,-4 L 50,-4 Q 54,-3 50,-2 L 28,-2 Z" fill={SANDAL_DARK} />
+
+          {/* ── Tunic — thrown back off the hips ── */}
+          <path
+            d="M -18.3,-116.2 C -6,-108 8,-88 14.3,-67.8 L 20.6,-61.1 L -15.4,-39.5 L -18.3,-48.2 C -30,-66 -40,-84 -45.7,-99.8 C -49,-110.5 -32,-121 -18.3,-116.2 Z"
+            fill={CLOTH}
+            stroke={CLOTH_LINE}
+            strokeWidth={2}
+            strokeLinejoin="round"
+          />
+          {/* strain folds running with the lean */}
+          <path d="M -30,-108 C -24,-92 -14,-70 -4,-52" fill="none" stroke={CLOTH_SHADE} strokeWidth={2.5} />
+          {/* tibeb hem band */}
+          <path d="M 20.6,-61.1 L -15.4,-39.5 L -20.6,-48.1 L 15.5,-69.7 Z" fill={team.tibeb} />
+          <line x1={18} y1={-65.4} x2={-18} y2={-43.8} stroke={GOLD} strokeWidth={2.5} opacity={0.9} />
+
+          {/* ── Netela sash across the chest, in the team's tibeb ── */}
+          <path d="M -35.4,-113.3 L -44.6,-102.7 L 5.4,-58.7 L 14.6,-69.3 Z" fill={team.tibeb} />
+          <line x1={-40} y1={-108} x2={10} y2={-64} stroke={GOLD} strokeWidth={2.5} opacity={0.9} />
+
+          {/* ── Front arm — over the torso, both hands on the rope ── */}
+          <polyline points="-30,-112 0,-96" fill="none" stroke={CLOTH_LINE} strokeWidth={16} strokeLinecap="round" />
+          <polyline points="-30,-112 0,-96" fill="none" stroke={CLOTH} strokeWidth={13} strokeLinecap="round" />
+          <polyline points="-5,-99 0,-96" fill="none" stroke={team.tibeb} strokeWidth={13} strokeLinecap="butt" />
+          <polyline points="0,-96 39,-82" fill="none" stroke={skin} strokeWidth={9} strokeLinecap="round" />
+          <circle cx={40} cy={-82} r={6.5} fill={skin} />
+
+          {/* ── Neck, head, face — head back, chin up, jaw clenched ── */}
+          <polyline points="-36,-110 -44,-119" fill="none" stroke={skin} strokeWidth={11} strokeLinecap="round" />
+          {/* hair sits behind the face, leaving a dark rim = short natural hair */}
+          <ellipse cx={-53} cy={-130} rx={13.5} ry={14.5} fill={HAIR} />
+          <circle cx={-62} cy={-135} r={4.2} fill={HAIR} />
+          <circle cx={-55} cy={-141} r={4.6} fill={HAIR} />
+          <circle cx={-47} cy={-142} r={4.2} fill={HAIR} />
+          <ellipse cx={-49} cy={-127} rx={11.5} ry={13} fill={skin} />
+          {/* ear */}
+          <ellipse cx={-59.5} cy={-125} rx={3.4} ry={4.2} fill={skin} />
+          {/* nose */}
+          <path d="M -38.5,-129 L -34,-125.5 L -38.5,-123 Z" fill={skin} />
+          {/* strained brow + eye */}
+          <path d="M -47.5,-135.5 L -40,-133.5" fill="none" stroke={HAIR} strokeWidth={2.2} strokeLinecap="round" />
+          <circle cx={-43} cy={-130} r={1.9} fill="#27272a" />
+          {/* open, straining mouth */}
+          <ellipse cx={-41} cy={-119.5} rx={3.4} ry={2.4} fill="#5b2a2a" />
+          <path d="M -44.1,-120.3 L -37.9,-120.3" fill="none" stroke="#fff" strokeWidth={1.4} />
+          {/* headband in the team's tibeb */}
+          <path
+            d="M -64,-133 A 13.5 14.5 0 0 1 -42,-139.5 L -44,-135 A 11 11 0 0 0 -62.5,-129 Z"
+            fill={team.tibeb}
+          />
+          {/* sweat — the strain */}
+          <ellipse cx={-33} cy={-138} rx={1.7} ry={2.6} fill="#7dd3fc" opacity={0.85} />
+          <ellipse cx={-29} cy={-131} rx={1.4} ry={2.2} fill="#7dd3fc" opacity={0.7} />
         </g>
-
-        {/* shorts */}
-        <ellipse cx={hip[0]} cy={hip[1] + 2} rx={12} ry={11} fill={NAVY} />
-
-        {/* ── Torso (jersey) ── */}
-        <polyline
-          points={`${hip[0]},${hip[1] - 4} ${sh[0]},${sh[1]}`}
-          fill="none"
-          stroke={c.jersey}
-          strokeWidth={27}
-          strokeLinecap="round"
-        />
-        {/* subtle side-shade for depth */}
-        <polyline
-          points={`${hip[0] - f * 8},${hip[1] - 6} ${sh[0] - f * 8},${sh[1] + 2}`}
-          fill="none"
-          stroke={c.dark}
-          strokeWidth={8}
-          strokeLinecap="round"
-          opacity={0.5}
-        />
-
-        {/* ── Front arm (over torso) reaching the rope ── */}
-        <polyline
-          points={`${P(sh)} ${P(elbow)}`}
-          fill="none"
-          stroke={c.jersey}
-          strokeWidth={9.5}
-          strokeLinecap="round"
-        />
-        <polyline
-          points={`${P(elbow)} ${P(grip)}`}
-          fill="none"
-          stroke={skin}
-          strokeWidth={7}
-          strokeLinecap="round"
-        />
-        <circle cx={grip[0]} cy={grip[1]} r={5} fill={skin} />
-
-        {/* ── Neck + head ── */}
-        <line x1={sh[0]} y1={sh[1]} x2={head[0]} y2={head[1] + 8} stroke={skin} strokeWidth={7} strokeLinecap="round" />
-        <circle cx={head[0]} cy={head[1]} r={12} fill={skin} />
-        {/* eye, facing the rope */}
-        <circle cx={head[0] + f * 5} cy={head[1] - 1} r={1.7} fill="#27272a" />
-
-        {/* ── Cap (silver) ── */}
-        <path
-          d={`M ${head[0] - 12} ${head[1] - 4} A 12 12 0 0 1 ${head[0] + 12} ${head[1] - 4} Z`}
-          fill={CAP}
-        />
-        <rect x={head[0] - 12} y={head[1] - 5} width={24} height={3.2} rx={1.6} fill={CAP_DARK} />
-        {/* brim pointing toward the rope */}
-        <ellipse cx={head[0] + f * 15} cy={head[1] - 3.5} rx={9} ry={3} fill={CAP_DARK} />
       </g>
     </g>
   );
 }
 
-export function TugScene({
-  offset,
-  target,
-  team1Name,
-  team2Name,
-  pullingTeam,
-  winner,
-}: TugSceneProps) {
+export function TugScene({ offset, target, pullingTeam, winner }: TugSceneProps) {
   const clamped = Math.max(-target, Math.min(target, offset));
   // Positive offset = team 1 winning → the whole rig slides LEFT, pulling team 2 over the line.
   const shift = -(clamped / target) * MAX_SHIFT;
 
-  const leanOf = (team: 1 | 2) => (pullingTeam === team ? 17 : 7);
-
-  const ropeStart = TEAM1_X[0] - 24;
-  const ropeEnd = TEAM2_X[2] + 24;
+  const leanOf = (team: 1 | 2) => (pullingTeam === team ? 18 : 8);
 
   return (
-    <svg viewBox="0 0 1000 380" className="h-full w-full" role="img" aria-label="Tug of war">
-      {/* bright sky + grass */}
-      <rect x="0" y="0" width="1000" height="380" fill="#e3f4ff" />
-      <rect x="0" y="315" width="1000" height="65" fill="#bfe6a0" />
-      <rect x="0" y="315" width="1000" height="5" fill="#a6d885" />
-
-      {/* fixed centre line */}
-      <line x1="500" y1="70" x2="500" y2="330" stroke="#94a3b8" strokeWidth="3" strokeDasharray="9 9" />
-
-      {/* team name plates */}
-      <g fontFamily="system-ui, sans-serif" fontWeight="700">
-        <rect x="30" y="26" rx="14" width="220" height="42" fill={RED.jersey} />
-        <text x="140" y="54" textAnchor="middle" fontSize="21" fill="#fff">{team1Name}</text>
-        <rect x="750" y="26" rx="14" width="220" height="42" fill={BLUE.jersey} />
-        <text x="860" y="54" textAnchor="middle" fontSize="21" fill="#fff">{team2Name}</text>
-      </g>
+    <svg
+      viewBox="180 160 640 195"
+      preserveAspectRatio="xMidYMid meet"
+      className="h-full w-full"
+      role="img"
+      aria-label="Tug of war"
+    >
+      {/* plain white field — the centre line runs the full height of the panel */}
+      <line x1="500" y1="-2000" x2="500" y2="2000" stroke="#cbd5e1" strokeWidth="3" strokeDasharray="9 9" />
 
       {/* the sliding formation: rope + both teams move together */}
       <g style={{ transform: `translateX(${shift}px)`, transition: "transform 420ms cubic-bezier(.4,1.1,.6,1)" }}>
         {/* rope */}
-        <line x1={ropeStart} y1={ROPE_Y} x2={ropeEnd} y2={ROPE_Y} stroke="#a9741f" strokeWidth="7" strokeLinecap="round" />
-        <line x1={ropeStart} y1={ROPE_Y} x2={ropeEnd} y2={ROPE_Y} stroke="#caa053" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="2 10" />
+        <line x1={272} y1={ROPE_Y} x2={728} y2={ROPE_Y} stroke="#a9741f" strokeWidth="7" strokeLinecap="round" />
+        <line
+          x1={272}
+          y1={ROPE_Y}
+          x2={728}
+          y2={ROPE_Y}
+          stroke="#caa053"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray="2 10"
+        />
         {/* red centre marker */}
         <g transform={`translate(500 ${ROPE_Y})`}>
           <line x1="0" y1="-2" x2="0" y2="34" stroke="#dc2626" strokeWidth="3" />
@@ -238,16 +235,18 @@ export function TugScene({
 
         {/* teams — all gripping the rope */}
         {TEAM1_X.map((x, i) => (
-          <Kid key={`a${i}`} x={x} facing={1} c={RED} skin={SKINS[i % 3]} lean={leanOf(1)} />
+          <Player key={`a${i}`} x={x} facing={1} team={RED} skin={SKINS[i % 3]} lean={leanOf(1)} />
         ))}
         {TEAM2_X.map((x, i) => (
-          <Kid key={`b${i}`} x={x} facing={-1} c={BLUE} skin={SKINS[i % 3]} lean={leanOf(2)} />
+          <Player key={`b${i}`} x={x} facing={-1} team={BLUE} skin={SKINS[(i + 1) % 3]} lean={leanOf(2)} />
         ))}
       </g>
 
       {/* winner badge */}
       {(winner === 1 || winner === 2) && (
-        <text x={winner === 1 ? 140 : 860} y="110" textAnchor="middle" fontSize="40">🏆</text>
+        <text x={winner === 1 ? 330 : 670} y="205" textAnchor="middle" fontSize="40">
+          🏆
+        </text>
       )}
     </svg>
   );

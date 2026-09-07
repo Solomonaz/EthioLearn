@@ -8,6 +8,7 @@ import type {
 import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
 import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
+import { logUsage, openAiUsage, type UsageFeature } from "./usage-logger";
 
 // Re-export the shared validators so NVIDIA can keep importing them
 // from "./groq" (their historical import path) without change.
@@ -38,7 +39,14 @@ function getGroqClient() {
  */
 export async function groqChat(
   prompt: string,
-  opts: { system?: string; temperature?: number; maxTokens?: number } = {}
+  opts: {
+    system?: string;
+    temperature?: number;
+    maxTokens?: number;
+    /** Which feature this call serves, for token-usage attribution. Shared
+     *  helper across features; defaults to quality-check. */
+    feature?: UsageFeature;
+  } = {}
 ): Promise<string | null> {
   if (!process.env.GROQ_API_KEY) return null;
   try {
@@ -55,6 +63,7 @@ export async function groqChat(
       max_tokens: opts.maxTokens ?? 4096,
       response_format: { type: "json_object" },
     });
+    logUsage({ feature: opts.feature ?? "quality-check", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
     return completion.choices[0]?.message?.content ?? null;
   } catch (err) {
     console.warn(
@@ -127,6 +136,7 @@ export async function groqGenerateQuestions(
       response_format: { type: "json_object" },
     });
 
+    logUsage({ feature: "question-generation", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
     const text = completion.choices[0]?.message?.content ?? "";
 
     try {
@@ -179,6 +189,7 @@ export async function groqDetectChapters(
       response_format: { type: "json_object" },
     });
 
+    logUsage({ feature: "chapter-detection", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
     const text = completion.choices[0]?.message?.content ?? "";
 
     try {
@@ -231,6 +242,7 @@ export async function groqTutorChatResponse(opts: {
     max_tokens: 2048,
   });
 
+  logUsage({ feature: "tutor-chat", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
   return completion.choices[0]?.message?.content ?? "I apologize, but I'm having trouble responding right now.";
 }
 
@@ -255,5 +267,6 @@ export async function groqGenerateVideoScript(opts: {
     response_format: { type: "json_object" },
   });
 
+  logUsage({ feature: "video-script", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
   return parseVideoScript(completion.choices[0]?.message?.content ?? "");
 }

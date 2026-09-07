@@ -1,7 +1,12 @@
 /**
- * Unified AI provider: Groq → NVIDIA → Gemini fallback chain (production).
+ * Unified AI provider: Gemini → Groq → NVIDIA fallback chain (production).
  * Ollama Mistral is available as a local-dev-only tertiary fallback when
  * OLLAMA_BASE_URL is set to a non-localhost address.
+ *
+ * Gemini is the primary for the batch/offline tasks — question generation,
+ * chapter detection, video scripts, Bloom tagging, embeddings. The two paths
+ * where latency beats capacity keep Groq first: the student-facing tutor chat
+ * and the post-generation AI quality checks.
  *
  * Usage:
  *   import { generateQuestions, detectChapters } from "@/lib/ai-provider";
@@ -61,16 +66,19 @@ function hasOllama(): boolean {
   return isOllamaEnabled();
 }
 
-// ─── Generate Questions (Groq → NVIDIA → Gemini → Ollama) ──────────────────
+// ─── Generate Questions (Gemini → Groq → NVIDIA → Ollama) ──────────────────
 //
 // Cerebras was removed from every chain: its free tier returns 402 Payment
 // Required, so it only ever added a failed call and a delay before the real
 // provider ran.
 //
-// Groq is first — fast and reliable for the small per-batch payloads
-// generateQuestionsBatched sends. NVIDIA follows as the high-RPM capacity
-// fallback, then Gemini (whose free tier has been returning "limit: 0" 429s),
-// then local Ollama in dev.
+// Gemini is first: it is the configured primary for every task, and its 1M TPM
+// (on a paid key) comfortably absorbs the small per-batch payloads
+// generateQuestionsBatched sends. Groq follows as the fast fallback, NVIDIA as
+// the high-RPM capacity fallback, then local Ollama in dev. Note that on a FREE
+// Gemini key this ordering means every batch pays a failed call and a 429 before
+// reaching Groq — set GEMINI_API_KEY to a billed key, or the chain will be
+// slower than it was with Groq first.
 
 export async function generateQuestions(
   opts: GenerateOptions
@@ -81,7 +89,20 @@ export async function generateQuestions(
   // error is captured and surfaced only if the ENTIRE chain is exhausted.
   let lastError: unknown = null;
 
-  // 1. Groq — fast; small batched requests fit its 12K TPM free tier.
+  // 1. Gemini — primary; 1M TPM on a billed key.
+  if (hasGeminiKey()) {
+    try {
+      const questions = await generateQuestionsFromContent(opts);
+      return { questions, provider: "gemini" };
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `[AI Provider] Gemini failed (${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
+      );
+    }
+  }
+
+  // 2. Groq — fast; small batched requests fit its 12K TPM free tier.
   if (hasGroqKey()) {
     try {
       const questions = await groqGenerateQuestions(opts);
@@ -94,7 +115,7 @@ export async function generateQuestions(
     }
   }
 
-  // 2. NVIDIA NIM — high RPM, no hard cap, but slow; a capacity fallback.
+  // 3. NVIDIA NIM — high RPM, no hard cap, but slow; a capacity fallback.
   if (hasNvidiaKey()) {
     try {
       const questions = await nvidiaGenerateQuestions(opts);
@@ -102,20 +123,7 @@ export async function generateQuestions(
     } catch (err) {
       lastError = err;
       console.warn(
-        `[AI Provider] NVIDIA failed (${err instanceof Error ? err.message : String(err)}), falling back to Gemini…`
-      );
-    }
-  }
-
-  // 3. Gemini — 1M TPM when available (currently limit: 0 on the free tier).
-  if (hasGeminiKey()) {
-    try {
-      const questions = await generateQuestionsFromContent(opts);
-      return { questions, provider: "gemini" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Gemini failed (${err instanceof Error ? err.message : String(err)}), falling back to Ollama Mistral…`
+        `[AI Provider] NVIDIA failed (${err instanceof Error ? err.message : String(err)}), falling back to Ollama Mistral…`
       );
     }
   }
@@ -205,14 +213,13 @@ export async function generateQuestionsBatched(
       ? lastError
       : new Error("All AI providers failed for question generation.");
   }
-  return { questions: all.slice(0, total), provider: usedProvider ?? "groq" };
+  return { questions: all.slice(0, total), provider: usedProvider ?? "gemini" };
 }
 
 // ─── Detect Chapters (Gemini → Groq → NVIDIA → Ollama) ─
 //
 // Same reasoning as generateQuestions: chapter detection sends up to 50K chars
-// of content (~12,500 tokens). NVIDIA is primary so a large textbook upload
-// doesn't cascade through Gemini's dead free tier first.
+// of content (~12,500 tokens), which Gemini's context handles in one call.
 
 export async function detectChapters(
   opts: DetectChaptersOptions
@@ -298,7 +305,7 @@ export async function detectChapters(
   );
 }
 
-// ─── AI Tutor Chat (Groq → Gemini fallback) ─────────────
+// ─── AI Tutor Chat (Groq → Gemini → NVIDIA) ─────────────
 
 export async function chatWithTutor(opts: {
   message: string;
@@ -308,9 +315,11 @@ export async function chatWithTutor(opts: {
   subject: string;
   grade: number;
 }): Promise<{ response: string; provider: "gemini" | "groq" | "nvidia" }> {
-  // Groq (fast) → Gemini → NVIDIA. Every provider falls through on
-  // ANY error so the tutor keeps working even if Groq AND Gemini are down —
-  // it previously had no capacity fallback beyond those two.
+  // Groq (fast) → Gemini → NVIDIA. The tutor is the one interactive,
+  // student-facing path in the app, so it keeps Groq first for latency rather
+  // than following the Gemini-first order the batch/offline tasks use. Every
+  // provider falls through on ANY error so the tutor keeps working even if
+  // Groq AND Gemini are down.
   let lastError: unknown = null;
 
   // History transform shared by the OpenAI-style providers (assistant, not model).
@@ -326,7 +335,7 @@ export async function chatWithTutor(opts: {
     grade: opts.grade,
   };
 
-  // 1. Groq — fast primary
+  // 1. Groq — fast primary (latency matters most on this path)
   if (hasGroqKey()) {
     try {
       const { groqTutorChatResponse } = await import("./groq");
@@ -370,7 +379,7 @@ export async function chatWithTutor(opts: {
   );
 }
 
-// ─── Video Tutorial Script (Groq → Gemini fallback) ──────
+// ─── Video Tutorial Script (Gemini → Groq → NVIDIA) ──────
 
 export async function generateVideoTutorial(opts: {
   content: string;
@@ -379,22 +388,11 @@ export async function generateVideoTutorial(opts: {
   grade: number;
   topic?: string;
 }): Promise<{ script: VideoScript; provider: "gemini" | "groq" | "nvidia" }> {
-  // Groq (fast) → Gemini → NVIDIA, falling through on ANY error so
+  // Gemini (primary) → Groq → NVIDIA, falling through on ANY error so
   // a video can still be produced when the first providers are unavailable.
   let lastError: unknown = null;
 
-  // 1. Groq — fast primary
-  if (hasGroqKey()) {
-    try {
-      const script = await groqGenerateVideoScript(opts);
-      return { script, provider: "groq" };
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] Groq failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to Gemini…`);
-    }
-  }
-
-  // 2. Gemini
+  // 1. Gemini — primary
   if (hasGeminiKey()) {
     try {
       const { generateVideoScript } = await import("./gemini");
@@ -402,7 +400,18 @@ export async function generateVideoTutorial(opts: {
       return { script, provider: "gemini" };
     } catch (err) {
       lastError = err;
-      console.warn(`[AI Provider] Gemini failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
+      console.warn(`[AI Provider] Gemini failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to Groq…`);
+    }
+  }
+
+  // 2. Groq — fast fallback
+  if (hasGroqKey()) {
+    try {
+      const script = await groqGenerateVideoScript(opts);
+      return { script, provider: "groq" };
+    } catch (err) {
+      lastError = err;
+      console.warn(`[AI Provider] Groq failed (Video: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
     }
   }
 

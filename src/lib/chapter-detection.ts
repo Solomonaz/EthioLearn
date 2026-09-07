@@ -33,6 +33,7 @@
  */
 
 import { detectChapters } from "./ai-provider";
+import { createTitleLocator, detectFrontMatterEnd } from "./gemini";
 import type { DetectedChapter } from "./gemini";
 
 // ── Front matter ────────────────────────────────────────
@@ -155,7 +156,13 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
   while ((m = labelled.exec(text)) !== null) {
     const number = parseNumberToken(m[2]);
     if (number === null) continue;
-    const title = (m[3] || "").trim();
+    // A contents-page heading drags its dot leader and page number along
+    // ("Relations and Functions..........1"). Both are typesetting, not part
+    // of the title, and they break every comparison downstream.
+    const title = (m[3] || "")
+      .replace(/[.·]{3,}.*$/, "")
+      .replace(/\s+\d{1,4}\s*$/, "")
+      .trim();
     candidates.push({
       index: m.index,
       kind: m[1].toLowerCase(),
@@ -215,8 +222,29 @@ function normaliseTitle(title: string): string {
     .replace(/\s*\([^)]*\)\s*$/g, "")
     .replace(/^(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)\s*[\d\w፩-፼]*\s*[-–—.:)]*\s*/i, "")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
+    // A contents-page title keeps its page number ("Relations and Functions 1").
+    // The same chapter found in the body does not.
+    .replace(/\s+\d{1,4}$/, "")
     .trim();
 }
+
+/**
+ * Compare titles with every space removed.
+ *
+ * PDF text extraction splits words at random — this Grade 10 Mathematics
+ * textbook yields "R elations and Functions" from its own contents page — so
+ * word-wise comparison reports two different chapters where there is one.
+ * Removing spaces entirely makes the OCR damage invisible to the comparison:
+ * "relationsandfunctions" either way.
+ */
+function squashKey(key: string): string {
+  return key.replace(/\s+/gu, "");
+}
+
+// Below this length a prefix match is more likely to be a coincidence than a
+// chapter. Six admits the singular/plural pairs that matter ("circle" against
+// "circles", which the old floor of 8 silently skipped).
+const MIN_SQUASHED_MATCH = 6;
 
 /**
  * Find an existing entry describing the same chapter.
@@ -224,14 +252,31 @@ function normaliseTitle(title: string): string {
  * Exact key equality is not enough: the AI reads the contents page and returns
  * "Vectors in Space (For Natural Science Students)" while the deterministic
  * scan reads a body heading and returns "Unit 6: Vectors in Space". Both name
- * one chapter, and listing it twice produces a broken split. One title
- * containing the other is treated as the same chapter.
+ * one chapter, and listing it twice produces a broken split — the duplicate
+ * takes a slice of the book with it.
+ *
+ * Two rules, unioned: the original word-wise prefix test, plus a space-blind
+ * one that survives OCR damage and plural drift.
  */
 function findExistingKey(merged: Map<string, unknown>, key: string): string | null {
   if (merged.has(key)) return key;
+
+  const squashed = squashKey(key);
   for (const existing of merged.keys()) {
-    if (existing.length < 8 || key.length < 8) continue; // too short to match safely
-    if (existing.startsWith(key) || key.startsWith(existing)) return existing;
+    if (
+      existing.length >= 8 &&
+      key.length >= 8 &&
+      (existing.startsWith(key) || key.startsWith(existing))
+    ) {
+      return existing;
+    }
+    const existingSquashed = squashKey(existing);
+    if (
+      Math.min(existingSquashed.length, squashed.length) >= MIN_SQUASHED_MATCH &&
+      (existingSquashed.startsWith(squashed) || squashed.startsWith(existingSquashed))
+    ) {
+      return existing;
+    }
   }
   return null;
 }
@@ -252,7 +297,10 @@ function findExistingKey(merged: Map<string, unknown>, key: string): string | nu
  *      headings, so they can be located further in. This is the check that
  *      catches fabrication.
  */
-function looksComplete(chapters: DetectedChapter[], content: string): boolean {
+function looksComplete(
+  chapters: DetectedChapter[],
+  bodyIndexOf: (title: string) => number
+): boolean {
   if (chapters.length < MIN_CHAPTERS_FOR_CONFIDENCE) return false;
 
   const numbers = chapters.map((c) => c.chapterNumber);
@@ -262,7 +310,7 @@ function looksComplete(chapters: DetectedChapter[], content: string): boolean {
   }
 
   const locatable = chapters.filter((c) =>
-    Number.isFinite(findApproxIndex(content, c.title))
+    Number.isFinite(bodyIndexOf(c.title))
   ).length;
 
   return locatable / chapters.length >= MIN_LOCATABLE_RATIO;
@@ -286,6 +334,30 @@ export async function detectChaptersFullText(opts: {
   const detect = opts.detect ?? detectChapters;
   const warnings: string[] = [];
 
+  // One normalised index over the document, shared by every lookup below and
+  // matching the one `splitTextByChapters` uses, so detection and splitting
+  // can never disagree about where a title lives.
+  const locate = createTitleLocator(content);
+  const frontMatterEnd = detectFrontMatterEnd(content);
+
+  /**
+   * Where a chapter's body actually begins — its first occurrence past the
+   * contents page. Infinity when the title appears nowhere.
+   *
+   * The previous implementation searched the RAW text for the first match,
+   * which is the contents-page entry in any book that has one. On a measured
+   * Grade 10 Mathematics textbook this was worse still: six of seven titles
+   * matched inside a single preface sentence ("this textbook has 7 units
+   * namely: Relations and Functions, Polynomial functions, …"), so all six
+   * resolved to positions 2554–2694 — a 140-character span — and the chapter
+   * order came out of that sentence rather than out of the book.
+   */
+  const bodyIndexOf = (title: string): number => {
+    const all = locate(title);
+    if (all.length === 0) return Number.POSITIVE_INFINITY;
+    return all.find((p) => p > frontMatterEnd) ?? all[0];
+  };
+
   const aiChapters: DetectedChapter[] = [];
   let provider = "none";
   let strategy: DetectionStrategy = "none";
@@ -308,7 +380,7 @@ export async function detectChaptersFullText(opts: {
     windowsScanned = 1;
     frontMatterAnswered = true;
 
-    if (looksComplete(result.chapters, content)) {
+    if (looksComplete(result.chapters, bodyIndexOf)) {
       aiChapters.push(...result.chapters);
       strategy = "front-matter";
       console.log(
@@ -380,10 +452,33 @@ export async function detectChaptersFullText(opts: {
   }
 
   // ── Pass 2: deterministic scan of the entire document ───────────────────
-  const scanned = filterToDominantSequence(scanHeadingCandidates(content));
+  //
+  // Contents-page entries are dropped BEFORE the sequence filter runs.
+  // `filterToDominantSequence` keeps only headings whose numbers ascend through
+  // the document, and a contents page wrecks that ordering: in this Grade 10
+  // Mathematics textbook its layout put units 1, 4, 5, 6 and 7 on the contents
+  // page but broke 2 and 3 across lines, so the scan saw 1,4,5,6,7 at the front
+  // and the real body headings for 2 and 3 a hundred thousand characters later
+  // — not ascending, so both were discarded. The scan could then never recover
+  // a unit the model had missed, which is the whole point of running it.
+  const rawScan = scanHeadingCandidates(content);
+  const bodyScan = rawScan.filter((c) => c.index > frontMatterEnd);
+  const scanned = filterToDominantSequence(
+    // Keep the unfiltered set if the cutoff leaves too little to work with —
+    // a book whose only chapter headings ARE its contents page.
+    bodyScan.length >= 2 ? bodyScan : rawScan
+  );
 
   // ── Merge (union, AI titles preferred) ──────────────────────────────────
-  const merged = new Map<string, { title: string; index: number }>();
+  //
+  // `rank` fixes the output order. For AI chapters it is the position the
+  // model gave them, because that comes from the book's own contents page and
+  // is authoritative — deriving order from text positions instead is what
+  // demoted Unit 2 ("Polynomial Functions") to chapter 8 on a real upload,
+  // simply because a line break hid it from the preface sentence the other six
+  // titles were being ordered by. Scan-recovered chapters have no such
+  // authority, so they are slotted in by body position with a fractional rank.
+  const merged = new Map<string, { title: string; index: number; rank: number }>();
 
   // Only accept an AI title that can actually be located in the document.
   //
@@ -394,16 +489,17 @@ export async function detectChaptersFullText(opts: {
   // filter: `splitTextByChapters` cannot assign content to a title it can't
   // locate anyway, so an unlocatable chapter is useless even when it is real.
   let rejectedHallucinations = 0;
-  for (const ch of aiChapters) {
+  let aiRank = 0;
+  for (const ch of [...aiChapters].sort((a, b) => a.chapterNumber - b.chapterNumber)) {
     const key = normaliseTitle(ch.title);
     if (!key || findExistingKey(merged, key)) continue;
 
-    const index = findApproxIndex(content, ch.title);
+    const index = bodyIndexOf(ch.title);
     if (!Number.isFinite(index)) {
       rejectedHallucinations++;
       continue;
     }
-    merged.set(key, { title: ch.title, index });
+    merged.set(key, { title: ch.title, index, rank: aiRank++ });
   }
 
   if (rejectedHallucinations > 0) {
@@ -413,13 +509,22 @@ export async function detectChaptersFullText(opts: {
     );
   }
 
+  // Body positions of the AI chapters, in AI order — the ruler a scan-recovered
+  // chapter is measured against to find which two AI chapters it falls between.
+  const aiPositions = [...merged.values()]
+    .sort((a, b) => a.rank - b.rank)
+    .map((c) => c.index);
+
   let recoveredByScan = 0;
   for (const cand of scanned) {
     const key = normaliseTitle(cand.title);
     // The AI's contents-page title is richer than a body heading, so an
     // already-present chapter wins and the scan entry is dropped.
     if (!key || findExistingKey(merged, key)) continue;
-    merged.set(key, { title: cand.title, index: cand.index });
+    // Sits just after the last AI chapter that starts before it. The .5 keeps
+    // it between two AI ranks without disturbing their relative order.
+    const before = aiPositions.filter((p) => p < cand.index).length;
+    merged.set(key, { title: cand.title, index: cand.index, rank: before - 0.5 });
     recoveredByScan++;
   }
 
@@ -436,10 +541,11 @@ export async function detectChaptersFullText(opts: {
     };
   }
 
-  // Order by position in the document, then renumber.
-  const ordered = [...merged.values()]
-    .sort((a, b) => a.index - b.index)
-    .map((c, i) => ({ chapterNumber: i + 1, title: c.title }));
+  // Order by rank (AI order, scan entries slotted in), then renumber.
+  const sorted = [...merged.values()].sort(
+    (a, b) => a.rank - b.rank || a.index - b.index
+  );
+  const ordered = sorted.map((c, i) => ({ chapterNumber: i + 1, title: c.title }));
 
   // ── Coverage check ──────────────────────────────────────────────────────
   // A chapter spanning a large share of the book usually means headings inside
@@ -476,26 +582,4 @@ export async function detectChaptersFullText(opts: {
     suspiciouslyLargeChapters,
     warnings,
   };
-}
-
-/**
- * Roughly where a title appears in the document — used only for ordering.
- * Returns Infinity when not found so unlocatable titles sort last rather than
- * colliding at position 0.
- */
-function findApproxIndex(content: string, title: string): number {
-  const needle = normaliseTitle(title);
-  if (!needle) return Number.POSITIVE_INFINITY;
-
-  const haystack = content.toLowerCase();
-  const direct = haystack.indexOf(needle);
-  if (direct !== -1) return direct;
-
-  // Fall back to the first few words — AI titles are often lightly reworded.
-  const head = needle.split(" ").slice(0, 4).join(" ");
-  if (head.length >= 6) {
-    const partial = haystack.indexOf(head);
-    if (partial !== -1) return partial;
-  }
-  return Number.POSITIVE_INFINITY;
 }

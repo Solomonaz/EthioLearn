@@ -41,9 +41,22 @@ interface QuizState {
   mode: "SOLO" | "TIMED";
   timeLeft: number;
   timerActive: boolean;
+  /**
+   * A message about the quiz itself, shown once when it opens — currently only
+   * the generator's shortfall reason. The API has always reported when it
+   * served fewer questions than were asked for, but nothing read the field, so
+   * a 19-question quiz built from a request for 20 looked like a silent bug.
+   */
+  notice: string | null;
 
   // Actions
-  startQuiz: (quizId: string, questions: QuizQuestionInput[], mode?: "SOLO" | "TIMED") => void;
+  startQuiz: (
+    quizId: string,
+    questions: QuizQuestionInput[],
+    mode?: "SOLO" | "TIMED",
+    notice?: string | null
+  ) => void;
+  dismissNotice: () => void;
   selectAnswer: (questionId: string, answer: string) => void;
   nextQuestion: () => void;
   previousQuestion: () => void;
@@ -66,8 +79,9 @@ export const useQuizStore = create<QuizState>((set, get) => ({
   mode: "SOLO",
   timeLeft: 30,
   timerActive: false,
+  notice: null,
 
-  startQuiz: (quizId, questions, mode = "SOLO") => {
+  startQuiz: (quizId, questions, mode = "SOLO", notice = null) => {
     // Normalize options: API may return string[] or { label, text }[]
     const LABELS = ["A", "B", "C", "D", "E", "F"];
     const normalized = questions.map((q) => ({
@@ -90,8 +104,11 @@ export const useQuizStore = create<QuizState>((set, get) => ({
       // Per-question time budget, scaled by the question's weight.
       timeLeft: normalized[0] ? getQuestionSeconds(normalized[0]) : 30,
       timerActive: mode === "TIMED",
+      notice,
     });
   },
+
+  dismissNotice: () => set({ notice: null }),
 
   selectAnswer: (questionId, answer) => {
     const { answers, questionStartTime } = get();
@@ -156,6 +173,7 @@ export const useQuizStore = create<QuizState>((set, get) => ({
       mode: "SOLO",
       timeLeft: 30,
       timerActive: false,
+      notice: null,
     });
   },
 

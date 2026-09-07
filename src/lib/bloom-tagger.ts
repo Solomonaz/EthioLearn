@@ -5,12 +5,12 @@
  *   Remember → Understand → Apply → Analyze → Evaluate → Create
  *
  * Batch processes multiple chunks in a single AI call for efficiency.
- * Provider priority: Groq → Gemini → Ollama (remote only) → default "Understand".
+ * Provider priority: Gemini → Groq → Ollama (remote only) → default "Understand".
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ollamaChat, isOllamaEnabled } from "./ollama";
 import { groqChat } from "./groq";
+import { geminiChat, GEMINI_FAST_MODEL } from "./gemini";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -35,14 +35,6 @@ export interface BloomTagResult {
   chunkIndex: number;
   bloomLevel: BloomLevel;
   confidence: number; // 0-1
-}
-
-// ─── Client ─────────────────────────────────────────────
-
-function getClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is required for Bloom tagging.");
-  return new GoogleGenerativeAI(apiKey);
 }
 
 // ─── Prompt ─────────────────────────────────────────────
@@ -172,13 +164,35 @@ async function tagBatch(
   const expectedIndices = batch.map((c) => c.chunkIndex);
   const prompt = buildBloomTaggingPrompt(batch, subject, grade);
 
-  // 1. Groq — fastest cloud provider, primary
+  // 1. Gemini — primary
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const raw = await geminiChat(prompt, {
+        model: GEMINI_FAST_MODEL,
+        temperature: 0.2,
+        maxTokens: 4096,
+        feature: "bloom-tagging",
+      });
+      if (raw) {
+        const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
+        if (tags.length > 0) return tags;
+      }
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes("429")) {
+        console.warn("[Bloom Tagger] Gemini rate-limited.");
+      }
+    }
+  }
+
+  // 2. Groq — fast cloud fallback
   try {
     const raw = await groqChat(prompt, {
       system:
         "You are an expert in Bloom's Taxonomy. Always respond with valid JSON only.",
       temperature: 0.2,
       maxTokens: 2048,
+      feature: "bloom-tagging",
     });
     if (raw) {
       const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
@@ -186,25 +200,6 @@ async function tagBatch(
     }
   } catch {
     // fall through
-  }
-
-  // 2. Gemini
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const client = getClient();
-      const model = client.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 4096 },
-      });
-      const result = await model.generateContent(prompt);
-      const tags = validateBloomTags(JSON.parse(result.response.text()), expectedIndices);
-      if (tags.length > 0) return tags;
-    } catch (err) {
-      const msg = String(err);
-      if (msg.includes("429")) {
-        console.warn("[Bloom Tagger] Gemini rate-limited.");
-      }
-    }
   }
 
   // 3. Ollama Mistral — only when pointed at a real (non-localhost) host, and
@@ -238,7 +233,7 @@ async function tagBatch(
 
 /**
  * Tag multiple chunks with Bloom's Taxonomy levels in a single AI call.
- * Provider priority: Groq → Gemini → Ollama (remote only) → default "Understand".
+ * Provider priority: Gemini → Groq → Ollama (remote only) → default "Understand".
  *
  * Batches are kept small so each prompt stays modest and the JSON output stays
  * well under the model's output-token cap (a batch too large truncates the

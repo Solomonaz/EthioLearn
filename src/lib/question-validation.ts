@@ -11,6 +11,26 @@ import type { GeneratedQuestion, DetectedChapter } from "./gemini";
 import { sanitizeQuestionText } from "./question-prompts";
 import { shuffleArray } from "./utils";
 
+/**
+ * Accept either a bare array or the `{ "<key>": [...] }` wrapper.
+ *
+ * The shared question prompt asks for a JSON OBJECT with a "questions" key, and
+ * JSON-mode responses often wrap chapter lists the same way. groq.ts and
+ * nvidia.ts each unwrapped this at their own call site; gemini.ts and ollama.ts
+ * did not, so Gemini failed every generation with "Response is not an array"
+ * and retried three times before the chain fell through to Groq — invisible
+ * while Gemini sat third in the chain, fatal once it became primary. Unwrapping
+ * here means no provider can miss it.
+ */
+function unwrap(raw: unknown, key: "questions" | "chapters"): unknown {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    const inner = (raw as Record<string, unknown>)[key];
+    if (Array.isArray(inner)) return inner;
+  }
+  return raw;
+}
+
 const VALID_TYPES: GeneratedQuestion["type"][] = [
   "MCQ",
   "TRUE_FALSE",
@@ -55,7 +75,8 @@ export function extractJson(text: string): unknown {
   }
 }
 
-export function validateQuestions(raw: unknown): GeneratedQuestion[] {
+export function validateQuestions(input: unknown): GeneratedQuestion[] {
+  const raw = unwrap(input, "questions");
   if (!Array.isArray(raw)) {
     throw new Error("Response is not an array");
   }
@@ -122,7 +143,8 @@ export function validateQuestions(raw: unknown): GeneratedQuestion[] {
   return validated;
 }
 
-export function validateDetectedChapters(raw: unknown): DetectedChapter[] {
+export function validateDetectedChapters(input: unknown): DetectedChapter[] {
+  const raw = unwrap(input, "chapters");
   if (!Array.isArray(raw)) {
     throw new Error("Response is not an array");
   }

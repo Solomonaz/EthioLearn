@@ -144,7 +144,16 @@ export async function POST(request: Request) {
     // 3. AI Generation
     const count = Math.min(Math.max(Number(questionCount) || 10, 1), 20);
     // Generate a small surplus so enough questions survive verification.
-    const genCount = Math.min(count + 3, 20);
+    //
+    // The surplus used to be clamped to the same ceiling as `count`
+    // (`Math.min(count + 3, 20)`), which silently cancelled it at exactly the
+    // value a student is most likely to pick: asking for 20 generated 20, so a
+    // single question rejected by the solver below came back as a 19-question
+    // quiz. The clamp was guarding against one oversized provider call, but
+    // `generateQuestionsBatched` already splits the request into batches of
+    // five and sends them sequentially — 23 is five small calls instead of
+    // four, not one big one.
+    const genCount = count + 3;
     const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
     const questionTypes = Array.isArray(body.questionTypes) && body.questionTypes.length > 0
       ? (body.questionTypes.filter((t: string) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[])

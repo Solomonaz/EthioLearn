@@ -136,6 +136,24 @@ function MatchPairsInterface({ options, value, onChange }: { options: any[]; val
 function OrderingInterface({ options, value, onChange }: { options: any[]; value: string; onChange: (val: string) => void }) {
   const items = value ? value.split("|") : options.map(o => o.text);
 
+  // The list on screen is already a complete ordering, so it is already an
+  // answer — record it as soon as the question is shown.
+  //
+  // Without this, a student who reads an ordering question and leaves it as
+  // presented submits an EMPTY answer: the question is counted unanswered
+  // ("17/19 answered" on a 19-question quiz), and because the grader compares
+  // the submitted string to the correct sequence, it is marked wrong no matter
+  // what — including when the presented order happens to be right and not
+  // touching it was the correct decision.
+  useEffect(() => {
+    if (!value && options.length > 0) {
+      onChange(options.map((o) => o.text).join("|"));
+    }
+    // `onChange` is recreated each render; the `!value` guard is what stops
+    // this after the first write, not the dependency list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, options]);
+
   const move = (index: number, direction: -1 | 1) => {
     const newItems = [...items];
     const targetIndex = index + direction;
@@ -189,6 +207,8 @@ export default function QuizTakingPage() {
   const timerActive = useQuizStore((s) => s.timerActive);
   const setTimeLeft = useQuizStore((s) => s.setTimeLeft);
   const setTimerActive = useQuizStore((s) => s.setTimerActive);
+  const notice = useQuizStore((s) => s.notice);
+  const dismissNotice = useQuizStore((s) => s.dismissNotice);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -392,6 +412,20 @@ export default function QuizTakingPage() {
         </div>
         <ProgressBar value={progress} color="primary" size="sm" className="mt-2" />
       </div>
+
+      {/* Why this quiz is shorter than requested — dismissible, shown once. */}
+      {notice && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border-2 border-warning/40 bg-warning/10 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+          <p className="flex-1 text-sm text-text-secondary">{notice}</p>
+          <button
+            onClick={dismissNotice}
+            className="shrink-0 text-sm font-medium text-text-secondary hover:text-text-primary"
+          >
+            {tc("close")}
+          </button>
+        </div>
+      )}
 
       {/* Question Card & Answer Interfaces */}
       <Card className="mb-4">
