@@ -33,6 +33,7 @@ interface DetailRow extends FeatureRow {
 
 interface UsageData {
   note: string;
+  period: string;
   currency: string;
   fxPerUsd: number;
   totalTokens: number;
@@ -42,6 +43,14 @@ interface UsageData {
   byFeature: FeatureRow[];
   detail: DetailRow[];
 }
+
+type Period = "today" | "7d" | "30d" | "all";
+const PERIOD_LABELS: Record<Period, string> = {
+  today: "Today",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  all: "All time",
+};
 
 // Friendly names for the machine feature slugs.
 const FEATURE_LABELS: Record<string, string> = {
@@ -76,12 +85,13 @@ export default function AiUsagePage() {
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>("all");
 
-  const fetchUsage = useCallback(async () => {
+  const fetchUsage = useCallback(async (p: Period) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/usage");
+      const res = await fetch(`/api/admin/usage?period=${p}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Failed to load usage");
@@ -95,8 +105,8 @@ export default function AiUsagePage() {
   }, []);
 
   useEffect(() => {
-    fetchUsage();
-  }, [fetchUsage]);
+    fetchUsage(period);
+  }, [period, fetchUsage]);
 
   if (loading && !data) {
     return (
@@ -111,7 +121,7 @@ export default function AiUsagePage() {
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
         <AlertCircle className="h-10 w-10 text-red-400" />
         <p className="text-sm text-gray-500">{error ?? "No data"}</p>
-        <Button variant="outline" onClick={fetchUsage}>
+        <Button variant="outline" onClick={() => fetchUsage(period)}>
           <RefreshCw className="h-4 w-4" /> Retry
         </Button>
       </div>
@@ -131,12 +141,26 @@ export default function AiUsagePage() {
             Tokens and list-price cost per feature, across all AI providers.
           </p>
         </div>
-        <Button variant="outline" onClick={fetchUsage} disabled={loading}>
-          <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as Period)}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#1B5E20] focus:outline-none"
+            aria-label="Time period"
+          >
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <option key={p} value={p}>
+                {PERIOD_LABELS[p]}
+              </option>
+            ))}
+          </select>
+          <Button variant="outline" onClick={() => fetchUsage(period)} disabled={loading}>
+            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} /> Refresh
+          </Button>
+        </div>
       </div>
 
-      {/* Caveat banner — this is a per-instance snapshot, not billing truth. */}
+      {/* Caveat banner — list price vs the vendor console, not billing truth. */}
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
         <p className="text-sm text-amber-800">{data.note}</p>
@@ -210,7 +234,7 @@ export default function AiUsagePage() {
 
           {empty ? (
             <div className="px-5 py-10 text-center text-sm text-gray-500">
-              No AI calls recorded yet on this server instance. Generate a quiz,
+              No AI calls recorded in this period. Generate a quiz,
               detect chapters, or use the tutor, then refresh.
             </div>
           ) : (

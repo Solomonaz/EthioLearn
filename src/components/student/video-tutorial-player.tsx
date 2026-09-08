@@ -146,85 +146,157 @@ function TeacherCharacter({ emotion = "explaining", colorIdx = 0 }: {
 }
 
 
-// ─── Visual: Process ─────────────────────────────────────
+// ─── Motion helpers ──────────────────────────────────────
+//
+// Every visual below animates from the TEMPLATE's own timing, never from data
+// the model produced. The AI writes text; the layout decides where that text
+// travels from and when. That separation is deliberate — it means a thin or
+// garbled generation can still only ever produce a well-composed slide, never
+// a broken animation.
 
-function ProcessVisual({ steps = [], active }: { steps: string[]; active: boolean }) {
-  const [shown, setShown] = useState(active ? steps.length : 0);
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Reveal `count` items one at a time while the slide is on screen.
+ *
+ * Returns how many are currently shown. When the slide is not active — or the
+ * viewer asked for reduced motion — everything shows at once, so nothing is
+ * ever hidden from someone who cannot see the animation.
+ */
+function useStagger(active: boolean, count: number, startMs = 320, stepMs = 700): number {
+  const [shown, setShown] = useState(active ? 0 : count);
   useEffect(() => {
-    if (!active) { setShown(steps.length); return; }
+    if (!active || prefersReducedMotion()) { setShown(count); return; }
     setShown(0);
-    const timers = steps.map((_, i) =>
-      setTimeout(() => setShown(i + 1), 400 + i * 900)
+    const timers = Array.from({ length: count }, (_, i) =>
+      setTimeout(() => setShown(i + 1), startMs + i * stepMs)
     );
     return () => timers.forEach(clearTimeout);
-  }, [active, steps]);
+  }, [active, count, startMs, stepMs]);
+  return shown;
+}
+
+/** Overshoot-and-settle easing. Things that arrive this way feel placed, not faded. */
+const SETTLE = "cubic-bezier(0.34, 1.42, 0.64, 1)";
+
+// ─── Visual: Process ─────────────────────────────────────
+//
+// The chain BUILDS: each step drops in and settles, and the connector between
+// two steps draws itself left-to-right instead of fading on.
+
+function ProcessVisual({ steps = [], active }: { steps: string[]; active: boolean }) {
+  const shown = useStagger(active, steps.length, 380, 820);
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-2 p-2">
-      {steps.map((step, i) => (
-        <div key={i} className="flex items-center gap-2">
-          {i > 0 && (
-            <div className={cn("text-white/40 text-xl font-bold transition-opacity duration-500",
-                               i < shown ? "opacity-100" : "opacity-0")}>→</div>
-          )}
-          <div className={cn(
-            "rounded-xl border-2 border-white/20 px-3 py-2.5 text-center text-sm font-semibold transition-all duration-500",
-            i < shown ? "bg-white/20 text-white scale-100 shadow-lg" : "bg-white/5 text-white/20 scale-90"
-          )}>
-            <div className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-white/40">
-              {i + 1}
+      {steps.map((step, i) => {
+        const on = i < shown;
+        return (
+          <div key={i} className="flex items-center gap-2">
+            {i > 0 && (
+              <div className="relative h-0.5 w-7">
+                {/* scaleX from the left edge = the connector draws toward the next step */}
+                <div
+                  className="h-full w-full origin-left rounded-full bg-white/40 transition-transform duration-500 ease-out"
+                  style={{ transform: on ? "scaleX(1)" : "scaleX(0)" }}
+                />
+                <div
+                  className="absolute -top-[5px] right-0 text-xs font-bold leading-none text-white/50 transition-opacity duration-300"
+                  style={{ opacity: on ? 1 : 0, transitionDelay: on ? "380ms" : "0ms" }}
+                >
+                  ▶
+                </div>
+              </div>
+            )}
+            <div
+              className={cn(
+                "rounded-xl border-2 px-3 py-2.5 text-center text-sm font-semibold",
+                on ? "border-white/40 bg-white/20 text-white shadow-lg" : "border-white/10 bg-white/5 text-white/25"
+              )}
+              style={{
+                transition: `transform 620ms ${SETTLE}, opacity 380ms ease-out, background-color 500ms, border-color 500ms`,
+                transform: on ? "translateY(0) scale(1)" : "translateY(22px) scale(0.88)",
+                opacity: on ? 1 : 0,
+              }}
+            >
+              <div className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-white/40">
+                {i + 1}
+              </div>
+              {step}
             </div>
-            {step}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 // ─── Visual: Comparison ──────────────────────────────────
+//
+// The two sides fly in from opposite edges, then their bullets land one by one.
+// Previously the panels nudged 24px and every bullet appeared at once.
 
 function ComparisonVisual({ leftLabel = "A", leftItems = [], rightLabel = "B", rightItems = [], active }: {
   leftLabel?: string; leftItems?: string[];
   rightLabel?: string; rightItems?: string[];
   active: boolean;
 }) {
-  const [showLeft, setShowLeft] = useState(!active);
-  const [showRight, setShowRight] = useState(!active);
+  const [panels, setPanels] = useState(!active);
   useEffect(() => {
-    if (!active) { setShowLeft(true); setShowRight(true); return; }
-    setShowLeft(false); setShowRight(false);
-    const t1 = setTimeout(() => setShowLeft(true), 300);
-    const t2 = setTimeout(() => setShowRight(true), 900);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    if (!active || prefersReducedMotion()) { setPanels(true); return; }
+    setPanels(false);
+    const t = setTimeout(() => setPanels(true), 220);
+    return () => clearTimeout(t);
   }, [active]);
 
+  const maxItems = Math.max(leftItems.length, rightItems.length);
+  const bullets = useStagger(active, maxItems, 780, 520);
+
+  const panelStyle = (dir: -1 | 1) => ({
+    transition: `transform 700ms ${SETTLE}, opacity 400ms ease-out`,
+    transform: panels ? "translateX(0)" : `translateX(${dir * 60}px)`,
+    opacity: panels ? 1 : 0,
+  });
+  const itemStyle = (i: number, dir: -1 | 1) => ({
+    transition: `transform 480ms ${SETTLE}, opacity 320ms ease-out`,
+    transform: i < bullets ? "translateX(0)" : `translateX(${dir * 16}px)`,
+    opacity: i < bullets ? 1 : 0,
+  });
+
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] gap-3 p-2 w-full">
-      {/* Left */}
-      <div className={cn("rounded-xl border border-white/20 bg-white/10 p-3 transition-all duration-500",
-                         showLeft ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-6")}>
+    <div className="grid w-full grid-cols-[1fr_auto_1fr] gap-3 p-2">
+      <div className="rounded-xl border border-white/20 bg-white/10 p-3" style={panelStyle(-1)}>
         <p className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-white/70">{leftLabel}</p>
         <div className="space-y-1.5">
           {leftItems.map((item, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-xs text-white/90">
+            <div key={i} className="flex items-start gap-1.5 text-xs text-white/90" style={itemStyle(i, -1)}>
               <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
               {item}
             </div>
           ))}
         </div>
       </div>
-      {/* VS divider */}
+
       <div className="flex items-center">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-black text-white/50">vs</div>
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-black text-white/50"
+          style={{
+            transition: `transform 600ms ${SETTLE}`,
+            transform: panels ? "scale(1) rotate(0deg)" : "scale(0.3) rotate(-90deg)",
+          }}
+        >
+          vs
+        </div>
       </div>
-      {/* Right */}
-      <div className={cn("rounded-xl border border-white/20 bg-white/10 p-3 transition-all duration-500",
-                         showRight ? "opacity-100 translate-x-0" : "opacity-0 translate-x-6")}>
+
+      <div className="rounded-xl border border-white/20 bg-white/10 p-3" style={panelStyle(1)}>
         <p className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-white/70">{rightLabel}</p>
         <div className="space-y-1.5">
           {rightItems.map((item, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-xs text-white/90">
+            <div key={i} className="flex items-start gap-1.5 text-xs text-white/90" style={itemStyle(i, 1)}>
               <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
               {item}
             </div>
@@ -236,32 +308,60 @@ function ComparisonVisual({ leftLabel = "A", leftItems = [], rightLabel = "B", r
 }
 
 // ─── Visual: Formula ─────────────────────────────────────
+//
+// The formula ASSEMBLES: it is split on whitespace and each token drops into
+// place in reading order, so the student watches the expression get built
+// rather than watching a finished box fade in.
 
 function FormulaVisual({ text = "", subtext = "", active }: {
   text?: string; subtext?: string; active: boolean;
 }) {
-  const [revealed, setRevealed] = useState(!active);
-  const [glow, setGlow] = useState(false);
+  const tokens = (text || "").trim().split(/\s+/).filter(Boolean);
+  const shown = useStagger(active, tokens.length, 380, 230);
+  const assembled = tokens.length > 0 && shown >= tokens.length;
+
+  const [sub, setSub] = useState(!active);
   useEffect(() => {
-    if (!active) { setRevealed(true); setGlow(false); return; }
-    setRevealed(false); setGlow(false);
-    const t1 = setTimeout(() => setRevealed(true), 400);
-    const t2 = setTimeout(() => setGlow(true), 1200);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [active, text]);
+    if (!active || prefersReducedMotion()) { setSub(true); return; }
+    setSub(false);
+    const t = setTimeout(() => setSub(true), 420 + tokens.length * 230);
+    return () => clearTimeout(t);
+  }, [active, text, tokens.length]);
 
   return (
     <div className="flex flex-col items-center justify-center gap-4 p-4">
-      <div className={cn(
-        "rounded-2xl border-2 border-white/30 px-8 py-5 text-center font-mono transition-all duration-700",
-        revealed ? "opacity-100 scale-100" : "opacity-0 scale-75",
-        glow ? "shadow-[0_0_40px_rgba(255,255,255,0.3)] border-white/60" : ""
-      )}>
-        <p className="text-3xl font-black tracking-wider text-white sm:text-4xl">{text}</p>
+      <div
+        className={cn(
+          "rounded-2xl border-2 px-8 py-5 text-center font-mono",
+          assembled ? "border-white/60 shadow-[0_0_40px_rgba(255,255,255,0.28)]" : "border-white/20"
+        )}
+        style={{ transition: "border-color 700ms ease-out, box-shadow 700ms ease-out" }}
+      >
+        <p className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 text-3xl font-black tracking-wider text-white sm:text-4xl">
+          {tokens.map((tk, i) => (
+            <span
+              key={i}
+              style={{
+                display: "inline-block",
+                transition: `transform 520ms ${SETTLE}, opacity 260ms ease-out`,
+                transform: i < shown ? "translateY(0) scale(1)" : "translateY(-18px) scale(0.7)",
+                opacity: i < shown ? 1 : 0,
+              }}
+            >
+              {tk}
+            </span>
+          ))}
+        </p>
       </div>
       {subtext && (
-        <p className={cn("max-w-xs text-center text-sm text-white/70 transition-all duration-700 delay-300",
-                         revealed ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3")}>
+        <p
+          className="max-w-xs text-center text-sm text-white/70"
+          style={{
+            transition: `transform 600ms ${SETTLE}, opacity 400ms ease-out`,
+            transform: sub ? "translateY(0)" : "translateY(12px)",
+            opacity: sub ? 1 : 0,
+          }}
+        >
           {subtext}
         </p>
       )}
@@ -270,36 +370,54 @@ function FormulaVisual({ text = "", subtext = "", active }: {
 }
 
 // ─── Visual: Timeline ────────────────────────────────────
+//
+// The spine DRAWS downward and each dot pops as its event slides in, so the
+// timeline advances instead of appearing all at once.
 
 function TimelineVisual({ events = [], active }: {
   events?: { period: string; event: string }[];
   active: boolean;
 }) {
-  const [shown, setShown] = useState(active ? 0 : events.length);
-  useEffect(() => {
-    if (!active) { setShown(events.length); return; }
-    setShown(0);
-    const timers = events.map((_, i) => setTimeout(() => setShown(i + 1), 300 + i * 800));
-    return () => timers.forEach(clearTimeout);
-  }, [active, events]);
+  const shown = useStagger(active, events.length, 420, 760);
+  const drawn = events.length === 0 ? 1 : Math.min(1, shown / events.length);
 
   return (
     <div className="relative flex flex-col gap-3 py-2 pl-6 pr-2">
-      {/* Vertical line */}
-      <div className="absolute left-3.5 top-2 bottom-2 w-0.5 bg-white/20 rounded-full" />
-      {events.map((ev, i) => (
-        <div key={i}
-             className={cn("flex items-start gap-3 transition-all duration-500",
-                           i < shown ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4")}>
-          {/* Dot */}
-          <div className="absolute left-2 mt-1.5 h-3 w-3 rounded-full border-2 border-white/40 bg-white/20"
-               style={{ left: "10px" }} />
-          <div className="ml-2">
-            <span className="text-xs font-bold text-white/50">{ev.period}</span>
-            <p className="text-sm font-semibold text-white">{ev.event}</p>
+      {/* The spine grows from the top as events arrive. */}
+      <div className="absolute bottom-2 left-3.5 top-2 w-0.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full w-full origin-top rounded-full bg-white/45 transition-transform duration-700 ease-out"
+          style={{ transform: `scaleY(${drawn})` }}
+        />
+      </div>
+
+      {events.map((ev, i) => {
+        const on = i < shown;
+        return (
+          <div
+            key={i}
+            className="flex items-start gap-3"
+            style={{
+              transition: `transform 560ms ${SETTLE}, opacity 340ms ease-out`,
+              transform: on ? "translateX(0)" : "translateX(-24px)",
+              opacity: on ? 1 : 0,
+            }}
+          >
+            <div
+              className="absolute mt-1.5 h-3 w-3 rounded-full border-2 border-white/50 bg-slate-900"
+              style={{
+                left: "10px",
+                transition: `transform 480ms ${SETTLE}`,
+                transform: on ? "scale(1)" : "scale(0)",
+              }}
+            />
+            <div className="ml-2">
+              <span className="text-xs font-bold text-white/50">{ev.period}</span>
+              <p className="text-sm font-semibold text-white">{ev.event}</p>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -311,7 +429,7 @@ function HighlightVisual({ text = "", subtext = "", active }: {
 }) {
   const [in_, setIn] = useState(!active);
   useEffect(() => {
-    if (!active) { setIn(true); return; }
+    if (!active || prefersReducedMotion()) { setIn(true); return; }
     setIn(false);
     const t = setTimeout(() => setIn(true), 200);
     return () => clearTimeout(t);
@@ -319,20 +437,31 @@ function HighlightVisual({ text = "", subtext = "", active }: {
 
   return (
     <div className="flex flex-col items-center justify-center gap-3 p-4 text-center">
-      <div className={cn(
-        "transition-all duration-700",
-        in_ ? "opacity-100 scale-100" : "opacity-0 scale-50"
-      )}>
-        <p className={cn(
-          "text-4xl font-black leading-tight text-white sm:text-5xl",
-          in_ ? "animate-[highlightPulse_2.5s_ease-in-out_infinite]" : ""
-        )}>
+      <div
+        style={{
+          transition: `transform 720ms ${SETTLE}, opacity 420ms ease-out`,
+          transform: in_ ? "scale(1)" : "scale(0.55)",
+          opacity: in_ ? 1 : 0,
+        }}
+      >
+        <p
+          className={cn(
+            "text-4xl font-black leading-tight text-white sm:text-5xl",
+            in_ ? "animate-[slideFloat_4s_ease-in-out_infinite]" : ""
+          )}
+        >
           {text}
         </p>
       </div>
       {subtext && (
-        <p className={cn("max-w-sm text-sm text-white/70 transition-all duration-700 delay-500",
-                         in_ ? "opacity-100" : "opacity-0")}>
+        <p
+          className="max-w-sm text-sm text-white/70"
+          style={{
+            transition: `transform 600ms ${SETTLE} 380ms, opacity 500ms ease-out 380ms`,
+            transform: in_ ? "translateY(0)" : "translateY(14px)",
+            opacity: in_ ? 1 : 0,
+          }}
+        >
           {subtext}
         </p>
       )}
@@ -341,32 +470,46 @@ function HighlightVisual({ text = "", subtext = "", active }: {
 }
 
 // ─── Visual: Diagram (connected nodes) ───────────────────
+//
+// Connectors are STROKED IN via a dash offset, so each arrow is drawn between
+// two nodes as the diagram assembles.
 
 function DiagramVisual({ steps = [], active }: { steps?: string[]; active: boolean }) {
-  const [shown, setShown] = useState(active ? 0 : steps.length);
-  useEffect(() => {
-    if (!active) { setShown(steps.length); return; }
-    setShown(0);
-    const timers = steps.map((_, i) => setTimeout(() => setShown(i + 1), 500 + i * 700));
-    return () => timers.forEach(clearTimeout);
-  }, [active, steps]);
-
-  // Arrange in a circle or line depending on count
+  const shown = useStagger(active, steps.length, 460, 680);
   const isLine = steps.length <= 3;
+
+  const nodeStyle = (i: number) => ({
+    transition: `transform 620ms ${SETTLE}, opacity 340ms ease-out, background-color 500ms`,
+    transform: i < shown ? "translateY(0) scale(1)" : "translateY(16px) scale(0.8)",
+    opacity: i < shown ? 1 : 0,
+  });
 
   return isLine ? (
     <div className="flex flex-wrap items-center justify-center gap-3 p-2">
       {steps.map((node, i) => (
         <div key={i} className="flex items-center gap-2">
           {i > 0 && (
-            <svg width="24" height="16" className={cn("transition-opacity duration-500", i < shown ? "opacity-100" : "opacity-0")}>
-              <path d="M2 8 L18 8 M13 3 L19 8 L13 13" stroke="rgba(255,255,255,0.4)" strokeWidth="2" fill="none" />
+            <svg width="26" height="16" aria-hidden="true">
+              <path
+                d="M2 8 L18 8 M13 3 L19 8 L13 13"
+                stroke="rgba(255,255,255,0.45)"
+                strokeWidth="2"
+                fill="none"
+                strokeDasharray="30"
+                style={{
+                  transition: "stroke-dashoffset 520ms ease-out",
+                  strokeDashoffset: i < shown ? 0 : 30,
+                }}
+              />
             </svg>
           )}
-          <div className={cn(
-            "flex h-16 w-24 items-center justify-center rounded-xl border-2 border-white/30 p-2 text-center text-xs font-bold text-white transition-all duration-500",
-            i < shown ? "bg-white/20 scale-100 opacity-100" : "bg-white/5 scale-90 opacity-0"
-          )}>
+          <div
+            className={cn(
+              "flex h-16 w-24 items-center justify-center rounded-xl border-2 p-2 text-center text-xs font-bold text-white",
+              i < shown ? "border-white/40 bg-white/20" : "border-white/10 bg-white/5"
+            )}
+            style={nodeStyle(i)}
+          >
             {node}
           </div>
         </div>
@@ -375,11 +518,14 @@ function DiagramVisual({ steps = [], active }: { steps?: string[]; active: boole
   ) : (
     <div className="grid grid-cols-2 gap-3 p-2">
       {steps.map((node, i) => (
-        <div key={i}
-             className={cn(
-               "flex min-h-[56px] items-center justify-center rounded-xl border-2 border-white/30 p-2 text-center text-xs font-bold text-white transition-all duration-500",
-               i < shown ? "bg-white/20 scale-100 opacity-100" : "bg-white/5 scale-90 opacity-0"
-             )}>
+        <div
+          key={i}
+          className={cn(
+            "flex min-h-[56px] items-center justify-center rounded-xl border-2 p-2 text-center text-xs font-bold text-white",
+            i < shown ? "border-white/40 bg-white/20" : "border-white/10 bg-white/5"
+          )}
+          style={nodeStyle(i)}
+        >
           <span className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-[10px]">
             {i + 1}
           </span>
@@ -393,28 +539,38 @@ function DiagramVisual({ steps = [], active }: { steps?: string[]; active: boole
 // ─── Visual: List ────────────────────────────────────────
 
 function ListVisual({ keyPoints = [], active }: { keyPoints: string[]; active: boolean }) {
-  const [shown, setShown] = useState(active ? 0 : keyPoints.length);
-  useEffect(() => {
-    if (!active) { setShown(keyPoints.length); return; }
-    setShown(0);
-    const timers = keyPoints.map((_, i) => setTimeout(() => setShown(i + 1), 500 + i * 700));
-    return () => timers.forEach(clearTimeout);
-  }, [active, keyPoints]);
+  const shown = useStagger(active, keyPoints.length, 460, 640);
 
   return (
     <div className="flex flex-col gap-2 p-2">
-      {keyPoints.map((pt, i) => (
-        <div key={i}
-             className={cn(
-               "flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 transition-all duration-500",
-               i < shown ? "opacity-100 translate-x-0" : "opacity-0 translate-x-6"
-             )}>
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white">
-            {i + 1}
-          </span>
-          <span className="text-sm font-medium text-white/90">{pt}</span>
-        </div>
-      ))}
+      {keyPoints.map((pt, i) => {
+        const on = i < shown;
+        return (
+          <div
+            key={i}
+            className={cn(
+              "flex items-start gap-3 rounded-xl border px-4 py-2.5",
+              on ? "border-white/25 bg-white/10" : "border-white/10 bg-white/5"
+            )}
+            style={{
+              transition: `transform 560ms ${SETTLE}, opacity 340ms ease-out, background-color 500ms`,
+              transform: on ? "translateX(0)" : "translateX(34px)",
+              opacity: on ? 1 : 0,
+            }}
+          >
+            <span
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white"
+              style={{
+                transition: `transform 500ms ${SETTLE} 120ms`,
+                transform: on ? "scale(1)" : "scale(0.4)",
+              }}
+            >
+              {i + 1}
+            </span>
+            <span className="text-sm font-medium text-white/90">{pt}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -846,6 +1002,10 @@ export default function VideoTutorialPlayer({ script, subject, chapterTitle, onC
         @keyframes soundBar {
           from { transform: scaleY(0.3); }
           to   { transform: scaleY(1.0); }
+        }
+        @keyframes slideFloat {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-6px); }
         }
         @keyframes highlightPulse {
           0%,100% { text-shadow: 0 0 20px rgba(255,255,255,0.15); }

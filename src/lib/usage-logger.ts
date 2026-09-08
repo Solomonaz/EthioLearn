@@ -16,7 +16,9 @@
  * the logs, not this map, are the source of truth over time.
  */
 
+import { randomUUID } from "crypto";
 import { costUsd } from "./model-pricing";
+import { db } from "./db";
 
 /** Normalised token counts, provider-independent. */
 export interface TokenUsage {
@@ -47,6 +49,8 @@ export type UsageFeature =
   | "bloom-tagging"
   | "tutor-chat"
   | "video-script"
+  /** Animated scene generation — the successor to "video-script". */
+  | "scene-generation"
   | "vision-graph"
   | "vision-equation"
   | "vision-solid"
@@ -141,6 +145,40 @@ export function logUsage(args: {
       `thinking=${usage.thinkingTokens} total=${usage.totalTokens} ` +
       `costUSD=${cost === null ? "unpriced" : cost.toFixed(6)}`
   );
+
+  // Durable, cross-route/cross-instance record. Fire-and-forget: usage
+  // accounting must never delay or fail a real request, and a lost event on
+  // shutdown is acceptable. The in-memory totals above are kept only for tests
+  // and quick debugging — the admin page reads the database, because separate
+  // route bundles and server instances each hold their OWN copy of that map.
+  void persistUsageEvent({ feature, provider, model, usage, cost });
+}
+
+async function persistUsageEvent(args: {
+  feature: UsageFeature;
+  provider: string;
+  model: string;
+  usage: TokenUsage;
+  cost: number | null;
+}): Promise<void> {
+  const { feature, provider, model, usage, cost } = args;
+  try {
+    await db.$executeRaw`
+      INSERT INTO usage_events
+        (id, "createdAt", feature, provider, model,
+         "promptTokens", "outputTokens", "thinkingTokens", "totalTokens",
+         "costUsd", unpriced)
+      VALUES
+        (${randomUUID()}, NOW(), ${feature}, ${provider}, ${model},
+         ${usage.promptTokens}, ${usage.outputTokens}, ${usage.thinkingTokens}, ${usage.totalTokens},
+         ${cost}, ${cost === null})
+    `;
+  } catch (err) {
+    // Never surface a logging failure to the caller.
+    console.warn(
+      `[Usage] Failed to persist usage event: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 }
 
 /**

@@ -375,6 +375,7 @@ model Chapter {
 
   questions Question[]
   chunks    ContentChunk[]
+  scenes    GeneratedScene[]
 
   @@unique([textbookId, chapterNumber])
   @@map("chapters")
@@ -862,4 +863,64 @@ model PaymentRequest {
   @@index([studentId])
   @@index([status])
   @@map("payment_requests")
+}
+
+/// One AI model call's token usage and list-price cost.
+///
+/// Written on every provider call so AI spend is durable and attributable per
+/// FEATURE — the vendor console only breaks spend down by model, and several
+/// features share the same Gemini models. Unlike the in-memory totals it
+/// replaced, these rows survive restarts and are shared across every route and
+/// server instance (the reason a book upload's usage never reached the admin
+/// page: separate route bundles hold separate in-memory maps).
+model UsageEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  feature  String // e.g. "question-generation", "chapter-detection", "bloom-tagging"
+  provider String // "gemini" | "groq" | "nvidia" | "ollama"
+  model    String // exact model id the provider reported
+
+  promptTokens   Int
+  outputTokens   Int
+  thinkingTokens Int
+  totalTokens    Int
+
+  // List-price USD cost of this call, computed at write time so a later price
+  // change never rewrites history. Null when the model had no price entry.
+  costUsd  Float?
+  unpriced Boolean @default(false)
+
+  @@index([createdAt])
+  @@index([feature])
+  @@map("usage_events")
+}
+
+/// A generated animated scene, cached per chapter (and per optional topic).
+///
+/// Generating one costs a real AI call — measured at about US$0.011 — and takes
+/// several seconds. Without this table a class of forty students opening the
+/// same chapter would pay for forty identical generations and wait through
+/// forty identical delays. Questions have always been persisted and reused;
+/// scenes now are too.
+///
+/// `topicKey` is the normalised topic ("" for a whole-chapter scene), so one
+/// chapter can hold several scenes without them colliding.
+model GeneratedScene {
+  id        String   @id @default(cuid())
+  chapterId String
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  topicKey String @default("")
+  title    String
+  /// The validated Scene object (actors, links, steps).
+  data     Json
+  provider String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chapterId, topicKey])
+  @@index([chapterId])
+  @@map("generated_scenes")
 }

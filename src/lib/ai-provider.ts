@@ -17,9 +17,13 @@ import {
   generateQuestionsFromContent,
   detectChaptersFromContent,
   splitTextByChapters,
+  geminiChat,
 } from "./gemini";
-import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript } from "./groq";
-import { nvidiaGenerateQuestions, nvidiaDetectChapters, hasNvidiaKey } from "./nvidia";
+import { groqGenerateQuestions, groqDetectChapters, groqGenerateVideoScript, groqChat } from "./groq";
+import { nvidiaGenerateQuestions, nvidiaDetectChapters, hasNvidiaKey, nvidiaChat } from "./nvidia";
+import { extractJson } from "./question-validation";
+import { validateScene, checkSceneAnimates, type Scene } from "./scene-schema";
+import { buildScenePrompt } from "./scene-prompts";
 import { ollamaGenerateQuestions, ollamaDetectChapters, isOllamaEnabled } from "./ollama";
 
 import type {
@@ -49,6 +53,10 @@ export { tagChunksWithBloomLevel, tagQuestionBloomLevel } from "./bloom-tagger";
 export type { BloomLevel, BloomTagResult } from "./bloom-tagger";
 export { runQualityPipeline, verifyQuestions, hasBlockingStructuralIssue } from "./quality-pipeline";
 export type { QualityResult, QualityPipelineResult, QualityFlag, VerifyResult } from "./quality-pipeline";
+
+// Animated scenes (see scene-schema / scene-player).
+export { validateScene, resolveScene, checkSceneAnimates } from "./scene-schema";
+export type { Scene, ResolvedScene, SceneActor, SceneLink, SceneStep } from "./scene-schema";
 
 // ─── Helpers ────────────────────────────────────────────
 
@@ -433,4 +441,111 @@ export async function generateVideoTutorial(opts: {
       ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}.`
       : "No AI provider is configured.")
   );
+}
+
+// ─── Animated scene generation ──────────────────────────
+//
+// Unlike the other chains, this one goes through each provider's GENERIC chat
+// helper rather than a per-provider function. The scene format is one prompt
+// and one JSON shape, so a `geminiGenerateScene` / `groqGenerateScene` /
+// `nvidiaGenerateScene` trio would be three copies of the same twenty lines —
+// exactly the drift that made question validation a shared module. The generic
+// helpers also already handle JSON mode and token-usage logging.
+
+/** A provider attempt: returns raw text, or null when unavailable/failed. */
+type SceneAttempt = {
+  name: "gemini" | "groq" | "nvidia";
+  run: (prompt: string) => Promise<string | null>;
+};
+
+export async function generateScene(opts: {
+  content: string;
+  chapterTitle: string;
+  subject: string;
+  grade: number;
+  topic?: string;
+}): Promise<{ scene: Scene; provider: "gemini" | "groq" | "nvidia" }> {
+  const prompt = buildScenePrompt(opts);
+
+  const attempts: SceneAttempt[] = [];
+  if (hasGeminiKey()) {
+    attempts.push({
+      name: "gemini",
+      // Scenes are larger than a chat reply — a 8-step scene placing a dozen
+      // actors runs to a few thousand tokens of JSON, and a truncated scene
+      // fails validation outright.
+      run: (p) => geminiChat(p, { temperature: 0.6, maxTokens: 8000, feature: "scene-generation" }),
+    });
+  }
+  if (hasGroqKey()) {
+    attempts.push({
+      name: "groq",
+      run: (p) => groqChat(p, { temperature: 0.6, maxTokens: 4096, feature: "scene-generation" }),
+    });
+  }
+  if (hasNvidiaKey()) {
+    attempts.push({
+      name: "nvidia",
+      run: (p) => nvidiaChat(p, { temperature: 0.6, maxTokens: 4096, feature: "scene-generation" }),
+    });
+  }
+
+  let lastReason = "no AI provider is configured";
+
+  for (const attempt of attempts) {
+    let raw: string | null = null;
+    try {
+      raw = await attempt.run(prompt);
+    } catch (err) {
+      lastReason = `${attempt.name} threw: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(`[Scene] ${lastReason}`);
+      continue;
+    }
+
+    if (!raw) {
+      lastReason = `${attempt.name} returned nothing`;
+      console.warn(`[Scene] ${lastReason} — trying the next provider.`);
+      continue;
+    }
+
+    // A model that answers with prose, or with a scene that loses all its
+    // actors to validation, has not produced something we can render. Falling
+    // through to the next provider beats showing a broken stage.
+    let scene: Scene | null = null;
+    try {
+      scene = validateScene(extractJson(raw));
+    } catch (err) {
+      lastReason = `${attempt.name} returned unparseable JSON: ${err instanceof Error ? err.message : String(err)}`;
+      console.warn(`[Scene] ${lastReason}`);
+      continue;
+    }
+
+    if (!scene) {
+      lastReason = `${attempt.name} produced a scene with no usable actors or steps`;
+      console.warn(`[Scene] ${lastReason} — trying the next provider.`);
+      continue;
+    }
+
+    // The whole point of this subsystem is that things MOVE. A model that
+    // ignored that and returned captions over a static stage has produced the
+    // slideshow we set out to replace, so it is rejected here rather than
+    // shipped — another provider gets a turn.
+    const motion = checkSceneAnimates(scene);
+    if (!motion.animates) {
+      lastReason =
+        `${attempt.name} returned a slideshow: only ${motion.animatedSteps} of ` +
+        `${motion.comparedSteps} steps move anything`;
+      console.warn(`[Scene] ${lastReason} — trying the next provider.`);
+      continue;
+    }
+
+    console.log(
+      `[Scene] Generated "${scene.title}" via ${attempt.name}: ` +
+      `${scene.actors.length} actors, ${scene.links.length} links, ${scene.steps.length} steps, ` +
+      `${motion.animatedSteps}/${motion.comparedSteps} animated.`
+    );
+    return { scene, provider: attempt.name };
+  }
+
+  throw new Error(`Could not generate an animated scene (${lastReason}).`);
 }
