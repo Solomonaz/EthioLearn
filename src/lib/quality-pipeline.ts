@@ -305,6 +305,10 @@ or null when the question is in scope.
 - Do NOT flag a question merely because it applies a relationship the source
   DOES name, nor for ordinary arithmetic, unit conversion, or vocabulary a
   Grade ${grade} student is assumed to have.
+- The excerpts are the passages CLOSEST to these questions, not the whole
+  chapter. Something you cannot see may still be in the book, so treat absence
+  from the excerpts as weak evidence: flag only when the question plainly needs
+  an outside formula or constant, never merely because you did not spot it.
 - Be conservative: if the supporting statement plausibly sits in the source,
   treat it as in scope and return null.`
     : "";
@@ -446,7 +450,9 @@ Return JSON only — no markdown, no code fences:
 // scope check, so a 20-question batch would send a very large request.
 const AI_CHECK_BATCH_SIZE = 8;
 /** Most source passages attached to one check batch. */
-const MAX_SCOPE_EXCERPTS = 3;
+const MAX_SCOPE_EXCERPTS = 5;
+/** Source windows retrieved per question — top-1 missed supporting passages. */
+const SCOPE_WINDOWS_PER_QUESTION = 2;
 /**
  * Chars kept from each passage. Full 4,000-char windows made the request big
  * enough that Groq's JSON mode failed outright (json_validate_failed with an
@@ -461,7 +467,7 @@ async function runAIQualityChecks(
   subject: string,
   grade: number,
   /** Per-question best-matching source window, aligned with `questions`. */
-  questionExcerpts: (string | undefined)[] = []
+  questionExcerpts: string[][] = []
 ): Promise<Map<number, AIQualityCheck>> {
   const result = new Map<number, AIQualityCheck>();
 
@@ -471,9 +477,7 @@ async function runAIQualityChecks(
     // questions usually share one window.
     const excerpts = [
       ...new Set(
-        questionExcerpts
-          .slice(start, start + AI_CHECK_BATCH_SIZE)
-          .filter((e): e is string => !!e)
+        questionExcerpts.slice(start, start + AI_CHECK_BATCH_SIZE).flat().filter(Boolean)
       ),
     ]
       .slice(0, MAX_SCOPE_EXCERPTS)
@@ -599,6 +603,44 @@ function detectExistingDuplicates(
     }
   }
   return hits;
+}
+
+/**
+ * Guard against a scope flag raised on incomplete evidence.
+ *
+ * The scope check only sees the passages nearest a question, not the whole
+ * chapter, so "the source never states X" really means "X was not in the
+ * fragment I was shown". That is the same unsound inference that made the old
+ * 300-char question truncation produce phantom grammar and factual errors.
+ *
+ * Before a scope flag is trusted, the thing the checker says is missing is
+ * looked for in the FULL source. A real example: a projectile question was
+ * flagged for "missing horizontal range formula" when Unit 2 derives
+ * R = v0^2 sin2θ/g in full — the phrase "horizontal range" is right there in
+ * the chapter, so the claim is contradicted and the flag is dropped.
+ *
+ * Returns true when the source demonstrably DOES contain what was called
+ * missing, i.e. the flag should be suppressed.
+ */
+const SCOPE_STOPWORDS = new Set([
+  "missing", "needs", "requires", "the", "a", "an", "of", "for", "and", "or",
+  "this", "that", "is", "are", "not", "in", "to", "from", "with", "formula",
+  "constant", "value", "source", "content", "chapter", "question", "given",
+  "stated", "state", "states", "never", "does", "no",
+]);
+
+function scopeClaimContradicted(issue: string, fullSource: string): boolean {
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const src = norm(fullSource);
+  if (!src) return false;
+
+  const words = norm(issue).split(" ").filter((w) => w.length > 3 && !SCOPE_STOPWORDS.has(w));
+  // Bigrams, not single words: "speed" alone appears in almost any physics
+  // chapter, whereas "speed of sound" appearing verbatim is real evidence.
+  for (let i = 0; i < words.length - 1; i++) {
+    if (src.includes(`${words[i]} ${words[i + 1]}`)) return true;
+  }
+  return false;
 }
 
 // ─── Batch answer-balance check ────────────────────────
@@ -951,15 +993,14 @@ export async function runQualityPipeline(
   // that occurred when two parallel AI calls hit the same endpoint.
   // Each question's closest source window, used as the scope yardstick. The
   // embeddings for both are already computed above, so this costs nothing.
-  const questionExcerpts: (string | undefined)[] = questions.map((_, i) => {
+  const questionExcerpts: string[][] = questions.map((_, i) => {
     const qe = questionEmbeddings[i];
-    if (!qe || sourceEmbeddings.length === 0) return undefined;
-    let best = -1, bestIdx = -1;
-    for (let w = 0; w < sourceEmbeddings.length; w++) {
-      const sim = cosineSimilarity(qe, sourceEmbeddings[w]);
-      if (sim > best) { best = sim; bestIdx = w; }
-    }
-    return bestIdx >= 0 ? sourceWindows[bestIdx] : undefined;
+    if (!qe || sourceEmbeddings.length === 0) return [];
+    return sourceEmbeddings
+      .map((se, w) => ({ w, sim: cosineSimilarity(qe, se) }))
+      .sort((a, b) => b.sim - a.sim)
+      .slice(0, SCOPE_WINDOWS_PER_QUESTION)
+      .map(({ w }) => sourceWindows[w]);
   });
 
   const aiChecksMap = await runAIQualityChecks(questions, subject, grade, questionExcerpts);
@@ -1062,11 +1103,18 @@ export async function runQualityPipeline(
       penalty += 0.15;
     }
 
-    // 5d. Needs a formula or constant this chapter never states.
+    // 5d. Needs a formula or constant this chapter never states — but only
+    // when the full source does not contradict the claim (see above).
     if (aiCheck?.scopeIssue) {
-      flags.push("OUT_OF_SCOPE");
-      details["OUT_OF_SCOPE"] = aiCheck.scopeIssue;
-      penalty += 0.3;
+      if (scopeClaimContradicted(aiCheck.scopeIssue, sourceContent)) {
+        console.info(
+          `[Quality] Scope flag on Q${idx + 1} dropped — the source does contain it: "${aiCheck.scopeIssue}"`
+        );
+      } else {
+        flags.push("OUT_OF_SCOPE");
+        details["OUT_OF_SCOPE"] = aiCheck.scopeIssue;
+        penalty += 0.3;
+      }
     }
 
     // 6. Grammar
