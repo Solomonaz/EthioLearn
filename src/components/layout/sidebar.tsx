@@ -119,6 +119,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "questions",  href: "/school-admin/questions",    icon: HelpCircle },
     { labelKey: "rewards",    href: "/school-admin/rewards",      icon: Gift },
     { labelKey: "analytics",  href: "/school-admin/analytics",    icon: BarChart2 },
+    { labelKey: "subscription", href: "/school-admin/subscription", icon: CreditCard },
     { labelKey: "settings",   href: "/school-admin/settings",     icon: Settings },
   ];
 

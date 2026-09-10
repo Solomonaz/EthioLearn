@@ -6,9 +6,9 @@ import type {
   DetectedChapter,
 } from "./gemini";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
-import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
+import { buildTutorSystemPrompt } from "./ai-prompts";
 import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
-import { logUsage, openAiUsage, type UsageFeature } from "./usage-logger";
+import { logUsage, openAiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
 
 // Re-export the shared validators so NVIDIA can keep importing them
 // from "./groq" (their historical import path) without change.
@@ -46,6 +46,8 @@ export async function groqChat(
     /** Which feature this call serves, for token-usage attribution. Shared
      *  helper across features; defaults to quality-check. */
     feature?: UsageFeature;
+    /** Who the call is for, for per-student cost attribution. */
+    actor?: UsageActor;
   } = {}
 ): Promise<string | null> {
   if (!process.env.GROQ_API_KEY) return null;
@@ -63,7 +65,7 @@ export async function groqChat(
       max_tokens: opts.maxTokens ?? 4096,
       response_format: { type: "json_object" },
     });
-    logUsage({ feature: opts.feature ?? "quality-check", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
+    logUsage({ feature: opts.feature ?? "quality-check", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage), actor: opts.actor });
     return completion.choices[0]?.message?.content ?? null;
   } catch (err) {
     console.warn(
@@ -226,6 +228,7 @@ export async function groqTutorChatResponse(opts: {
   chapterTitle: string;
   subject: string;
   grade: number;
+  actor?: UsageActor;
 }): Promise<string> {
   const client = getGroqClient();
 
@@ -242,31 +245,6 @@ export async function groqTutorChatResponse(opts: {
     max_tokens: 2048,
   });
 
-  logUsage({ feature: "tutor-chat", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
+  logUsage({ feature: "tutor-chat", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage), actor: opts.actor });
   return completion.choices[0]?.message?.content ?? "I apologize, but I'm having trouble responding right now.";
-}
-
-// ─── Video Tutorial Script (Groq fallback) ──────────────
-
-import type { VideoScript } from "./gemini";
-
-export async function groqGenerateVideoScript(opts: {
-  content: string;
-  chapterTitle: string;
-  subject: string;
-  grade: number;
-  topic?: string;
-}): Promise<VideoScript> {
-  const client = getGroqClient();
-
-  const completion = await client.chat.completions.create({
-    model: GROQ_MODEL,
-    messages: [{ role: "user", content: buildVideoScriptPrompt(opts) }],
-    temperature: 0.6,
-    max_tokens: 3000,
-    response_format: { type: "json_object" },
-  });
-
-  logUsage({ feature: "video-script", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
-  return parseVideoScript(completion.choices[0]?.message?.content ?? "");
 }

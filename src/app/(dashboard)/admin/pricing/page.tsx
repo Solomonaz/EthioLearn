@@ -23,6 +23,7 @@ import {
   formatMoney,
   billingIntervalLabel,
   studentIntervalPrice,
+  validateTiers,
   type BillingInterval,
 } from "@/lib/pricing";
 
@@ -205,11 +206,19 @@ export default function AdminPricingPage() {
     };
 
     if (editor.pricingModel === "TIERED") {
-      body.tiers = editor.tiers.map((t) => ({
+      const tiers = editor.tiers.map((t) => ({
         minStudents: Number(t.minStudents),
         maxStudents: t.maxStudents.trim() === "" ? null : Number(t.maxStudents),
         price: Number(t.price),
       }));
+      // Same rules the API enforces — catch them here so the admin sees the
+      // problem against the bracket rows instead of as a failed save.
+      const tierError = validateTiers(tiers);
+      if (tierError) {
+        toast.error(tierError);
+        return;
+      }
+      body.tiers = tiers;
     } else {
       body.price = Number(editor.price);
     }
@@ -517,6 +526,22 @@ function PlanEditor({
     set({ tiers: [...editor.tiers, { minStudents: "", maxStudents: "", price: "" }] });
   const removeTier = (i: number) => set({ tiers: editor.tiers.filter((_, idx) => idx !== i) });
 
+  // Live bracket check, so gaps and open-ended-middle mistakes show up while
+  // typing rather than on save. Blank rows are still being filled in — don't
+  // nag about those.
+  const tiersComplete =
+    editor.pricingModel === "TIERED" &&
+    editor.tiers.every((t) => t.minStudents.trim() !== "" && t.price.trim() !== "");
+  const tierError = tiersComplete
+    ? validateTiers(
+        editor.tiers.map((t) => ({
+          minStudents: Number(t.minStudents),
+          maxStudents: t.maxStudents.trim() === "" ? null : Number(t.maxStudents),
+          price: Number(t.price),
+        }))
+      )
+    : null;
+
   return (
     <Card className="border-primary/40">
       <CardHeader>
@@ -655,8 +680,15 @@ function PlanEditor({
                 </div>
               ))}
             </div>
+            {tierError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                {tierError}
+              </p>
+            )}
             <p className="text-xs text-text-muted">
-              Leave “Max students” blank for the top bracket (no upper limit). Brackets must not overlap.
+              Brackets must cover every student count in one continuous run — no overlaps and
+              no gaps, each starting where the previous one ends (e.g. 1–100, then 101). Leave
+              “Max students” blank on the top bracket only, so a school of any size has a price.
             </p>
           </div>
         )}

@@ -24,7 +24,8 @@ export type QualityFlag =
   | "LOW_RELEVANCE"        // Cosine similarity to source < 0.5
   | "INVALID_ANSWER"       // correctAnswer not in options, wrong format
   | "DIFFICULTY_MISMATCH"  // AI-rated difficulty differs from declared
-  | "DUPLICATE_QUESTION"   // Semantically similar to another question (>0.75)
+  | "DUPLICATE_QUESTION"   // Semantically similar to another question in this batch
+  | "DUPLICATE_EXISTING"   // Semantically similar to a question ALREADY SAVED for this chapter
   | "GRAMMAR_ISSUE"        // Grammar/clarity problems
   | "EMPTY_EXPLANATION"    // Missing explanation
   | "TOO_SHORT"            // Question text suspiciously short
@@ -33,6 +34,8 @@ export type QualityFlag =
   | "META_REFERENCE"       // Question text references "the chapter / the text"
   | "COMPOUND_QUESTION"    // MCQ/TRUE_FALSE asks two things ("…and why?")
   | "WEAK_OPTION"          // MCQ uses "All/None of the above" or "Both A and B"
+  | "WEAK_DISTRACTOR"      // A wrong option is so implausible it narrows the question
+  | "OUT_OF_SCOPE"         // Needs a formula/constant the chapter content never states
   | "ANSWER_SKEW"          // Batch's correct answers are lopsided (position / true-false)
   | "WRONG_KEY"            // Independent solver disagrees with the marked answer
   | "MULTI_ANSWER"         // Independent solver finds 0 or ≥2 defensible answers
@@ -74,14 +77,54 @@ interface AIQualityCheck {
   grammarIssue: string | null; // null = no issue detected
   factualPassed: boolean;
   factualReason: string;
+  /** Which distractor is implausible and why; null when all are credible. */
+  weakDistractor: string | null;
+  /** What the question needs that the source never states; null when in scope. */
+  scopeIssue: string | null;
 }
 
 // ─── Constants ──────────────────────────────────────────
 
 const QUALITY_PASS_THRESHOLD = 0.6;
 const RELEVANCE_THRESHOLD = 0.5;
-const DUPLICATE_THRESHOLD = 0.75; // Lowered from 0.85 to catch near-duplicates
+/**
+ * Cosine similarity at which two questions count as the same question.
+ *
+ * Calibrated against this corpus rather than guessed. Measured on Grade 12
+ * Physics Unit 1, embedding hand-verified pairs with gemini-embedding-001:
+ *
+ *   true duplicates      95.7% – 97.6%
+ *   genuinely distinct   73.1% – 82.3%
+ *
+ * Any two exam questions drawn from ONE chapter already share a register —
+ * same subject vocabulary, same MCQ phrasing — so the floor for unrelated
+ * pairs sits above 0.70, not near zero. Earlier values of 0.75 and 0.80 were
+ * both inside that band: at 0.80 a suspension-bridge question and a
+ * centre-of-gravity question matched at 0.81, and an optical-fibre question
+ * matched an MRI question at 0.81. 0.90 sits in the empty gap, catching every
+ * verified duplicate with ~6 points of margin on each side.
+ */
+const DUPLICATE_THRESHOLD = 0.9;
 const MIN_QUESTION_LENGTH = 15;
+/**
+ * Cap on question text sent to the AI quality checker.
+ *
+ * This was 300, which silently cut the checker's copy of any longer question
+ * mid-word — and then the checker faithfully reported what it saw. One real
+ * example lost its final clause ("…causes its true luminosity to increase by a
+ * factor of 18") and came back with three flags that were all the same bug:
+ * GRAMMAR_ISSUE ("incomplete sentence"), FACTUAL_ERROR (it solved the half it
+ * could see and disagreed with the key), and DIFFICULTY_MISMATCH (what remained
+ * really was a one-step MEDIUM problem).
+ *
+ * HARD questions are long BY DESIGN — templates 1 and 5 both embed two facts in
+ * the stem — so the cap was selecting against exactly the questions the rubric
+ * asks for. The saving never justified it: ~150 extra characters across a batch
+ * of five is under 200 tokens. This is now a runaway guard, not a budget.
+ */
+const MAX_CHECKED_QUESTION_CHARS = 1200;
+/** How many already-saved questions a new batch is compared against. */
+const MAX_EXISTING_COMPARED = 300;
 
 // Shared guard from lib/ollama — off in production, on when OLLAMA_ENABLED=true.
 const ollamaChatEnabled = isOllamaEnabled();
@@ -222,7 +265,9 @@ export function hasBlockingStructuralIssue(q: GeneratedQuestion): boolean {
 async function runAIQualityChecksBatch(
   questions: GeneratedQuestion[],
   subject: string,
-  grade: number
+  grade: number,
+  /** Chapter passages these questions were generated from — the scope yardstick. */
+  sourceExcerpts: string[] = []
 ): Promise<Map<number, AIQualityCheck>> {
   const result = new Map<number, AIQualityCheck>();
   if (questions.length === 0) return result;
@@ -234,16 +279,39 @@ async function runAIQualityChecksBatch(
         .join("\n");
       return (
         `Q${i} [${q.type}] difficulty: ${q.difficulty}\n` +
-        `Question: ${q.questionText.slice(0, 300)}\n` +
+        `Question: ${q.questionText.slice(0, MAX_CHECKED_QUESTION_CHARS)}\n` +
         `Options:\n${opts}\n` +
         `Marked correct: ${q.correctAnswer}`
       );
     })
     .join("\n\n");
 
+  // Only run the scope check when we actually have the source to judge against.
+  const sourceBlock = sourceExcerpts.length
+    ? `\n\nSOURCE CONTENT (the chapter passages these questions came from):\n"""\n${sourceExcerpts.join("\n\n---\n\n")}\n"""\n`
+    : "";
+
+  const scopeCheck = sourceExcerpts.length
+    ? `
+
+CHECK 5 — SCOPE: Can the question be answered using ONLY the SOURCE CONTENT
+above plus arithmetic? Set scopeIssue to a short string naming what is missing,
+or null when the question is in scope.
+- Flag it when the question needs a FORMULA, PHYSICAL CONSTANT, or named
+  relationship that the source never states — e.g. computing with a refractive
+  index, a speed of sound in tissue, v = f x lambda, or P = F x v when the
+  source contains none of them. The physics being correct is irrelevant: if the
+  source does not supply it, the question is out of scope for this chapter.
+- Do NOT flag a question merely because it applies a relationship the source
+  DOES name, nor for ordinary arithmetic, unit conversion, or vocabulary a
+  Grade ${grade} student is assumed to have.
+- Be conservative: if the supporting statement plausibly sits in the source,
+  treat it as in scope and return null.`
+    : "";
+
   const prompt = `You are a strict quality-checker for Grade ${grade} ${subject} exam questions.
 
-For EACH question perform THREE checks:
+For EACH question perform ${sourceExcerpts.length ? "FIVE" : "FOUR"} checks:
 
 CHECK 1 — DIFFICULTY: Rate as EASY, MEDIUM, or HARD.
 - EASY: Direct recall, simple facts, basic definitions.
@@ -268,14 +336,26 @@ CHECK 3 — FACTUAL ACCURACY & SINGLE ANSWER: Verify all six:
     or "Both A and B" — every option must be a concrete, substantive answer.
 Return factualPassed: false with a concise reason if ANY sub-check fails.
 
+CHECK 4 — DISTRACTOR PLAUSIBILITY: Every WRONG option must be a mistake a
+student who half-understood the material could actually make. Set
+weakDistractor to a short string naming the offending option and why, or null
+when all distractors are credible.
+- Flag options that are physically absurd (an instrument spontaneously becoming
+  a different instrument, a radio pulse causing nuclear fusion), that contradict
+  everyday experience, or that borrow vocabulary from an unrelated topic purely
+  to sound wrong. Nobody picks these, so they turn a 4-option question into a
+  3-option one and inflate the guess rate.
+- A distractor is GOOD when you can name the specific misunderstanding behind
+  it. Judge only the wrong options — never the marked correct answer.${scopeCheck}${sourceBlock}
+
 QUESTIONS:
 ${questionList}
 
 Return JSON only — no markdown, no code fences:
 {
   "checks": [
-    { "index": 0, "difficulty": "MEDIUM", "grammarIssue": null, "factualPassed": true, "factualReason": "" },
-    { "index": 1, "difficulty": "HARD", "grammarIssue": null, "factualPassed": false, "factualReason": "Premise wrong: primary sexual characteristics are present from birth, not developed during puberty." }
+    { "index": 0, "difficulty": "MEDIUM", "grammarIssue": null, "factualPassed": true, "factualReason": "", "weakDistractor": null, "scopeIssue": null },
+    { "index": 1, "difficulty": "HARD", "grammarIssue": null, "factualPassed": false, "factualReason": "Premise wrong: primary sexual characteristics are present from birth.", "weakDistractor": "Option B (nuclear fusion from a radiofrequency pulse) is physically absurd — no student would pick it.", "scopeIssue": "Needs the speed of sound in tissue (1540 m/s) and v = f x lambda; the source states neither." }
   ]
 }`;
 
@@ -287,7 +367,7 @@ Return JSON only — no markdown, no code fences:
   //    has since decommissioned (404) while groq.ts had already moved on.
   if (process.env.GROQ_API_KEY) {
     try {
-      rawText = (await groqChat(prompt, { temperature: 0.1, maxTokens: 2048, feature: "quality-check" })) ?? "";
+      rawText = (await groqChat(prompt, { temperature: 0.1, maxTokens: 4096, feature: "quality-check" })) ?? "";
       if (rawText) console.info("[Quality Pipeline] AI checks via groq");
     } catch (err) {
       console.warn("[Quality Pipeline] Groq failed AI checks:", err instanceof Error ? err.message : String(err));
@@ -300,7 +380,7 @@ Return JSON only — no markdown, no code fences:
       rawText = (await geminiChat(prompt, {
         model: GEMINI_FAST_MODEL,
         temperature: 0.1,
-        maxTokens: 2048,
+        maxTokens: 4096,
         feature: "quality-check",
       })) ?? "";
       if (rawText) console.info("[Quality Pipeline] AI checks via gemini");
@@ -341,6 +421,14 @@ Return JSON only — no markdown, no code fences:
         // Default factualPassed to true on parse failure — no false positives
         factualPassed: typeof c.factualPassed === "boolean" ? c.factualPassed : true,
         factualReason: typeof c.factualReason === "string" ? c.factualReason : "",
+        weakDistractor:
+          typeof c.weakDistractor === "string" && c.weakDistractor.trim().length > 0
+            ? c.weakDistractor.trim()
+            : null,
+        scopeIssue:
+          typeof c.scopeIssue === "string" && c.scopeIssue.trim().length > 0
+            ? c.scopeIssue.trim()
+            : null,
       });
     }
   } catch {
@@ -354,18 +442,43 @@ Return JSON only — no markdown, no code fences:
 // prompt within a safe token budget. Previously only the first 20 questions
 // were checked, so questions 21–30 silently skipped difficulty/grammar/factual
 // verification. Batch-local indices are offset back to global positions.
-const AI_CHECK_BATCH_SIZE = 20;
+// Smaller than the old 20: the prompt now carries source passages for the
+// scope check, so a 20-question batch would send a very large request.
+const AI_CHECK_BATCH_SIZE = 8;
+/** Most source passages attached to one check batch. */
+const MAX_SCOPE_EXCERPTS = 3;
+/**
+ * Chars kept from each passage. Full 4,000-char windows made the request big
+ * enough that Groq's JSON mode failed outright (json_validate_failed with an
+ * empty generation) — and because every check shares that one call, a prompt
+ * too large for the scope check silently disabled difficulty, grammar and
+ * factual checking too. Keep this modest.
+ */
+const SCOPE_EXCERPT_CHARS = 1500;
 
 async function runAIQualityChecks(
   questions: GeneratedQuestion[],
   subject: string,
-  grade: number
+  grade: number,
+  /** Per-question best-matching source window, aligned with `questions`. */
+  questionExcerpts: (string | undefined)[] = []
 ): Promise<Map<number, AIQualityCheck>> {
   const result = new Map<number, AIQualityCheck>();
 
   for (let start = 0; start < questions.length; start += AI_CHECK_BATCH_SIZE) {
     const batch = questions.slice(start, start + AI_CHECK_BATCH_SIZE);
-    const batchResult = await runAIQualityChecksBatch(batch, subject, grade);
+    // The distinct passages this batch came from — deduplicated, since several
+    // questions usually share one window.
+    const excerpts = [
+      ...new Set(
+        questionExcerpts
+          .slice(start, start + AI_CHECK_BATCH_SIZE)
+          .filter((e): e is string => !!e)
+      ),
+    ]
+      .slice(0, MAX_SCOPE_EXCERPTS)
+      .map((e) => e.slice(0, SCOPE_EXCERPT_CHARS));
+    const batchResult = await runAIQualityChecksBatch(batch, subject, grade, excerpts);
     for (const [localIdx, check] of batchResult) {
       result.set(start + localIdx, check);
     }
@@ -450,6 +563,42 @@ function splitSourceForRelevance(
     if (slice) windows.push(slice);
   }
   return windows;
+}
+
+/**
+ * Compare each NEW question against the chapter's already-saved questions.
+ *
+ * `detectDuplicates` above only looks inside the current batch, which is why a
+ * chapter could accumulate the same question many times over: each generation
+ * was self-consistent and blind to every previous one. Returns index → the
+ * saved question it repeats.
+ */
+function detectExistingDuplicates(
+  questionEmbeddings: number[][],
+  existingEmbeddings: number[][],
+  existingTexts: string[]
+): Map<number, string> {
+  const hits = new Map<number, string>();
+  if (existingEmbeddings.length === 0 || questionEmbeddings.length === 0) return hits;
+
+  for (let i = 0; i < questionEmbeddings.length; i++) {
+    const qe = questionEmbeddings[i];
+    if (!qe) continue;
+    let bestSim = 0;
+    let bestIdx = -1;
+    for (let j = 0; j < existingEmbeddings.length; j++) {
+      const sim = cosineSimilarity(qe, existingEmbeddings[j]);
+      if (sim > bestSim) { bestSim = sim; bestIdx = j; }
+    }
+    if (bestIdx >= 0 && bestSim >= DUPLICATE_THRESHOLD) {
+      const text = existingTexts[bestIdx] ?? "";
+      hits.set(
+        i,
+        `Already in this chapter (${(bestSim * 100).toFixed(0)}% similar): "${text.slice(0, 110)}${text.length > 110 ? "…" : ""}"`
+      );
+    }
+  }
+  return hits;
 }
 
 // ─── Batch answer-balance check ────────────────────────
@@ -755,16 +904,32 @@ export async function runQualityPipeline(
   sourceContent: string,
   subject: string,
   grade: number,
-  generatorProvider?: string
+  generatorProvider?: string,
+  /**
+   * Question texts ALREADY SAVED for this chapter. Duplicate detection used to
+   * compare a batch only against itself, so generating ten times produced the
+   * same question ten times and nothing noticed — the repeats were only ever
+   * visible once they were all in the database. Passing the existing bank makes
+   * each new question checkable against what the chapter already has.
+   */
+  existingQuestions: string[] = []
 ): Promise<QualityPipelineResult> {
   // Pre-compute all embeddings in a single batch (source windows + all
   // questions). The source is split into windows so relevance is scored against
   // the WHOLE document, not just its opening 5k characters. Sharing one batched
   // call keeps duplicate detection and relevance scoring on a single API round.
   const sourceWindows = splitSourceForRelevance(sourceContent);
-  const allTexts = [...sourceWindows, ...questions.map((q) => q.questionText)];
+  // Cap the saved bank so a large chapter cannot make this call unbounded.
+  // Newest first: a repeat of something generated recently is the likely case.
+  const existingSlice = existingQuestions.slice(0, MAX_EXISTING_COMPARED);
+  const allTexts = [
+    ...sourceWindows,
+    ...questions.map((q) => q.questionText),
+    ...existingSlice,
+  ];
   let sourceEmbeddings: number[][] = [];
   let questionEmbeddings: number[][] = [];
+  let existingEmbeddings: number[][] = [];
 
   try {
     const embeddingResults = await generateEmbeddings(allTexts);
@@ -772,7 +937,10 @@ export async function runQualityPipeline(
       .slice(0, sourceWindows.length)
       .map((r) => r.embedding);
     questionEmbeddings = embeddingResults
-      .slice(sourceWindows.length)
+      .slice(sourceWindows.length, sourceWindows.length + questions.length)
+      .map((r) => r.embedding);
+    existingEmbeddings = embeddingResults
+      .slice(sourceWindows.length + questions.length)
       .map((r) => r.embedding);
   } catch (error) {
     console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
@@ -781,12 +949,26 @@ export async function runQualityPipeline(
   // Single combined AI check (difficulty + grammar + factual accuracy).
   // Groq-first provider order prevents the Gemini rate-limit collisions
   // that occurred when two parallel AI calls hit the same endpoint.
-  const aiChecksMap = await runAIQualityChecks(questions, subject, grade);
+  // Each question's closest source window, used as the scope yardstick. The
+  // embeddings for both are already computed above, so this costs nothing.
+  const questionExcerpts: (string | undefined)[] = questions.map((_, i) => {
+    const qe = questionEmbeddings[i];
+    if (!qe || sourceEmbeddings.length === 0) return undefined;
+    let best = -1, bestIdx = -1;
+    for (let w = 0; w < sourceEmbeddings.length; w++) {
+      const sim = cosineSimilarity(qe, sourceEmbeddings[w]);
+      if (sim > best) { best = sim; bestIdx = w; }
+    }
+    return bestIdx >= 0 ? sourceWindows[bestIdx] : undefined;
+  });
+
+  const aiChecksMap = await runAIQualityChecks(questions, subject, grade, questionExcerpts);
   // Independent-solver verification (blind re-solve, cross-model, fail-closed).
   const verifyResults = await verifyQuestions(questions, subject, grade, {
     avoidProvider: generatorProvider,
   });
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
+  const existingDupes = detectExistingDuplicates(questionEmbeddings, existingEmbeddings, existingSlice);
   const relevanceMap = checkRelevance(questions, sourceEmbeddings, questionEmbeddings);
 
   const duplicateIndices = new Set(
@@ -861,6 +1043,30 @@ export async function runQualityPipeline(
         .map((p) => p.find((i) => i !== idx)!);
       details["DUPLICATE_QUESTION"] = `Semantically similar to question(s): ${pairs.map((i) => i + 1).join(", ")}`;
       penalty += 0.2;
+    }
+
+    // 5b. Repeat of a question the chapter already has. Penalised harder than
+    // an in-batch duplicate: one of a duplicate pair is still worth keeping,
+    // whereas this one adds nothing the bank does not already contain.
+    const existingHit = existingDupes.get(idx);
+    if (existingHit) {
+      flags.push("DUPLICATE_EXISTING");
+      details["DUPLICATE_EXISTING"] = existingHit;
+      penalty += 0.35;
+    }
+
+    // 5c. Implausible distractor — narrows the question without testing anything.
+    if (aiCheck?.weakDistractor) {
+      flags.push("WEAK_DISTRACTOR");
+      details["WEAK_DISTRACTOR"] = aiCheck.weakDistractor;
+      penalty += 0.15;
+    }
+
+    // 5d. Needs a formula or constant this chapter never states.
+    if (aiCheck?.scopeIssue) {
+      flags.push("OUT_OF_SCOPE");
+      details["OUT_OF_SCOPE"] = aiCheck.scopeIssue;
+      penalty += 0.3;
     }
 
     // 6. Grammar

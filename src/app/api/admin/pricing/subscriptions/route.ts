@@ -130,6 +130,15 @@ export async function POST(req: NextRequest) {
     studentCountSnapshot ?? 0
   );
 
+  // Never store a subscription that has no price — it renders as "—/month" and
+  // silently bills nothing. Fix the plan's brackets first.
+  if (priced.amount === null) {
+    return NextResponse.json(
+      { error: priced.note ?? "This plan has no price for this target." },
+      { status: 400 }
+    );
+  }
+
   // Record who created it — but only when the acting user is a real persisted
   // row. The super-admin shortcut session isn't backed by a users record, so
   // blindly setting createdById would violate the foreign key.

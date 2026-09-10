@@ -48,13 +48,37 @@ export type UsageFeature =
   | "quality-check"
   | "bloom-tagging"
   | "tutor-chat"
-  | "video-script"
-  /** Animated scene generation — the successor to "video-script". */
-  | "scene-generation"
   | "vision-graph"
   | "vision-equation"
   | "vision-solid"
   | "graph-qa";
+
+/**
+ * Who a model call was made FOR. Passed down from the route that has the
+ * session, since the provider helpers deep in the call stack have no idea who
+ * is asking. Both fields absent for content-side work (question generation,
+ * chapter detection) that no single student triggered.
+ */
+export interface UsageActor {
+  studentId?: string | null;
+  schoolId?: string | null;
+}
+
+/**
+ * Build an actor from the signed-in user a route already has. `studentId` is
+ * set only for students, so "cost per student" stays a student number; the
+ * school is recorded for any school-linked user, so a school admin's own AI
+ * use still lands on that school's bill.
+ */
+export function usageActor(
+  user: { id: string; role: string; schoolId?: string | null } | null | undefined
+): UsageActor | undefined {
+  if (!user) return undefined;
+  return {
+    studentId: user.role === "STUDENT" ? user.id : null,
+    schoolId: user.schoolId ?? null,
+  };
+}
 
 interface UsageTotal {
   calls: number;
@@ -115,8 +139,9 @@ export function logUsage(args: {
   provider: string;
   model: string;
   usage: TokenUsage;
+  actor?: UsageActor;
 }): void {
-  const { feature, provider, model, usage } = args;
+  const { feature, provider, model, usage, actor } = args;
   const key = `${feature}|${provider}|${model}`;
 
   const cost = costUsd(model, usage.promptTokens, usage.totalTokens);
@@ -143,7 +168,9 @@ export function logUsage(args: {
     `[Usage] feature=${feature} provider=${provider} model=${model} ` +
       `prompt=${usage.promptTokens} output=${usage.outputTokens} ` +
       `thinking=${usage.thinkingTokens} total=${usage.totalTokens} ` +
-      `costUSD=${cost === null ? "unpriced" : cost.toFixed(6)}`
+      `costUSD=${cost === null ? "unpriced" : cost.toFixed(6)}` +
+      (actor?.studentId ? ` student=${actor.studentId}` : "") +
+      (actor?.schoolId ? ` school=${actor.schoolId}` : "")
   );
 
   // Durable, cross-route/cross-instance record. Fire-and-forget: usage
@@ -151,7 +178,7 @@ export function logUsage(args: {
   // shutdown is acceptable. The in-memory totals above are kept only for tests
   // and quick debugging — the admin page reads the database, because separate
   // route bundles and server instances each hold their OWN copy of that map.
-  void persistUsageEvent({ feature, provider, model, usage, cost });
+  void persistUsageEvent({ feature, provider, model, usage, cost, actor });
 }
 
 async function persistUsageEvent(args: {
@@ -160,18 +187,19 @@ async function persistUsageEvent(args: {
   model: string;
   usage: TokenUsage;
   cost: number | null;
+  actor?: UsageActor;
 }): Promise<void> {
-  const { feature, provider, model, usage, cost } = args;
+  const { feature, provider, model, usage, cost, actor } = args;
   try {
     await db.$executeRaw`
       INSERT INTO usage_events
         (id, "createdAt", feature, provider, model,
          "promptTokens", "outputTokens", "thinkingTokens", "totalTokens",
-         "costUsd", unpriced)
+         "costUsd", unpriced, "studentId", "schoolId")
       VALUES
         (${randomUUID()}, NOW(), ${feature}, ${provider}, ${model},
          ${usage.promptTokens}, ${usage.outputTokens}, ${usage.thinkingTokens}, ${usage.totalTokens},
-         ${cost}, ${cost === null})
+         ${cost}, ${cost === null}, ${actor?.studentId ?? null}, ${actor?.schoolId ?? null})
     `;
   } catch (err) {
     // Never surface a logging failure to the caller.

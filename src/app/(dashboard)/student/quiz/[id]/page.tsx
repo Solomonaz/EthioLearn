@@ -226,6 +226,11 @@ export default function QuizTakingPage() {
   const { resetViolations } = useAntiCheat({
     onAutoSubmit: useCallback(() => handleSubmitRef.current(), []),
     enabled: hasQuestions && !isSubmitting,
+    // This page only ever runs SOLO / TIMED practice — battles run in
+    // /student/battle/[roomCode], which keeps the penalty. Practice keeps the
+    // clipboard blocking but no longer auto-submits when a student switches
+    // away: checking a notification shouldn't cost them their attempt.
+    tabSwitchAutoSubmit: false,
   });
   const totalQuestions = questions.length;
   const isLastQuestion = currentIndex === totalQuestions - 1;

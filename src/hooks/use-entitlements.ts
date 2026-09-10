@@ -14,7 +14,7 @@ export interface EntitlementsInfo {
   /** Paid plans / billing enabled platform-wide. Off = hide billing UI. */
   pricingEnabled: boolean;
   /** Effective per-AI-feature switches (master AND per-feature). */
-  aiFeatures: { aiTutor: boolean; aiVideo: boolean; aiQuizGen: boolean; aiAdaptive: boolean; aiMathTools: boolean };
+  aiFeatures: { aiTutor: boolean; aiQuizGen: boolean; aiAdaptive: boolean; aiMathTools: boolean };
   loading: boolean;
 }
 
@@ -30,7 +30,7 @@ const DEFAULT: EntitlementsInfo = {
   isSchoolStudent: false,
   planName: null,
   pricingEnabled: true,
-  aiFeatures: { aiTutor: true, aiVideo: true, aiQuizGen: true, aiAdaptive: true, aiMathTools: true },
+  aiFeatures: { aiTutor: true, aiQuizGen: true, aiAdaptive: true, aiMathTools: true },
   loading: true,
 };
 
@@ -60,7 +60,6 @@ export function useEntitlements(): EntitlementsInfo {
             pricingEnabled: d.pricingEnabled !== false,
             aiFeatures: {
               aiTutor: d.aiFeatures?.aiTutor !== false,
-              aiVideo: d.aiFeatures?.aiVideo !== false,
               aiQuizGen: d.aiFeatures?.aiQuizGen !== false,
               aiAdaptive: d.aiFeatures?.aiAdaptive !== false,
               aiMathTools: d.aiFeatures?.aiMathTools !== false,

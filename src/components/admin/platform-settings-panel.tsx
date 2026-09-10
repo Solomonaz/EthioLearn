@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 interface Settings {
   aiEnabled: boolean;
   aiTutorEnabled: boolean;
-  aiVideoEnabled: boolean;
   aiQuizGenEnabled: boolean;
   aiAdaptiveEnabled: boolean;
   aiMathToolsEnabled: boolean;
@@ -179,13 +178,6 @@ export function PlatformSettingsPanel() {
             checked={settings.aiTutorEnabled}
             disabled={aiOff}
             onChange={(v) => update("aiTutorEnabled", v)}
-          />
-          <Row
-            label="AI Video Tutorials"
-            desc="Generated animated video explanations."
-            checked={settings.aiVideoEnabled}
-            disabled={aiOff}
-            onChange={(v) => update("aiVideoEnabled", v)}
           />
           <Row
             label="AI Question / Quiz Generation"

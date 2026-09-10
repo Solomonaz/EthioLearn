@@ -66,8 +66,13 @@ export async function GET(request: NextRequest) {
     db.question.count({ where }),
   ]);
 
-  // Fetch textbooks for filter dropdowns
-  const textbooks = await db.textbook.findMany({
+  // Fetch textbooks for filter dropdowns.
+  //
+  // `chunkingStatus` and the per-chapter chunk count drive the AI-generation
+  // warning: a chapter with no chunks has not been through the processing
+  // pipeline, so generation falls back to the chapter's opening slice instead
+  // of sampling across the whole chapter (see lib/generation-content).
+  const textbooksRaw = await db.textbook.findMany({
     where: user.schoolId ? { schoolId: user.schoolId } : {},
     orderBy: { createdAt: "desc" },
     select: {
@@ -75,12 +80,26 @@ export async function GET(request: NextRequest) {
       title: true,
       subject: true,
       grade: true,
+      chunkingStatus: true,
       chapters: {
-        select: { id: true, title: true, chapterNumber: true },
+        select: {
+          id: true,
+          title: true,
+          chapterNumber: true,
+          _count: { select: { chunks: true } },
+        },
         orderBy: { chapterNumber: "asc" },
       },
     },
   });
+
+  const textbooks = textbooksRaw.map((t) => ({
+    ...t,
+    chapters: t.chapters.map(({ _count, ...ch }) => ({
+      ...ch,
+      chunkCount: _count.chunks,
+    })),
+  }));
 
   return NextResponse.json({
     questions,

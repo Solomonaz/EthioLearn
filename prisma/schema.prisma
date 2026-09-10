@@ -252,7 +252,6 @@ model PlatformSettings {
   id                String   @id @default("singleton")
   aiEnabled         Boolean  @default(true) // master AI switch — off disables ALL AI
   aiTutorEnabled    Boolean  @default(true) // AI tutor chat
-  aiVideoEnabled    Boolean  @default(true) // AI video tutorials
   aiQuizGenEnabled  Boolean  @default(true) // AI question / quiz generation
   aiAdaptiveEnabled Boolean  @default(true) // adaptive difficulty
   aiMathToolsEnabled Boolean @default(true) // AI in the graphing calculator & 3D geometry lab
@@ -375,7 +374,6 @@ model Chapter {
 
   questions Question[]
   chunks    ContentChunk[]
-  scenes    GeneratedScene[]
 
   @@unique([textbookId, chapterNumber])
   @@map("chapters")
@@ -881,6 +879,16 @@ model UsageEvent {
   provider String // "gemini" | "groq" | "nvidia" | "ollama"
   model    String // exact model id the provider reported
 
+  // Who the call was made FOR, so spend is attributable to a student and a
+  // school rather than only to a feature. Both null for content-side work that
+  // no single student triggered (question generation, chapter detection): that
+  // cost is one-time per textbook and amortised across everyone who uses it.
+  // Denormalised on purpose — the school is copied from the student at write
+  // time so moving a student later never rewrites billing history, and neither
+  // FK cascades, so deleting a user keeps the spend they caused on the books.
+  studentId String?
+  schoolId  String?
+
   promptTokens   Int
   outputTokens   Int
   thinkingTokens Int
@@ -893,34 +901,7 @@ model UsageEvent {
 
   @@index([createdAt])
   @@index([feature])
+  @@index([studentId])
+  @@index([schoolId])
   @@map("usage_events")
-}
-
-/// A generated animated scene, cached per chapter (and per optional topic).
-///
-/// Generating one costs a real AI call — measured at about US$0.011 — and takes
-/// several seconds. Without this table a class of forty students opening the
-/// same chapter would pay for forty identical generations and wait through
-/// forty identical delays. Questions have always been persisted and reused;
-/// scenes now are too.
-///
-/// `topicKey` is the normalised topic ("" for a whole-chapter scene), so one
-/// chapter can hold several scenes without them colliding.
-model GeneratedScene {
-  id        String   @id @default(cuid())
-  chapterId String
-  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
-
-  topicKey String @default("")
-  title    String
-  /// The validated Scene object (actors, links, steps).
-  data     Json
-  provider String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([chapterId, topicKey])
-  @@index([chapterId])
-  @@map("generated_scenes")
 }

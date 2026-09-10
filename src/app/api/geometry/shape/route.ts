@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { readSolidFromImage } from "@/lib/gemini";
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     if (image) {
       if (!ALLOWED.has(mimeType)) return NextResponse.json({ error: "Unsupported image type" }, { status: 400 });
       if (image.length > MAX_BASE64) return NextResponse.json({ error: "Image is too large" }, { status: 413 });
-      raw = await readSolidFromImage(image, mimeType);
+      raw = await readSolidFromImage(image, mimeType, usageActor(user));
     } else if (prompt) {
       if (prompt.length > 300) return NextResponse.json({ error: "Please keep it short" }, { status: 400 });
       const instruction =
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
         `Use "sides" (3-12) only for prism/pyramid/antiprism/bipyramid. "label" is a short human name. ` +
         `Description: "${prompt}"`;
       const { response } = await chatWithTutor({
+      actor: usageActor(user),
         message: instruction,
         history: [],
         content: "You translate a description of a 3D shape into a JSON spec. Reply with JSON only.",

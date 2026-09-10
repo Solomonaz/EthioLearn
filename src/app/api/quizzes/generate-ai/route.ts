@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateQuestionsBatched, verifyQuestions, hasBlockingStructuralIssue } from "@/lib/ai-provider";
+import { generateQuestionsBatched, verifyQuestions, hasBlockingStructuralIssue, generationContentBudget } from "@/lib/ai-provider";
 import { QuestionType, Difficulty } from "@prisma/client";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
@@ -79,6 +79,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Also seeds HARD template rotation, so regenerating a chapter varies the
+    // question SHAPES as well as the source text it draws from.
+    let priorQuestions = 0;
     let finalContent = "";
     let finalTitle = "";
     let targetChapterId: string | null = null;
@@ -121,13 +124,15 @@ export async function POST(request: Request) {
       // Spend the prompt's character budget across the WHOLE chapter instead of
       // its opening 30k. Rotation advances with the chapter's existing question
       // count so repeated generation sweeps new material each time.
-      const priorQuestions = await db.question.count({
+      priorQuestions = await db.question.count({
         where: { chapterId: chapter.id },
       });
       const selected = await selectGenerationContent({
         chapterId: chapter.id,
         fallbackContent: finalContent,
-        budgetChars: QUESTION_CONTENT_CHARS,
+        // Budget by how many calls will carry it, so a small chapter is sent whole
+      // instead of being sampled down to one prompt's worth. See ai-provider.
+      budgetChars: generationContentBudget(Math.min(Math.max(Number(questionCount) || 10, 1), 20) + 3),
         rotation: priorQuestions,
       });
       finalContent = selected.content;
@@ -168,6 +173,7 @@ export async function POST(request: Request) {
       difficulty: difficulty as any,
       questionTypes: questionTypes as any,
       mode: (mode === "TIMED" || mode === "GROUP" ? mode : "SOLO") as "SOLO" | "TIMED" | "GROUP",
+      variantSeed: priorQuestions,
     });
 
     // 3b. Independent-solver verification. Students take the test immediately and

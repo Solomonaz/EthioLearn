@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { askAboutGraph } from "@/lib/gemini";
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     : [];
 
   try {
-    const answer = (await askAboutGraph(image, mimeType, question, history)).trim();
+    const answer = (await askAboutGraph(image, mimeType, question, history, usageActor(user))).trim();
     if (!answer) {
       return NextResponse.json({ error: "No answer — try rephrasing." }, { status: 422 });
     }

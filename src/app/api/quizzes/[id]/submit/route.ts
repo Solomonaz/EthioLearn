@@ -219,8 +219,22 @@ export async function POST(
     // spoof it by lying about per-answer times.
     const elapsedMs = Date.now() - new Date(quiz.startedAt).getTime();
     const tooFast = elapsedMs < gradedAnswers.length * MIN_MS_PER_QUESTION;
+
+    // ── Single-player practice earns no points at all ───────────────────────
+    // This route only ever handles SOLO and TIMED quizzes — battles score
+    // through the socket server (see server.ts), never here. Both are
+    // unsupervised and infinitely repeatable, which made them the farming
+    // surface every constant above was fighting. Rather than keep tuning those
+    // heuristics, practice simply stops paying: no leaderboard/XP points, no
+    // prize points, no streak bonus.
+    //
+    // The Daily Challenge is the one exception. It is one curated quiz per day,
+    // so it cannot be farmed by definition, and it is the reason students come
+    // back daily — it scores exactly as it always has.
+    const isPractice = !quiz.isDailyChallenge;
+
     const pointsBlocked =
-      exceedsDailyLimit || score < MIN_SCORE_FOR_POINTS || tooFast;
+      exceedsDailyLimit || score < MIN_SCORE_FOR_POINTS || tooFast || isPractice;
 
     const { total: rawPointsEarned, breakdown, speedBonus, streakBonus } =
       calculateQuizPoints(pointsInput, {
@@ -408,8 +422,7 @@ export async function POST(
 
     // If it's a Daily Challenge, award extra points only for 60%+ performance
     let challengePoints = 0;
-    const quizAny = quiz as any;
-    if (!pointsBlocked && quizAny.isDailyChallenge && correctCount >= 3) {
+    if (!pointsBlocked && quiz.isDailyChallenge && correctCount >= 3) {
       const { today: dStart, tomorrow } = (() => {
         const d = new Date();
         d.setHours(0, 0, 0, 0);
@@ -554,11 +567,15 @@ export async function POST(
       streakBonus: effectiveStreakBonus,
       pointsBlocked,
       pointsBlockedReason: pointsBlocked
-        ? exceedsDailyLimit
-          ? "Daily quiz limit reached (20 scored quizzes/day)"
-          : tooFast
-            ? "Answered too fast to count — take your time to earn points"
-            : `Score below ${MIN_SCORE_FOR_POINTS}% — no points awarded`
+        // Practice is checked first: a solo quiz scored 90% is not blocked for
+        // being "below 50%", and saying so would be actively misleading.
+        ? isPractice
+          ? "Practice quizzes don't award points — play a Battle or today's Daily Challenge to earn."
+          : exceedsDailyLimit
+            ? "Daily quiz limit reached (20 scored quizzes/day)"
+            : tooFast
+              ? "Answered too fast to count — take your time to earn points"
+              : `Score below ${MIN_SCORE_FOR_POINTS}% — no points awarded`
         : undefined,
       redeemablePointsEarned: redeemableEarned,
       newRedeemablePoints: updatedUser.redeemablePoints,

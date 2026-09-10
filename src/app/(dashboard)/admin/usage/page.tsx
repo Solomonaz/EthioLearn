@@ -7,6 +7,8 @@ import {
   RefreshCw,
   AlertCircle,
   AlertTriangle,
+  Users,
+  Building2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,16 @@ interface DetailRow extends FeatureRow {
   model: string;
 }
 
+interface ActorRow {
+  id: string | null;
+  name: string;
+  grade: number | null;
+  schoolName: string | null;
+  calls: number;
+  totalTokens: number;
+  costUsd: number;
+}
+
 interface UsageData {
   note: string;
   period: string;
@@ -40,6 +52,13 @@ interface UsageData {
   totalCostUsd: number;
   totalCost: number;
   anyUnpriced: boolean;
+  attributedCostUsd: number;
+  attributedCost: number;
+  avgCostPerStudentUsd: number;
+  avgCostPerStudent: number;
+  studentsWithUsage: number;
+  byStudent: ActorRow[];
+  bySchool: ActorRow[];
   byFeature: FeatureRow[];
   detail: DetailRow[];
 }
@@ -60,7 +79,6 @@ const FEATURE_LABELS: Record<string, string> = {
   "quality-check": "Quality checks",
   "bloom-tagging": "Bloom tagging",
   "tutor-chat": "AI tutor chat",
-  "video-script": "Video scripts",
   "vision-graph": "Graph reading (vision)",
   "vision-equation": "Equation reading (vision)",
   "vision-solid": "3D solid reading (vision)",
@@ -207,11 +225,18 @@ export default function AiUsagePage() {
           <CardContent className="pt-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500">Features tracked</p>
-                <p className="mt-1 text-2xl font-bold text-gray-900">{data.byFeature.length}</p>
+                <p className="text-xs font-medium text-gray-500">Avg cost per student</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">
+                  {fmtMoney(data.avgCostPerStudentUsd, "USD")}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {showLocal && `≈ ${fmtMoney(data.avgCostPerStudent, data.currency)} · `}
+                  across {data.studentsWithUsage} student
+                  {data.studentsWithUsage === 1 ? "" : "s"} with AI use
+                </p>
               </div>
               <div className="rounded-lg bg-green-50 p-2">
-                <Cpu className="h-5 w-5 text-[#1B5E20]" />
+                <Users className="h-5 w-5 text-[#1B5E20]" />
               </div>
             </div>
             {data.anyUnpriced && (
@@ -282,6 +307,27 @@ export default function AiUsagePage() {
         </CardContent>
       </Card>
 
+
+      {/* Per-student spend — the number a per-student price has to cover. */}
+      <ActorTable
+        title="Cost by student"
+        icon={<Users className="h-4 w-4 text-[#1B5E20]" />}
+        subjectLabel="Student"
+        rows={data.byStudent}
+        showGrade
+        emptyText="No student-attributed AI use in this period."
+        footnote="Content-side work (question generation, chapter detection) carries no student — it is one-time per textbook and shared by everyone, so it is not listed here."
+      />
+
+      {/* Per-school spend. */}
+      <ActorTable
+        title="Cost by school"
+        icon={<Building2 className="h-4 w-4 text-[#1B5E20]" />}
+        subjectLabel="School"
+        rows={data.bySchool}
+        emptyText="No school-attributed AI use in this period."
+      />
+
       {/* Per model+provider detail */}
       {data.detail.length > 0 && (
         <Card>
@@ -325,5 +371,77 @@ export default function AiUsagePage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * One attribution table (students or schools). Both render the same shape, so
+ * they share a component rather than duplicating forty lines of markup.
+ */
+function ActorTable({
+  title,
+  icon,
+  subjectLabel,
+  rows,
+  showGrade = false,
+  emptyText,
+  footnote,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  subjectLabel: string;
+  rows: ActorRow[];
+  showGrade?: boolean;
+  emptyText: string;
+  footnote?: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-4">
+          {icon}
+          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-gray-500">{emptyText}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-5 py-3 font-medium">{subjectLabel}</th>
+                  {showGrade && <th className="px-5 py-3 font-medium">Grade</th>}
+                  {showGrade && <th className="px-5 py-3 font-medium">School</th>}
+                  <th className="px-5 py-3 text-right font-medium">Calls</th>
+                  <th className="px-5 py-3 text-right font-medium">Total tokens</th>
+                  <th className="px-5 py-3 text-right font-medium">Cost (USD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id ?? r.name} className="border-b border-gray-50 last:border-0">
+                    <td className="px-5 py-3 text-gray-900">{r.name}</td>
+                    {showGrade && (
+                      <td className="px-5 py-3 text-gray-600">{r.grade ?? "—"}</td>
+                    )}
+                    {showGrade && (
+                      <td className="px-5 py-3 text-gray-600">{r.schoolName ?? "Independent"}</td>
+                    )}
+                    <td className="px-5 py-3 text-right text-gray-600">{fmtTokens(r.calls)}</td>
+                    <td className="px-5 py-3 text-right text-gray-600">{fmtTokens(r.totalTokens)}</td>
+                    <td className="px-5 py-3 text-right text-gray-900">{fmtMoney(r.costUsd, "USD")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {footnote && (
+          <p className="border-t border-gray-100 px-5 py-3 text-xs text-gray-500">{footnote}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

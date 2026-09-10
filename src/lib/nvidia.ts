@@ -13,17 +13,16 @@ import type {
   GeneratedQuestion,
   DetectChaptersOptions,
   DetectedChapter,
-  VideoScript,
 } from "./gemini";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
-import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
+import { buildTutorSystemPrompt } from "./ai-prompts";
 import {
   extractJson,
   validateQuestions,
   validateDetectedChapters,
   buildChapterDetectionPrompt,
 } from "./groq";
-import { logUsage, openAiUsage, type UsageFeature } from "./usage-logger";
+import { logUsage, openAiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 // Default NIM model. Override with NVIDIA_MODEL if your account/catalog exposes
@@ -49,7 +48,7 @@ export function hasNvidiaKey(): boolean {
 
 async function nvidiaChatCompletion(
   messages: { role: "system" | "user" | "assistant"; content: string }[],
-  opts: { temperature?: number; maxTokens?: number; jsonMode?: boolean; feature?: UsageFeature } = {}
+  opts: { temperature?: number; maxTokens?: number; jsonMode?: boolean; feature?: UsageFeature; actor?: UsageActor } = {}
 ): Promise<string> {
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) throw new Error("NVIDIA_API_KEY is not configured.");
@@ -84,6 +83,7 @@ async function nvidiaChatCompletion(
     provider: "nvidia",
     model: NVIDIA_MODEL,
     usage: openAiUsage(data.usage),
+    actor: opts.actor,
   });
   return data.choices?.[0]?.message?.content ?? "";
 }
@@ -95,7 +95,7 @@ async function nvidiaChatCompletion(
  */
 export async function nvidiaChat(
   prompt: string,
-  opts: { system?: string; temperature?: number; maxTokens?: number; feature?: UsageFeature } = {}
+  opts: { system?: string; temperature?: number; maxTokens?: number; feature?: UsageFeature; actor?: UsageActor } = {}
 ): Promise<string | null> {
   if (!hasNvidiaKey()) return null;
   try {
@@ -103,7 +103,7 @@ export async function nvidiaChat(
       ...(opts.system ? [{ role: "system" as const, content: opts.system }] : []),
       { role: "user" as const, content: prompt },
     ];
-    return await nvidiaChatCompletion(messages, { ...opts, jsonMode: true, feature: opts.feature });
+    return await nvidiaChatCompletion(messages, { ...opts, jsonMode: true, feature: opts.feature, actor: opts.actor });
   } catch (err) {
     console.warn(
       `[NVIDIA] Chat request failed: ${err instanceof Error ? err.message : String(err)}`
@@ -209,6 +209,7 @@ export async function nvidiaTutorChat(opts: {
   chapterTitle: string;
   subject: string;
   grade: number;
+  actor?: UsageActor;
 }): Promise<string> {
   const text = await nvidiaChatCompletion(
     [
@@ -216,23 +217,7 @@ export async function nvidiaTutorChat(opts: {
       ...opts.history,
       { role: "user", content: opts.message },
     ],
-    { temperature: 0.7, maxTokens: 2048, jsonMode: false, feature: "tutor-chat" }
+    { temperature: 0.7, maxTokens: 2048, jsonMode: false, feature: "tutor-chat", actor: opts.actor }
   );
   return text.trim() || "I apologize, but I'm having trouble responding right now.";
-}
-
-// ─── Video Tutorial Script ──────────────────────────────
-
-export async function nvidiaGenerateVideoScript(opts: {
-  content: string;
-  chapterTitle: string;
-  subject: string;
-  grade: number;
-  topic?: string;
-}): Promise<VideoScript> {
-  const text = await nvidiaChatCompletion(
-    [{ role: "user", content: buildVideoScriptPrompt(opts) }],
-    { temperature: 0.6, maxTokens: 3000, jsonMode: true, feature: "video-script" }
-  );
-  return parseVideoScript(text);
 }

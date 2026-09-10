@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { getEntitlements } from "@/lib/entitlements";
 import { chatWithTutor } from "@/lib/ai-provider";
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { response } = await chatWithTutor({
+      actor: usageActor(user),
       message: instruction,
       history: [],
       content: "You are a friendly geometry tutor helping a student understand a 3D solid they are viewing. Reply in plain text.",

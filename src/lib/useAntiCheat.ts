@@ -8,17 +8,33 @@ interface UseAntiCheatOptions {
   onAutoSubmit: () => void;
   /** Whether to enable the hook (e.g. only while quiz is active). */
   enabled?: boolean;
+  /**
+   * Whether leaving the tab counts as a violation that warns and then
+   * auto-submits. Battle mode only: a battle is a live, timed contest against
+   * other students, so stepping out to look something up is cheating them.
+   * A solo quiz is practice — a student who checks a notification should not
+   * lose their attempt — so solo passes false.
+   *
+   * Clipboard blocking below is NOT affected by this and stays on for every
+   * quiz; only the tab-switch penalty is scoped.
+   */
+  tabSwitchAutoSubmit?: boolean;
 }
 
 /**
  * Anti-cheat hook that:
- *  1. Detects tab switching via `visibilitychange` / `blur`
+ *  1. Detects tab switching via `visibilitychange` / `blur` — BATTLE ONLY,
+ *     see `tabSwitchAutoSubmit`
  *     - 1st offence → warning toast
  *     - 2nd offence → calls onAutoSubmit()
  *  2. Disables copy, cut, paste, and contextmenu events on the page
- *     while the quiz is active.
+ *     while the quiz is active (every mode).
  */
-export function useAntiCheat({ onAutoSubmit, enabled = true }: UseAntiCheatOptions) {
+export function useAntiCheat({
+  onAutoSubmit,
+  enabled = true,
+  tabSwitchAutoSubmit = true,
+}: UseAntiCheatOptions) {
   /** Track how many times the user has left the tab/window. */
   const violationCount = useRef(0);
   /** Stable reference so the effect always calls the latest version. */
@@ -27,7 +43,7 @@ export function useAntiCheat({ onAutoSubmit, enabled = true }: UseAntiCheatOptio
 
   // ── Tab-switch / window-blur detection ──────────────────────────────────
   const handleVisibilityChange = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || !tabSwitchAutoSubmit) return;
     if (document.visibilityState === "hidden") {
       violationCount.current += 1;
 
@@ -49,10 +65,10 @@ export function useAntiCheat({ onAutoSubmit, enabled = true }: UseAntiCheatOptio
         onAutoSubmitRef.current();
       }
     }
-  }, [enabled]);
+  }, [enabled, tabSwitchAutoSubmit]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !tabSwitchAutoSubmit) return;
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     // Also catch window blur (e.g. alt-tab to another application)
@@ -62,7 +78,7 @@ export function useAntiCheat({ onAutoSubmit, enabled = true }: UseAntiCheatOptio
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleVisibilityChange);
     };
-  }, [enabled, handleVisibilityChange]);
+  }, [enabled, tabSwitchAutoSubmit, handleVisibilityChange]);
 
   // ── Copy / Paste / Cut / ContextMenu prevention ─────────────────────────
   useEffect(() => {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import {
   Users,
@@ -24,7 +23,6 @@ import { Avatar } from "@/components/ui/avatar";
 import { StatCard } from "@/components/shared/stat-card";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
-import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 import { cn } from "@/lib/utils";
 
 interface DashboardData {
@@ -58,8 +56,6 @@ interface DashboardData {
 
 export default function SchoolAdminDashboardPage() {
   const t = useTranslations("admin");
-  const { data: session } = useSession();
-  const schoolId = (session?.user as { schoolId?: string } | undefined)?.schoolId;
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,9 +107,6 @@ export default function SchoolAdminDashboardPage() {
           Overview of your school&apos;s performance and activity
         </p>
       </div>
-
-      {/* Subscription (read-only for school admins) */}
-      {schoolId && <SubscriptionPanel audience="SCHOOL" targetId={schoolId} readOnly />}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">

@@ -7,7 +7,6 @@ import { getPlatformSettings, PLATFORM_SETTINGS_SINGLETON_ID } from "@/lib/platf
 const BOOLEAN_KEYS = [
   "aiEnabled",
   "aiTutorEnabled",
-  "aiVideoEnabled",
   "aiQuizGenEnabled",
   "aiAdaptiveEnabled",
   "aiMathToolsEnabled",
@@ -58,7 +57,6 @@ export async function PATCH(request: Request) {
     select: {
       aiEnabled: true,
       aiTutorEnabled: true,
-      aiVideoEnabled: true,
       aiQuizGenEnabled: true,
       aiAdaptiveEnabled: true,
       aiMathToolsEnabled: true,

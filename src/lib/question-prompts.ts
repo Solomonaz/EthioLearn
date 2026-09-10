@@ -202,10 +202,43 @@ Q3. TOPIC DIVERSITY (HARD CAP): Across the whole batch, cover DIFFERENT
     sub-topic (e.g. one specific kingdom's decline, one person, one invention).
     A 3rd question on the same nexus is FORBIDDEN — replace it with one drawn
     from an as-yet-uncovered part of the chapter.
+    BREADTH BEFORE DEPTH: the excerpt below covers several distinct named
+    topics. Give EVERY distinct topic in it at least one question before giving
+    any topic a second. A subsection that is present in the excerpt and gets no
+    question at all is a failure of this rule — descriptive passages (a device,
+    an organ, a named technique) count as topics exactly as much as passages
+    that contain a formula, and must not be skipped in favour of whatever is
+    easiest to compute from.
     BEFORE FINALIZING: list the primary subtopic of each question; if any single
     subtopic appears 3+ times, rewrite the extras to cover different material.
     If the chapter spans multiple civilizations/regions/themes, the batch must
     sample BROADLY across them, not exhaust one.
+Q3b. STAY INSIDE THE PROVIDED CONTENT (HARD RULE): Every question must be
+    answerable using ONLY the chapter content below, plus arithmetic. Do NOT
+    introduce a formula, physical constant, or named relationship that the
+    content does not state — even a correct one, and even if a student might
+    know it from another course.
+    • If the content names a relationship but gives no equation (e.g. it says
+      "the equation of continuity" without writing it), you may use it.
+    • If the content gives NEITHER the equation NOR the constant, the question
+      is out of scope. Examples of what NOT to do when the content omits them:
+      inventing a refractive index, a speed of sound in tissue, a wave equation
+      v = f x lambda, or a power relation P = F x v, then computing with it.
+    A question that needs an outside formula is WRONG for this chapter no
+    matter how good the physics is — replace it with one the content supports.
+
+Q3c. EVERY DISTRACTOR MUST BE A REAL MISTAKE (HARD RULE): Each wrong option
+    must be something a student who half-understood THIS content could
+    genuinely choose — a confused mechanism, a swapped cause and effect, a
+    plausible-but-wrong value. A wrong option that no student would ever pick
+    does not test anything; it just narrows a 4-option question to 3.
+    FORBIDDEN as distractors: physically absurd claims (nuclear fusion in
+    tissue from a radio pulse, an instrument spontaneously changing into a
+    different instrument), options contradicting everyday experience, and
+    options mixing in vocabulary from an unrelated topic purely to sound wrong.
+    TEST EACH DISTRACTOR: name the specific misunderstanding that would lead a
+    student to it. If you cannot, rewrite it.
+
 Q4. TRUE_FALSE DIFFICULTY CAP: TRUE_FALSE questions may ONLY be labelled EASY
     or MEDIUM — never HARD. (Binary questions have a 50% random-guess rate and
     cannot meaningfully test HARD-level reasoning.)
@@ -438,6 +471,73 @@ Questions MUST be answerable within a few seconds. Therefore:
  * Builds the universal question-generation prompt used by every provider.
  * A single edit here propagates to Groq, Gemini, and Ollama.
  */
+/** The five HARD structural models, in the order they appear in the rubric. */
+const HARD_TEMPLATE_NAMES = [
+  "TEMPLATE 1 (Misconception Refutation)",
+  "TEMPLATE 2 (Competing Processes)",
+  "TEMPLATE 3 (Evidence Evaluation)",
+  "TEMPLATE 4 (Consequence of Disruption)",
+  "TEMPLATE 5 (Cross-concept Synthesis)",
+];
+
+/**
+ * Per-call HARD template steering.
+ *
+ * Questions are generated in independent batches that all receive the SAME
+ * prompt, and Template 1 is listed first in the rubric — so every batch reached
+ * for "A student claims that… identify the flaw", and a chapter's whole HARD set
+ * came out in one voice. This assigns each call a different pair of templates to
+ * lead with, and caps the Misconception Refutation stem so it can never be more
+ * than one question in a batch.
+ *
+ * `seed` should differ per call (the batch index works); templates rotate with
+ * it. It is a preference, not a straitjacket: content that genuinely cannot
+ * support the assigned pair may use another template — but the cap still holds.
+ */
+function buildHardTemplateBlock(seed: number): string {
+  const n = HARD_TEMPLATE_NAMES.length;
+  // +1 so seed 0 — a chapter generated for the first time — does NOT lead with
+  // Template 1. It is the template models fall into by default, and a chapter
+  // whose whole HARD set opens "A student claims that…" is the exact failure
+  // this rotation exists to prevent.
+  const base = (Math.abs(Math.trunc(seed)) + 1) % n;
+  const primary = HARD_TEMPLATE_NAMES[base];
+  const secondary = HARD_TEMPLATE_NAMES[(base + 2) % n];
+
+  // Template 1 (Misconception Refutation) is the one models default to, so it
+  // is allowed ONLY in the batches where the rotation actually assigns it —
+  // 2 of every 5. The previous rule ("at most one per batch") capped each call
+  // but not the request: 30 questions is 6 calls, so six were permissible and
+  // four appeared. Gating on assignment makes the share proportional however
+  // many questions are asked for.
+  const T1 = HARD_TEMPLATE_NAMES[0];
+  const t1Allowed = primary === T1 || secondary === T1;
+
+  const t1Rule = t1Allowed
+    ? `  • TEMPLATE 1 is permitted in this batch, for AT MOST **ONE** question.
+    A 2nd "A student claims…" question is FORBIDDEN — use another template.`
+    : `  • TEMPLATE 1 (Misconception Refutation) is **FORBIDDEN** in this batch.
+    Do NOT write any question of the form "A student claims … identify the
+    flaw". Another batch covers that shape; this one must not.`;
+
+  return `HARD TEMPLATE DIVERSITY (HARD CAP — read before writing any HARD question):
+The five HARD templates are structural models, NOT a house style. A set of HARD
+questions that all open the same way is a FAILED batch, however good each one is.
+
+  • LEAD WITH: ${primary} and ${secondary}.
+    Use a different template only if this chapter's content genuinely cannot
+    support these two.
+${t1Rule}
+  • No two questions in the batch may share an opening clause.
+  • When a misconception IS the subject, vary who holds it. Attribute the
+    mistaken claim to whatever suits the subject — a lab write-up, a revision
+    note, a news report, a study group's conclusion, a proposed design — rather
+    than always "a student", and vary the closing question with it (e.g.
+    "Which correction is required?", "Which step does this reasoning skip?").
+  BEFORE FINALIZING: list the template used by each HARD question. If any
+  template appears more than twice, rewrite the extras.`;
+}
+
 export function buildQuestionGenerationPrompt(
   opts: GenerateOptions,
   contentCharLimit: number = QUESTION_CONTENT_CHARS
@@ -454,6 +554,15 @@ export function buildQuestionGenerationPrompt(
   // Timed / Battle play can't fairly ask heavy calculation or graph questions
   // under a countdown, so those modes get the "fast" ruleset instead of the
   // quantitative one. SOLO (or unspecified) keeps the full numerical + graph mix.
+  // Only steer HARD templates when the batch can actually contain HARD
+  // questions — for an EASY-only batch the block is noise.
+  const canProduceHard = !opts.difficulty || opts.difficulty === "HARD" || opts.difficulty === "MIXED";
+  const hardTemplateBlock = canProduceHard
+    ? `
+${buildHardTemplateBlock(opts.variantSeed ?? 0)}
+`
+    : "";
+
   const fastMode = opts.mode === "TIMED" || opts.mode === "GROUP";
   const quantitativeBlock = fastMode
     ? `\n${FAST_MODE_INSTRUCTIONS}\n`
@@ -476,7 +585,7 @@ ${DIFFICULTY_RUBRIC}
 ${QUALITY_RULES}
 
 ${formatRulesFor(types)}
-${quantitativeBlock}
+${quantitativeBlock}${hardTemplateBlock}
 DIFFICULTY TARGET FOR THIS BATCH:
 ${difficultyInstruction}
 
@@ -492,6 +601,8 @@ For each candidate question, verify ALL of the following:
 
   FORMAT CHECKS:
   ✓ [Q4]  If TRUE_FALSE, difficulty is EASY or MEDIUM — never HARD.
+  ✓ [Q13] No two questions share an opening clause, and at most ONE question
+          uses the "A student claims…" misconception stem.
   ✓ [Q11] The questionText contains NO phrase like "this chapter", "the text",
           "from the chapter", "the passage", "according to the book", or similar.
   ✓ [Q12] The questionText asks exactly ONE thing — no "and why?", "and how?",

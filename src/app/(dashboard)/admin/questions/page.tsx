@@ -16,6 +16,7 @@ import {
   Download,
   Sparkles,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,8 @@ interface TextbookChapter {
   id: string;
   title: string;
   chapterNumber: number;
+  /** Retrieval chunks stored for this chapter. 0 = not processed yet. */
+  chunkCount: number;
 }
 
 interface TextbookOption {
@@ -45,6 +48,7 @@ interface TextbookOption {
   grade: number;
   hasContent: boolean;
   contentLength: number;
+  chunkingStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
   chapters: TextbookChapter[];
 }
 
@@ -125,6 +129,12 @@ const REVIEW_FLAGS = new Set([
   "WRONG_KEY",
   "MULTI_ANSWER",
   "UNVERIFIED",
+  // A repeat of a question the chapter already has — never pre-selected.
+  "DUPLICATE_EXISTING",
+  // Needs a formula/constant the chapter never states.
+  "OUT_OF_SCOPE",
+  // A wrong option no student would pick, so the question is really 3-option.
+  "WEAK_DISTRACTOR",
   "FACTUAL_ERROR",
   "LOW_RELEVANCE",
 ]);
@@ -555,6 +565,22 @@ export default function AdminQuestionsPage() {
 
   const aiSelectedTb = textbooks.find((t) => t.id === aiTextbookId);
   const aiChapters = aiSelectedTb?.chapters ?? [];
+
+  // ── "Generating before processing" warning ───────────────────────────────
+  // Question generation samples chunks spread across the whole chapter. Chunks
+  // are only written by the textbook processing pipeline, so before it has run
+  // there are none and generation silently falls back to the chapter's opening
+  // ~30,000 characters — the back of a long chapter never produces a question,
+  // and because the rotation offset only applies to the chunk sampler, running
+  // it again re-mines the identical text and the duplicate filter throws more
+  // of it away each time.
+  const aiSelectedChapter = aiChapters.find((c) => c.id === aiChapterId);
+  const aiChapterUnprocessed = !!aiSelectedChapter && aiSelectedChapter.chunkCount === 0;
+  // "All Chapters" concatenates raw chapter text and never consults chunks at
+  // all, so processing does not change its behaviour — it gets its own note
+  // rather than a warning that would wrongly imply processing would help.
+  const aiCumulative = aiChapterId === "all";
+  const aiProcessing = aiSelectedTb?.chunkingStatus === "PROCESSING";
 
   function handleAiTextbookChange(tbId: string) {
     setAiTextbookId(tbId);
@@ -1468,6 +1494,60 @@ export default function AdminQuestionsPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Unprocessed chapter — generation degrades to a raw slice. */}
+                      {aiChapterUnprocessed && (
+                        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                          <div className="space-y-1">
+                            <p className="font-semibold">
+                              {aiProcessing
+                                ? "This textbook is still processing"
+                                : "This chapter hasn't been processed yet"}
+                            </p>
+                            <p>
+                              Questions will be drawn only from the chapter&apos;s first
+                              ~30,000 characters, so the rest of it can&apos;t be used — and
+                              generating again re-reads the same text instead of moving
+                              through the chapter, so repeat runs return more duplicates and
+                              fewer usable questions.
+                            </p>
+                            <p>
+                              {aiProcessing ? (
+                                <>Wait for processing to finish, then generate.</>
+                              ) : (
+                                <>
+                                  Run <span className="font-medium">Process</span> on this book
+                                  in{" "}
+                                  <a
+                                    href={`${basePath}/textbooks`}
+                                    className="font-medium underline"
+                                  >
+                                    Textbook Management
+                                  </a>{" "}
+                                  first for full-chapter coverage. You can still generate now
+                                  if you want.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cumulative mode never uses chunks, processed or not. */}
+                      {aiCumulative && (
+                        <div className="flex items-start gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm text-text-secondary">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+                          <p>
+                            <span className="font-medium text-text-primary">
+                              All Chapters
+                            </span>{" "}
+                            joins every chapter&apos;s raw text and uses the first ~80,000
+                            characters. It doesn&apos;t sample across chapters even after
+                            processing, so pick a single chapter for the best coverage.
+                          </p>
+                        </div>
+                      )}
 
                       <Button
                         type="button"

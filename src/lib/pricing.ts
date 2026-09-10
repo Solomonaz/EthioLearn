@@ -27,11 +27,15 @@ export interface PlanLike {
 }
 
 export interface PriceResult {
-  /** Computed price, or null when no tier matches the given student count. */
+  /** Computed price. Null only when the plan is unpriceable (e.g. no tiers at all). */
   amount: number | null;
-  /** The tier that matched (TIERED plans only). */
+  /** The tier that was applied (TIERED plans only). */
   tier: TierLike | null;
-  /** Human-readable note when a price could not be determined. */
+  /**
+   * Human-readable note when the price needed explaining — either it could not
+   * be determined, or no bracket contained the student count and the nearest
+   * one was applied instead.
+   */
   note?: string;
 }
 
@@ -50,20 +54,42 @@ export function computePlanPrice(plan: PlanLike, studentCount = 0): PriceResult 
       return { amount: (plan.price ?? 0) * count, tier: null };
 
     case "TIERED": {
-      const tier = matchTier(plan.tiers ?? [], count);
-      if (!tier) {
-        return {
-          amount: null,
-          tier: null,
-          note: `No pricing tier covers ${count} student${count === 1 ? "" : "s"}.`,
-        };
+      const tiers = plan.tiers ?? [];
+      if (tiers.length === 0) {
+        return { amount: null, tier: null, note: "This plan has no pricing brackets." };
       }
-      return { amount: tier.price, tier };
+
+      const exact = matchTier(tiers, count);
+      if (exact) return { amount: exact.price, tier: exact };
+
+      // No bracket contains `count`. Pricing at nothing is never the right
+      // answer — a subscription with a null amount reads as "—/month" and
+      // silently bills zero — so fall back to the nearest bracket: the highest
+      // one the count reaches, or the lowest when it reaches none (e.g. a
+      // school with 0 students on a plan whose first bracket starts at 1).
+      // `validateTiers` keeps new plans gap-free, so this only rescues plans
+      // authored before that rule.
+      const sorted = [...tiers].sort((a, b) => a.minStudents - b.minStudents);
+      const nearest = [...sorted].reverse().find((t) => count >= t.minStudents) ?? sorted[0];
+      const students = `${count} student${count === 1 ? "" : "s"}`;
+
+      return {
+        amount: nearest.price,
+        tier: nearest,
+        note: `No bracket covers ${students} — priced at the ${describeTier(nearest)} bracket.`,
+      };
     }
 
     default:
       return { amount: null, tier: null, note: "Unknown pricing model." };
   }
+}
+
+/** Describe a bracket's range the way the UI writes it, e.g. "1–100" or "101+". */
+export function describeTier(t: TierLike): string {
+  return t.maxStudents === null || t.maxStudents === undefined
+    ? `${t.minStudents}+`
+    : `${t.minStudents}–${t.maxStudents}`;
 }
 
 /** Find the tier whose [minStudents, maxStudents] range contains `count`. */
@@ -80,7 +106,9 @@ export function matchTier(tiers: TierLike[], count: number): TierLike | null {
 /**
  * Validate a set of tiers for a TIERED plan. Returns an error string describing
  * the first problem found, or null when the tiers are well-formed. Tiers must
- * have min ≤ max, be non-overlapping, and each carry a non-negative price.
+ * have min ≤ max, each carry a non-negative price, and together cover every
+ * student count without overlaps or gaps — only the highest bracket may be
+ * open-ended, and it must be, so no school size is left unpriced.
  */
 export function validateTiers(tiers: TierLike[]): string | null {
   if (!Array.isArray(tiers) || tiers.length === 0) {
@@ -101,15 +129,33 @@ export function validateTiers(tiers: TierLike[]): string | null {
     }
   }
 
-  // Check for overlaps by scanning in min order.
+  // Scan in min order to check the brackets form one continuous range.
   const sorted = [...tiers].sort((a, b) => a.minStudents - b.minStudents);
+
+  // Only the last bracket may be open-ended; a blank max anywhere else would
+  // swallow every bracket above it.
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (sorted[i].maxStudents === null || sorted[i].maxStudents === undefined) {
+      return "Only the highest bracket may leave its maximum blank.";
+    }
+  }
+
   for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1];
-    const cur = sorted[i];
-    const prevMax = prev.maxStudents ?? Infinity;
-    if (cur.minStudents <= prevMax) {
+    const prevMax = sorted[i - 1].maxStudents as number;
+    const curMin = sorted[i].minStudents;
+    if (curMin <= prevMax) {
       return "Pricing tiers overlap. Each student-count range must be distinct.";
     }
+    if (curMin > prevMax + 1) {
+      return `Pricing tiers leave a gap — nothing covers ${prevMax + 1}–${curMin - 1} students.`;
+    }
+  }
+
+  // The top bracket must be open-ended, otherwise a school that grows past it
+  // has no price at all.
+  const top = sorted[sorted.length - 1];
+  if (top.maxStudents !== null && top.maxStudents !== undefined) {
+    return "The highest bracket must leave its maximum blank, so schools of any size are covered.";
   }
 
   return null;

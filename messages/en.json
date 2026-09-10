@@ -116,6 +116,7 @@
     "pricing": "Pricing",
     "payments": "Payments",
     "billing": "Billing",
+    "subscription": "Subscription",
     "sectionTeacher": "Teacher",
     "xpLevel": "XP Level {n}",
     "xpToNext": "{xp} XP to Level {n}",

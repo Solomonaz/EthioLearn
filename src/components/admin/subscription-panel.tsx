@@ -212,6 +212,12 @@ export function SubscriptionPanel({
                     <span>Priced for {current.studentCountSnapshot} students</span>
                   )}
                 </div>
+                {current.amount === null && (
+                  <p className="mt-2 rounded-md bg-warning/10 px-2 py-1.5 text-xs text-text-secondary">
+                    This subscription was recorded without a price. Ask a super-admin to
+                    re-assign the plan so it prices correctly.
+                  </p>
+                )}
                 {current.notes && <p className="mt-2 text-xs text-text-muted">{current.notes}</p>}
                 {!readOnly && current.status !== "CANCELED" && current.status !== "EXPIRED" && (
                   <div className="mt-3">
@@ -313,6 +319,11 @@ export function SubscriptionPanel({
                             ? `${formatMoney(preview.amount, selectedPlan.currency)}${billingIntervalLabel(selectedPlan.billingInterval)}`
                             : preview?.note ?? "—"}
                         </span>
+                        {/* A note alongside a real price means no bracket matched and the
+                            nearest one was applied — worth seeing before assigning. */}
+                        {preview?.amount !== null && preview?.note && (
+                          <p className="mt-1 text-xs text-text-secondary">{preview.note}</p>
+                        )}
                       </div>
                     )}
 

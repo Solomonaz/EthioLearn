@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { readEquationsFromImage } from "@/lib/gemini";
 import { parseEquations } from "@/lib/graph-parse";
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const raw = await readEquationsFromImage(image, mimeType);
+    const raw = await readEquationsFromImage(image, mimeType, usageActor(user));
     const equations = parseEquations(raw);
     if (equations.length === 0) {
       return NextResponse.json(

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateQuestionsBatched } from "@/lib/ai-provider";
+import { generateQuestionsBatched, generationContentBudget } from "@/lib/ai-provider";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { selectGenerationContent } from "@/lib/generation-content";
 import { QUESTION_CONTENT_CHARS } from "@/lib/question-prompts";
@@ -60,8 +60,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Parse request body
+  let body: {
+    count?: number;
+    difficulty?: string;
+    questionTypes?: string[];
+  } = {};
+  try {
+    body = await request.json();
+  } catch {
+    // Use defaults
+  }
+
+  // Declared before content selection: the content budget depends on how many
+  // questions are requested (more questions = more calls = more chapter sent).
+  const count = Math.min(Math.max(Number(body.count) || 10, 1), 30);
   let finalContent = "";
   let finalTitle = "";
+  // Seeds HARD template rotation as well as content rotation, so generating a
+  // chapter repeatedly varies the question shapes, not just the source text.
+  let priorQuestions = 0;
 
   if (chapterId === "all") {
     // Cumulative generation from all chapters
@@ -97,11 +115,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Draw from across the whole chapter rather than its opening 30k — see
     // lib/generation-content. Rotation advances with the existing question
     // count so repeat generations reach new material.
-    const priorQuestions = await db.question.count({ where: { chapterId: chapter.id } });
+    priorQuestions = await db.question.count({ where: { chapterId: chapter.id } });
     const selected = await selectGenerationContent({
       chapterId: chapter.id,
       fallbackContent: finalContent,
-      budgetChars: QUESTION_CONTENT_CHARS,
+      // Budget by how many calls will carry it, so a small chapter is sent whole
+      // instead of being sampled down to one prompt's worth. See ai-provider.
+      budgetChars: generationContentBudget(count),
       rotation: priorQuestions,
     });
     finalContent = selected.content;
@@ -118,19 +138,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // Parse request body
-  let body: {
-    count?: number;
-    difficulty?: string;
-    questionTypes?: string[];
-  } = {};
-  try {
-    body = await request.json();
-  } catch {
-    // Use defaults
-  }
-
-  const count = Math.min(Math.max(Number(body.count) || 10, 1), 30);
 
   const validDifficulties = ["EASY", "MEDIUM", "HARD", "MIXED"];
   const difficulty = validDifficulties.includes(String(body.difficulty))
@@ -164,9 +171,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       count,
       difficulty,
       questionTypes: questionTypes as any,
+      variantSeed: priorQuestions,
     });
 
     console.log(`[AI Generation] Used provider: ${provider}`);
+
+    // The questions this chapter ALREADY has, so the pipeline can reject a
+    // repeat before it reaches the admin's save list. "all" spans the book, so
+    // it compares against the whole textbook rather than one chapter.
+    const existingQuestions = await db.question.findMany({
+      where: chapterId === "all" ? { chapter: { textbookId } } : { chapterId },
+      select: { questionText: true },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    });
 
     // Run Post-Processing Quality Pipeline
     const { runQualityPipeline } = await import("@/lib/ai-provider");
@@ -175,7 +193,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       finalContent,
       textbook.subject,
       textbook.grade,
-      provider
+      provider,
+      existingQuestions.map((q) => q.questionText)
     );
 
     // Map quality results back to questions

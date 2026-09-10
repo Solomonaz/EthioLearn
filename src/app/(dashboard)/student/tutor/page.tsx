@@ -13,17 +13,13 @@ import {
   User,
   Loader2,
   Trash2,
-  Video,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import VideoTutorialPlayer from "@/components/student/video-tutorial-player";
 import { UpgradeNotice } from "@/components/student/upgrade-notice";
 import { useEntitlements } from "@/hooks/use-entitlements";
-import type { VideoScript } from "@/lib/ai-provider";
 
 interface Chapter {
   id: string;
@@ -58,13 +54,6 @@ export default function TutorPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(true);
-
-  // Video tutorial state
-  const [videoScript, setVideoScript] = useState<VideoScript | null>(null);
-  const [videoTopic, setVideoTopic] = useState("");
-  const [generatingVideo, setGeneratingVideo] = useState(false);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [showVideoTopicInput, setShowVideoTopicInput] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -170,37 +159,6 @@ export default function TutorPage() {
     }
   };
 
-  // ── Video tutorial generation ──────────────────────────
-
-  async function handleGenerateVideo() {
-    if (!selectedChapter) return;
-    setGeneratingVideo(true);
-    setVideoError(null);
-    setVideoScript(null);
-    setShowVideoTopicInput(false);
-
-    try {
-      const res = await fetch("/api/ai/tutor/video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chapterId: selectedChapter.id,
-          topic: videoTopic.trim() || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to generate video");
-
-      setVideoScript(data.script);
-      setVideoTopic("");
-    } catch (err) {
-      setVideoError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setGeneratingVideo(false);
-    }
-  }
-
   // Plan gating — the AI Tutor requires an AI-enabled plan.
   if (!ent.loading && !(ent.ai && ent.aiFeatures.aiTutor)) {
     return <UpgradeNotice feature="AI Tutor" planName={ent.planName} />;
@@ -211,20 +169,6 @@ export default function TutorPage() {
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
         <Spinner size="lg" />
         <p className="text-text-muted animate-pulse">Initializing your AI Tutor...</p>
-      </div>
-    );
-  }
-
-  // ── If video tutorial is active, show the player full-screen ──
-  if (videoScript) {
-    return (
-      <div className="h-[calc(100vh-8rem)]">
-        <VideoTutorialPlayer
-          script={videoScript}
-          subject={selectedTextbook?.subject ?? ""}
-          chapterTitle={selectedChapter?.title ?? ""}
-          onClose={() => setVideoScript(null)}
-        />
       </div>
     );
   }
@@ -251,8 +195,6 @@ export default function TutorPage() {
                 onChange={(e) => {
                   const tb = textbooks.find((t) => t.id === e.target.value);
                   setSelectedTextbook(tb || null);
-                  setVideoScript(null);
-                  setVideoError(null);
                 }}
               >
                 <option value="">Choose a book...</option>
@@ -277,9 +219,6 @@ export default function TutorPage() {
                   const ch = chapters.find((c) => c.id === e.target.value);
                   setSelectedChapter(ch || null);
                   setMessages([]);
-                  setVideoScript(null);
-                  setVideoError(null);
-                  setShowVideoTopicInput(false);
                 }}
               >
                 <option value="">Choose a chapter...</option>
@@ -291,97 +230,14 @@ export default function TutorPage() {
               </select>
             </div>
 
-            {/* ── Video Tutorial Section (hidden when AI Video is off) ── */}
-            {selectedChapter && ent.ai && ent.aiFeatures.aiVideo && (
-              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
-                <div className="flex items-center gap-2 text-primary">
-                  <Video className="h-4 w-4" />
-                  <span className="text-sm font-bold">AI Video Tutorial</span>
-                </div>
-                <p className="text-xs leading-relaxed text-text-secondary">
-                  Generate a narrated video lesson for this chapter — AI creates
-                  slides with spoken explanations.
-                </p>
-
-                {/* Optional topic input */}
-                {showVideoTopicInput ? (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. Osmosis, Civil War causes…"
-                      value={videoTopic}
-                      onChange={(e) => setVideoTopic(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-text-muted"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleGenerateVideo();
-                      }}
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        className="flex-1 gap-1.5"
-                        onClick={handleGenerateVideo}
-                        isLoading={generatingVideo}
-                        disabled={generatingVideo}
-                      >
-                        <Video className="h-3.5 w-3.5" />
-                        Generate
-                      </Button>
-                      <button
-                        onClick={() => {
-                          setShowVideoTopicInput(false);
-                          setVideoTopic("");
-                        }}
-                        className="rounded-lg border border-border px-2 text-text-muted hover:text-text-primary transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      size="sm"
-                      className="w-full gap-1.5"
-                      onClick={handleGenerateVideo}
-                      isLoading={generatingVideo}
-                      disabled={generatingVideo}
-                    >
-                      <Video className="h-3.5 w-3.5" />
-                      {generatingVideo ? "Generating…" : "Generate Full Tutorial"}
-                    </Button>
-                    <button
-                      onClick={() => setShowVideoTopicInput(true)}
-                      className="text-center text-xs text-primary hover:underline"
-                    >
-                      Focus on a specific topic →
-                    </button>
-                  </div>
-                )}
-
-                {videoError && (
-                  <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-error">
-                    {videoError}
-                  </p>
-                )}
-
-                {generatingVideo && (
-                  <div className="flex items-center gap-2 text-xs text-text-muted">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>AI is writing your tutorial script…</span>
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className="mt-auto space-y-4 rounded-xl bg-primary/5 p-4">
               <div className="flex items-center gap-2 text-primary">
                 <Sparkles className="h-4 w-4" />
                 <span className="text-sm font-bold">Pro Tip</span>
               </div>
               <p className="text-xs leading-relaxed text-text-secondary">
-                Use the chat to ask follow-up questions after watching a video
-                tutorial — the tutor stays focused on your selected chapter!
+                Ask follow-up questions in the chat — the tutor stays focused
+                on your selected chapter!
               </p>
             </div>
           </CardContent>
@@ -429,8 +285,7 @@ export default function TutorPage() {
                 <h3 className="font-bold text-lg">Start Learning</h3>
                 <p className="text-sm text-text-muted leading-relaxed">
                   Select a textbook and chapter on the left to begin your
-                  personalized tutoring session. You can also generate an AI
-                  video tutorial!
+                  personalized tutoring session.
                 </p>
               </div>
             </div>

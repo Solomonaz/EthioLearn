@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
-import { buildTutorSystemPrompt, buildVideoScriptPrompt, parseVideoScript } from "./ai-prompts";
+import { buildTutorSystemPrompt } from "./ai-prompts";
 import { validateQuestions, validateDetectedChapters } from "./question-validation";
-import { logUsage, geminiUsage, type UsageFeature } from "./usage-logger";
+import { logUsage, geminiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -18,6 +18,13 @@ export interface GenerateOptions {
   /** Quiz mode. TIMED / GROUP (battle) suppress heavy multi-step & graph
    *  questions so fast play stays answerable; SOLO/undefined gets the full mix. */
   mode?: "SOLO" | "TIMED" | "GROUP";
+  /**
+   * Varies which HARD templates the prompt leads with. Batches are independent
+   * calls that would otherwise share one prompt and all reach for the same
+   * template; pass something that differs per call (the batch index, or the
+   * chapter's existing question count for a single-batch call).
+   */
+  variantSeed?: number;
 }
 
 // ─── Chapter Detection Types ────────────────────────────
@@ -56,7 +63,7 @@ export interface GeneratedQuestion {
 // reaches its shutdown date.
 //
 // FLAGSHIP — work whose quality decides whether content ships: question
-// generation, chapter detection, the independent verifier, video scripts, and
+// generation, chapter detection, the independent verifier, and
 // every vision task (graph/equation/solid reading). gemini-3.8-flash is the
 // newest stable Flash and is priced identically to 3.6-flash ($0.75/$3.75 per
 // 1M through 2026), so there is no reason to sit on the older one.
@@ -132,6 +139,8 @@ export async function geminiChat(
      *  helper, so the feature varies by caller (bloom tagging, quality checks,
      *  answer verification …); defaults to quality-check. */
     feature?: UsageFeature;
+    /** Who the call is for, for per-student cost attribution. */
+    actor?: UsageActor;
   } = {}
 ): Promise<string | null> {
   if (!process.env.GEMINI_API_KEY) return null;
@@ -152,6 +161,7 @@ export async function geminiChat(
       provider: "gemini",
       model: modelId,
       usage: geminiUsage(result.response),
+      actor: opts.actor,
     });
     return result.response.text() || null;
   } catch (err) {
@@ -173,6 +183,7 @@ export async function geminiChat(
 export async function explainGraphImage(
   base64: string,
   mimeType: string,
+  actor?: UsageActor,
 ): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
@@ -202,7 +213,7 @@ export async function explainGraphImage(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "vision-graph", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
+  logUsage({ feature: "vision-graph", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -214,6 +225,7 @@ export async function explainGraphImage(
 export async function readEquationsFromImage(
   base64: string,
   mimeType: string,
+  actor?: UsageActor,
 ): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
@@ -234,7 +246,7 @@ export async function readEquationsFromImage(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "vision-equation", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
+  logUsage({ feature: "vision-equation", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -242,7 +254,7 @@ export async function readEquationsFromImage(
  * Read a sketch/drawing/photo of a 3D shape and name the solid it represents,
  * as a JSON spec the geometry explorer can build. Returns the model's raw reply.
  */
-export async function readSolidFromImage(base64: string, mimeType: string): Promise<string> {
+export async function readSolidFromImage(base64: string, mimeType: string, actor?: UsageActor): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
     model: GEMINI_MODEL,
@@ -260,7 +272,7 @@ export async function readSolidFromImage(base64: string, mimeType: string): Prom
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "vision-solid", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
+  logUsage({ feature: "vision-solid", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -273,6 +285,7 @@ export async function askAboutGraph(
   mimeType: string,
   question: string,
   history: { role: "user" | "assistant"; text: string }[] = [],
+  actor?: UsageActor,
 ): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
@@ -297,7 +310,7 @@ export async function askAboutGraph(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "graph-qa", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
+  logUsage({ feature: "graph-qa", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -957,6 +970,7 @@ export async function tutorResponseFromContent(opts: {
   chapterTitle: string;
   subject: string;
   grade: number;
+  actor?: UsageActor;
 }): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
@@ -973,65 +987,6 @@ export async function tutorResponseFromContent(opts: {
   });
 
   const result = await chat.sendMessage(opts.message);
-  logUsage({ feature: "tutor-chat", provider: "gemini", model: GEMINI_FAST_MODEL, usage: geminiUsage(result.response) });
+  logUsage({ feature: "tutor-chat", provider: "gemini", model: GEMINI_FAST_MODEL, usage: geminiUsage(result.response), actor: opts.actor });
   return result.response.text();
-}
-
-// ─── Video Tutorial Types ────────────────────────────────
-
-export type TeacherEmotion = "explaining" | "pointing" | "excited" | "thinking" | "writing";
-export type VisualType = "process" | "comparison" | "formula" | "timeline" | "highlight" | "diagram" | "list";
-
-export interface VideoSlide {
-  heading: string;
-  narration: string;
-  keyPoints: string[];
-  teacherEmotion: TeacherEmotion;
-  visualType: VisualType;
-  visualData: {
-    // process: sequential steps with arrows between them
-    steps?: string[];
-    // comparison: two-column side-by-side
-    leftLabel?: string;
-    leftItems?: string[];
-    rightLabel?: string;
-    rightItems?: string[];
-    // formula / highlight: big centred text
-    text?: string;
-    subtext?: string;
-    // timeline: ordered events
-    events?: { period: string; event: string }[];
-    // diagram: labelled nodes (use steps[] for node labels)
-    // list: use keyPoints as the visual — no extra data needed
-  };
-}
-
-export interface VideoScript {
-  title: string;
-  estimatedMinutes: number;
-  slides: VideoSlide[];
-}
-
-// ─── Video Tutorial Script Generation ───────────────────
-
-export async function generateVideoScript(opts: {
-  content: string;
-  chapterTitle: string;
-  subject: string;
-  grade: number;
-  topic?: string;
-}): Promise<VideoScript> {
-  const client = getClient();
-  const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
-    generationConfig: withThinkingCap({
-      responseMimeType: "application/json",
-      maxOutputTokens: 5000,
-      temperature: 0.6,
-    }),
-  });
-
-  const result = await model.generateContent(buildVideoScriptPrompt(opts));
-  logUsage({ feature: "video-script", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
-  return parseVideoScript(result.response.text());
 }

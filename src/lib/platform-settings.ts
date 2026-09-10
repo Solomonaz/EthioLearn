@@ -4,7 +4,6 @@ import { db } from "./db";
 export interface PlatformSettings {
   aiEnabled: boolean;
   aiTutorEnabled: boolean;
-  aiVideoEnabled: boolean;
   aiQuizGenEnabled: boolean;
   aiAdaptiveEnabled: boolean;
   aiMathToolsEnabled: boolean;
@@ -14,7 +13,6 @@ export interface PlatformSettings {
 // Individual AI features are gated by BOTH the master switch and their own flag.
 export interface EffectiveAiFlags {
   aiTutor: boolean;
-  aiVideo: boolean;
   aiQuizGen: boolean;
   aiAdaptive: boolean;
   aiMathTools: boolean;
@@ -25,7 +23,6 @@ const SINGLETON_ID = "singleton";
 const DEFAULTS: PlatformSettings = {
   aiEnabled: true,
   aiTutorEnabled: true,
-  aiVideoEnabled: true,
   aiQuizGenEnabled: true,
   aiAdaptiveEnabled: true,
   aiMathToolsEnabled: true,
@@ -46,8 +43,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
       select: {
         aiEnabled: true,
         aiTutorEnabled: true,
-        aiVideoEnabled: true,
-        aiQuizGenEnabled: true,
+              aiQuizGenEnabled: true,
         aiAdaptiveEnabled: true,
         aiMathToolsEnabled: true,
         pricingEnabled: true,
@@ -63,7 +59,6 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
 export function effectiveAiFlags(s: PlatformSettings): EffectiveAiFlags {
   return {
     aiTutor: s.aiEnabled && s.aiTutorEnabled,
-    aiVideo: s.aiEnabled && s.aiVideoEnabled,
     aiQuizGen: s.aiEnabled && s.aiQuizGenEnabled,
     aiAdaptive: s.aiEnabled && s.aiAdaptiveEnabled,
     aiMathTools: s.aiEnabled && s.aiMathToolsEnabled,

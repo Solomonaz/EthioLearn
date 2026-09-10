@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
@@ -92,6 +93,7 @@ export async function POST(req: Request) {
 
     // 3. Chat with Tutor
     const result = await chatWithTutor({
+      actor: usageActor(user),
       message,
       history,
       content,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/get-session";
 import { db } from "@/lib/db";
 import { displayCurrency } from "@/lib/model-pricing";
@@ -15,6 +16,13 @@ import { displayCurrency } from "@/lib/model-pricing";
  * unlike the in-memory totals this replaced, which each route bundle held a
  * separate copy of (why a book upload's usage never reached this page).
  *
+ * Spend is also attributed to the STUDENT and SCHOOL a call was made for, so
+ * "what does a student actually cost us per month" is answerable from data
+ * rather than estimated. Content-side work (question generation, chapter
+ * detection) carries no student — it is one-time per textbook and amortised
+ * across everyone who uses it, so it is deliberately excluded from the
+ * per-student table rather than being spread across students arbitrarily.
+ *
  * Caveat: cost is list price for the tokens spent. The vendor may apply
  * free-tier credits and bill in a local currency, so this can differ from the
  * console total.
@@ -27,6 +35,16 @@ const PERIODS: Record<string, number | null> = {
   "30d": 30,
   all: null,
 };
+
+interface ActorRow {
+  id: string | null;
+  name: string | null;
+  grade: number | null;
+  schoolName: string | null;
+  calls: bigint | number;
+  totalTokens: bigint | number;
+  costUsd: number | null;
+}
 
 interface AggRow {
   feature: string;
@@ -122,6 +140,62 @@ export async function GET(request: NextRequest) {
     byFeature.set(r.feature, acc);
   }
 
+  // A school admin sees only their OWN school's spend; a super-admin sees all.
+  const scoped = user.role === "SCHOOL_ADMIN" ? user.schoolId ?? "__none__" : null;
+  const timeFilter = since ? Prisma.sql`AND ue."createdAt" >= ${since}` : Prisma.empty;
+  const schoolFilter = scoped ? Prisma.sql`AND ue."schoolId" = ${scoped}` : Prisma.empty;
+
+  // Per-student spend. Only rows that carry a student — see the note above.
+  const byStudent = await db.$queryRaw<ActorRow[]>`
+    SELECT ue."studentId"                    AS "id",
+           u.name                            AS "name",
+           u.grade                           AS "grade",
+           s.name                            AS "schoolName",
+           COUNT(*)                          AS "calls",
+           COALESCE(SUM(ue."totalTokens"),0) AS "totalTokens",
+           COALESCE(SUM(ue."costUsd"),0)     AS "costUsd"
+    FROM usage_events ue
+    LEFT JOIN users   u ON u.id = ue."studentId"
+    LEFT JOIN schools s ON s.id = ue."schoolId"
+    WHERE ue."studentId" IS NOT NULL ${timeFilter} ${schoolFilter}
+    GROUP BY ue."studentId", u.name, u.grade, s.name
+    ORDER BY "costUsd" DESC
+    LIMIT 100`;
+
+  // Per-school spend, including calls made by a school's admins/teachers.
+  const bySchool = await db.$queryRaw<ActorRow[]>`
+    SELECT ue."schoolId"                     AS "id",
+           s.name                            AS "name",
+           NULL::int                         AS "grade",
+           NULL::text                        AS "schoolName",
+           COUNT(*)                          AS "calls",
+           COALESCE(SUM(ue."totalTokens"),0) AS "totalTokens",
+           COALESCE(SUM(ue."costUsd"),0)     AS "costUsd"
+    FROM usage_events ue
+    LEFT JOIN schools s ON s.id = ue."schoolId"
+    WHERE ue."schoolId" IS NOT NULL ${timeFilter} ${schoolFilter}
+    GROUP BY ue."schoolId", s.name
+    ORDER BY "costUsd" DESC
+    LIMIT 100`;
+
+  const asActor = (r: ActorRow) => ({
+    id: r.id,
+    name: r.name ?? "(deleted user)",
+    grade: r.grade,
+    schoolName: r.schoolName,
+    calls: num(r.calls),
+    totalTokens: num(r.totalTokens),
+    costUsd: num(r.costUsd),
+  });
+
+  const students = byStudent.map(asActor);
+  const schools = bySchool.map(asActor);
+
+  // Attributed spend divided by the students who caused it — the number that
+  // tells you whether a per-student price covers its own AI cost.
+  const attributedCostUsd = students.reduce((s, r) => s + r.costUsd, 0);
+  const avgCostPerStudentUsd = students.length ? attributedCostUsd / students.length : 0;
+
   const totalTokens = detail.reduce((s, r) => s + r.totalTokens, 0);
   const totalCostUsd = detail.reduce((s, r) => s + r.costUsd, 0);
   const anyUnpriced = detail.some((r) => r.hasUnpriced);
@@ -135,6 +209,13 @@ export async function GET(request: NextRequest) {
     totalCostUsd,
     totalCost: totalCostUsd * perUsd,
     anyUnpriced,
+    attributedCostUsd,
+    attributedCost: attributedCostUsd * perUsd,
+    avgCostPerStudentUsd,
+    avgCostPerStudent: avgCostPerStudentUsd * perUsd,
+    studentsWithUsage: students.length,
+    byStudent: students,
+    bySchool: schools,
     byFeature: [...byFeature.values()]
       .map(({ provider: _p, model: _m, ...rest }) => rest)
       .sort((a, b) => b.costUsd - a.costUsd),

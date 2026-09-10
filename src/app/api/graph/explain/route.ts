@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { compile } from "mathjs";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { getEntitlements } from "@/lib/entitlements";
 import { explainGraphImage } from "@/lib/gemini";
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const raw = await explainGraphImage(image, mimeType);
+    const raw = await explainGraphImage(image, mimeType, usageActor(user));
 
     // The reply should be a JSON object; parse it defensively.
     let summary = "";

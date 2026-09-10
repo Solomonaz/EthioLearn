@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { parseEquations } from "@/lib/graph-parse";
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { response } = await chatWithTutor({
+      actor: usageActor(user),
       message: instruction,
       history: [],
       content:
