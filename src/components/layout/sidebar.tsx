@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
 
 interface SidebarProps {
@@ -232,6 +233,15 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
                 </Link>
               );
             })}
+
+            {/* Theme control lives here on phones, where the top bar has no
+                room for it. Hidden from md up, where the navbar shows it. */}
+            <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4 md:hidden">
+              <span className="px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                {t("theme" as any)}
+              </span>
+              <ThemeToggle />
+            </div>
           </nav>
         )}
       </aside>

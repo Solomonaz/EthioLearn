@@ -391,8 +391,8 @@ function MonitoringTab() {
           <p className="text-sm text-text-secondary">Wait for students to start playing.</p>
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[680px] text-sm">
             <thead className="bg-gray-50 border-b border-border">
               <tr className="text-left font-semibold text-text-secondary">
                 <th className="px-6 py-4">Room Code</th>

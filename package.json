@@ -19,7 +19,6 @@
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.19.2",
     "@types/papaparse": "^5.5.2",
-    "africastalking": "^0.7.9",
     "clsx": "^2.1.1",
     "epub2": "^3.0.2",
     "groq-sdk": "^1.1.2",

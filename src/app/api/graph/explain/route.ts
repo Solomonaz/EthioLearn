@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { compile } from "mathjs";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { getEntitlements } from "@/lib/entitlements";
@@ -69,6 +70,17 @@ const MAX_BASE64 = 8_000_000; // ~6 MB image
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Every call here spends real tokens at a paid provider, so an unmetered
+  // endpoint is a cost attack as much as an availability one. 10/min per
+  // user is far above human pace for vision call and still bounds the damage.
+  const rl = rateLimit(`ai:graph:explain:${user.id}`, 10, 60_000);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many AI requests. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }

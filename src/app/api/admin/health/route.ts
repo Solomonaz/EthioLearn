@@ -36,11 +36,13 @@ export async function GET() {
     aiStatus = "unavailable";
   }
 
-  // SMS health
-  const hasAtKey = !!process.env.AFRICASTALKING_API_KEY;
-  const hasAtUsername = !!process.env.AFRICASTALKING_USERNAME;
-  const smsStatus: "operational" | "unavailable" =
-    hasAtKey && hasAtUsername ? "operational" : "unavailable";
+  // Verification-code delivery health. SMS was dropped with the Africa's
+  // Talking integration, so the live channels are Telegram and email — report
+  // on those rather than on a provider that no longer exists.
+  const hasTelegram = !!process.env.TELEGRAM_BOT_TOKEN;
+  const hasEmail = !!process.env.RESEND_API_KEY;
+  const otpStatus: "operational" | "degraded" | "unavailable" =
+    hasTelegram && hasEmail ? "operational" : hasTelegram || hasEmail ? "degraded" : "unavailable";
 
   return NextResponse.json({
     api: { 
@@ -50,6 +52,6 @@ export async function GET() {
     },
     database: { status: dbStatus, latencyMs: dbLatencyMs },
     ai: { status: aiStatus },
-    sms: { status: smsStatus },
+    otpDelivery: { status: otpStatus, channels: { telegram: hasTelegram, email: hasEmail, sms: false } },
   });
 }

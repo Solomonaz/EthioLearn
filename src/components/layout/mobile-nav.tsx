@@ -15,19 +15,28 @@ const studentNavKeys = [
   { labelKey: "profile",     href: "/student/profile",      icon: User },
 ];
 
+/**
+ * Whether a route gets the mobile bottom bar. Only students do — admins,
+ * school-admins and teachers navigate from the drawer sidebar.
+ *
+ * Exported so the layout can reserve bottom padding on exactly the routes that
+ * actually have a bar. It used to pad every mobile route, leaving 5rem of dead
+ * space under admin and teacher pages where no bar is rendered.
+ */
+export function hasMobileBottomNav(pathname: string): boolean {
+  return !(
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/school-admin") ||
+    pathname.startsWith("/teacher")
+  );
+}
+
 export function MobileNav() {
   const pathname = usePathname();
   const t = useTranslations("nav");
   const ent = useEntitlements();
 
-  // Only students get a bottom bar; admins, school-admins, and teachers use the sidebar.
-  if (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/school-admin") ||
-    pathname.startsWith("/teacher")
-  ) {
-    return null;
-  }
+  if (!hasMobileBottomNav(pathname)) return null;
 
   // Hide plan-locked destinations (Battle → multiplayer, Ranks → leaderboard).
   const navKeys = studentNavKeys.filter((item) => {

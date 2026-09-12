@@ -134,7 +134,8 @@
     "playGames": "ጨዋታዎች",
     "play_short": "ጨዋታ",
     "tugOfWar": "ገመድ መጎተት",
-    "tug_short": "ገመድ"
+    "tug_short": "ገመድ",
+    "theme": "ገጽታ"
   },
   "teacher": {
     "welcome": "እንኳን ደህና መጡ፣ {name}",
@@ -730,7 +731,8 @@
     "createdLabel": "ተፈጥሯል",
     "correct": "{n}/{total} ትክክል",
     "schoolDashboardTitle": "የትምህርት ቤት ዳሽቦርድ",
-    "schoolDashboardSubtitle": "የትምህርት ቤቱ አፈጻጸም እና ተግባር አጠቃላይ ዕይታ"
+    "schoolDashboardSubtitle": "የትምህርት ቤቱ አፈጻጸም እና ተግባር አጠቃላይ ዕይታ",
+    "otpDelivery": "የኮድ መላኪያ"
   },
   "quiz": {
     "selectGrade": "ክፍል ምረጥ",

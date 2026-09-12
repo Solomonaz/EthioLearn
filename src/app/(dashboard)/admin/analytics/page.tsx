@@ -594,8 +594,8 @@ export default function AnalyticsPage() {
                 {t("noGradeData")}
               </div>
             ) : gradeStats.length <= 5 ? (
-              <div className="overflow-hidden rounded-lg border border-gray-100">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-lg border border-gray-100">
+                <table className="w-full min-w-[520px] text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
                       <th className="px-4 py-2 text-left font-medium text-gray-600">{t("gradeLabel", { grade: "" }).trim()}</th>

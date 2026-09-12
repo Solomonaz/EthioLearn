@@ -43,6 +43,28 @@
     @apply bg-background text-text-primary antialiased;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
+
+  /* Horizontal-overflow guard.
+     Without this a single too-wide element anywhere — one long unbroken
+     string, a wide table, a fixed-width panel — makes the WHOLE page scroll
+     sideways on a phone, so every screen reads as "not mobile friendly" even
+     when its own layout is fine.
+     `clip` rather than `hidden`: `overflow-x: hidden` turns the element into a
+     scroll container, which silently breaks `position: sticky` descendants
+     (the landing-page header and several table headers rely on it). `clip`
+     stops the sideways scroll without creating that container.
+     This hides the SYMPTOM app-wide; genuinely wide content (tables) still
+     needs its own `overflow-x-auto` wrapper so it stays reachable. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  /* Long unbroken strings (URLs, IDs, formulas) are the other common cause of
+     a phone-width blowout. */
+  body {
+    overflow-wrap: break-word;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────

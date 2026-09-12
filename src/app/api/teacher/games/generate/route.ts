@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { rateLimit } from "@/lib/rate-limit";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { generateQuestions } from "@/lib/ai-provider";
 import { getRequester } from "../_shared";
@@ -18,6 +19,17 @@ export async function POST(request: NextRequest) {
   if (!req) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  // Question generation is the priciest AI call in the app, so it is capped
+  // harder than the chat paths. `ownerId` is null for the env super-admin, who
+  // still needs a distinct bucket rather than sharing one keyed on "null".
+  const rl = rateLimit(`ai:teacher:gen:${req.ownerId ?? "env-super-admin"}`, 5, 60_000);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many AI generation requests. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
   }
 
   if (!(await isAiFeatureEnabled("aiQuizGen"))) {

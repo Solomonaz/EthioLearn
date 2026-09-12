@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { Navbar } from "./navbar";
 import { Sidebar } from "./sidebar";
-import { MobileNav } from "./mobile-nav";
+import { MobileNav, hasMobileBottomNav } from "./mobile-nav";
 import { TeacherTopBar } from "./teacher-topbar";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const isTeacher = pathname.startsWith("/teacher");
+  // Only pad for the bottom bar on routes that actually render one.
+  const bottomBarPad = hasMobileBottomNav(pathname);
 
   // Restore the sidebar collapsed preference (desktop only; default = open).
   useEffect(() => {
@@ -81,7 +83,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             collapsed ? "md:pl-[6.5rem]" : "md:pl-[17.5rem]",
           )}
         >
-          <div className="px-3 pb-24 pt-3 sm:px-5 sm:pt-5 md:pb-8 md:pr-5">
+          <div className={cn("px-3 pt-3 sm:px-5 sm:pt-5 md:pb-8 md:pr-5", bottomBarPad ? "pb-24" : "pb-6")}>
             <TeacherTopBar onMenuToggle={() => setSidebarOpen((v) => !v)} />
             <main>{children}</main>
           </div>
@@ -107,7 +109,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       <main
         className={cn(
-          "pb-20 transition-[margin] duration-200 md:pb-0",
+          "transition-[margin] duration-200 md:pb-0",
+          bottomBarPad ? "pb-20" : "pb-6",
           collapsed ? "md:ml-20" : "md:ml-64",
         )}
       >

@@ -16,23 +16,39 @@ function hashOTP(otp: string): string {
 // Exponential back-off tracker for failed OTP attempts (in-memory, per process)
 const failedAttempts = new Map<string, { count: number; blockedUntil: number }>();
 
-async function sendSMS(phone: string, message: string): Promise<void> {
-  const apiKey = process.env.AFRICASTALKING_API_KEY;
-  const username = process.env.AFRICASTALKING_USERNAME;
+/**
+ * Raised when a phone code is requested but no SMS provider is configured.
+ * Callers should surface this as a real failure, not a success.
+ */
+export class SmsUnavailableError extends Error {
+  constructor() {
+    super("No SMS provider is configured.");
+    this.name = "SmsUnavailableError";
+  }
+}
 
-  if (!apiKey || !username || process.env.NODE_ENV !== "production") {
+/**
+ * SMS delivery.
+ *
+ * The Africa's Talking integration was removed: it pulled a high-severity
+ * axios SSRF advisory whose only available fix was a major downgrade, and the
+ * channel was not needed. Codes reach users through Telegram
+ * (auth/telegram-otp/send) and email (Resend) instead.
+ *
+ * This THROWS in production rather than falling back to a console log. The old
+ * code logged and returned normally whenever the provider was unconfigured —
+ * including in production — so `/api/auth/otp/send` answered "OTP sent
+ * successfully" while the user waited for a message nobody had sent. Failing
+ * loudly is the point: a missing channel must look missing.
+ *
+ * To add a provider later, implement it here; nothing else needs to change.
+ */
+async function sendSMS(phone: string, message: string): Promise<void> {
+  if (process.env.NODE_ENV !== "production") {
     console.log(`[DEV OTP] ${phone} → ${message}`);
     return;
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const AfricasTalking = require("africastalking");
-  const at = AfricasTalking({ apiKey, username });
-  await at.SMS.send({
-    to: [phone],
-    message,
-    from: process.env.AFRICASTALKING_SENDER_ID || "EthioLearn",
-  });
+  throw new SmsUnavailableError();
 }
 
 async function sendEmail(to: string, otp: string): Promise<void> {

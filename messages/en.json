@@ -134,7 +134,8 @@
     "playGames": "Play Games",
     "play_short": "Play",
     "tugOfWar": "Tug of War",
-    "tug_short": "Tug"
+    "tug_short": "Tug",
+    "theme": "Theme"
   },
   "teacher": {
     "welcome": "Welcome, {name}",
@@ -730,7 +731,8 @@
     "createdLabel": "Created",
     "correct": "{n}/{total} correct",
     "schoolDashboardTitle": "School Dashboard",
-    "schoolDashboardSubtitle": "Overview of your school's performance and activity"
+    "schoolDashboardSubtitle": "Overview of your school's performance and activity",
+    "otpDelivery": "Code delivery"
   },
   "quiz": {
     "selectGrade": "Select Grade",

@@ -26,12 +26,12 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface">
-      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-3">
+      <div className="flex h-16 items-center justify-between gap-2 px-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-3">
           {session && (
             <button
               onClick={onMenuToggle}
-              className="rounded-lg p-2 text-text-secondary hover:bg-border/50 md:hidden"
+              className="shrink-0 rounded-lg p-2 text-text-secondary hover:bg-border/50 md:hidden"
               aria-label="Toggle sidebar"
             >
               {isSidebarOpen ? (
@@ -41,14 +41,26 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
               )}
             </button>
           )}
-          <Link href="/" aria-label={t("appName")}>
-            <Logo size="sm" />
+          <Link href="/" aria-label={t("appName")} className="min-w-0">
+            {/* Phones get the mark alone; the wordmark returns at sm. */}
+            <span className="sm:hidden">
+              <Logo size="sm" iconOnly />
+            </span>
+            <span className="hidden sm:inline-flex">
+              <Logo size="sm" />
+            </span>
           </Link>
         </div>
 
         {status === "loading" ? null : session ? (
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+            {/* The 3-way theme control is ~84px, which a 375px row cannot
+                spare. It moves into the drawer on phones (see Sidebar) and
+                comes back here from sm up. The language switcher stays: an
+                EN/አማ audience needs it one tap away, not two. */}
+            <span className="hidden sm:inline-flex">
+              <ThemeToggle />
+            </span>
             <LanguageSwitcher />
             <NotificationBell />
             <Badge variant="success" className="hidden sm:inline-flex">
@@ -73,7 +85,7 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
         ) : (
           <>
             {/* Desktop auth links */}
-            <div className="hidden items-center gap-3 sm:flex">
+            <div className="hidden shrink-0 items-center gap-3 sm:flex">
               <ThemeToggle />
               <LanguageSwitcher />
               <Link

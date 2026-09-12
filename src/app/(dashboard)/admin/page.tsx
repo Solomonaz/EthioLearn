@@ -58,7 +58,11 @@ interface HealthData {
   api: { status: "operational" | "down"; latencyMs: number; uptime: number };
   database: { status: "operational" | "down"; latencyMs: number };
   ai: { status: "operational" | "degraded" | "unavailable" };
-  sms: { status: "operational" | "unavailable"; deliveryRate: number };
+  /** Verification-code delivery. SMS was dropped; Telegram + email remain. */
+  otpDelivery: {
+    status: "operational" | "degraded" | "unavailable";
+    channels: { telegram: boolean; email: boolean; sms: boolean };
+  };
 }
 
 export default function AdminDashboardPage() {
@@ -255,21 +259,34 @@ export default function AdminDashboardPage() {
               <span
                 className={cn(
                   "h-2 w-2 shrink-0 rounded-full",
-                  health.sms.status === "operational"
+                  health.otpDelivery.status === "operational"
                     ? "bg-green-500"
-                    : "bg-red-500"
+                    : health.otpDelivery.status === "degraded"
+                      ? "bg-amber-500"
+                      : "bg-red-500"
                 )}
               />
-              <span className="text-xs text-text-primary">{t("smsGateway")}</span>
+              <span className="text-xs text-text-primary">{t("otpDelivery")}</span>
               <Badge
                 variant={
-                  health.sms.status === "operational" ? "success" : "error"
+                  health.otpDelivery.status === "operational"
+                    ? "success"
+                    : health.otpDelivery.status === "degraded"
+                      ? "warning"
+                      : "error"
                 }
                 className="text-[10px] px-1.5 py-0"
               >
-                {health.sms.status === "operational"
-                  ? `${t("operational")} (${health.sms.deliveryRate}%)`
-                  : t("unavailable")}
+                {/* Name the live channels instead of a delivery-rate figure:
+                    the old label printed `${health.sms.deliveryRate}%`, a field
+                    the health endpoint has never returned, so it rendered
+                    literally as "undefined%". */}
+                {[
+                  health.otpDelivery.channels.telegram && "Telegram",
+                  health.otpDelivery.channels.email && "Email",
+                ]
+                  .filter(Boolean)
+                  .join(" + ") || t("unavailable")}
               </Badge>
             </div>
           </CardContent>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { semanticSearch } from "@/lib/embeddings";
@@ -47,6 +48,17 @@ async function buildTutorContext(
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
+
+  // Every call here spends real tokens at a paid provider, so an unmetered
+  // endpoint is a cost attack as much as an availability one. 20/min per
+  // user is far above human pace for chat turns and still bounds the damage.
+  const rl = rateLimit(`ai:tutor:${user.id}`, 20, 60_000);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many AI requests. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

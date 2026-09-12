@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { storeOTP } from "@/lib/otp-store";
+import { storeOTP, SmsUnavailableError } from "@/lib/otp-store";
 import { rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -49,7 +49,18 @@ export async function POST(request: Request) {
       success: true,
       message: "OTP sent successfully",
     });
-  } catch {
+  } catch (err) {
+    // No SMS provider configured — say so plainly and point at the channels
+    // that do work, rather than reporting a success the user never receives.
+    if (err instanceof SmsUnavailableError) {
+      return NextResponse.json(
+        {
+          error:
+            "SMS codes are unavailable. Please sign in with Telegram, Google, or email instead.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: "Failed to send OTP" },
       { status: 500 }
