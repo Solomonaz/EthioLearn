@@ -11,6 +11,7 @@
  * Questions are flagged but included — admin decides final disposition.
  */
 
+import { SchemaType, type ResponseSchema } from "@google/generative-ai";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
 import { ollamaChat, isOllamaEnabled } from "./ollama";
 import { groqChat } from "./groq";
@@ -82,6 +83,106 @@ interface AIQualityCheck {
   /** What the question needs that the source never states; null when in scope. */
   scopeIssue: string | null;
 }
+
+// ─── Native Structured Schemas (Quality Pipeline) ───────
+
+const AI_QUALITY_CHECKS_GEMINI_SCHEMA: ResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    checks: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          index: { type: SchemaType.INTEGER },
+          difficulty: { type: SchemaType.STRING },
+          grammarIssue: { type: SchemaType.STRING, nullable: true },
+          factualPassed: { type: SchemaType.BOOLEAN },
+          factualReason: { type: SchemaType.STRING },
+          weakDistractor: { type: SchemaType.STRING, nullable: true },
+          scopeIssue: { type: SchemaType.STRING, nullable: true },
+        },
+        required: ["index", "difficulty", "factualPassed", "factualReason"],
+      },
+    },
+  },
+  required: ["checks"],
+};
+
+const GROQ_AI_QUALITY_CHECKS_SCHEMA = {
+  name: "ai_quality_checks",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      checks: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            index: { type: "integer" },
+            difficulty: { type: "string" },
+            grammarIssue: { type: ["string", "null"] },
+            factualPassed: { type: "boolean" },
+            factualReason: { type: "string" },
+            weakDistractor: { type: ["string", "null"] },
+            scopeIssue: { type: ["string", "null"] },
+          },
+          required: ["index", "difficulty", "grammarIssue", "factualPassed", "factualReason", "weakDistractor", "scopeIssue"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["checks"],
+    additionalProperties: false,
+  },
+};
+
+const VERIFIER_GEMINI_SCHEMA: ResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    verdicts: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          index: { type: SchemaType.INTEGER },
+          answer: { type: SchemaType.STRING, nullable: true },
+          correctCount: { type: SchemaType.INTEGER },
+          reason: { type: SchemaType.STRING },
+        },
+        required: ["index", "correctCount", "reason"],
+      },
+    },
+  },
+  required: ["verdicts"],
+};
+
+const GROQ_VERIFIER_JSON_SCHEMA = {
+  name: "verifier_verdicts",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      verdicts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            index: { type: "integer" },
+            answer: { type: ["string", "null"] },
+            correctCount: { type: "integer" },
+            reason: { type: "string" },
+          },
+          required: ["index", "answer", "correctCount", "reason"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["verdicts"],
+    additionalProperties: false,
+  },
+};
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -371,7 +472,16 @@ Return JSON only — no markdown, no code fences:
   //    has since decommissioned (404) while groq.ts had already moved on.
   if (process.env.GROQ_API_KEY) {
     try {
-      rawText = (await groqChat(prompt, { temperature: 0.1, maxTokens: 4096, feature: "quality-check" })) ?? "";
+      rawText =
+        (await groqChat(prompt, {
+          temperature: 0.1,
+          maxTokens: 4096,
+          feature: "quality-check",
+          responseFormat: {
+            type: "json_schema",
+            json_schema: GROQ_AI_QUALITY_CHECKS_SCHEMA,
+          },
+        })) ?? "";
       if (rawText) console.info("[Quality Pipeline] AI checks via groq");
     } catch (err) {
       console.warn("[Quality Pipeline] Groq failed AI checks:", err instanceof Error ? err.message : String(err));
@@ -381,12 +491,14 @@ Return JSON only — no markdown, no code fences:
   // 2. Gemini — fallback (lower free-tier rate limits than Groq)
   if (!rawText && process.env.GEMINI_API_KEY) {
     try {
-      rawText = (await geminiChat(prompt, {
-        model: GEMINI_FAST_MODEL,
-        temperature: 0.1,
-        maxTokens: 4096,
-        feature: "quality-check",
-      })) ?? "";
+      rawText =
+        (await geminiChat(prompt, {
+          model: GEMINI_FAST_MODEL,
+          temperature: 0.1,
+          maxTokens: 4096,
+          feature: "quality-check",
+          responseSchema: AI_QUALITY_CHECKS_GEMINI_SCHEMA,
+        })) ?? "";
       if (rawText) console.info("[Quality Pipeline] AI checks via gemini");
     } catch (err) {
       if (String(err).includes("429")) {
@@ -722,7 +834,13 @@ const VERIFY_BATCH_SIZE = 8;
 
 type ChatFn = (
   prompt: string,
-  opts?: { temperature?: number; maxTokens?: number; feature?: UsageFeature },
+  opts?: {
+    temperature?: number;
+    maxTokens?: number;
+    feature?: UsageFeature;
+    responseSchema?: ResponseSchema;
+    responseFormat?: any;
+  },
 ) => Promise<string | null>;
 
 // Try providers in an order that puts the generator's own provider LAST, so the
@@ -735,8 +853,21 @@ async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<
     // when Gemini generated the questions it is demoted so the critic is a
     // different model. In the common case (Gemini generates) the verifier is
     // therefore Groq — which is the point of the blind cross-check.
-    { name: "gemini", fn: (p, o) => geminiChat(p, o) },
-    { name: "groq", fn: (p, o) => groqChat(p, o) },
+    {
+      name: "gemini",
+      fn: (p, o) => geminiChat(p, { ...o, responseSchema: VERIFIER_GEMINI_SCHEMA }),
+    },
+    {
+      name: "groq",
+      fn: (p, o) =>
+        groqChat(p, {
+          ...o,
+          responseFormat: {
+            type: "json_schema",
+            json_schema: GROQ_VERIFIER_JSON_SCHEMA,
+          },
+        }),
+    },
     { name: "nvidia", fn: (p, o) => nvidiaChat(p, o) },
   ];
   // Preference order:

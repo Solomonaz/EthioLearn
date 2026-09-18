@@ -7,6 +7,7 @@ import { chatWithTutor } from "@/lib/ai-provider";
 import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { rewriteQueryForRAG } from "@/lib/query-rewriter";
 
 // How many of the most relevant chunks to retrieve as tutor context.
 const TUTOR_RETRIEVAL_LIMIT = 8;
@@ -95,11 +96,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
     }
 
-    // 2. Retrieve the most relevant chunks for this question (RAG), falling
-    //    back to raw chapter text when embeddings aren't available.
+    // 2. Synthesize a standalone search query if this is a follow-up turn in a conversation
+    const searchQuery = await rewriteQueryForRAG({
+      message,
+      history,
+      subject: chapter.textbook.subject,
+      chapterTitle: chapter.title,
+      actor: usageActor(user),
+    });
+
+    // Retrieve the most relevant chunks for this question (RAG), falling
+    // back to raw chapter text when embeddings aren't available.
     const content = await buildTutorContext(
       chapterId,
-      message,
+      searchQuery,
       chapter.content || chapter.textbook.content || ""
     );
 

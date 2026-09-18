@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateQuestionsBatched, verifyQuestions, hasBlockingStructuralIssue, generationContentBudget } from "@/lib/ai-provider";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
-import { getRecommendedDifficulty } from "@/lib/adaptive-learning";
+import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { isInStudyScope } from "@/lib/grade-scope";
@@ -50,10 +50,15 @@ async function runGeneration(
 
   // Resolve Adaptive Difficulty — honour the platform switch. When adaptive is
   // turned off, fall back to a fixed difficulty instead of calibrating.
+  let adaptiveInsights: AdaptiveInsights | undefined = undefined;
   if (difficulty === "ADAPTIVE") {
     if (await isAiFeatureEnabled("aiAdaptive")) {
-      difficulty = await getRecommendedDifficulty(user.id);
-      console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty}`);
+      adaptiveInsights = await getAdaptiveDifficultyInsights(user.id, {
+        chapterId: chapterId === "all" ? null : chapterId,
+        textbookId,
+      });
+      difficulty = adaptiveInsights.difficulty;
+      console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty} (${adaptiveInsights.scope} scope, theta=${adaptiveInsights.theta})`);
     } else {
       difficulty = "MEDIUM";
     }
@@ -258,11 +263,25 @@ async function runGeneration(
           options: q.options,
           correctAnswer: q.correctAnswer,
           explanation: q.explanation,
+          bloomLevel: (q as any).bloomLevel ?? null,
+          qualityScore: 1.0,
           status: "PUBLISHED",
         },
       })
     )
   );
+
+  // Synchronize chapter question count so student-generated questions immediately
+  // expand the chapter's question bank, daily challenges, and question badges.
+  if (targetChapterId) {
+    const totalChapterQuestions = await db.question.count({
+      where: { chapterId: targetChapterId, status: "PUBLISHED" },
+    });
+    await db.chapter.update({
+      where: { id: targetChapterId },
+      data: { questionCount: totalChapterQuestions },
+    });
+  }
 
   const allQuizQuestions = [...existingQuestions, ...newlyCreatedQuestions];
 
@@ -295,6 +314,20 @@ async function runGeneration(
       };
     }),
     adaptiveCalibrated: body.difficulty === "ADAPTIVE" ? difficulty : undefined,
+    adaptiveInsights: adaptiveInsights
+      ? {
+          difficulty: adaptiveInsights.difficulty,
+          weightedAccuracy: Math.round(adaptiveInsights.weightedAccuracy * 100),
+          quizzesAnalyzed: adaptiveInsights.quizzesAnalyzed,
+          reasoning: adaptiveInsights.reasoning,
+          trend: adaptiveInsights.trend,
+          scope: adaptiveInsights.scope,
+          theta:
+            adaptiveInsights.theta !== undefined
+              ? Number(adaptiveInsights.theta.toFixed(2))
+              : undefined,
+        }
+      : undefined,
     requestedQuestions: count,
     deliveredQuestions: allQuizQuestions.length,
     shortfallReason:

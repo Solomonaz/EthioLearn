@@ -21,6 +21,76 @@ export { extractJson, validateQuestions, validateDetectedChapters };
 // is a current, fast, general model that fits the free-tier limits.
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 
+// ─── Native Structured Schemas (JSON Schema for Groq) ───
+
+export const GROQ_QUESTION_JSON_SCHEMA = {
+  name: "question_batch",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      questions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            questionText: { type: "string" },
+            type: {
+              type: "string",
+              enum: ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"],
+            },
+            options: {
+              type: "array",
+              items: { type: "string" },
+            },
+            correctAnswer: { type: "string" },
+            difficulty: {
+              type: "string",
+              enum: ["EASY", "MEDIUM", "HARD"],
+            },
+            explanation: { type: "string" },
+          },
+          required: [
+            "questionText",
+            "type",
+            "options",
+            "correctAnswer",
+            "difficulty",
+            "explanation",
+          ],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["questions"],
+    additionalProperties: false,
+  },
+};
+
+export const GROQ_CHAPTER_JSON_SCHEMA = {
+  name: "detected_chapters",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      chapters: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            chapterNumber: { type: "integer" },
+            title: { type: "string" },
+          },
+          required: ["chapterNumber", "title"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["chapters"],
+    additionalProperties: false,
+  },
+};
+
 function getGroqClient() {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -48,23 +118,49 @@ export async function groqChat(
     feature?: UsageFeature;
     /** Who the call is for, for per-student cost attribution. */
     actor?: UsageActor;
+    /** Structured output response format */
+    responseFormat?: any;
   } = {}
 ): Promise<string | null> {
   if (!process.env.GROQ_API_KEY) return null;
   try {
     const client = getGroqClient();
-    const completion = await client.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        ...(opts.system
-          ? [{ role: "system" as const, content: opts.system }]
-          : []),
-        { role: "user", content: prompt },
-      ],
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens ?? 4096,
-      response_format: { type: "json_object" },
-    });
+    let completion;
+    try {
+      completion = await client.chat.completions.create({
+        model: GROQ_MODEL,
+        messages: [
+          ...(opts.system
+            ? [{ role: "system" as const, content: opts.system }]
+            : []),
+          { role: "user", content: prompt },
+        ],
+        temperature: opts.temperature ?? 0.2,
+        max_tokens: opts.maxTokens ?? 4096,
+        response_format: opts.responseFormat ?? { type: "json_object" },
+      });
+    } catch (schemaErr: any) {
+      if (opts.responseFormat && opts.responseFormat.type === "json_schema") {
+        console.warn(
+          "[Groq] json_schema format failed, falling back to json_object:",
+          schemaErr?.message || schemaErr
+        );
+        completion = await client.chat.completions.create({
+          model: GROQ_MODEL,
+          messages: [
+            ...(opts.system
+              ? [{ role: "system" as const, content: opts.system }]
+              : []),
+            { role: "user", content: prompt },
+          ],
+          temperature: opts.temperature ?? 0.2,
+          max_tokens: opts.maxTokens ?? 4096,
+          response_format: { type: "json_object" },
+        });
+      } else {
+        throw schemaErr;
+      }
+    }
     logUsage({ feature: opts.feature ?? "quality-check", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage), actor: opts.actor });
     return completion.choices[0]?.message?.content ?? null;
   } catch (err) {
@@ -123,27 +219,53 @@ export async function groqGenerateQuestions(
   const prompt = buildPrompt(opts);
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const completion = await client.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert educational content creator. Always respond with valid JSON only. No markdown, no explanations outside the JSON.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.5,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    });
+    let completion;
+    try {
+      completion = await client.chat.completions.create({
+        model: GROQ_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert educational content creator. Always respond with valid JSON strictly conforming to the requested schema. No markdown, no explanations outside the JSON.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 4096,
+        response_format: {
+          type: "json_schema",
+          json_schema: GROQ_QUESTION_JSON_SCHEMA,
+        } as any,
+      });
+    } catch (schemaErr: any) {
+      // If the model does not support json_schema, gracefully fall back to json_object
+      if (String(schemaErr?.message || "").includes("json_schema")) {
+        completion = await client.chat.completions.create({
+          model: GROQ_MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert educational content creator. Always respond with valid JSON only. No markdown, no explanations outside the JSON.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.5,
+          max_tokens: 4096,
+          response_format: { type: "json_object" },
+        });
+      } else {
+        throw schemaErr;
+      }
+    }
 
     logUsage({ feature: "question-generation", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
     const text = completion.choices[0]?.message?.content ?? "";
 
     try {
       const parsed = extractJson(text);
-      // Groq with json_object mode may wrap in an object like { "questions": [...] }
+      // Groq with json_schema returns an object { "questions": [...] }, or directly [...]
       const arr = Array.isArray(parsed)
         ? parsed
         : (parsed as Record<string, unknown>).questions;
@@ -176,20 +298,45 @@ export async function groqDetectChapters(
   const prompt = buildChapterDetectionPrompt(opts);
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const completion = await client.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert at analyzing textbook structure. Always respond with valid JSON only. No markdown, no explanations outside the JSON.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    });
+    let completion;
+    try {
+      completion = await client.chat.completions.create({
+        model: GROQ_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert at analyzing textbook structure. Always respond with valid JSON conforming to the schema. No markdown, no explanations outside the JSON.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 4096,
+        response_format: {
+          type: "json_schema",
+          json_schema: GROQ_CHAPTER_JSON_SCHEMA,
+        } as any,
+      });
+    } catch (schemaErr: any) {
+      if (String(schemaErr?.message || "").includes("json_schema")) {
+        completion = await client.chat.completions.create({
+          model: GROQ_MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert at analyzing textbook structure. Always respond with valid JSON only. No markdown, no explanations outside the JSON.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 4096,
+          response_format: { type: "json_object" },
+        });
+      } else {
+        throw schemaErr;
+      }
+    }
 
     logUsage({ feature: "chapter-detection", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
     const text = completion.choices[0]?.message?.content ?? "";

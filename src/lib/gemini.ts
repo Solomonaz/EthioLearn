@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from "@google/generative-ai";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt } from "./ai-prompts";
 import { validateQuestions, validateDetectedChapters } from "./question-validation";
@@ -55,6 +55,65 @@ export interface GeneratedQuestion {
   difficulty: "EASY" | "MEDIUM" | "HARD";
   explanation: string;
 }
+
+// ─── Native Structured Schemas (Strict ResponseSchema) ──
+
+export const QUESTION_GENERATION_SCHEMA: ResponseSchema = {
+  type: SchemaType.ARRAY,
+  description: "Array of curriculum-aligned exam questions",
+  items: {
+    type: SchemaType.OBJECT,
+    properties: {
+      questionText: {
+        type: SchemaType.STRING,
+        description: "The complete question stem without meta-references.",
+      },
+      type: {
+        type: SchemaType.STRING,
+        format: "enum",
+        enum: ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"],
+      },
+      options: {
+        type: SchemaType.ARRAY,
+        items: { type: SchemaType.STRING },
+        description: "Options for the question. For MCQ, exactly 4 distinct options.",
+      },
+      correctAnswer: {
+        type: SchemaType.STRING,
+        description: "The exact correct answer matching one of the options.",
+      },
+      difficulty: {
+        type: SchemaType.STRING,
+        format: "enum",
+        enum: ["EASY", "MEDIUM", "HARD"],
+      },
+      explanation: {
+        type: SchemaType.STRING,
+        description: "Pedagogical explanation of why the correct answer is right.",
+      },
+    },
+    required: ["questionText", "type", "options", "correctAnswer", "difficulty", "explanation"],
+  },
+};
+
+export const CHAPTER_DETECTION_SCHEMA: ResponseSchema = {
+  type: SchemaType.ARRAY,
+  description: "Sequential list of detected chapters or units in the textbook",
+  items: {
+    type: SchemaType.OBJECT,
+    properties: {
+      chapterNumber: {
+        type: SchemaType.INTEGER,
+        description: "Sequential chapter number starting from 1",
+      },
+      title: {
+        type: SchemaType.STRING,
+        description: "Exact title of the chapter or unit as found in the textbook",
+      },
+    },
+    required: ["chapterNumber", "title"],
+  },
+};
 
 // ─── Client ─────────────────────────────────────────────
 
@@ -141,21 +200,45 @@ export async function geminiChat(
     feature?: UsageFeature;
     /** Who the call is for, for per-student cost attribution. */
     actor?: UsageActor;
+    /** Native Gemini structured output schema */
+    responseSchema?: ResponseSchema;
   } = {}
 ): Promise<string | null> {
   if (!process.env.GEMINI_API_KEY) return null;
   const modelId = opts.model ?? GEMINI_MODEL;
   try {
-    const model = getClient().getGenerativeModel({
+    let model = getClient().getGenerativeModel({
       model: modelId,
       ...(opts.system ? { systemInstruction: opts.system } : {}),
       generationConfig: withThinkingCap({
         responseMimeType: "application/json",
+        ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
         temperature: opts.temperature ?? 0.2,
         maxOutputTokens: opts.maxTokens ?? 4096,
       }),
     });
-    const result = await model.generateContent(prompt);
+    let result;
+    try {
+      result = await model.generateContent(prompt);
+    } catch (schemaErr) {
+      if (opts.responseSchema) {
+        console.warn(
+          `[Gemini] Chat request with responseSchema failed, falling back to standard JSON mode: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`
+        );
+        model = getClient().getGenerativeModel({
+          model: modelId,
+          ...(opts.system ? { systemInstruction: opts.system } : {}),
+          generationConfig: withThinkingCap({
+            responseMimeType: "application/json",
+            temperature: opts.temperature ?? 0.2,
+            maxOutputTokens: opts.maxTokens ?? 4096,
+          }),
+        });
+        result = await model.generateContent(prompt);
+      } else {
+        throw schemaErr;
+      }
+    }
     logUsage({
       feature: opts.feature ?? "quality-check",
       provider: "gemini",
@@ -332,6 +415,7 @@ export async function generateQuestionsFromContent(
     model: GEMINI_MODEL,
     generationConfig: withThinkingCap({
       responseMimeType: "application/json",
+      responseSchema: QUESTION_GENERATION_SCHEMA,
       temperature: 0.7,
       maxOutputTokens: 4096,
     }),
@@ -419,6 +503,7 @@ export async function detectChaptersFromContent(
     model: GEMINI_MODEL,
     generationConfig: withThinkingCap({
       responseMimeType: "application/json",
+      responseSchema: CHAPTER_DETECTION_SCHEMA,
       temperature: 0.3,
       maxOutputTokens: 4096,
     }),
