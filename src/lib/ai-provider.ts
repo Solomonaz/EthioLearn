@@ -199,10 +199,20 @@ export function generationContentBudget(count: number): number {
 }
 
 export async function generateQuestionsBatched(
-  opts: GenerateOptions
+  opts: GenerateOptions & {
+    onProgress?: (info: { batchIndex: number; totalBatches: number; questionsSoFar: number }) => void;
+  }
 ): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
   const total = Math.max(1, opts.count ?? 10);
-  if (total <= QUESTION_BATCH_SIZE) return generateQuestions(opts);
+  if (total <= QUESTION_BATCH_SIZE) {
+    const res = await generateQuestions(opts);
+    opts.onProgress?.({
+      batchIndex: 1,
+      totalBatches: 1,
+      questionsSoFar: res.questions.length,
+    });
+    return res;
+  }
 
   const batches: number[] = [];
   for (let remaining = total; remaining > 0; remaining -= QUESTION_BATCH_SIZE) {
@@ -241,6 +251,11 @@ export async function generateQuestionsBatched(
       });
       all.push(...questions);
       usedProvider ??= provider;
+      opts.onProgress?.({
+        batchIndex: i + 1,
+        totalBatches: batches.length,
+        questionsSoFar: all.length,
+      });
     } catch (err) {
       lastError = err;
       console.warn(

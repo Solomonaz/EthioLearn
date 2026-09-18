@@ -101,6 +101,11 @@ export default function QuizLauncherPage() {
     difficultyTypeCounts?: DiffTypeCounts;
   } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [aiProgress, setAiProgress] = useState<{
+    step: string;
+    message: string;
+    percent: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adaptiveInsights, setAdaptiveInsights] = useState<{
     difficulty: string;
@@ -264,9 +269,15 @@ export default function QuizLauncherPage() {
 
     setGenerating(true);
     setError(null);
+    setAiProgress(
+      selectedSource === "AI"
+        ? { step: "init", message: "Connecting to AI...", percent: 5 }
+        : null
+    );
 
     try {
-      const endpoint = selectedSource === "AI" ? "/api/quizzes/generate-ai" : "/api/quizzes/generate";
+      const isAI = selectedSource === "AI";
+      const endpoint = isAI ? "/api/quizzes/generate-ai?stream=true" : "/api/quizzes/generate";
       const body = {
         textbookId: selectedTextbook.id,
         chapterId: selectedChapter === "all" ? "all" : selectedChapter.id,
@@ -278,16 +289,72 @@ export default function QuizLauncherPage() {
 
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(isAI ? { Accept: "text/event-stream" } : {}),
+        },
         body: JSON.stringify(body),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to generate quiz");
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to generate quiz");
       }
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = null;
+
+      if (isAI && contentType.includes("text/event-stream")) {
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("Could not read streaming response from server");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const events = buffer.split("\n\n");
+          buffer = events.pop() || "";
+
+          for (const rawEvent of events) {
+            if (!rawEvent.trim()) continue;
+            let eventName = "message";
+            let dataStr = "";
+
+            for (const line of rawEvent.split("\n")) {
+              if (line.startsWith("event:")) {
+                eventName = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataStr = line.slice(5).trim();
+              }
+            }
+
+            if (!dataStr) continue;
+            try {
+              const payload = JSON.parse(dataStr);
+              if (eventName === "progress") {
+                setAiProgress(payload);
+              } else if (eventName === "complete") {
+                data = payload;
+              } else if (eventName === "error") {
+                throw new Error(payload.error || "Failed to generate AI quiz");
+              }
+            } catch (parseErr: any) {
+              if (eventName === "error") throw parseErr;
+            }
+          }
+        }
+
+        if (!data) {
+          throw new Error("AI generation ended unexpectedly without creating quiz questions.");
+        }
+      } else {
+        data = await res.json();
+      }
+
       if (data.adaptiveInsights) {
         setAdaptiveInsights(data.adaptiveInsights);
       }
@@ -303,6 +370,7 @@ export default function QuizLauncherPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate quiz");
       setGenerating(false);
+      setAiProgress(null);
     }
   }
 
@@ -957,11 +1025,79 @@ export default function QuizLauncherPage() {
             </div>
           )}
 
+          {/* AI Generation Live Progress Card */}
+          {generating && selectedSource === "AI" && (
+            <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary/5 via-purple-500/5 to-transparent shadow-md">
+              <CardContent className="space-y-4 py-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary animate-spin" />
+                    <span className="font-semibold text-text-primary text-sm">
+                      {aiProgress?.message || "Crafting your quiz with AI..."}
+                    </span>
+                  </div>
+                  <span className="text-sm font-bold text-primary">
+                    {aiProgress?.percent ?? 10}%
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-2 w-full overflow-hidden rounded-full bg-primary/10">
+                  <div
+                    className="h-full bg-primary transition-all duration-500 ease-out"
+                    style={{ width: `${aiProgress?.percent ?? 10}%` }}
+                  />
+                </div>
+
+                {/* Step indicators */}
+                <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] text-text-secondary">
+                  <div className={cn(
+                    "rounded py-1 px-1 transition-colors border",
+                    (aiProgress?.percent ?? 0) >= 10
+                      ? "border-primary/30 bg-primary/10 font-semibold text-primary"
+                      : "border-transparent opacity-40"
+                  )}>
+                    1. Curriculum
+                  </div>
+                  <div className={cn(
+                    "rounded py-1 px-1 transition-colors border",
+                    (aiProgress?.percent ?? 0) >= 35
+                      ? "border-primary/30 bg-primary/10 font-semibold text-primary"
+                      : "border-transparent opacity-40"
+                  )}>
+                    2. Draft Questions
+                  </div>
+                  <div className={cn(
+                    "rounded py-1 px-1 transition-colors border",
+                    (aiProgress?.percent ?? 0) >= 75
+                      ? "border-primary/30 bg-primary/10 font-semibold text-primary"
+                      : "border-transparent opacity-40"
+                  )}>
+                    3. AI Solver Check
+                  </div>
+                  <div className={cn(
+                    "rounded py-1 px-1 transition-colors border",
+                    (aiProgress?.percent ?? 0) >= 90
+                      ? "border-primary/30 bg-primary/10 font-semibold text-primary"
+                      : "border-transparent opacity-40"
+                  )}>
+                    4. Finalize
+                  </div>
+                </div>
+
+                <p className="text-center text-[11px] text-text-secondary">
+                  Every question is cross-checked blind by a secondary AI solver before serving.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           <Button
             size="lg"
             className="w-full gap-2 text-base shadow-lg shadow-primary/20"
             onClick={handleStartQuiz}
             isLoading={generating}
+            disabled={generating}
           >
             {selectedSource === "AI" ? (
               <Sparkles className="h-5 w-5" />
