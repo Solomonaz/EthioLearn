@@ -1,17 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { normalizeOption } from "@/lib/utils";
+import { normalizeOption, generateRoomCode } from "@/lib/utils";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
-
-function generateRoomCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
 
 // POST /api/battles — Create a battle room
 export async function POST(request: Request) {
@@ -114,12 +105,27 @@ export async function POST(request: Request) {
       };
     });
 
-    // Generate unique room code
+    // Generate unique 4-digit room code
     let roomCode = generateRoomCode();
     let attempts = 0;
-    while (attempts < 10) {
+    while (attempts < 20) {
       const existing = await db.gameRoom.findUnique({ where: { roomCode } });
       if (!existing) break;
+      // If existing room is completed or stale (> 2 hours old), recycle the code
+      const isStale =
+        existing.status === "COMPLETED" ||
+        Date.now() - new Date(existing.updatedAt).getTime() > 2 * 60 * 60 * 1000;
+      if (isStale) {
+        try {
+          await db.gameRoom.update({
+            where: { id: existing.id },
+            data: { roomCode: `${roomCode}_${Date.now().toString(36)}` },
+          });
+          break;
+        } catch {
+          // If update fails due to race condition, generate another code
+        }
+      }
       roomCode = generateRoomCode();
       attempts++;
     }
@@ -170,7 +176,7 @@ export async function POST(request: Request) {
   }
 }
 
-// GET /api/battles?roomCode=XXXXXX — Get room info
+// GET /api/battles?roomCode=XXXX — Get room info
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) {

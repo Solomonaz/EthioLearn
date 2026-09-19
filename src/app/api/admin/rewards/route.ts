@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { RewardTier } from "@prisma/client";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -15,12 +15,17 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const targetSchoolId = user.schoolId || searchParams.get("schoolId");
+
   const rewards = await db.reward.findMany({
-    where: { schoolId: user.schoolId },
+    where: {
+      ...(targetSchoolId ? { schoolId: targetSchoolId } : {}),
+    },
     orderBy: [{ tier: "asc" }, { pointsCost: "asc" }],
     include: {
       _count: {
@@ -44,6 +49,7 @@ interface CreateRewardBody {
   windowEndDate?: string;
   maxRedemptionsPerWindow?: number;
   unitCost?: number;
+  schoolId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -119,6 +125,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unitCost must be a non-negative number" }, { status: 400 });
   }
 
+  let targetSchoolId = user.schoolId || body.schoolId;
+  if (!targetSchoolId && user.role === "SUPER_ADMIN") {
+    targetSchoolId = (await db.school.findFirst({ select: { id: true } }))?.id;
+  }
+
+  if (!targetSchoolId) {
+    return NextResponse.json({ error: "A school is required to create a reward" }, { status: 400 });
+  }
+
   const reward = await db.reward.create({
     data: {
       name: name.trim(),
@@ -127,7 +142,7 @@ export async function POST(request: NextRequest) {
       pointsCost,
       inventoryCount: inventoryCount ?? 10,
       imageUrl: imageUrl?.trim() || null,
-      schoolId: user.schoolId,
+      schoolId: targetSchoolId,
       redemptionWindow: (redemptionWindow as any) ?? "ANYTIME",
       windowStartDate: windowStartDate ? new Date(windowStartDate) : null,
       windowEndDate: windowEndDate ? new Date(windowEndDate) : null,

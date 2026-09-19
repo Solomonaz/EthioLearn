@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -70,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Redemption not found" }, { status: 404 });
   }
 
-  if (redemption.reward.schoolId !== user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && redemption.reward.schoolId !== user.schoolId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

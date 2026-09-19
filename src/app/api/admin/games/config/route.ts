@@ -11,19 +11,29 @@ const DEFAULTS = {
   minPlayersToStart: 2,
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
+  const { searchParams } = new URL(request.url);
+  let targetSchoolId = user.schoolId || searchParams.get("schoolId");
+  if (!targetSchoolId && user.role === "SUPER_ADMIN") {
+    targetSchoolId = (await db.school.findFirst({ select: { id: true } }))?.id ?? null;
+  }
+
+  if (!targetSchoolId) {
+    return NextResponse.json({ config: DEFAULTS });
+  }
+
   const config = await db.gameConfig.findUnique({
-    where: { schoolId: user.schoolId },
+    where: { schoolId: targetSchoolId },
   });
 
   if (!config) {
@@ -39,6 +49,7 @@ interface UpdateConfigBody {
   defaultDifficulty?: string;
   difficultyLocked?: boolean;
   minPlayersToStart?: number;
+  schoolId?: string;
 }
 
 export async function PUT(request: NextRequest) {
@@ -60,7 +71,7 @@ async function handleUpsert(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -69,6 +80,15 @@ async function handleUpsert(request: NextRequest) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  let targetSchoolId = user.schoolId || body.schoolId;
+  if (!targetSchoolId && user.role === "SUPER_ADMIN") {
+    targetSchoolId = (await db.school.findFirst({ select: { id: true } }))?.id;
+  }
+
+  if (!targetSchoolId) {
+    return NextResponse.json({ error: "A school is required to configure games" }, { status: 400 });
   }
 
   if (body.maxPlayersPerRoom !== undefined) {
@@ -103,7 +123,7 @@ async function handleUpsert(request: NextRequest) {
   }
 
   const config = await db.gameConfig.upsert({
-    where: { schoolId: user.schoolId },
+    where: { schoolId: targetSchoolId },
     update: {
       ...(body.maxPlayersPerRoom !== undefined && { maxPlayersPerRoom: body.maxPlayersPerRoom }),
       ...(body.timePerQuestion !== undefined && { timePerQuestion: body.timePerQuestion }),
@@ -112,7 +132,7 @@ async function handleUpsert(request: NextRequest) {
       ...(body.minPlayersToStart !== undefined && { minPlayersToStart: body.minPlayersToStart }),
     },
     create: {
-      schoolId: user.schoolId,
+      schoolId: targetSchoolId,
       maxPlayersPerRoom: body.maxPlayersPerRoom ?? DEFAULTS.maxPlayersPerRoom,
       timePerQuestion: body.timePerQuestion ?? DEFAULTS.timePerQuestion,
       defaultDifficulty: (body.defaultDifficulty as any) ?? DEFAULTS.defaultDifficulty,

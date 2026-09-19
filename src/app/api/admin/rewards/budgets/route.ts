@@ -3,19 +3,24 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const targetSchoolId = user.schoolId || searchParams.get("schoolId");
+
   const budgets = await db.rewardBudget.findMany({
-    where: { schoolId: user.schoolId },
+    where: {
+      ...(targetSchoolId ? { schoolId: targetSchoolId } : {}),
+    },
     orderBy: { periodStart: "desc" },
   });
 
@@ -33,6 +38,7 @@ interface CreateBudgetBody {
   periodStart?: string;
   periodEnd?: string;
   currency?: string;
+  schoolId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +52,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -90,6 +96,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "periodEnd must be after periodStart" }, { status: 400 });
   }
 
+  let targetSchoolId = user.schoolId || body.schoolId;
+  if (!targetSchoolId && user.role === "SUPER_ADMIN") {
+    targetSchoolId = (await db.school.findFirst({ select: { id: true } }))?.id;
+  }
+
+  if (!targetSchoolId) {
+    return NextResponse.json({ error: "A school is required to create a budget" }, { status: 400 });
+  }
+
   const budget = await db.rewardBudget.create({
     data: {
       name: name.trim(),
@@ -97,7 +112,7 @@ export async function POST(request: NextRequest) {
       periodStart: start,
       periodEnd: end,
       currency: currency?.trim() || "ETB",
-      schoolId: user.schoolId,
+      schoolId: targetSchoolId,
     },
   });
 

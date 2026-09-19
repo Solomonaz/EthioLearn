@@ -1,22 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated" }, { status: 400 });
   }
+
+  const { searchParams } = new URL(request.url);
+  const targetSchoolId = user.schoolId || searchParams.get("schoolId");
 
   try {
     const rooms = await db.gameRoom.findMany({
       where: {
-        host: { schoolId: user.schoolId },
+        ...(targetSchoolId ? { host: { schoolId: targetSchoolId } } : {}),
         status: { in: ["WAITING", "ACTIVE"] }
       },
       include: {

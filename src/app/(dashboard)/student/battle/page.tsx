@@ -248,7 +248,7 @@ export default function BattleLobbyPage() {
 
   async function handleJoinRoom() {
     if (!userId || !joinCode.trim()) return;
-    const code = joinCode.trim().toUpperCase();
+    const code = joinCode.trim();
 
     setJoining(true);
     setJoinError(null);
@@ -281,7 +281,7 @@ export default function BattleLobbyPage() {
   }
 
   function handleStartGame() {
-    if (!currentRoomCode || !userId) return;
+    if (!currentRoomCode || !userId || players.length < 2) return;
     setStartingGame(true);
     socketRef.current?.emit("start_game", { roomCode: currentRoomCode });
   }
@@ -316,7 +316,7 @@ export default function BattleLobbyPage() {
   }, [availableCount]);
 
   const isHost = userId === hostId;
-  const canStart = isHost && players.length >= 1 && roomStatus === "waiting";
+  const canStart = isHost && players.length >= 2 && roomStatus === "waiting";
 
   // Plan gating — battle mode requires a plan that allows multiplayer.
   if (!ent.loading && !ent.multiplayer) {
@@ -462,14 +462,17 @@ export default function BattleLobbyPage() {
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={joinCode}
                   onChange={(e) => {
-                    setJoinCode(e.target.value.toUpperCase().slice(0, 6));
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    setJoinCode(val);
                     setJoinError(null);
                   }}
-                  placeholder="Enter 6-character code"
-                  maxLength={6}
-                  className="w-full rounded-lg border border-border bg-white px-4 py-3 text-center text-2xl font-bold uppercase tracking-widest text-text-primary placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-text-secondary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="Enter 4-digit code"
+                  maxLength={4}
+                  className="w-full rounded-lg border border-border bg-white px-4 py-3 text-center text-2xl font-bold tracking-widest text-text-primary placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-text-secondary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 {joinError && (
                   <p className="mt-1.5 text-sm text-red-600">{joinError}</p>
@@ -481,7 +484,7 @@ export default function BattleLobbyPage() {
                 className="w-full gap-2"
                 onClick={handleJoinRoom}
                 isLoading={joining}
-                disabled={joining || joinCode.length < 6}
+                disabled={joining || joinCode.length < 4}
               >
                 <LogIn className="h-5 w-5" />
                 Join Battle
@@ -600,7 +603,7 @@ export default function BattleLobbyPage() {
               disabled={!canStart || startingGame}
             >
               <Play className="h-5 w-5" />
-              {players.length < 2 ? "Start (need 2+ players for full experience)" : "Start Game"}
+              {players.length < 2 ? "Waiting for players (need 2+ to start)" : "Start Game"}
             </Button>
           )}
 

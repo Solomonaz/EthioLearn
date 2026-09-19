@@ -38,7 +38,7 @@ export const createGameRoomSchema = z.object({
 });
 
 export const joinGameRoomSchema = z.object({
-  roomCode: z.string().length(6),
+  roomCode: z.string().regex(/^\d{4}$/, "Room code must be a 4-digit number"),
 });
 
 export const redeemRewardSchema = z.object({

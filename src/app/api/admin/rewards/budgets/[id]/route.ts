@@ -18,7 +18,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Budget not found" }, { status: 404 });
   }
 
-  if (existing.schoolId !== user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && existing.schoolId !== user.schoolId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -120,7 +120,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -132,7 +132,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Budget not found" }, { status: 404 });
   }
 
-  if (existing.schoolId !== user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && existing.schoolId !== user.schoolId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

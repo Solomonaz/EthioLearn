@@ -38,6 +38,8 @@ interface PlayerScore {
   socketId: string;
   correctAnswers: number;
   totalAnswerTimeMs: number;
+  streak?: number;
+  bestStreak?: number;
 }
 
 interface Awards {
@@ -57,6 +59,9 @@ interface QuestionData {
   question: string;
   options: string[];
   timeLimit: number;
+  remainingTime?: number;
+  questionStartedAt?: number;
+  hasAnswered?: boolean;
 }
 
 type GamePhase = "connecting" | "waiting" | "countdown" | "in_progress" | "finished";
@@ -83,6 +88,7 @@ export default function BattleRoomPage() {
 
   const socketRef = useRef<Socket | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const questionStartedAtRef = useRef<number>(0);
 
   const [phase, setPhase] = useState<GamePhase>("connecting");
   const [countdownSeconds, setCountdownSeconds] = useState(3);
@@ -96,6 +102,9 @@ export default function BattleRoomPage() {
   const [correctIndex, setCorrectIndex] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [pointsEarned, setPointsEarned] = useState<number>(0);
+  const [answerTimeMs, setAnswerTimeMs] = useState<number | null>(null);
+  const [streak, setStreak] = useState<number>(0);
+  const [streakBonusPct, setStreakBonusPct] = useState<number>(0);
   const [answered, setAnswered] = useState(false);
 
   // Results state
@@ -189,14 +198,21 @@ export default function BattleRoomPage() {
     });
 
     socket.on("question", (data: QuestionData) => {
+      questionStartedAtRef.current = data.questionStartedAt ?? Date.now();
       setCurrentQuestion(data);
       setPhase("in_progress");
       setSelectedAnswer(null);
       setCorrectIndex(null);
       setIsCorrect(null);
       setPointsEarned(0);
-      setAnswered(false);
-      startTimer(data.timeLimit);
+      setAnswerTimeMs(null);
+      if (data.hasAnswered) {
+        setAnswered(true);
+      } else {
+        setAnswered(false);
+      }
+      const initialSeconds = typeof data.remainingTime === "number" ? data.remainingTime : data.timeLimit;
+      startTimer(initialSeconds);
     });
 
     socket.on(
@@ -205,14 +221,25 @@ export default function BattleRoomPage() {
         correct,
         pointsEarned,
         correctIndex,
+        streak: resStreak = 0,
+        streakBonusPct: resStreakBonusPct = 0,
+        timeTakenMs,
       }: {
         correct: boolean;
         pointsEarned: number;
         correctIndex: number;
+        streak?: number;
+        streakBonusPct?: number;
+        timeTakenMs?: number;
       }) => {
         setIsCorrect(correct);
         setPointsEarned(pointsEarned);
         setCorrectIndex(correctIndex);
+        setStreak(resStreak);
+        setStreakBonusPct(resStreakBonusPct);
+        if (typeof timeTakenMs === "number") {
+          setAnswerTimeMs(timeTakenMs);
+        }
         if (timerRef.current) clearInterval(timerRef.current);
       }
     );
@@ -265,6 +292,9 @@ export default function BattleRoomPage() {
       setCorrectIndex(null);
       setIsCorrect(null);
       setPointsEarned(0);
+      setAnswerTimeMs(null);
+      setStreak(0);
+      setStreakBonusPct(0);
       setAnswered(false);
       setPhase("countdown");
     });
@@ -281,6 +311,10 @@ export default function BattleRoomPage() {
 
   function handleAnswer(index: number) {
     if (answered || !currentQuestion || !userId) return;
+    const timeTakenMs = questionStartedAtRef.current > 0
+      ? Math.max(0, Date.now() - questionStartedAtRef.current)
+      : Math.max(0, (currentQuestion.timeLimit - timeLeft) * 1000);
+
     setSelectedAnswer(index);
     setAnswered(true);
 
@@ -289,6 +323,7 @@ export default function BattleRoomPage() {
       questionIndex: currentQuestion.index,
       answerIndex: index,
       timeLeft,
+      timeTakenMs,
     });
   }
 
@@ -299,7 +334,10 @@ export default function BattleRoomPage() {
   }
 
   const myScore = players.find((p) => p.userId === userId);
-  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+  const sortedPlayers = [...players].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.totalAnswerTimeMs - b.totalAnswerTimeMs;
+  });
 
   // ─── Connecting ───────────────────────────────────────────
   if (phase === "connecting") {
@@ -495,9 +533,28 @@ export default function BattleRoomPage() {
                 )}
               >
                 {isCorrect ? (
-                  <p className="font-semibold text-green-700">
-                    Correct! +{pointsEarned} points
-                  </p>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-green-700">
+                      Correct! +{pointsEarned} points
+                      {answerTimeMs !== null && (
+                        <span className="ml-1.5 text-xs font-normal text-green-600">
+                          ({(answerTimeMs / 1000).toFixed(2)}s)
+                        </span>
+                      )}
+                    </p>
+                    {streak >= 2 && (
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                          🔥 {streak} in a row!
+                          {streakBonusPct > 0 && (
+                            <span className="font-bold text-orange-600">
+                              (+{streakBonusPct}% Streak Bonus)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <p className="font-semibold text-red-700">
                     Incorrect. The correct answer was{" "}
@@ -508,6 +565,17 @@ export default function BattleRoomPage() {
                 )}
                 <p className="mt-1 text-xs text-text-secondary">
                   Next question coming up...
+                </p>
+              </div>
+            )}
+
+            {answered && isCorrect === null && (
+              <div className="rounded-xl border border-border bg-gray-50 p-4 text-center">
+                <p className="font-semibold text-text-primary">
+                  Answer Submitted
+                </p>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Waiting for other players or next question...
                 </p>
               </div>
             )}
@@ -541,12 +609,19 @@ export default function BattleRoomPage() {
                       </span>
                       <Avatar name={p.name} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-text-primary">
-                          {p.name}
-                          {p.userId === userId && (
-                            <span className="ml-1 text-primary">(you)</span>
+                        <div className="flex items-center gap-1">
+                          <p className="truncate text-xs font-semibold text-text-primary">
+                            {p.name}
+                            {p.userId === userId && (
+                              <span className="ml-1 text-primary">(you)</span>
+                            )}
+                          </p>
+                          {(p.streak ?? 0) >= 2 && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.2 text-[10px] font-bold text-orange-700">
+                              🔥{p.streak}
+                            </span>
                           )}
-                        </p>
+                        </div>
                         <p className="text-xs text-text-secondary">
                           {disconnectedPlayerIds.has(p.userId) ? (
                             <span className="inline-flex items-center gap-1 text-orange-500">
@@ -585,13 +660,18 @@ export default function BattleRoomPage() {
                     <span className="w-4 text-center font-bold text-text-secondary">
                       {i + 1}
                     </span>
-                    <span className="flex-1 font-medium text-text-primary">
-                      {p.name}
+                    <span className="flex-1 font-medium text-text-primary flex items-center gap-1">
+                      <span className="truncate">{p.name}</span>
                       {p.userId === userId && (
-                        <span className="ml-1 text-xs text-primary">(you)</span>
+                        <span className="ml-1 text-xs text-primary shrink-0">(you)</span>
+                      )}
+                      {(p.streak ?? 0) >= 2 && (
+                        <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.2 text-[10px] font-bold text-orange-700">
+                          🔥{p.streak}
+                        </span>
                       )}
                       {disconnectedPlayerIds.has(p.userId) && (
-                        <WifiOff className="ml-1 inline h-3 w-3 text-orange-500" />
+                        <WifiOff className="ml-1 inline h-3 w-3 text-orange-500 shrink-0" />
                       )}
                     </span>
                     <span className="font-bold text-primary">{p.score}</span>

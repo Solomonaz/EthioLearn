@@ -14,11 +14,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
   const { searchParams } = new URL(request.url);
+  const targetSchoolId = user.schoolId || searchParams.get("schoolId");
   const statusParam = searchParams.get("status") ?? "all";
   const pageParam = parseInt(searchParams.get("page") ?? "1", 10);
   const limitParam = parseInt(searchParams.get("limit") ?? "20", 10);
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
       : {};
 
   const whereClause = {
-    reward: { schoolId: user.schoolId },
+    ...(targetSchoolId ? { reward: { schoolId: targetSchoolId } } : {}),
     ...statusFilter,
   };
 

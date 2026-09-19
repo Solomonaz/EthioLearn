@@ -100,11 +100,14 @@ interface PlayerState {
   socketId: string;
   correctAnswers: number;
   totalAnswerTimeMs: number;
+  streak: number;
+  bestStreak: number;
   disconnectedAt?: number;
   disconnectTimer?: NodeJS.Timeout;
 }
 
 interface RoomState {
+  gameRoomId: string;
   roomCode: string;
   hostId: string;
   players: Map<string, PlayerState>;
@@ -112,6 +115,9 @@ interface RoomState {
   currentQuestion: number;
   status: "waiting" | "countdown" | "in_progress" | "finished";
   questionTimer?: NodeJS.Timeout;
+  startTimer?: NodeJS.Timeout;
+  nextQuestionTimer?: NodeJS.Timeout;
+  cleanupTimer?: NodeJS.Timeout;
   questionStartedAt: number;
   currentTimeLimit?: number; // seconds allotted to the current question
   rematchRequesters: Set<string>;
@@ -127,6 +133,8 @@ function serializePlayers(room: RoomState) {
     socketId: p.socketId,
     correctAnswers: p.correctAnswers,
     totalAnswerTimeMs: p.totalAnswerTimeMs,
+    streak: p.streak,
+    bestStreak: p.bestStreak,
   }));
 }
 
@@ -214,14 +222,34 @@ app.prepare().then(() => {
         if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
           const q = room.questions[room.currentQuestion];
           const timeLimit = room.currentTimeLimit ?? getBattleSeconds({ questionText: q.question, options: q.options });
-          socket.emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit });
+          const elapsedSec = Math.floor((Date.now() - room.questionStartedAt) / 1000);
+          const remainingTime = Math.max(1, timeLimit - elapsedSec);
+          const hasAnswered = existing.answered > room.currentQuestion;
+
+          socket.emit("question", {
+            index: room.currentQuestion,
+            total: room.questions.length,
+            question: q.question,
+            options: q.options,
+            timeLimit,
+            remainingTime,
+            questionStartedAt: room.questionStartedAt,
+            hasAnswered,
+          });
         }
         return;
       }
 
       if (room.status !== "waiting") { socket.emit("error", { message: "Game already in progress" }); return; }
       socket.join(roomCode);
-      room.players.set(userId, { userId, name, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0 });
+      room.players.set(userId, { userId, name, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0, streak: 0, bestStreak: 0 });
+      if (room.gameRoomId) {
+        prisma.gamePlayer.upsert({
+          where: { userId_gameRoomId: { userId, gameRoomId: room.gameRoomId } },
+          create: { userId, gameRoomId: room.gameRoomId, score: 0 },
+          update: {},
+        }).catch(console.error);
+      }
       io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: room.status, hostId: room.hostId });
     });
 
@@ -253,8 +281,9 @@ app.prepare().then(() => {
         }
 
         rooms.set(roomCode, {
+          gameRoomId: dbRoom.id,
           roomCode, hostId,
-          players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0 }]]),
+          players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0, streak: 0, bestStreak: 0 }]]),
           questions, currentQuestion: 0, status: "waiting", questionStartedAt: 0, rematchRequesters: new Set(),
           subject: config.subject ?? undefined,
         });
@@ -270,14 +299,29 @@ app.prepare().then(() => {
     socket.on("start_game", ({ roomCode }: { roomCode: string }) => {
       const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
-      if (!room || room.hostId !== userId || room.players.size < 1) return;
+      if (!room || room.hostId !== userId) return;
+      if (room.players.size < 2) {
+        socket.emit("error", { message: "At least 2 players are required to start a battle." });
+        return;
+      }
+      if (room.cleanupTimer) { clearTimeout(room.cleanupTimer); room.cleanupTimer = undefined; }
+      if (room.questionTimer) { clearTimeout(room.questionTimer); room.questionTimer = undefined; }
+      if (room.startTimer) { clearTimeout(room.startTimer); room.startTimer = undefined; }
+      if (room.nextQuestionTimer) { clearTimeout(room.nextQuestionTimer); room.nextQuestionTimer = undefined; }
+
       room.status = "countdown";
+      if (room.gameRoomId) {
+        prisma.gameRoom.update({
+          where: { id: room.gameRoomId },
+          data: { status: "ACTIVE" },
+        }).catch(console.error);
+      }
       io.to(roomCode).emit("countdown_start", { seconds: 3 });
-      setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
+      room.startTimer = setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
     });
 
-    socket.on("submit_answer", ({ roomCode, questionIndex, answerIndex, timeLeft }: {
-      roomCode: string; questionIndex: number; answerIndex: number; timeLeft: number;
+    socket.on("submit_answer", ({ roomCode, questionIndex, answerIndex, timeLeft, timeTakenMs }: {
+      roomCode: string; questionIndex: number; answerIndex: number; timeLeft?: number; timeTakenMs?: number;
     }) => {
       const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
@@ -289,26 +333,76 @@ app.prepare().then(() => {
       const q = room.questions[questionIndex];
       const isCorrect = answerIndex === q.correctIndex;
 
-      // ── Catch-up mechanic: reduce speed bonus for the current score leader ──
-      const allPlayers = Array.from(room.players.values());
-      const maxScore = Math.max(0, ...allPlayers.map((p) => p.score));
-      const isLeader = player.score >= maxScore && maxScore > 0;
-      // Normalise speed by THIS question's time budget so heavy questions (with a
-      // longer window) don't hand out oversized speed bonuses.
-      const timeBudget = room.currentTimeLimit ?? 20;
-      const speedBonus = isCorrect ? Math.round((timeLeft / timeBudget) * 10 * (isLeader ? 0.8 : 1.0)) : 0;
-      const pointsEarned = isCorrect ? 10 + speedBonus : 0;
+      // ── Streak Tracking & Bonus ──
+      // Consecutive correct answers award bonus points:
+      // 3 in a row = 10%, 4 in a row = 15%, 5 in a row = 20%, +5% for each additional.
+      let streakBonusPct = 0;
+      if (isCorrect) {
+        player.streak = (player.streak || 0) + 1;
+        if (player.streak > (player.bestStreak || 0)) {
+          player.bestStreak = player.streak;
+        }
+        if (player.streak >= 3) {
+          streakBonusPct = 10 + (player.streak - 3) * 5;
+        }
+      } else {
+        player.streak = 0;
+      }
+
+      // ── Millisecond-Precision Scoring (Kahoot-Style, Out of 100) ──
+      const timeBudgetSec = room.currentTimeLimit ?? 20;
+      const timeBudgetMs = timeBudgetSec * 1000;
+      const serverElapsedMs = Math.max(0, Date.now() - room.questionStartedAt);
+
+      // Fair millisecond calculation with latency tolerance and anti-cheat bounding
+      let effectiveTimeTakenMs = serverElapsedMs;
+      if (typeof timeTakenMs === "number" && !isNaN(timeTakenMs) && timeTakenMs >= 0) {
+        const minAllowed = Math.max(0, serverElapsedMs - 1500);
+        const maxAllowed = Math.min(serverElapsedMs + 500, timeBudgetMs);
+        effectiveTimeTakenMs = Math.min(Math.max(Math.round(timeTakenMs), minAllowed), maxAllowed);
+      } else if (typeof timeLeft === "number" && !isNaN(timeLeft)) {
+        effectiveTimeTakenMs = Math.min(Math.max(0, (timeBudgetSec - timeLeft) * 1000), timeBudgetMs);
+      }
+      effectiveTimeTakenMs = Math.min(effectiveTimeTakenMs, timeBudgetMs);
+
+      // Remaining time in milliseconds (0 to timeBudgetMs)
+      const timeLeftMs = Math.max(0, timeBudgetMs - effectiveTimeTakenMs);
+
+      // Kahoot-style scoring out of 100 points:
+      // Base: 50 points for correct answer
+      // Speed bonus: up to 50 points based on exact remaining milliseconds
+      const basePoints = isCorrect ? 50 : 0;
+      const speedBonus = isCorrect && timeBudgetMs > 0
+        ? Math.round((timeLeftMs / timeBudgetMs) * 50)
+        : 0;
+      const rawPoints = basePoints + speedBonus;
+
+      // Streak bonus percentage on top
+      const streakBonusPoints = isCorrect && streakBonusPct > 0
+        ? Math.round(rawPoints * (streakBonusPct / 100))
+        : 0;
+      const pointsEarned = rawPoints + streakBonusPoints;
 
       player.score += pointsEarned;
       player.answered = questionIndex + 1;
 
-      // Track stats for post-game awards
-      const timeTakenMs = Math.min(Date.now() - room.questionStartedAt, 20_000);
-      if (isCorrect) { player.correctAnswers += 1; player.totalAnswerTimeMs += timeTakenMs; }
+      // Track stats for post-game awards (using millisecond accuracy)
+      if (isCorrect) {
+        player.correctAnswers += 1;
+        player.totalAnswerTimeMs += effectiveTimeTakenMs;
+      }
 
-      socket.emit("answer_result", { correct: isCorrect, pointsEarned, correctIndex: q.correctIndex, isLeaderPenalty: isLeader && isCorrect });
+      socket.emit("answer_result", {
+        correct: isCorrect,
+        pointsEarned,
+        correctIndex: q.correctIndex,
+        streak: player.streak,
+        streakBonusPct,
+        timeTakenMs: effectiveTimeTakenMs,
+      });
       io.to(roomCode).emit("scores_updated", { players: serializePlayers(room) });
 
+      const allPlayers = Array.from(room.players.values());
       const allAnswered = allPlayers.every((p) => p.answered > questionIndex);
       if (allAnswered) advanceQuestion(io, rooms, roomCode);
     });
@@ -318,19 +412,33 @@ app.prepare().then(() => {
       const userId = socket.data.userId as string;
       const room = rooms.get(roomCode);
       if (!room || room.status !== "finished") return;
+
+      // Cancel room cleanup timer as soon as any player expresses intent to rematch
+      if (room.cleanupTimer) {
+        clearTimeout(room.cleanupTimer);
+        room.cleanupTimer = undefined;
+      }
+
       room.rematchRequesters.add(userId);
       const votes = room.rematchRequesters.size;
       const total = room.players.size;
       io.to(roomCode).emit("rematch_vote_updated", { votes, total });
 
-      if (votes >= total && total > 0) {
+      if (votes >= total && total >= 2) {
+        if (room.cleanupTimer) { clearTimeout(room.cleanupTimer); room.cleanupTimer = undefined; }
+        if (room.questionTimer) { clearTimeout(room.questionTimer); room.questionTimer = undefined; }
+        if (room.startTimer) { clearTimeout(room.startTimer); room.startTimer = undefined; }
+        if (room.nextQuestionTimer) { clearTimeout(room.nextQuestionTimer); room.nextQuestionTimer = undefined; }
+
         room.players.forEach((p) => {
           p.score = 0; p.answered = 0; p.correctAnswers = 0; p.totalAnswerTimeMs = 0;
+          p.streak = 0; p.bestStreak = 0;
           p.disconnectedAt = undefined;
           if (p.disconnectTimer) { clearTimeout(p.disconnectTimer); p.disconnectTimer = undefined; }
         });
 
         // ── Fetch new questions from DB for the rematch ──
+        let newQuestionsLoaded = false;
         try {
           const dbRoom = await prisma.gameRoom.findUnique({ where: { roomCode } });
           if (dbRoom && dbRoom.quizConfig) {
@@ -338,48 +446,54 @@ app.prepare().then(() => {
             const textbookId = config.textbookId;
             const questionCount = config.questionCount || 10;
 
-            const textbook = await prisma.textbook.findUnique({
-              where: { id: textbookId },
-              include: { chapters: { select: { id: true } } },
-            });
-
-            if (textbook && textbook.chapters.length > 0) {
-              const chapterIds = textbook.chapters.map((c: any) => c.id);
-              const allQuestions = await prisma.question.findMany({
-                where: { chapterId: { in: chapterIds }, type: "MCQ" },
+            if (textbookId) {
+              const textbook = await prisma.textbook.findUnique({
+                where: { id: textbookId },
+                include: { chapters: { select: { id: true } } },
               });
 
-              if (allQuestions.length > 0) {
-                // Fisher-Yates shuffle
-                for (let i = allQuestions.length - 1; i > 0; i--) {
-                  const j = Math.floor(Math.random() * (i + 1));
-                  [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
-                }
-                const selected = allQuestions.slice(0, Math.min(questionCount, allQuestions.length));
+              if (textbook && textbook.chapters.length > 0) {
+                const chapterIds = textbook.chapters.map((c: any) => c.id);
+                const allQuestions = await prisma.question.findMany({
+                  where: { chapterId: { in: chapterIds }, type: "MCQ" },
+                });
 
-                room.questions = selected.map((q) => {
+                if (allQuestions.length > 0) {
+                  // Fisher-Yates shuffle
+                  for (let i = allQuestions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+                  }
+                  const selected = allQuestions.slice(0, Math.min(questionCount, allQuestions.length));
+
                   const normalize = (val: unknown) => {
                     if (typeof val === "string") return val;
                     if (val && typeof val === "object" && "text" in val) return String((val as any).text);
                     return String(val);
                   };
 
-                  const options = (q.options as unknown[]).map(normalize);
-                  const normalizedAnswer = normalize(q.correctAnswer as unknown);
-                  const correctIndex = options.indexOf(normalizedAnswer);
+                  room.questions = selected.map((q) => {
+                    const options = (q.options as unknown[]).map(normalize);
+                    const normalizedAnswer = normalize(q.correctAnswer as unknown);
+                    const correctIndex = options.indexOf(normalizedAnswer);
 
-                  return {
-                    question: q.questionText,
-                    options,
-                    correctIndex: correctIndex >= 0 ? correctIndex : 0,
-                  };
-                });
+                    return {
+                      question: q.questionText,
+                      options,
+                      correctIndex: correctIndex >= 0 ? correctIndex : 0,
+                    };
+                  });
+                  newQuestionsLoaded = true;
+                }
               }
             }
           }
         } catch (error) {
           console.error("Error fetching new questions for rematch:", error);
-          // Fallback: reshuffle existing questions if DB fails
+        }
+
+        // Fallback: reshuffle existing questions if new questions could not be loaded from DB
+        if (!newQuestionsLoaded && room.questions && room.questions.length > 0) {
           const shuffled = [...room.questions];
           for (let i = shuffled.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -391,11 +505,17 @@ app.prepare().then(() => {
         room.currentQuestion = 0;
         room.status = "countdown";
         room.rematchRequesters.clear();
+        if (room.gameRoomId) {
+          prisma.gameRoom.update({
+            where: { id: room.gameRoomId },
+            data: { status: "ACTIVE" },
+          }).catch(console.error);
+        }
 
         io.to(roomCode).emit("rematch_starting");
         io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: "countdown", hostId: room.hostId });
         io.to(roomCode).emit("countdown_start", { seconds: 3 });
-        setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
+        room.startTimer = setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
       }
     });
 
@@ -407,7 +527,17 @@ app.prepare().then(() => {
       if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
         const q = room.questions[room.currentQuestion];
         const timeLimit = room.currentTimeLimit ?? getBattleSeconds({ questionText: q.question, options: q.options });
-        socket.emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit });
+        const elapsedSec = Math.floor((Date.now() - room.questionStartedAt) / 1000);
+        const remainingTime = Math.max(1, timeLimit - elapsedSec);
+        socket.emit("question", {
+          index: room.currentQuestion,
+          total: room.questions.length,
+          question: q.question,
+          options: q.options,
+          timeLimit,
+          remainingTime,
+          questionStartedAt: room.questionStartedAt,
+        });
       }
     });
 
@@ -417,6 +547,11 @@ app.prepare().then(() => {
           if (player.socketId !== socket.id) return;
           if (room.status === "waiting") {
             room.players.delete(userId);
+            if (room.gameRoomId && userId !== room.hostId) {
+              prisma.gamePlayer.deleteMany({
+                where: { userId, gameRoomId: room.gameRoomId },
+              }).catch(console.error);
+            }
             io.to(code).emit("room_updated", { players: serializePlayers(room), status: room.status, hostId: room.hostId });
           } else if (room.status === "in_progress") {
             // ── 30-second reconnect window ─────────────────────────────────
@@ -440,27 +575,61 @@ app.prepare().then(() => {
   function sendQuestion(io: SocketServer, rooms: Map<string, RoomState>, roomCode: string) {
     const room = rooms.get(roomCode);
     if (!room) return;
+    if (room.questionTimer) clearTimeout(room.questionTimer);
+    if (room.nextQuestionTimer) clearTimeout(room.nextQuestionTimer);
     room.questionStartedAt = Date.now();
     const q = room.questions[room.currentQuestion];
     // Heavy calculation/graph questions get a longer window; normal ones keep 20 s.
     const timeLimit = getBattleSeconds({ questionText: q.question, options: q.options });
     room.currentTimeLimit = timeLimit;
-    io.to(roomCode).emit("question", { index: room.currentQuestion, total: room.questions.length, question: q.question, options: q.options, timeLimit });
+    io.to(roomCode).emit("question", {
+      index: room.currentQuestion,
+      total: room.questions.length,
+      question: q.question,
+      options: q.options,
+      timeLimit,
+      remainingTime: timeLimit,
+      questionStartedAt: room.questionStartedAt,
+    });
     room.questionTimer = setTimeout(() => advanceQuestion(io, rooms, roomCode), (timeLimit + 2) * 1000);
   }
 
   function advanceQuestion(io: SocketServer, rooms: Map<string, RoomState>, roomCode: string) {
     const room = rooms.get(roomCode);
     if (!room) return;
-    if (room.questionTimer) clearTimeout(room.questionTimer);
+    if (room.questionTimer) {
+      clearTimeout(room.questionTimer);
+      room.questionTimer = undefined;
+    }
+    if (room.nextQuestionTimer) {
+      clearTimeout(room.nextQuestionTimer);
+      room.nextQuestionTimer = undefined;
+    }
+    const prevIndex = room.currentQuestion;
     room.currentQuestion += 1;
+
+    // Reset streak for any player who timed out without answering
+    room.players.forEach((p) => {
+      if (p.answered <= prevIndex) {
+        p.streak = 0;
+      }
+    });
 
     if (room.currentQuestion >= room.questions.length) {
       // Emit final fun fact before showing results
       io.to(roomCode).emit("fun_fact", { fact: getFunFact(room.subject) });
       room.status = "finished";
+      if (room.gameRoomId) {
+        prisma.gameRoom.update({
+          where: { id: room.gameRoomId },
+          data: { status: "COMPLETED" },
+        }).catch(console.error);
+      }
       const allPlayers = Array.from(room.players.values());
-      const finalScores = [...allPlayers].sort((a, b) => b.score - a.score);
+      const finalScores = [...allPlayers].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.totalAnswerTimeMs - b.totalAnswerTimeMs;
+      });
 
       // MVP: highest accuracy
       let mvpUserId: string | null = null, bestAcc = -1;
@@ -484,7 +653,17 @@ app.prepare().then(() => {
         : 0;
 
       io.to(roomCode).emit("game_finished", {
-        finalScores: finalScores.map((p) => ({ userId: p.userId, name: p.name, score: p.score, answered: p.answered, socketId: p.socketId, correctAnswers: p.correctAnswers, totalAnswerTimeMs: p.totalAnswerTimeMs })),
+        finalScores: finalScores.map((p) => ({
+          userId: p.userId,
+          name: p.name,
+          score: p.score,
+          answered: p.answered,
+          socketId: p.socketId,
+          correctAnswers: p.correctAnswers,
+          totalAnswerTimeMs: p.totalAnswerTimeMs,
+          streak: p.streak,
+          bestStreak: p.bestStreak,
+        })),
         awards: { mvpUserId, fastestFingerUserId },
         groupStats: { avgScore: groupAvgScore, avgAccuracy: groupAvgAccuracy, avgAnswerTimeMs: groupAvgAnswerTimeMs },
       });
@@ -496,13 +675,27 @@ app.prepare().then(() => {
         checkBattleAchievements(winner.userId).catch(console.error);
       }
       finalScores.forEach((player, index) => {
-        prisma.gamePlayer.updateMany({ where: { userId: player.userId }, data: { score: player.score, rank: index + 1 } }).catch(console.error);
+        if (room.gameRoomId) {
+          prisma.gamePlayer.upsert({
+            where: { userId_gameRoomId: { userId: player.userId, gameRoomId: room.gameRoomId } },
+            create: { userId: player.userId, gameRoomId: room.gameRoomId, score: player.score, rank: index + 1 },
+            update: { score: player.score, rank: index + 1 },
+          }).catch(console.error);
+        }
       });
-      setTimeout(() => rooms.delete(roomCode), 30_000);
+
+      // Clear any prior cleanup timer and schedule a guarded 5-minute cleanup
+      if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+      room.cleanupTimer = setTimeout(() => {
+        const current = rooms.get(roomCode);
+        if (current && current.status === "finished") {
+          rooms.delete(roomCode);
+        }
+      }, 5 * 60 * 1000);
     } else {
       // Emit a fun fact between questions (SRS §4.6.3)
       io.to(roomCode).emit("fun_fact", { fact: getFunFact(room.subject) });
-      setTimeout(() => sendQuestion(io, rooms, roomCode), 2500);
+      room.nextQuestionTimer = setTimeout(() => sendQuestion(io, rooms, roomCode), 2500);
     }
   }
 

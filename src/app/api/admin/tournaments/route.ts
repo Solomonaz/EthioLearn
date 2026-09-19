@@ -10,14 +10,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
   const { searchParams } = new URL(request.url);
+  const targetSchoolId = user.schoolId || searchParams.get("schoolId");
   const status = searchParams.get("status");
 
-  const where: any = { schoolId: user.schoolId };
+  const where: any = {
+    ...(targetSchoolId ? { schoolId: targetSchoolId } : {}),
+  };
 
   if (status) {
     const validStatuses = ["DRAFT", "SCHEDULED", "ACTIVE", "COMPLETED", "CANCELLED"];
@@ -50,6 +53,7 @@ interface CreateTournamentBody {
   grade?: string;
   difficulty?: string;
   rules?: any;
+  schoolId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -63,7 +67,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  if (!user.schoolId) {
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
     return NextResponse.json({ error: "No school associated with this account" }, { status: 400 });
   }
 
@@ -91,6 +95,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let targetSchoolId = user.schoolId || body.schoolId;
+  if (!targetSchoolId && user.role === "SUPER_ADMIN") {
+    targetSchoolId = (await db.school.findFirst({ select: { id: true } }))?.id;
+  }
+
+  if (!targetSchoolId) {
+    return NextResponse.json({ error: "A school is required to create a tournament" }, { status: 400 });
+  }
+
   const tournament = await db.tournament.create({
     data: {
       name: name.trim(),
@@ -103,7 +116,7 @@ export async function POST(request: NextRequest) {
       grade: grade ? parseInt(grade, 10) : null,
       difficulty: difficulty as "EASY" | "MEDIUM" | "HARD" | null ?? null,
       rules: rules ?? undefined,
-      schoolId: user.schoolId,
+      schoolId: targetSchoolId,
       createdById: user.id,
     },
   });
