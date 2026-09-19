@@ -450,6 +450,19 @@ export default function BattleRoomPage() {
                 >
                   {timeLeft}s
                 </span>
+                {currentQuestion.timeLimit >= 75 ? (
+                  <Badge variant="default" className="text-[10px] font-semibold px-1.5 py-0.5 bg-purple-100 text-purple-800 border border-purple-200">
+                    Deep Problem
+                  </Badge>
+                ) : currentQuestion.timeLimit >= 55 ? (
+                  <Badge variant="warning" className="text-[10px] font-semibold px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-200">
+                    Extended Time
+                  </Badge>
+                ) : currentQuestion.timeLimit >= 40 ? (
+                  <Badge variant="info" className="text-[10px] font-semibold px-1.5 py-0.5">
+                    Detailed
+                  </Badge>
+                ) : null}
               </div>
             </div>
 
