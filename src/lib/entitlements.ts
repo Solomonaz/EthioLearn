@@ -25,6 +25,8 @@ export interface Entitlements {
   leaderboard: boolean;
   /** Graphing calculator & 3D geometry lab. */
   mathTools: boolean;
+  /** Anti-cheat tracking (tab-switch detection, clipboard lock). */
+  antiCheat: boolean;
 }
 
 export const FULL_ACCESS: Entitlements = {
@@ -33,6 +35,7 @@ export const FULL_ACCESS: Entitlements = {
   rewards: true,
   leaderboard: true,
   mathTools: true,
+  antiCheat: true,
 };
 // Individual student with no (or a free) plan: solo only — no AI, no multiplayer,
 // no rewards, no leaderboard, no advanced math tools.
@@ -42,6 +45,7 @@ export const FREE_TIER: Entitlements = {
   rewards: false,
   leaderboard: false,
   mathTools: false,
+  antiCheat: false,
 };
 
 const LIVE_STATUSES = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
@@ -58,10 +62,16 @@ interface UserLike {
  */
 export async function getEntitlements(user: UserLike | null | undefined): Promise<Entitlements> {
   const settings = await getPlatformSettings();
-  // The global master switch overrides everything: if AI is off platform-wide
-  // (e.g. the owner hasn't paid for the AI service), nobody gets AI — no matter
-  // what their plan says.
-  const gate = (e: Entitlements): Entitlements => ({ ...e, ai: e.ai && settings.aiEnabled });
+  // Global platform switches override individual plans:
+  // - If AI is off platform-wide, nobody gets AI.
+  // - If Rewards is off platform-wide, nobody gets rewards.
+  // - Anti-cheat is active only when BOTH rewards and anti-cheat tracking are enabled.
+  const gate = (e: Entitlements): Entitlements => ({
+    ...e,
+    ai: e.ai && settings.aiEnabled,
+    rewards: e.rewards && settings.rewardsEnabled,
+    antiCheat: settings.rewardsEnabled && settings.antiCheatEnabled,
+  });
 
   if (!user) return gate(FREE_TIER);
 
@@ -105,6 +115,7 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
     rewards: sub.plan.allowRewards,
     leaderboard: sub.plan.allowLeaderboard,
     mathTools: sub.plan.allowMathTools,
+    antiCheat: true,
   });
 }
 

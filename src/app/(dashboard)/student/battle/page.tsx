@@ -131,6 +131,7 @@ export default function BattleLobbyPage() {
       setCreatedRoomCode(roomCode);
       setCurrentRoomCode(roomCode);
       setInRoom(true);
+      router.push(`/student/battle/${roomCode}`);
     });
 
     socket.on(
@@ -264,15 +265,7 @@ export default function BattleLobbyPage() {
         return;
       }
 
-      // Join via socket
-      socketRef.current?.emit("join_room", {
-        roomCode: code,
-        name: userName,
-      });
-
-      setCurrentRoomCode(code);
-      setInRoom(true);
-      setActiveTab("create"); // Switch to show player list
+      router.push(`/student/battle/${code}`);
     } catch {
       setJoinError("Network error. Please try again.");
     } finally {

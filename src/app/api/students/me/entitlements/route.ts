@@ -39,6 +39,7 @@ export async function GET() {
     isSchoolStudent,
     planName,
     pricingEnabled: settings.pricingEnabled,
+    rewardsEnabled: settings.rewardsEnabled,
     aiFeatures,
   });
 }

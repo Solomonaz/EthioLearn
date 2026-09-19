@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
+import { useEntitlements } from "@/hooks/use-entitlements";
 
 interface UseAntiCheatOptions {
   /** Called on the 2nd tab-switch violation (should submit/end the quiz). */
@@ -29,12 +30,19 @@ interface UseAntiCheatOptions {
  *     - 2nd offence → calls onAutoSubmit()
  *  2. Disables copy, cut, paste, and contextmenu events on the page
  *     while the quiz is active (every mode).
+ *
+ * NOTE: Both mechanisms are automatically bypassed if the platform has disabled
+ * anti-cheat tracking (or if rewards are off platform-wide).
  */
 export function useAntiCheat({
   onAutoSubmit,
   enabled = true,
   tabSwitchAutoSubmit = true,
 }: UseAntiCheatOptions) {
+  const ent = useEntitlements();
+  // Anti-cheat is active only when enabled by caller AND active platform-wide
+  const isAntiCheatActive = enabled && ent.antiCheat;
+
   /** Track how many times the user has left the tab/window. */
   const violationCount = useRef(0);
   /** Stable reference so the effect always calls the latest version. */
@@ -43,7 +51,7 @@ export function useAntiCheat({
 
   // ── Tab-switch / window-blur detection ──────────────────────────────────
   const handleVisibilityChange = useCallback(() => {
-    if (!enabled || !tabSwitchAutoSubmit) return;
+    if (!isAntiCheatActive || !tabSwitchAutoSubmit) return;
     if (document.visibilityState === "hidden") {
       violationCount.current += 1;
 
@@ -65,10 +73,10 @@ export function useAntiCheat({
         onAutoSubmitRef.current();
       }
     }
-  }, [enabled, tabSwitchAutoSubmit]);
+  }, [isAntiCheatActive, tabSwitchAutoSubmit]);
 
   useEffect(() => {
-    if (!enabled || !tabSwitchAutoSubmit) return;
+    if (!isAntiCheatActive || !tabSwitchAutoSubmit) return;
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     // Also catch window blur (e.g. alt-tab to another application)
@@ -78,11 +86,11 @@ export function useAntiCheat({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleVisibilityChange);
     };
-  }, [enabled, tabSwitchAutoSubmit, handleVisibilityChange]);
+  }, [isAntiCheatActive, tabSwitchAutoSubmit, handleVisibilityChange]);
 
   // ── Copy / Paste / Cut / ContextMenu prevention ─────────────────────────
   useEffect(() => {
-    if (!enabled) return;
+    if (!isAntiCheatActive) return;
 
     const prevent = (e: Event) => {
       e.preventDefault();

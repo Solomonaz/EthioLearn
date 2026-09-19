@@ -119,6 +119,7 @@ interface RoomState {
   nextQuestionTimer?: NodeJS.Timeout;
   cleanupTimer?: NodeJS.Timeout;
   questionStartedAt: number;
+  countdownStartedAt?: number;
   currentTimeLimit?: number; // seconds allotted to the current question
   rematchRequesters: Set<string>;
   subject?: string; // for fun facts
@@ -205,9 +206,35 @@ app.prepare().then(() => {
   io.on("connection", (socket) => {
     if (dev) console.log("Socket connected:", socket.id, "user:", socket.data.userId);
 
-    socket.on("join_room", ({ roomCode, name }: { roomCode: string; name: string }) => {
+    socket.on("join_room", async ({ roomCode, name }: { roomCode: string; name: string }) => {
       const userId = socket.data.userId as string;
-      const room = rooms.get(roomCode);
+      let room = rooms.get(roomCode);
+      if (!room) {
+        try {
+          const dbRoom = await prisma.gameRoom.findUnique({ where: { roomCode } });
+          if (dbRoom && dbRoom.quizConfig && (dbRoom.status === "WAITING" || dbRoom.status === "ACTIVE")) {
+            const config = dbRoom.quizConfig as any;
+            const questions = config.questions as Array<{ question: string; options: string[]; correctIndex: number }>;
+            if (questions?.length) {
+              room = {
+                gameRoomId: dbRoom.id,
+                roomCode,
+                hostId: dbRoom.hostUserId,
+                players: new Map(),
+                questions,
+                currentQuestion: 0,
+                status: dbRoom.status === "ACTIVE" ? "countdown" : "waiting",
+                questionStartedAt: 0,
+                rematchRequesters: new Set(),
+                subject: config.subject ?? undefined,
+              };
+              rooms.set(roomCode, room);
+            }
+          }
+        } catch (err) {
+          console.error("Error restoring room in join_room:", err);
+        }
+      }
       if (!room) { socket.emit("error", { message: "Room not found" }); return; }
 
       const existing = room.players.get(userId);
@@ -219,7 +246,11 @@ app.prepare().then(() => {
         socket.join(roomCode);
         io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: room.status, hostId: room.hostId });
         io.to(roomCode).emit("player_reconnected", { userId });
-        if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
+        if (room.status === "countdown") {
+          const elapsedSec = room.countdownStartedAt ? Math.floor((Date.now() - room.countdownStartedAt) / 1000) : 0;
+          const remainingCountdown = Math.max(1, 3 - elapsedSec);
+          socket.emit("countdown_start", { seconds: remainingCountdown });
+        } else if (room.status === "in_progress" && room.currentQuestion < room.questions.length) {
           const q = room.questions[room.currentQuestion];
           const timeLimit = room.currentTimeLimit ?? getBattleSeconds({ questionText: q.question, options: q.options });
           const elapsedSec = Math.floor((Date.now() - room.questionStartedAt) / 1000);
@@ -310,14 +341,16 @@ app.prepare().then(() => {
       if (room.nextQuestionTimer) { clearTimeout(room.nextQuestionTimer); room.nextQuestionTimer = undefined; }
 
       room.status = "countdown";
+      room.countdownStartedAt = Date.now();
       if (room.gameRoomId) {
         prisma.gameRoom.update({
           where: { id: room.gameRoomId },
           data: { status: "ACTIVE" },
         }).catch(console.error);
       }
+      io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: "countdown", hostId: room.hostId });
       io.to(roomCode).emit("countdown_start", { seconds: 3 });
-      room.startTimer = setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
+      room.startTimer = setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3500);
     });
 
     socket.on("submit_answer", ({ roomCode, questionIndex, answerIndex, timeLeft, timeTakenMs }: {
@@ -504,6 +537,7 @@ app.prepare().then(() => {
 
         room.currentQuestion = 0;
         room.status = "countdown";
+        room.countdownStartedAt = Date.now();
         room.rematchRequesters.clear();
         if (room.gameRoomId) {
           prisma.gameRoom.update({
@@ -515,7 +549,7 @@ app.prepare().then(() => {
         io.to(roomCode).emit("rematch_starting");
         io.to(roomCode).emit("room_updated", { players: serializePlayers(room), status: "countdown", hostId: room.hostId });
         io.to(roomCode).emit("countdown_start", { seconds: 3 });
-        room.startTimer = setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3000);
+        room.startTimer = setTimeout(() => { room.status = "in_progress"; room.currentQuestion = 0; sendQuestion(io, rooms, roomCode); }, 3500);
       }
     });
 

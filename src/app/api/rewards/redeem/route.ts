@@ -15,6 +15,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
+  const { getPlatformSettings } = await import("@/lib/platform-settings");
+  const settings = await getPlatformSettings();
+  if (!settings.rewardsEnabled) {
+    return NextResponse.json(
+      { error: "The rewards system is currently disabled on the platform.", code: "REWARDS_DISABLED" },
+      { status: 403 }
+    );
+  }
+
   const ent = await getEntitlements(user);
   if (!ent.rewards) {
     return NextResponse.json(

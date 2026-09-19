@@ -20,6 +20,8 @@ import {
   BarChart2,
   RotateCcw,
   WifiOff,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,12 +90,15 @@ export default function BattleRoomPage() {
 
   const socketRef = useRef<Socket | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const questionStartedAtRef = useRef<number>(0);
 
   const [phase, setPhase] = useState<GamePhase>("connecting");
   const [countdownSeconds, setCountdownSeconds] = useState(3);
   const [players, setPlayers] = useState<PlayerScore[]>([]);
   const [hostId, setHostId] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [startingBattle, setStartingBattle] = useState(false);
 
   // Question state
   const [currentQuestion, setCurrentQuestion] = useState<QuestionData | null>(null);
@@ -157,6 +162,29 @@ export default function BattleRoomPage() {
     const socket = io({ transports: ["websocket", "polling"] });
     socketRef.current = socket;
 
+    const startCountdown = (seconds: number) => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      setPhase("countdown");
+      setCountdownSeconds(seconds);
+
+      let count = seconds;
+      countdownIntervalRef.current = setInterval(() => {
+        count -= 1;
+        if (count >= 1) {
+          setCountdownSeconds(count);
+        } else {
+          setCountdownSeconds(0);
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+        }
+      }, 1000);
+    };
+
     socket.on("connect", () => {
       // Join/rejoin the room on connect — userId comes from server-side JWT auth
       socket.emit("join_room", { roomCode, name: userName });
@@ -175,9 +203,25 @@ export default function BattleRoomPage() {
       }) => {
         setPlayers(players);
         setHostId(hostId);
-        if (status === "waiting") setPhase("waiting");
-        else if (status === "countdown") setPhase("countdown");
-        else if (status === "in_progress") setPhase("in_progress");
+        if (status === "waiting") {
+          setPhase("waiting");
+          setStartingBattle(false);
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+        } else if (status === "countdown") {
+          setPhase("countdown");
+          if (!countdownIntervalRef.current) {
+            startCountdown(3);
+          }
+        } else if (status === "in_progress") {
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+          setPhase("in_progress");
+        }
       }
     );
 
@@ -186,18 +230,14 @@ export default function BattleRoomPage() {
     });
 
     socket.on("countdown_start", ({ seconds }: { seconds: number }) => {
-      setPhase("countdown");
-      setCountdownSeconds(seconds);
-
-      let count = seconds;
-      const interval = setInterval(() => {
-        count -= 1;
-        setCountdownSeconds(count);
-        if (count <= 0) clearInterval(interval);
-      }, 1000);
+      startCountdown(seconds);
     });
 
     socket.on("question", (data: QuestionData) => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
       questionStartedAtRef.current = data.questionStartedAt ?? Date.now();
       setCurrentQuestion(data);
       setPhase("in_progress");
@@ -301,13 +341,31 @@ export default function BattleRoomPage() {
 
     socket.on("error", ({ message }: { message: string }) => {
       setError(message);
+      setStartingBattle(false);
     });
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
       socket.disconnect();
     };
   }, [userId, userName, roomCode, startTimer]);
+
+  function handleCopyRoomCode() {
+    navigator.clipboard.writeText(roomCode).then(() => {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    });
+  }
+
+  function handleStartBattle() {
+    if (!userId || players.length < 2 || startingBattle) return;
+    setStartingBattle(true);
+    socketRef.current?.emit("start_game", { roomCode });
+  }
 
   function handleAnswer(index: number) {
     if (answered || !currentQuestion || !userId) return;
@@ -356,43 +414,101 @@ export default function BattleRoomPage() {
 
   // ─── Waiting ─────────────────────────────────────────────
   if (phase === "waiting") {
+    const isHost = userId === hostId;
+    const canStart = isHost && players.length >= 2;
+
     return (
       <div className="mx-auto max-w-md p-6">
-        <Card className="border-primary/20">
-          <CardContent className="py-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+        <Card className="border-primary/20 shadow-md">
+          <CardContent className="py-8 text-center space-y-6">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
               <Swords className="h-8 w-8 text-primary" />
             </div>
-            <h2 className="mb-1 text-xl font-bold text-text-primary">
-              Room: {roomCode}
-            </h2>
-            <p className="mb-6 text-sm text-text-secondary">
-              Waiting for the host to start...
-            </p>
 
-            <div className="space-y-2">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-secondary">
-                <Users className="h-4 w-4" />
-                <span>{players.length} player{players.length !== 1 ? "s" : ""} in room</span>
-              </div>
-              {players.map((p) => (
-                <div
-                  key={p.userId}
-                  className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2"
+            <div>
+              <p className="text-xs uppercase tracking-wider font-semibold text-text-secondary mb-1">
+                Room Code
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <span className="font-mono text-3xl font-bold tracking-widest text-primary bg-primary/5 px-4 py-1.5 rounded-lg border border-primary/20">
+                  {roomCode}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyRoomCode}
+                  className="h-10 px-3"
+                  title="Copy Room Code"
                 >
-                  <Avatar name={p.name} size="sm" />
-                  <span className="flex-1 text-left text-sm font-medium text-text-primary">
-                    {p.name}
-                  </span>
-                  {p.userId === hostId && (
-                    <Badge variant="warning" className="gap-1">
-                      <Crown className="h-3 w-3" />
-                      Host
-                    </Badge>
-                  )}
-                </div>
-              ))}
+                  {copiedCode ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-text-secondary" />}
+                </Button>
+              </div>
             </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm font-semibold text-text-secondary px-1">
+                <div className="flex items-center gap-1.5">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span>Players ({players.length})</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                  <span className="text-xs text-text-secondary">Waiting</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {players.map((p) => (
+                  <div
+                    key={p.userId}
+                    className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 border border-gray-100"
+                  >
+                    <Avatar name={p.name} size="sm" />
+                    <span className="flex-1 text-left text-sm font-medium text-text-primary">
+                      {p.name}
+                    </span>
+                    {p.userId === hostId && (
+                      <Badge variant="warning" className="gap-1 text-xs">
+                        <Crown className="h-3 w-3" />
+                        Host
+                      </Badge>
+                    )}
+                    {p.userId === userId && p.userId !== hostId && (
+                      <Badge variant="info" className="text-xs">You</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Host Controls */}
+            {isHost ? (
+              <div className="space-y-2 pt-2">
+                <Button
+                  size="lg"
+                  onClick={handleStartBattle}
+                  disabled={!canStart || startingBattle}
+                  className="w-full gap-2 font-bold text-base shadow-sm"
+                >
+                  <Swords className="h-5 w-5" />
+                  {players.length < 2
+                    ? "Waiting for Opponent (Need 2+)"
+                    : startingBattle
+                    ? "Starting Countdown..."
+                    : "Start Battle Now"}
+                </Button>
+                {players.length < 2 && (
+                  <p className="text-xs text-text-secondary">
+                    Share the room code <span className="font-mono font-bold text-text-primary">{roomCode}</span> with a classmate to battle!
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 py-3 px-4 text-center text-sm text-text-secondary flex items-center justify-center gap-2">
+                <Spinner size="sm" className="text-primary" />
+                <span>Waiting for the host to start the battle...</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -402,14 +518,19 @@ export default function BattleRoomPage() {
   // ─── Countdown ───────────────────────────────────────────
   if (phase === "countdown") {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-6">
-        <p className="text-sm font-medium uppercase tracking-widest text-text-secondary">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-6">
+        <p className="text-sm font-bold uppercase tracking-widest text-primary animate-pulse">
           Get Ready!
         </p>
-        <div className="flex h-32 w-32 items-center justify-center rounded-full bg-primary/10">
-          <span className="text-7xl font-bold text-primary">{countdownSeconds}</span>
+        <div className="flex h-36 w-36 items-center justify-center rounded-full bg-primary/10 border-4 border-primary/20 shadow-xl transition-all">
+          <span
+            key={countdownSeconds}
+            className="text-8xl font-black text-primary animate-in zoom-in-50 duration-300 transition-all select-none"
+          >
+            {countdownSeconds > 0 ? countdownSeconds : "GO!"}
+          </span>
         </div>
-        <p className="text-text-secondary">Battle starts in...</p>
+        <p className="text-sm font-medium text-text-secondary">Battle starts in...</p>
       </div>
     );
   }

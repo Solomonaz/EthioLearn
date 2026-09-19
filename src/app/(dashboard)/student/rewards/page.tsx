@@ -354,6 +354,29 @@ export default function RewardsPage() {
     setPendingReward(null);
   };
 
+  // If the rewards program is turned off platform-wide by the administrator
+  if (!ent.loading && !ent.rewardsEnabled) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 border border-amber-200">
+          <Gift className="h-8 w-8 text-amber-600" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+          Rewards Program Currently Inactive
+        </h1>
+        <p className="mx-auto mt-3 max-w-lg text-sm text-gray-600 leading-relaxed sm:text-base">
+          The rewards store is temporarily closed while our reward program is being organized.
+          You can continue earning points and leveling up in quizzes and battles — your points are safely tracked on your profile and leaderboard!
+        </p>
+        <div className="mt-6 flex justify-center gap-3">
+          <Button variant="outline" onClick={() => window.location.href = "/student"}>
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // Rewards are a premium feature — gate for plans without the entitlement.
   if (!ent.loading && !ent.rewards) {
     return <UpgradeNotice feature="Rewards" planName={ent.planName} />;

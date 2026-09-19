@@ -11,6 +11,8 @@ const BOOLEAN_KEYS = [
   "aiAdaptiveEnabled",
   "aiMathToolsEnabled",
   "pricingEnabled",
+  "rewardsEnabled",
+  "antiCheatEnabled",
 ] as const;
 
 // ─── GET: current global platform settings ──
@@ -61,6 +63,8 @@ export async function PATCH(request: Request) {
       aiAdaptiveEnabled: true,
       aiMathToolsEnabled: true,
       pricingEnabled: true,
+      rewardsEnabled: true,
+      antiCheatEnabled: true,
     },
   });
 

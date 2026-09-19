@@ -256,6 +256,8 @@ model PlatformSettings {
   aiAdaptiveEnabled Boolean  @default(true) // adaptive difficulty
   aiMathToolsEnabled Boolean @default(true) // AI in the graphing calculator & 3D geometry lab
   pricingEnabled    Boolean  @default(true) // paid plans & billing — off = free for all
+  rewardsEnabled    Boolean  @default(true) // rewards catalogue & redemption — off = hide rewards
+  antiCheatEnabled  Boolean  @default(true) // anti-cheat detection & penalties — off = no restrictions
   updatedAt         DateTime @updatedAt
 
   @@map("platform_settings")

@@ -8,6 +8,8 @@ export interface PlatformSettings {
   aiAdaptiveEnabled: boolean;
   aiMathToolsEnabled: boolean;
   pricingEnabled: boolean;
+  rewardsEnabled: boolean;
+  antiCheatEnabled: boolean;
 }
 
 // Individual AI features are gated by BOTH the master switch and their own flag.
@@ -27,6 +29,8 @@ const DEFAULTS: PlatformSettings = {
   aiAdaptiveEnabled: true,
   aiMathToolsEnabled: true,
   pricingEnabled: true,
+  rewardsEnabled: true,
+  antiCheatEnabled: true,
 };
 
 /**
@@ -43,10 +47,12 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
       select: {
         aiEnabled: true,
         aiTutorEnabled: true,
-              aiQuizGenEnabled: true,
+        aiQuizGenEnabled: true,
         aiAdaptiveEnabled: true,
         aiMathToolsEnabled: true,
         pricingEnabled: true,
+        rewardsEnabled: true,
+        antiCheatEnabled: true,
       },
     });
     return row;
@@ -69,6 +75,17 @@ export function effectiveAiFlags(s: PlatformSettings): EffectiveAiFlags {
 export async function isAiFeatureEnabled(feature: keyof EffectiveAiFlags): Promise<boolean> {
   const settings = await getPlatformSettings();
   return effectiveAiFlags(settings)[feature];
+}
+
+/**
+ * Resolves whether anti-cheat tracking should be active.
+ *
+ * Rule: Anti-cheat tracking is only active when BOTH the rewards system is enabled
+ * AND anti-cheat tracking is explicitly turned on. If rewards are off, anti-cheat
+ * tracking is automatically dormant.
+ */
+export function isAntiCheatActive(settings: PlatformSettings): boolean {
+  return settings.rewardsEnabled && settings.antiCheatEnabled;
 }
 
 export const PLATFORM_SETTINGS_SINGLETON_ID = SINGLETON_ID;

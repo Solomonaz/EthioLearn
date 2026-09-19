@@ -9,6 +9,18 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { getPlatformSettings } = await import("@/lib/platform-settings");
+  const settings = await getPlatformSettings();
+  if (!settings.rewardsEnabled) {
+    return NextResponse.json({
+      rewards: [],
+      userPoints: 0,
+      redemptions: [],
+      disabled: true,
+      message: "The rewards system is currently disabled on the platform.",
+    });
+  }
+
   const ent = await getEntitlements(user);
   if (!ent.rewards) {
     return NextResponse.json(

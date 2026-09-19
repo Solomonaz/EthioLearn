@@ -8,11 +8,15 @@ export interface EntitlementsInfo {
   rewards: boolean;
   leaderboard: boolean;
   mathTools: boolean;
+  /** Anti-cheat tracking (tab-switch penalties, clipboard restriction). */
+  antiCheat: boolean;
   isIndependent: boolean;
   isSchoolStudent: boolean;
   planName: string | null;
   /** Paid plans / billing enabled platform-wide. Off = hide billing UI. */
   pricingEnabled: boolean;
+  /** Rewards store enabled platform-wide. Off = show inactive banner. */
+  rewardsEnabled: boolean;
   /** Effective per-AI-feature switches (master AND per-feature). */
   aiFeatures: { aiTutor: boolean; aiQuizGen: boolean; aiAdaptive: boolean; aiMathTools: boolean };
   loading: boolean;
@@ -26,10 +30,12 @@ const DEFAULT: EntitlementsInfo = {
   rewards: true,
   leaderboard: true,
   mathTools: true,
+  antiCheat: true,
   isIndependent: false,
   isSchoolStudent: false,
   planName: null,
   pricingEnabled: true,
+  rewardsEnabled: true,
   aiFeatures: { aiTutor: true, aiQuizGen: true, aiAdaptive: true, aiMathTools: true },
   loading: true,
 };
@@ -54,10 +60,12 @@ export function useEntitlements(): EntitlementsInfo {
             rewards: !!d.rewards,
             leaderboard: !!d.leaderboard,
             mathTools: !!d.mathTools,
+            antiCheat: d.antiCheat !== false,
             isIndependent: !!d.isIndependent,
             isSchoolStudent: !!d.isSchoolStudent,
             planName: d.planName ?? null,
             pricingEnabled: d.pricingEnabled !== false,
+            rewardsEnabled: d.rewardsEnabled !== false,
             aiFeatures: {
               aiTutor: d.aiFeatures?.aiTutor !== false,
               aiQuizGen: d.aiFeatures?.aiQuizGen !== false,

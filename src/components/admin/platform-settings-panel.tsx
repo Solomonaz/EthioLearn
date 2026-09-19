@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, CreditCard, Power } from "lucide-react";
+import { Sparkles, CreditCard, Power, Gift, Shield } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
@@ -14,6 +14,8 @@ interface Settings {
   aiAdaptiveEnabled: boolean;
   aiMathToolsEnabled: boolean;
   pricingEnabled: boolean;
+  rewardsEnabled: boolean;
+  antiCheatEnabled: boolean;
 }
 
 type Key = keyof Settings;
@@ -214,6 +216,34 @@ export function PlatformSettingsPanel() {
           checked={settings.pricingEnabled}
           onChange={(v) => update("pricingEnabled", v)}
         />
+
+        {/* Rewards & Academic Integrity section */}
+        <div className="mb-1 mt-5 flex items-center gap-2 border-b border-border pb-1">
+          <Gift className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-text-primary">Rewards & Academic Integrity</span>
+          {(savingKey === "rewardsEnabled" || savingKey === "antiCheatEnabled") && (
+            <Spinner size="sm" className="text-primary" />
+          )}
+        </div>
+        <Row
+          label="Rewards Program"
+          desc="Enable the rewards store and item redemption for students. Turn off to host without prizes."
+          checked={settings.rewardsEnabled}
+          onChange={(v) => update("rewardsEnabled", v)}
+        />
+        <div className="divide-y divide-border border-l-2 border-border/60 pl-4">
+          <Row
+            label="Anti-Cheat Tracking"
+            desc={
+              !settings.rewardsEnabled
+                ? "Auto-disabled while Rewards are turned off (tab-switch penalties and copy/paste restrictions are inactive)."
+                : "Enforce tab-switch auto-submit penalties and copy/paste restrictions during quizzes and battles."
+            }
+            checked={settings.rewardsEnabled && settings.antiCheatEnabled}
+            disabled={!settings.rewardsEnabled}
+            onChange={(v) => update("antiCheatEnabled", v)}
+          />
+        </div>
       </CardContent>
     </Card>
   );
