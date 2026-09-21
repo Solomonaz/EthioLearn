@@ -202,6 +202,13 @@ export async function geminiChat(
     actor?: UsageActor;
     /** Native Gemini structured output schema */
     responseSchema?: ResponseSchema;
+    /**
+     * Ask for prose instead of JSON. Long-form answers must NOT be wrapped in
+     * JSON: hitting the token cap then truncates the envelope and the whole
+     * reply becomes unparseable, losing text that was otherwise fine. Defaults
+     * to false so every existing caller keeps JSON mode.
+     */
+    plainText?: boolean;
   } = {}
 ): Promise<string | null> {
   if (!process.env.GEMINI_API_KEY) return null;
@@ -211,7 +218,9 @@ export async function geminiChat(
       model: modelId,
       ...(opts.system ? { systemInstruction: opts.system } : {}),
       generationConfig: withThinkingCap({
-        responseMimeType: "application/json",
+        ...(opts.plainText
+          ? { responseMimeType: "text/plain" }
+          : { responseMimeType: "application/json" }),
         ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
         temperature: opts.temperature ?? 0.2,
         maxOutputTokens: opts.maxTokens ?? 4096,

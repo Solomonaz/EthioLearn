@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
+import { homeRouteForRole } from "@/lib/teacher-band";
 
 /**
  * Post-login redirect hub.
@@ -31,15 +32,7 @@ export default function AuthRedirectPage() {
     }
 
     const role = user?.role;
-    if (role === "SUPER_ADMIN") {
-      router.replace("/admin");
-    } else if (role === "SCHOOL_ADMIN") {
-      router.replace("/school-admin");
-    } else if (role === "TEACHER") {
-      router.replace("/teacher");
-    } else {
-      router.replace("/student");
-    }
+    router.replace(homeRouteForRole(role));
   }, [status, session, router]);
 
   return (

@@ -5,6 +5,7 @@ import { extractTextFromFile } from "@/lib/extract-text";
 import { splitTextByChapters } from "@/lib/ai-provider";
 import { detectChaptersFullText } from "@/lib/chapter-detection";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { canonicalSubject } from "@/lib/subject";
 
 // Simple in-memory rate limiter
 const rateLimitMap = new Map<string, number[]>();
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
       // past roughly page 25 went undetected.
       const result = await detectChaptersFullText({
         content: extraction.text,
-        subject: subject.trim(),
+        subject: await canonicalSubject(subject),
         grade,
         language,
       });

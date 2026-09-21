@@ -12,6 +12,7 @@ import {
   School,
   CheckCircle2,
   TrendingUp,
+  Lock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -160,6 +161,9 @@ export default function StudentProfilePage() {
 
   const { user, stats, subjectMastery, recentActivity, achievements } = profile;
 
+  // Enrolled at a school → the school owns their identity fields.
+  const schoolManaged = Boolean(user.school);
+
   const pointsInCurrentLevel = user.totalPoints % 100;
   const accuracy =
     stats.totalQuestions > 0
@@ -191,25 +195,42 @@ export default function StudentProfilePage() {
                 <h1 className="text-2xl font-bold text-text-primary">
                   {user.name}
                 </h1>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 px-2 text-xs text-text-secondary"
-                  aria-label="Edit name"
-                  onClick={() => {
-                    setEditName(profile?.user.name ?? "");
-                    setEditGrade(profile?.user.grade ?? "");
-                    setEditSection(profile?.user.section ?? "");
-                    setEditError(null);
-                    setIsEditing(true);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
+                {/*
+                  A student enrolled at a school does not own their own name,
+                  grade or section — those are how their teachers identify
+                  them, and how the platform decides whose class they are in.
+                  The API refuses these edits outright; hiding the button is
+                  the courtesy, not the control.
+                */}
+                {schoolManaged ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-border/50 px-2 py-0.5 text-[11px] font-medium text-text-muted"
+                    title="Your school sets your name, grade and section. Ask your school administrator to change them."
+                  >
+                    <Lock className="h-3 w-3" />
+                    Set by your school
+                  </span>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs text-text-secondary"
+                    aria-label="Edit name"
+                    onClick={() => {
+                      setEditName(profile?.user.name ?? "");
+                      setEditGrade(profile?.user.grade ?? "");
+                      setEditSection(profile?.user.section ?? "");
+                      setEditError(null);
+                      setIsEditing(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                )}
               </div>
 
-              {isEditing && (
+              {isEditing && !schoolManaged && (
                 <div className="mt-4 space-y-3 border-t border-border pt-4">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-secondary">Display Name</label>
@@ -233,18 +254,6 @@ export default function StudentProfilePage() {
                       ))}
                     </select>
                   </div>
-                  {/* Section is a school-class attribute — only for students who belong to a school */}
-                  {user.school && (
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-text-secondary">Section</label>
-                      <input
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                        value={editSection}
-                        onChange={(e) => setEditSection(e.target.value)}
-                        placeholder="e.g. A"
-                      />
-                    </div>
-                  )}
                   {editError && (
                     <p className="text-sm text-error">{editError}</p>
                   )}

@@ -33,6 +33,7 @@ export type QualityFlag =
   | "AMBIGUOUS"            // Potentially ambiguous question
   | "FACTUAL_ERROR"        // Correct answer or premise is factually wrong
   | "META_REFERENCE"       // Question text references "the chapter / the text"
+  | "DANGLING_REFERENCE"   // Promises data or a figure the student is never shown
   | "COMPOUND_QUESTION"    // MCQ/TRUE_FALSE asks two things ("…and why?")
   | "WEAK_OPTION"          // MCQ uses "All/None of the above" or "Both A and B"
   | "WEAK_DISTRACTOR"      // A wrong option is so implausible it narrows the question
@@ -259,7 +260,46 @@ const META_REF_PATTERNS = [
   /\bthe textbook\b/i,
   /\baccording to the book\b/i,
   /\bbased on the reading\b/i,
+  // Grade-qualified sources: "the Grade 11 textbook", "your Grade 12 book".
+  // The plain patterns above cannot see these, because the grade sits between
+  // the article and the source noun — which is how one reached a student.
+  /\b(?:the|your|our)?\s*grade\s*\d+\s+(?:textbooks?|books?|texts?|chapters?|syllabus|curriculum|notes?)\b/i,
+  /\byour\s+(?:textbook|notes|workbook|exercise book)\b/i,
 ];
+
+/**
+ * Things a question can promise but never deliver.
+ *
+ * The questionText is all the student sees — there is no attached table and no
+ * image. A stem that says "use the following data" and then supplies none is
+ * unanswerable, and one that references a diagram is unanswerable by
+ * construction.
+ */
+const PROMISED_DATA_PATTERNS = [
+  /\bthe\s+(?:following|below|above|given)\s+(?:thermochemical\s+)?(?:data|values|table|information|figures|results|measurements)\b/i,
+  /\b(?:data|table|values|information|results)\s+(?:below|above|shown|provided|given)\b/i,
+];
+
+/** Visual references that can never be rendered, so are always broken. */
+const VISUAL_REF_PATTERNS = [
+  /\b(?:the|this|following|above|below)\s+(?:diagram|figure|graph|image|picture|illustration|chart|map|photograph)\b/i,
+  /\b(?:diagram|figure|graph|image|picture|illustration|chart)\s+(?:below|above|shown)\b/i,
+  /\bas\s+shown\s+in\s+the\s+(?:diagram|figure|graph|image|chart)\b/i,
+];
+
+/**
+ * Whether a stem that promises data actually contains any.
+ *
+ * Deliberately generous: two or more numbers, or a list/table-like structure,
+ * counts as data being present. The aim is to catch the stem that supplies
+ * nothing at all, not to police how the data is laid out.
+ */
+function containsSuppliedData(text: string): boolean {
+  const numbers = text.match(/-?\d+(?:\.\d+)?/g) ?? [];
+  if (numbers.length >= 2) return true;
+  // A list or table written into the stem.
+  return /[;\n]\s*\S+\s*[:=]/.test(text) || /\|/.test(text);
+}
 
 // ─── 1. Answer Validation ──────────────────────────────
 
@@ -316,6 +356,14 @@ function structuralChecks(q: GeneratedQuestion): QualityFlag[] {
     flags.push("META_REFERENCE");
   }
 
+  // Promised data that was never supplied, or a visual that cannot be shown:
+  // either way the student is asked to read something that is not there.
+  const promisesData = PROMISED_DATA_PATTERNS.some((p) => p.test(q.questionText));
+  const referencesVisual = VISUAL_REF_PATTERNS.some((p) => p.test(q.questionText));
+  if (referencesVisual || (promisesData && !containsSuppliedData(q.questionText))) {
+    flags.push("DANGLING_REFERENCE");
+  }
+
   const type = q.type.toUpperCase();
   if (
     (type === "MCQ" || type === "TRUE_FALSE") &&
@@ -344,6 +392,9 @@ const STUDENT_BLOCKING_FLAGS: QualityFlag[] = [
   "META_REFERENCE",
   "COMPOUND_QUESTION",
   "WEAK_OPTION",
+  // A question referring to data or a picture that is not there cannot be
+  // answered at all, so it is the most blocking defect of the set.
+  "DANGLING_REFERENCE",
 ];
 
 /**
@@ -1105,7 +1156,11 @@ export async function runQualityPipeline(
   let existingEmbeddings: number[][] = [];
 
   try {
-    const embeddingResults = await generateEmbeddings(allTexts);
+    const embeddingResults = await generateEmbeddings(
+      allTexts,
+      "RETRIEVAL_DOCUMENT",
+      { feature: "embedding-dedup" }
+    );
     sourceEmbeddings = embeddingResults
       .slice(0, sourceWindows.length)
       .map((r) => r.embedding);

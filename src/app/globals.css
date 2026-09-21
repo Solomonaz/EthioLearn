@@ -194,3 +194,61 @@
     animation: none !important;
   }
 }
+
+/* ─── Printing ──────────────────────────────────────────────────────────
+   Teachers print AI-generated lesson plans and worksheets to take into a
+   classroom, so a printed page must carry the content and nothing else: no
+   sidebar, no navbar, no buttons.
+
+   Anything marked `print-area` becomes the whole page; `print-hide` is for
+   controls that sit inside that area, like the action buttons. */
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  /* Collapse the app chrome. */
+  nav,
+  aside,
+  header,
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Lift the printable region out of the dashboard's padded, offset shell. */
+  .print-area {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .print-area * {
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  /* Keep tables and worked examples from splitting across pages. */
+  .print-area table,
+  .print-area pre,
+  .print-area blockquote {
+    break-inside: avoid;
+  }
+
+  .print-area h1,
+  .print-area h2,
+  .print-area h3 {
+    break-after: avoid;
+  }
+
+  .print-area table,
+  .print-area th,
+  .print-area td {
+    border-color: #999 !important;
+  }
+}

@@ -238,7 +238,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       // search time.
       const embeddingResults = await generateEmbeddings(
         chunks.map((c) => c.content),
-        "RETRIEVAL_DOCUMENT"
+        "RETRIEVAL_DOCUMENT",
+        // Content-side work: no single student triggered it, so no actor. The
+        // cost is one-time per textbook and amortised across everyone.
+        { feature: "embedding-ingest" }
       );
       const embeddings = embeddingResults.map((r) => r.embedding);
       const providers = embeddingResults.map((r) => r.provider);

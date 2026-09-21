@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { normalizeSection } from "@/lib/section";
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -50,6 +51,29 @@ export async function PATCH(req: Request) {
     section?: string;
     avatarUrl?: string;
   };
+
+  // ── School students do not own their identity fields ──────────────────
+  // Same rule as PATCH /api/students/me/profile — see the note there. Two
+  // routes write the same three columns, so both have to enforce it; locking
+  // only one leaves the other as the way round it.
+  //
+  // Email and avatar stay the student's own: neither is how a teacher
+  // identifies them in a class list.
+  if (user.schoolId) {
+    const restricted = (["name", "grade", "section"] as const).filter(
+      (f) => body[f] !== undefined,
+    );
+    if (restricted.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Your name, grade and section are managed by your school. Ask your school administrator to change them.",
+          fields: restricted,
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   // Validate name
   if (name !== undefined) {
@@ -101,7 +125,9 @@ export async function PATCH(req: Request) {
   if (name !== undefined) updateData.name = name.trim();
   if (email !== undefined) updateData.email = email === "" ? null : email;
   if (grade !== undefined) updateData.grade = grade;
-  if (section !== undefined) updateData.section = section || null;
+  // Normalised, so a self-managed student cannot store "b" against the "B"
+  // every other writer holds.
+  if (section !== undefined) updateData.section = normalizeSection(section) || null;
   if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl || null;
 
   if (Object.keys(updateData).length === 0) {

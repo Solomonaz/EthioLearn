@@ -135,7 +135,14 @@
     "play_short": "ጨዋታ",
     "tugOfWar": "ገመድ መጎተት",
     "tug_short": "ገመድ",
-    "theme": "ገጽታ"
+    "theme": "ገጽታ",
+    "sectionSecondaryTeacher": "መምህር (9-12)",
+    "myClasses": "ክፍሎቼ",
+    "teachers": "መምህራን",
+    "activities": "ተግባራት",
+    "myWork": "ስራዎች",
+    "assistant": "AI ረዳት",
+    "myMaterials": "የባት ትምህርቶች"
   },
   "teacher": {
     "welcome": "እንኳን ደህና መጡ፣ {name}",

@@ -29,6 +29,10 @@ export default async function TeacherLayout({
     redirect("/student");
   }
 
+  if (user.role === "SECONDARY_TEACHER") {
+    redirect("/secondary-teacher");
+  }
+
   if (user.role !== "TEACHER") {
     redirect("/login");
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ interface NotificationItem {
 }
 
 const TYPE_ICONS: Record<string, string> = {
+  homework: "📝",
   achievement: "🏆",
   level_up: "⬆️",
   streak: "🔥",
@@ -32,6 +34,7 @@ const FILTER_TABS = [
   { key: "unread",        label: "Unread"       },
   { key: "achievement",   label: "Achievements" },
   { key: "streak",        label: "Streaks"      },
+  { key: "homework",      label: "Work set"     },
   { key: "battle_invite", label: "Battles"      },
 ] as const;
 
@@ -53,6 +56,22 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [markingAll, setMarkingAll] = useState(false);
+  const router = useRouter();
+
+  /**
+   * Where a notification takes you, or null if it is purely informational.
+   *
+   * Work a teacher set is the one kind a student must be able to act on, and
+   * a notice they cannot open is worse than no notice at all — it says
+   * something is due and then refuses to say what.
+   */
+  function destinationFor(n: NotificationItem): string | null {
+    if (n.type !== "homework") return null;
+    const activityId = n.data?.activityId;
+    return typeof activityId === "string" && activityId
+      ? `/student/activities?activity=${encodeURIComponent(activityId)}`
+      : "/student/activities";
+  }
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -184,7 +203,11 @@ export default function NotificationsPage() {
               {filtered.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => !n.isRead && markOneRead(n.id)}
+                  onClick={() => {
+                    if (!n.isRead) markOneRead(n.id);
+                    const to = destinationFor(n);
+                    if (to) router.push(to);
+                  }}
                   className={cn(
                     "flex w-full items-start gap-4 px-4 py-4 text-left transition-colors hover:bg-surface/60",
                     !n.isRead && "bg-primary/5"

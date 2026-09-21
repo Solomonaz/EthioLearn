@@ -52,6 +52,19 @@ export function sanitizeQuestionText(text: string): string {
     ""
   );
 
+  // Grade-qualified sources — "from the Grade 11 textbook", "in your Grade 12
+  // book". The pattern above cannot reach these because the grade sits between
+  // the article and the source noun, which is exactly how the leak was found.
+  t = t.replace(
+    /\s*(?:,\s*)?(?:from|in|using|per|according to)\s+(?:the|your|our)?\s*grade\s*\d+\s+(?:textbooks?|books?|texts?|chapters?|syllabus|curriculum|notes?)\b/gi,
+    ""
+  );
+  // …and the bare form, "the Grade 11 textbook", left mid-sentence.
+  t = t.replace(
+    /\s*(?:the|your|our)\s+grade\s*\d+\s+(?:textbooks?|books?|texts?|chapters?|syllabus|curriculum|notes?)\b/gi,
+    ""
+  );
+
   t = t.replace(/\s{2,}/g, " ").replace(/^[,;:\s]+/, "").trim();
   if (t.length > 0) t = t[0].toUpperCase() + t.slice(1);
   return t;
@@ -286,10 +299,34 @@ Q11. NO META-REFERENCES: The questionText must NEVER contain phrases such as
     chapter", or any phrase that reveals the question's source. Questions must
     read as fully standalone exam items — a student should not be reminded
     they are reading from a textbook.
+    This includes GRADE-QUALIFIED sources. "the Grade 11 textbook", "your
+    Grade 12 book", "the Grade 9 syllabus" and anything similar are all
+    forbidden. The student already knows which book and grade they are in;
+    naming it adds nothing and reads like an instruction to the teacher.
     WRONG: "According to the chapter, what triggers the menstrual cycle?"
     WRONG: "Which evidence from the chapter best refutes this claim?"
+    WRONG: "Use the thermochemical data from the Grade 11 textbook to calculate…"
     RIGHT: "What is the primary hormonal trigger for the menstrual cycle?"
     RIGHT: "Which of the following best refutes the claim that X occurs in Y?"
+    RIGHT: "Use the following data to calculate…" — FOLLOWED BY THE ACTUAL DATA.
+Q12. SELF-CONTAINED — NOTHING MAY BE PROMISED AND NOT SUPPLIED:
+    The questionText is the ONLY thing the student sees. There is no attached
+    table, no figure, no diagram, no image, no "data above".
+    (a) If you write "the following data", "the data below", "the table below"
+        or similar, you MUST then write that data out IN FULL inside the
+        questionText itself, as plain text or a simple list.
+    (b) NEVER refer to a diagram, figure, graph, image, picture, illustration
+        or map. None of them can be displayed. If a question only works with a
+        picture, write a different question.
+    WRONG: "Use the following thermochemical data to calculate the lattice
+           energy of NaCl." — then no data is given. The student cannot answer.
+    RIGHT: "Given these values: sublimation of Na = 108 kJ/mol; ionisation of
+           Na = 496 kJ/mol; bond dissociation of Cl2 = 242 kJ/mol; electron
+           affinity of Cl = -349 kJ/mol; formation of NaCl(s) = -411 kJ/mol —
+           calculate the lattice energy of NaCl(s)."
+    WRONG: "Based on the graph shown, what is the rate at 20 s?"
+    RIGHT: "A reaction produces 12 cm3 of gas in the first 10 s and 20 cm3 by
+           20 s. What is the average rate between 10 s and 20 s?"
 Q13. DISTRACTOR COHERENCE (MCQ only): Every option must be a DIRECT LOGICAL
     RESPONSE to the exact question being asked — not a fact about a related but
     different topic. The question premise defines the domain; all 4 options must

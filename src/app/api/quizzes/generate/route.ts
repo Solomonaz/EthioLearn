@@ -7,6 +7,7 @@ import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { isInStudyScope } from "@/lib/grade-scope";
+import { replenishQuestionBank } from "@/lib/question-bank";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -156,168 +157,19 @@ export async function POST(request: Request) {
       },
     });
 
-    // If Question Bank has fewer questions than requested (or zero), and AI generation
-    // is enabled, automatically replenish the chapter question bank in the database (SRS §4.5.3 / §4.9).
-    // Future quizzes on this chapter will then serve instantly from PostgreSQL.
+    // If the bank is short, top it up with AI and reuse the result. The logic
+    // lives in lib/question-bank so teacher-set activities share it exactly —
+    // the verify and dedupe rules are calibrated and must not be duplicated.
     if (allQuestions.length < count) {
-      const canGenerate =
-        (await isAiFeatureEnabled("aiQuizGen")) &&
-        (process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.NVIDIA_API_KEY);
-
-      if (canGenerate) {
-        try {
-          let replenishContent = "";
-          let replenishTitle = "";
-          let replenishChapterId = typeof chapterId === "string" ? chapterId : "";
-
-          if (chapterId === "all") {
-            const firstChapter = await db.chapter.findFirst({
-              where: { textbookId },
-              orderBy: { chapterNumber: "asc" },
-              select: { id: true, title: true, content: true },
-            });
-            if (firstChapter) {
-              replenishChapterId = firstChapter.id;
-              replenishTitle = firstChapter.title;
-              replenishContent = firstChapter.content || "";
-            }
-          } else {
-            const ch = await db.chapter.findUnique({
-              where: { id: replenishChapterId },
-              select: {
-                id: true,
-                title: true,
-                content: true,
-                textbook: { select: { content: true } },
-              },
-            });
-            if (ch) {
-              replenishChapterId = ch.id;
-              replenishTitle = ch.title;
-              replenishContent = ch.content || ch.textbook.content || "";
-            }
-          }
-
-          if (replenishContent && replenishContent.length >= 100) {
-            const neededCount = Math.min(count - allQuestions.length + 2, 15);
-            const {
-              generateQuestionsBatched,
-              verifyQuestions,
-              hasBlockingStructuralIssue,
-            } = await import("@/lib/ai-provider");
-
-            const resolvedTextbookId =
-              textbookId ??
-              (
-                await db.chapter.findUnique({
-                  where: { id: replenishChapterId },
-                  select: { textbookId: true },
-                })
-              )?.textbookId;
-
-            const textbookMeta = resolvedTextbookId
-              ? await db.textbook.findUnique({
-                  where: { id: resolvedTextbookId },
-                  select: { subject: true, grade: true },
-                })
-              : null;
-
-            if (textbookMeta) {
-              const { questions: rawGen, provider } =
-                await generateQuestionsBatched({
-                  content: replenishContent.slice(0, 30000),
-                  chapterTitle: replenishTitle,
-                  subject: textbookMeta.subject,
-                  grade: textbookMeta.grade,
-                  count: neededCount,
-                  difficulty:
-                    difficulty === "ADAPTIVE" || !difficulty
-                      ? "MEDIUM"
-                      : (difficulty as any),
-                  questionTypes:
-                    Array.isArray(questionTypes) && questionTypes.length > 0
-                      ? (questionTypes as any)
-                      : (["MCQ"] as any),
-                  mode:
-                    mode === "TIMED" || mode === "GROUP"
-                      ? (mode as any)
-                      : "SOLO",
-                });
-
-              const verdicts = await verifyQuestions(
-                rawGen,
-                textbookMeta.subject,
-                textbookMeta.grade,
-                { avoidProvider: provider }
-              );
-              const verifiedNew = rawGen.filter(
-                (q, idx) =>
-                  verdicts[idx]?.verdict === "verified" &&
-                  !hasBlockingStructuralIssue(q)
-              );
-
-              if (verifiedNew.length > 0) {
-                const genTexts = verifiedNew.map((q) => q.questionText);
-                const existing = await db.question.findMany({
-                  where: {
-                    chapterId: replenishChapterId,
-                    questionText: { in: genTexts },
-                  },
-                  select: { questionText: true },
-                });
-                const existingSet = new Set(existing.map((e) => e.questionText));
-                const toInsert = verifiedNew.filter(
-                  (q) => !existingSet.has(q.questionText)
-                );
-
-                if (toInsert.length > 0) {
-                  const created = await Promise.all(
-                    toInsert.map((q) =>
-                      db.question.create({
-                        data: {
-                          chapterId: replenishChapterId,
-                          questionText: q.questionText,
-                          type: q.type as any,
-                          difficulty: q.difficulty as any,
-                          options: q.options,
-                          correctAnswer: q.correctAnswer,
-                          explanation: q.explanation,
-                          bloomLevel: (q as any).bloomLevel ?? null,
-                          qualityScore: 1.0,
-                          status: "PUBLISHED",
-                        },
-                        select: {
-                          id: true,
-                          questionText: true,
-                          options: true,
-                          type: true,
-                          difficulty: true,
-                        },
-                      })
-                    )
-                  );
-
-                  // Update chapter question count so daily challenge and chapter badges stay in sync
-                  const totalCount = await db.question.count({
-                    where: {
-                      chapterId: replenishChapterId,
-                      status: "PUBLISHED",
-                    },
-                  });
-                  await db.chapter.update({
-                    where: { id: replenishChapterId },
-                    data: { questionCount: totalCount },
-                  });
-
-                  allQuestions.push(...created);
-                }
-              }
-            }
-          }
-        } catch (replenishErr) {
-          console.warn("[Question Bank Replenish Error]", replenishErr);
-        }
-      }
+      const created = await replenishQuestionBank({
+        chapterId: typeof chapterId === "string" ? chapterId : "",
+        textbookId,
+        needed: count - allQuestions.length,
+        difficulty,
+        questionTypes,
+        mode,
+      });
+      allQuestions.push(...(created as typeof allQuestions));
     }
 
     if (allQuestions.length === 0) {

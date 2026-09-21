@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { isAnyTeacher } from "@/lib/teacher-band";
 
 /** DELETE /api/teacher/me/assignments/[id] — remove one of my teaching pairs. */
 export async function DELETE(
@@ -12,8 +13,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
+  // Shared by both teacher bands; the deleteMany below is owner-scoped, so a
+  // teacher can still only remove their own rows.
   const user = await getCurrentUser();
-  if (!user || user.role !== "TEACHER") {
+  if (!user || !isAnyTeacher(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 

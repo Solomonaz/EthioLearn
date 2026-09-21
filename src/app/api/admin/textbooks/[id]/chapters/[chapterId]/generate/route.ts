@@ -121,7 +121,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       fallbackContent: finalContent,
       // Budget by how many calls will carry it, so a small chapter is sent whole
       // instead of being sampled down to one prompt's worth. See ai-provider.
-      budgetChars: generationContentBudget(count),
+      // Pass the chapter's true length so the budget is sized by how much
+      // there is to read, not only by how many questions were asked for.
+      budgetChars: generationContentBudget(count, finalContent.length),
       rotation: priorQuestions,
     });
     finalContent = selected.content;

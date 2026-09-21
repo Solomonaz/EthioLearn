@@ -22,6 +22,8 @@ import {
   TrendingUp,
   BookMarked,
   Building2,
+  ClipboardList,
+  GraduationCap,
   CreditCard,
   PencilRuler,
   Shuffle,
@@ -33,6 +35,7 @@ import {
   Boxes,
   Receipt,
   Coins,
+  Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -71,10 +74,14 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
   const isTeacher = pathname.startsWith("/teacher");
+  // "/secondary-teacher" does not start with "/teacher", so the grades 1-8
+  // playful teacher chrome below is correctly NOT applied to this surface.
+  const isSecondaryTeacher = pathname.startsWith("/secondary-teacher");
 
   const studentNavItems: NavItem[] = [
     { labelKey: "dashboard",   href: "/student",                icon: Home,          exact: true },
     { labelKey: "quiz",        href: "/student/quiz",           icon: BookOpen },
+    { labelKey: "myWork",      href: "/student/activities",     icon: ClipboardList },
     { labelKey: "grapher",     href: "/student/grapher",        icon: LineChart },
     { labelKey: "geometry",    href: "/student/geometry",       icon: Boxes },
     { labelKey: "aiTutor",     href: "/student/tutor",          icon: MessageSquare },
@@ -101,6 +108,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "dashboard",  href: "/admin",             icon: LayoutDashboard, exact: true },
     { labelKey: "schools",    href: "/admin/schools",      icon: Building2 },
     { labelKey: "students",   href: "/admin/students",     icon: Users },
+    { labelKey: "teachers",   href: "/admin/teachers",     icon: GraduationCap },
     { labelKey: "textbooks",  href: "/admin/textbooks",    icon: Library },
     { labelKey: "subjects",   href: "/admin/subjects",     icon: BookMarked },
     { labelKey: "questions",  href: "/admin/questions",    icon: HelpCircle },
@@ -115,6 +123,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   const schoolAdminNavItems: NavItem[] = [
     { labelKey: "dashboard",  href: "/school-admin",              icon: LayoutDashboard, exact: true },
     { labelKey: "students",   href: "/school-admin/students",     icon: Users },
+    { labelKey: "teachers",   href: "/school-admin/teachers",     icon: GraduationCap },
     { labelKey: "textbooks",  href: "/school-admin/textbooks",    icon: Library },
     { labelKey: "subjects",   href: "/school-admin/subjects",     icon: BookMarked },
     { labelKey: "questions",  href: "/school-admin/questions",    icon: HelpCircle },
@@ -135,6 +144,17 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
   ];
 
+  const secondaryTeacherNavItems: NavItem[] = [
+    { labelKey: "dashboard",  href: "/secondary-teacher",            icon: LayoutDashboard, exact: true },
+    { labelKey: "myClasses",  href: "/secondary-teacher/classes",    icon: Users },
+    { labelKey: "activities", href: "/secondary-teacher/activities", icon: ClipboardList },
+    { labelKey: "assistant",   href: "/secondary-teacher/assistant",  icon: Sparkles },
+    { labelKey: "myMaterials", href: "/secondary-teacher/resources",  icon: BookMarked },
+    { labelKey: "grapher",    href: "/secondary-teacher/grapher",    icon: LineChart },
+    { labelKey: "geometry",   href: "/secondary-teacher/geometry",   icon: Boxes },
+    { labelKey: "profile",    href: "/secondary-teacher/profile",    icon: User },
+  ];
+
   let navItems: NavItem[] = studentNavItems;
   let sectionLabelKey = "sectionStudent";
   if (isSchoolAdmin) {
@@ -143,6 +163,9 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   } else if (isAdmin) {
     navItems = superAdminNavItems;
     sectionLabelKey = "sectionAdmin";
+  } else if (isSecondaryTeacher) {
+    navItems = secondaryTeacherNavItems;
+    sectionLabelKey = "sectionSecondaryTeacher";
   } else if (isTeacher) {
     navItems = teacherNavItems;
     sectionLabelKey = "sectionTeacher";

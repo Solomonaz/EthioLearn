@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "compare:models": "node --env-file=.env --import tsx scripts/compare-question-models.ts",
     "generate-icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
@@ -20,8 +21,10 @@
     "@prisma/client": "^6.19.2",
     "@types/papaparse": "^5.5.2",
     "clsx": "^2.1.1",
+    "docx": "^9.7.1",
     "epub2": "^3.0.2",
     "groq-sdk": "^1.1.2",
+    "katex": "^0.16.47",
     "lucide-react": "^0.577.0",
     "mammoth": "^1.12.0",
     "mathjs": "^15.2.0",
@@ -35,7 +38,9 @@
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "resend": "^6.10.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",

@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
+import { MAX_SECTION_LENGTH } from "@/lib/section";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -359,6 +360,12 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
       setError("Name and phone number are required.");
       return;
     }
+    // Section is required: class rosters and every cohort view are keyed on it,
+    // so a student without one belongs to no class.
+    if (!section.trim()) {
+      setError("Section is required — e.g. A.");
+      return;
+    }
     setError(null);
     setSaving(true);
     try {
@@ -371,7 +378,7 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
           name: name.trim(),
           phone: `+251${localDigits}`,
           grade: grade || undefined,
-          section: section.trim() || undefined,
+          section,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -438,8 +445,15 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-text-muted">Section</label>
-                <Input placeholder='e.g. "A"' value={section} onChange={(e) => setSection(e.target.value)} disabled={saving} />
+                <label className="text-xs font-semibold uppercase text-text-muted">Section *</label>
+                <Input
+                  placeholder='e.g. "A"'
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                  disabled={saving}
+                  maxLength={MAX_SECTION_LENGTH}
+                  required
+                />
               </div>
             </div>
 

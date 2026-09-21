@@ -135,7 +135,14 @@
     "play_short": "Play",
     "tugOfWar": "Tug of War",
     "tug_short": "Tug",
-    "theme": "Theme"
+    "theme": "Theme",
+    "sectionSecondaryTeacher": "Teacher (9-12)",
+    "myClasses": "My Classes",
+    "teachers": "Teachers",
+    "activities": "Activities",
+    "myWork": "My Work",
+    "assistant": "AI Assistant",
+    "myMaterials": "My Materials"
   },
   "teacher": {
     "welcome": "Welcome, {name}",

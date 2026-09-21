@@ -48,10 +48,23 @@ export type UsageFeature =
   | "quality-check"
   | "bloom-tagging"
   | "tutor-chat"
+  | "teacher-assistant"
   | "vision-graph"
   | "vision-equation"
   | "vision-solid"
-  | "graph-qa";
+  | "graph-qa"
+  // ── Embeddings ───────────────────────────────────────────────────────────
+  // Split by call site rather than lumped into one "embedding" bucket: the
+  // three have completely different cost curves. Ingest is bounded by how many
+  // textbooks exist, query scales with student traffic, and dedup scales with
+  // question generation — which makes dedup the only one that can grow
+  // without a textbook or a student being added.
+  /** Textbook processing: one vector per chunk, once per book. */
+  | "embedding-ingest"
+  /** Question-generation dedup: re-embeds the comparison set every batch. */
+  | "embedding-dedup"
+  /** Tutor semantic search: one short vector per student message. */
+  | "embedding-query";
 
 /**
  * Who a model call was made FOR. Passed down from the route that has the

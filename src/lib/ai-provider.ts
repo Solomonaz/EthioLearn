@@ -167,10 +167,39 @@ const QUESTION_BATCH_SIZE = 5;
  */
 const CONTENT_CHARS_PER_BATCH = 9000;
 
-/** How many provider calls `generateQuestionsBatched` will make for `count`. */
-export function batchCountFor(count: number): number {
+/**
+ * Ceiling on how many sequential provider calls one generation may make.
+ *
+ * Batches run one after another, so this is a latency and cost bound as much as
+ * a safety one: 12 calls at roughly 15s each is about three minutes, and
+ * 12 x 9,000 = 108,000 chars of coverage, comfortably more than any real
+ * chapter. A chapter longer than that is sampled rather than read whole, and
+ * the log line below says so instead of leaving it invisible.
+ */
+const MAX_QUESTION_BATCHES = 12;
+
+/**
+ * How many provider calls `generateQuestionsBatched` will make.
+ *
+ * Batch count used to derive from the question count ALONE, which quietly tied
+ * how much of a chapter was read to how many questions someone happened to ask
+ * for: 10 questions meant 2 calls meant 18,000 chars, so a 44,000-char chapter
+ * was 41% examined and nothing reported the other 59%. Passing `contentChars`
+ * makes length a first-class input, so a long chapter gets the calls it needs
+ * to be covered whatever the question count.
+ *
+ * Bounded on both sides: never fewer calls than the question count requires,
+ * and never more than there are questions to fill them (a batch that generates
+ * nothing is a wasted call) or `MAX_QUESTION_BATCHES`.
+ */
+export function batchCountFor(count: number, contentChars?: number): number {
   const total = Math.max(1, count);
-  return Math.max(1, Math.ceil(total / QUESTION_BATCH_SIZE));
+  const byCount = Math.max(1, Math.ceil(total / QUESTION_BATCH_SIZE));
+  if (!contentChars || contentChars <= 0) return byCount;
+
+  const byLength = Math.max(1, Math.ceil(contentChars / CONTENT_CHARS_PER_BATCH));
+  const ceiling = Math.min(total, MAX_QUESTION_BATCHES);
+  return Math.min(Math.max(byCount, byLength), ceiling);
 }
 
 /**
@@ -187,8 +216,8 @@ export function batchCountFor(count: number): number {
  * ultrasound echo terms were absent from every prompt — the model could not
  * have asked about them. Budgeting per call instead lets all 16 through.
  */
-export function generationContentBudget(count: number): number {
-  const batches = batchCountFor(count);
+export function generationContentBudget(count: number, contentChars?: number): number {
+  const batches = batchCountFor(count, contentChars);
   // One call is capped by the prompt builder itself, not by batching.
   if (batches === 1) return QUESTION_CONTENT_CHARS;
   // Multiple calls: budget EXACTLY what they can carry. Selecting more than
@@ -204,7 +233,17 @@ export async function generateQuestionsBatched(
   }
 ): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
   const total = Math.max(1, opts.count ?? 10);
-  if (total <= QUESTION_BATCH_SIZE) {
+  const content = opts.content ?? "";
+
+  // Batch count follows CHAPTER LENGTH as well as question count, so how much
+  // of a chapter gets read no longer depends on how many questions someone
+  // asked for. See `batchCountFor`.
+  const numBatches = batchCountFor(total, content.length);
+
+  // One call is not a degenerate batch: the prompt builder carries
+  // QUESTION_CONTENT_CHARS (30,000), far more than a single batch window
+  // (9,000), so splitting here would send LESS of the chapter, not more.
+  if (numBatches === 1) {
     const res = await generateQuestions(opts);
     opts.onProgress?.({
       batchIndex: 1,
@@ -214,19 +253,39 @@ export async function generateQuestionsBatched(
     return res;
   }
 
-  const batches: number[] = [];
-  for (let remaining = total; remaining > 0; remaining -= QUESTION_BATCH_SIZE) {
-    batches.push(Math.min(QUESTION_BATCH_SIZE, remaining));
-  }
+  // Spread the requested questions evenly over those batches. Deriving the
+  // count from length can ask for MORE batches than `total / QUESTION_BATCH_SIZE`
+  // would, so batches are no longer uniformly QUESTION_BATCH_SIZE — the
+  // remainder is dealt one-per-batch from the front rather than piled onto the
+  // last call.
+  const base = Math.floor(total / numBatches);
+  const remainder = total % numBatches;
+  const batches: number[] = Array.from(
+    { length: numBatches },
+    (_, i) => base + (i < remainder ? 1 : 0)
+  );
 
   // Give each batch a different, capped slice of the chapter so every call
   // sends little text — small enough for the free-tier per-minute token limits
   // (Groq 12K) and fast — and the questions cover the whole chapter
   // instead of all being drawn from the opening pages.
-  const content = opts.content ?? "";
   const canSplit = content.length > 6000;
   const windowSize = canSplit ? Math.ceil(content.length / batches.length) : 0;
   const CONTENT_CAP = CONTENT_CHARS_PER_BATCH;
+
+  // Say out loud how much of the chapter these calls can actually carry. When a
+  // chapter is long enough to hit MAX_QUESTION_BATCHES this is the only place
+  // that reports the shortfall, which previously passed in silence.
+  const reach = Math.min(content.length, numBatches * CONTENT_CAP);
+  const coverage = content.length > 0 ? Math.round((reach / content.length) * 100) : 100;
+  console.log(
+    `[AI Provider] ${total} question(s) over ${numBatches} batch(es); ` +
+      `chapter ${content.length.toLocaleString()} chars, ` +
+      `reachable ${reach.toLocaleString()} (${coverage}%)` +
+      (coverage < 100
+        ? ` — capped at MAX_QUESTION_BATCHES=${MAX_QUESTION_BATCHES}; ask for more questions or split the chapter to cover the rest.`
+        : "")
+  );
 
   // Run sequentially: firing every batch at once trips the providers' per-minute
   // token caps simultaneously. Spread over time, each small batch succeeds.

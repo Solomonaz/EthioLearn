@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import Papa from "papaparse";
 import { Prisma } from "@prisma/client";
+import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
 
 interface CsvRow {
   name?: string;
@@ -111,7 +112,14 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const section = row.section?.trim() || null;
+    const section = normalizeSection(row.section);
+    if (!isValidSection(section)) {
+      errors.push({
+        row: rowNum,
+        message: "Section is required (up to " + MAX_SECTION_LENGTH + " characters), e.g. A",
+      });
+      continue;
+    }
 
     validRows.push({
       name,

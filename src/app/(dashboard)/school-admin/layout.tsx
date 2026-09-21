@@ -22,6 +22,10 @@ export default async function SchoolAdminLayout({
     redirect("/teacher");
   }
 
+  if (user.role === "SECONDARY_TEACHER") {
+    redirect("/secondary-teacher");
+  }
+
   if (user.role !== "SCHOOL_ADMIN") {
     redirect("/student");
   }

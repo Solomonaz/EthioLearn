@@ -22,6 +22,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
 import { useSound } from "@/hooks/use-sound";
+import { PRIMARY_MAX_GRADE } from "@/lib/teacher-band";
 
 interface TeacherProfile {
   id: string;
@@ -39,7 +40,11 @@ interface Assignment {
   grade: number;
 }
 
-const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
+// Grades 1-8 only. This is the elementary teacher's own profile, and the API
+// now refuses anything above PRIMARY_MAX_GRADE — offering grade 9 here would
+// only produce a rejection after the fact. Grades 9-12 belong to
+// SECONDARY_TEACHER, whose classes also carry a section.
+const GRADES = Array.from({ length: PRIMARY_MAX_GRADE }, (_, i) => i + 1);
 
 export default function TeacherProfilePage() {
   const t = useTranslations("teacher");

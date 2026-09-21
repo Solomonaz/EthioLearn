@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { Difficulty, QuestionType } from "@prisma/client";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { canonicalSubject } from "@/lib/subject";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -124,7 +125,9 @@ export async function POST(request: NextRequest) {
   const textbook = await db.textbook.create({
     data: {
       title: title.trim(),
-      subject: subject.trim(),
+      // Snapped to the managed subject list, so a textbook filed as
+      // "biology" still lines up with the classes recorded as "Biology".
+      subject: await canonicalSubject(subject),
       grade,
       publisher: publisher?.trim() || undefined,
       academicYear: academicYear?.trim() || undefined,

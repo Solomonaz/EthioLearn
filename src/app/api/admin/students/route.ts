@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
 
 // Normalize an Ethiopian phone number to +251XXXXXXXXX, or null if invalid.
 function normalizePhone(raw: string): string | null {
@@ -53,7 +54,16 @@ export async function POST(req: NextRequest) {
   if (gradeNum !== null && (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 12)) {
     return NextResponse.json({ error: "Grade must be between 1 and 12." }, { status: 400 });
   }
-  const section = typeof body.section === "string" && body.section.trim() ? body.section.trim() : null;
+  // Section is required. A grade can run twenty sections, and both the class
+  // rosters a teacher sees and the cohort scoping behind them are keyed on it,
+  // so a student with no section would belong to no class at all.
+  const section = normalizeSection(body.section);
+  if (!isValidSection(section)) {
+    return NextResponse.json(
+      { error: `Enter the student's section (up to ${MAX_SECTION_LENGTH} characters), for example A.` },
+      { status: 400 }
+    );
+  }
 
   const existing = await db.user.findUnique({ where: { phoneNumber }, select: { id: true } });
   if (existing) {
@@ -102,7 +112,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const search = searchParams.get("search")?.trim() || "";
   const grade = searchParams.get("grade") || "";
-  const section = searchParams.get("section")?.trim() || "";
+  const section = normalizeSection(searchParams.get("section")) ?? "";
   const sort = searchParams.get("sort") || "points";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));

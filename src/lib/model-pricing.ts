@@ -36,6 +36,15 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
   // the flagship input price and 40% of its output price.
   "gemini-3.1-flash-lite": { inputPerMillion: 0.25, outputPerMillion: 1.5, billed: true },
 
+  // Embeddings. These have NO output tokens — the response is a vector, not
+  // text — so outputPerMillion is 0 and the whole cost is the input side.
+  // gemini-embedding-001 lists at $0.15 per 1M input tokens.
+  "gemini-embedding-001": { inputPerMillion: 0.15, outputPerMillion: 0, billed: true },
+  // Local embedding model served by Ollama — no API cost.
+  "bge-m3": { inputPerMillion: 0, outputPerMillion: 0, billed: false },
+  // The offline n-gram stand-in is pure local computation, not a model call.
+  fingerprint: { inputPerMillion: 0, outputPerMillion: 0, billed: false },
+
   // Free tiers / local — no cost to this account today.
   "openai/gpt-oss-20b": { inputPerMillion: 0, outputPerMillion: 0, billed: false },
   "nvidia/nemotron-3-super-120b-a12b": { inputPerMillion: 0, outputPerMillion: 0, billed: false },

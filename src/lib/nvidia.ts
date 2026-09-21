@@ -95,7 +95,19 @@ async function nvidiaChatCompletion(
  */
 export async function nvidiaChat(
   prompt: string,
-  opts: { system?: string; temperature?: number; maxTokens?: number; feature?: UsageFeature; actor?: UsageActor } = {}
+  opts: {
+    system?: string;
+    temperature?: number;
+    maxTokens?: number;
+    feature?: UsageFeature;
+    actor?: UsageActor;
+    /**
+     * Ask for prose instead of JSON. Defaults to JSON so existing callers are
+     * unchanged; long-form answers pass false, because a truncated JSON
+     * envelope throws away a reply that was otherwise usable.
+     */
+    jsonMode?: boolean;
+  } = {}
 ): Promise<string | null> {
   if (!hasNvidiaKey()) return null;
   try {
@@ -103,7 +115,12 @@ export async function nvidiaChat(
       ...(opts.system ? [{ role: "system" as const, content: opts.system }] : []),
       { role: "user" as const, content: prompt },
     ];
-    return await nvidiaChatCompletion(messages, { ...opts, jsonMode: true, feature: opts.feature, actor: opts.actor });
+    return await nvidiaChatCompletion(messages, {
+      ...opts,
+      jsonMode: opts.jsonMode ?? true,
+      feature: opts.feature,
+      actor: opts.actor,
+    });
   } catch (err) {
     console.warn(
       `[NVIDIA] Chat request failed: ${err instanceof Error ? err.message : String(err)}`

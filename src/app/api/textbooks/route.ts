@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { resolveGradeScope } from "@/lib/grade-scope";
+import { subjectFilter } from "@/lib/subject";
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -26,21 +27,43 @@ export async function GET(request: Request) {
   // — the grade 8 exam is drawn from grades 7–8, ESSLCE from grades 9–12. The
   // requested grade is only ever a *narrowing* of that scope: anything outside
   // it is dropped, so this can no longer be widened from the query string.
-  const requestedGrade = grade ? parseInt(grade, 10) : null;
-  const scope = resolveGradeScope(user, Number.isNaN(requestedGrade) ? null : requestedGrade);
+  //
+  // `grade` may be a single value or a comma-separated set. A teacher setting
+  // work for a grade 12 class asks for the whole ESSLCE cycle, because that
+  // class may legitimately be set grade 11 revision — exactly what the
+  // activities route already allows through `isInStudyScope`. Asking for one
+  // grade here while the write path accepted four is what left revision
+  // textbooks invisible in the picker.
+  const requestedGrades = (grade ?? "")
+    .split(",")
+    .map((g) => parseInt(g.trim(), 10))
+    .filter((g) => Number.isInteger(g));
+
+  const scope = resolveGradeScope(
+    user,
+    requestedGrades.length === 1 ? requestedGrades[0] : null,
+  );
   if (scope !== null) {
-    if (scope.length === 0) {
+    // A student's scope is the ceiling. Several requested grades narrow it;
+    // they can never widen it.
+    const allowed =
+      requestedGrades.length > 1
+        ? scope.filter((g) => requestedGrades.includes(g))
+        : scope;
+    if (allowed.length === 0) {
       // Either a grade outside the student's scope, or a student with no grade
       // set yet — both show nothing rather than falling back to everything.
       return NextResponse.json({ textbooks: [] });
     }
-    where.grade = { in: scope };
-  } else if (requestedGrade !== null && !Number.isNaN(requestedGrade)) {
-    // Non-students (admins, teachers) keep the old free-form grade filter.
-    where.grade = requestedGrade;
+    where.grade = { in: allowed };
+  } else if (requestedGrades.length > 0) {
+    // Non-students (admins, teachers) keep the free-form grade filter.
+    where.grade = { in: requestedGrades };
   }
 
-  if (subject) where.subject = subject;
+  // Case-insensitive: `Textbook.subject` is free text, so a book filed as
+  // "biology" must still answer a request for "Biology".
+  if (subject) where.subject = subjectFilter(subject);
 
   // School scoping:
   //   • Textbooks with schoolId = student's school  → that school's curriculum

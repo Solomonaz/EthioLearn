@@ -1,15 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { getMasteryLevel, type MasteryLevel } from "@/lib/class-insights";
 
-type MasteryLevel = "NOT_STARTED" | "IN_PROGRESS" | "PROFICIENT" | "MASTERED";
-
-function getMasteryLevel(avgScore: number, attemptCount: number): MasteryLevel {
-  if (attemptCount === 0) return "NOT_STARTED";
-  if (avgScore >= 80) return "MASTERED";
-  if (avgScore >= 60) return "PROFICIENT";
-  return "IN_PROGRESS";
-}
 
 export async function GET() {
   const user = await requireCompleteProfile();

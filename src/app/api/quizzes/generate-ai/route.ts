@@ -134,7 +134,12 @@ async function runGeneration(
     const selected = await selectGenerationContent({
       chapterId: chapter.id,
       fallbackContent: finalContent,
-      budgetChars: generationContentBudget(Math.min(Math.max(Number(questionCount) || 10, 1), 20) + 3),
+      budgetChars: generationContentBudget(
+        Math.min(Math.max(Number(questionCount) || 10, 1), 20) + 3,
+        // Chapter length, so a long chapter earns the extra calls needed to
+        // cover it instead of being sampled down to the question count.
+        finalContent.length
+      ),
       rotation: priorQuestions,
     });
     finalContent = selected.content;

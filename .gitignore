@@ -42,3 +42,6 @@ prisma/*.db-journal
 # claude
 **/.claude
 .claude/
+
+# Student submission files (see lib/uploads.ts). Never commit student work.
+uploads/

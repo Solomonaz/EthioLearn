@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { usageActor } from "@/lib/usage-logger";
+import { usageActor, type UsageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
@@ -23,12 +23,17 @@ const TUTOR_RETRIEVAL_LIMIT = 8;
 async function buildTutorContext(
   chapterId: string,
   message: string,
-  fallback: string
+  fallback: string,
+  actor?: UsageActor
 ): Promise<string> {
   try {
     const hits = await semanticSearch(message, {
       chapterId,
       limit: TUTOR_RETRIEVAL_LIMIT,
+      // One short vector per student message — small, but it is the only
+      // embedding cost that scales with student traffic, so it is attributed
+      // to the student who caused it.
+      usage: { feature: "embedding-query", actor },
     });
 
     if (hits.length > 0) {
@@ -110,7 +115,8 @@ export async function POST(req: Request) {
     const content = await buildTutorContext(
       chapterId,
       searchQuery,
-      chapter.content || chapter.textbook.content || ""
+      chapter.content || chapter.textbook.content || "",
+      usageActor(user)
     );
 
     // 3. Chat with Tutor

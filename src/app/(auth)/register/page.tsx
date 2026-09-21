@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
+import { homeRouteForRole } from "@/lib/teacher-band";
 
 const TelegramLoginButton = dynamic(
   () => import("@/components/auth/telegram-login").then((m) => m.TelegramLoginButton),
@@ -36,10 +37,7 @@ function RegisterForm() {
   useEffect(() => {
     if (status === "authenticated") {
       const role = (session?.user as { role?: string } | undefined)?.role;
-      if (role === "SUPER_ADMIN") router.replace("/admin");
-      else if (role === "SCHOOL_ADMIN") router.replace("/school-admin");
-      else if (role === "TEACHER") router.replace("/teacher");
-      else router.replace("/student");
+      router.replace(homeRouteForRole(role));
     }
   }, [status, session, router]);
 

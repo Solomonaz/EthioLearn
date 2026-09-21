@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { ACHIEVEMENTS } from "@/lib/achievements";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { normalizeSection } from "@/lib/section";
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -248,6 +249,36 @@ export async function PATCH(request: Request) {
 
   const { name, grade, section } = body;
 
+  // ── School students do not own their own identity ─────────────────────
+  //
+  // Name, grade and section are the three fields a teacher recognises a
+  // student by. A student who can rewrite them can appear in someone else's
+  // class roster, or take another child's name on a leaderboard their
+  // classmates read. Neither is hypothetical once a class shares one screen.
+  //
+  // Grade and section are not cosmetic either: together they decide which
+  // teacher's cohort the student lands in and which work they are set. Moving
+  // yourself between sections is a way out of work you were given.
+  //
+  // So for a student enrolled at a school, these are the school admin's to
+  // set. An independent student has no admin to ask, so they keep managing
+  // their own — locking them would strand them with no way to fix a typo.
+  if (user.schoolId) {
+    const restricted = (["name", "grade", "section"] as const).filter(
+      (f) => body[f] !== undefined,
+    );
+    if (restricted.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Your name, grade and section are managed by your school. Ask your school administrator to change them.",
+          fields: restricted,
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   // Validate
   if (name !== undefined && (typeof name !== "string" || name.trim().length < 2)) {
     return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 });
@@ -262,7 +293,9 @@ export async function PATCH(request: Request) {
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name.trim();
   if (grade !== undefined) updateData.grade = grade;
-  if (section !== undefined) updateData.section = section.trim() || null;
+  // Normalised like every other writer, so a self-managed student cannot
+  // store "b" where the rest of the platform holds "B".
+  if (section !== undefined) updateData.section = normalizeSection(section) || null;
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });

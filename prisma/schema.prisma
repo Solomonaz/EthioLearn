@@ -12,7 +12,14 @@ datasource db {
 enum UserRole {
   SUPER_ADMIN
   SCHOOL_ADMIN
+  // Primary/middle-cycle teacher (grades 1-8). Owns the classroom games surface
+  // at /teacher. Kept under the original name so no existing row migrates.
   TEACHER
+  // Secondary-cycle teacher (grades 9-12). Owns the cohort-insights surface at
+  // /secondary-teacher. Deliberately a separate role, not a band derived from
+  // TeachingAssignment, so the grades 1-8 surface excludes them by role check
+  // alone and needs no band logic added inside it.
+  SECONDARY_TEACHER
   STUDENT
 }
 
@@ -47,6 +54,34 @@ enum Difficulty {
   EASY
   MEDIUM
   HARD
+}
+
+// What a teacher set. Purely a label: it changes wording and filtering, not
+// how the activity behaves. Kept open-ended so "other activities" fit.
+enum ActivityKind {
+  HOMEWORK
+  CLASSWORK
+  ASSIGNMENT
+  TEST
+  PRACTICE
+}
+
+enum ActivityStatus {
+  /// Generated but NOT yet given to anyone. A teacher must read it first:
+  /// AI writes plausible-looking wrong answers, and the moment work reaches a
+  /// class it cannot be unseen. Students never load a DRAFT.
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+// How an activity is carried out.
+//   QUESTIONS — a pinned set of questions the student sits and is auto-marked.
+//   DOCUMENT  — written work the student reads and does, often on paper. There
+//               is nothing to auto-mark, so completion is the student saying so.
+enum ActivityFormat {
+  QUESTIONS
+  DOCUMENT
 }
 
 enum QuizMode {
@@ -191,6 +226,11 @@ model User {
   gameContents         GameContent[]     @relation("GameContentCreator")
   teachingAssignments  TeachingAssignment[] @relation("TeacherAssignments")
   savedGraphs          SavedGraph[]      @relation("UserSavedGraphs")
+  setActivities        ClassActivity[]   @relation("ActivityTeacher")
+  resources            TeacherResource[] @relation("TeacherResources")
+  activityTargets      ClassActivityTarget[] @relation("ActivityTargets")
+  submissionFiles      SubmissionFile[]      @relation("SubmissionOwner")
+  markedSubmissions    ClassActivityTarget[] @relation("ActivityMarker")
 
   @@map("users")
 }
@@ -222,11 +262,50 @@ model TeachingAssignment {
   teacher   User     @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
   subject   String // free-text (suggested from the Subject list), matching GameContent/Textbook
   grade     Int
+  // The one section of that grade this row covers, normalised to upper case
+  // (e.g. "A"). A grade can run 20 sections and no teacher takes them all, so
+  // the section — not the grade — is the real unit of a secondary class.
+  //
+  // NULL means "every section", which is what the grades 1-8 rows written
+  // before sections existed mean. Postgres does not treat two NULLs as equal,
+  // so the unique index below does NOT catch duplicates among those rows;
+  // the API checks for them explicitly before inserting.
+  section   String?
   createdAt DateTime @default(now())
 
-  @@unique([teacherId, subject, grade])
+  activities ClassActivity[]
+
+  @@unique([teacherId, subject, grade, section])
   @@index([teacherId])
   @@map("teaching_assignments")
+}
+
+// ─── Teacher resources (saved AI assistant output) ─────────
+// A teacher's own library. Separate from ClassActivity on purpose: a lesson
+// plan is for the teacher and may never be given to students, while a
+// worksheet might be. Saving and assigning are different decisions.
+model TeacherResource {
+  id       String @id @default(cuid())
+  teacherId String
+  teacher  User   @relation("TeacherResources", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  /// The AssistantTask it came from (LESSON_PLAN, WORKSHEET, …).
+  task  String
+  title String
+  body  String @db.Text
+
+  // Context it was generated against, kept so the library can be filtered and
+  // so "give to my class" can pre-select sensibly. Plain fields rather than
+  // relations: the resource must survive a textbook being replaced.
+  subject      String?
+  grade        Int?
+  chapterTitle String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@map("teacher_resources")
 }
 
 // ─── Student Notes (floating study scratchpad) ─────────────
@@ -376,6 +455,7 @@ model Chapter {
 
   questions Question[]
   chunks    ContentChunk[]
+  activities ClassActivity[]
 
   @@unique([textbookId, chapterNumber])
   @@map("chapters")
@@ -404,6 +484,7 @@ model Question {
   chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   quizAnswers QuizAnswer[]
+  activityUses ClassActivityQuestion[]
 
   @@map("questions")
 }
@@ -460,10 +541,194 @@ model Quiz {
   gameRoomId String?
   gameRoom   GameRoom? @relation(fields: [gameRoomId], references: [id])
 
+  // Set when this attempt is a teacher-set activity. SetNull rather than
+  // Cascade: removing an activity must never delete a student's answer history.
+  activityId String?
+  activity   ClassActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
   answers QuizAnswer[]
 
   @@index([studentId])
+  @@index([activityId])
   @@map("quizzes")
+}
+
+// ─── Teacher-set activities ─────────────────────────────────────────────
+// Homework, classwork, a test — anything a secondary teacher sets for one of
+// their classes. The questions are PINNED at creation rather than generated
+// per student, so the whole class sits the same paper: that is what teachers
+// expect, what makes "68% missed Q3" answerable, and what a printable version
+// would need.
+model ClassActivity {
+  id           String         @id @default(cuid())
+  kind         ActivityKind   @default(HOMEWORK)
+  status       ActivityStatus @default(DRAFT)
+  title        String
+  instructions String?
+  // Advisory only. Late work is accepted and NOT flagged — a student may well
+  // have handed the same thing in on paper.
+  dueAt        DateTime?
+
+  teacherId String
+  teacher   User   @relation("ActivityTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  // The class it was set for. SetNull, never Cascade: a teacher tidying their
+  // profile must not delete work students have already done.
+  teachingAssignmentId String?
+  teachingAssignment   TeachingAssignment? @relation(fields: [teachingAssignmentId], references: [id], onDelete: SetNull)
+
+  // Class identity, denormalised so the activity survives that SetNull and
+  // stays scopeable on its own.
+  schoolId String
+  subject  String
+  grade    Int
+  section  String
+
+  format ActivityFormat @default(QUESTIONS)
+
+  // DOCUMENT only: whether students must hand something in. When false the
+  // activity is read-and-acknowledge, which is what written work done in an
+  // exercise book looks like.
+  requiresSubmission Boolean @default(false)
+
+  // What the work is marked out of. Null means the teacher gives written
+  // feedback without a score — plenty of classwork is not scored.
+  maxMarks Int?
+
+  // DOCUMENT activities only: the Markdown the student reads. Null for a
+  // QUESTIONS activity, whose content is the pinned questions instead.
+  //
+  // This is the STUDENT-FACING half and nothing else may be put in it. When a
+  // worksheet is generated with worked solutions, the solutions are split off
+  // into `answerKey` before anything is stored — a student who receives the
+  // answers has not been set work, they have been given a reading exercise.
+  body String? @db.Text
+
+  /// Worked solutions and the marking guide. TEACHER-ONLY: no student-facing
+  /// route may ever select this column.
+  answerKey String? @db.Text
+
+  /// When it actually reached the class. Null while it is still a draft.
+  publishedAt DateTime?
+
+  // Provenance of the spec, so the same activity can be set again later.
+  //
+  // `chapterId` is the PRIMARY chapter and keeps the relation. `chapterIds`
+  // holds every chapter the paper drew from, because a revision paper is
+  // often a mix across a whole unit. For a single-chapter activity the two
+  // agree; older rows have an empty list and fall back to `chapterId`, so
+  // nothing has to be backfilled.
+  chapterId     String?
+  chapter       Chapter?    @relation(fields: [chapterId], references: [id])
+  chapterIds    String[]
+  textbookId    String?
+  difficulty    Difficulty? // null = mixed (MIXED is not an enum value)
+  // Zero for a DOCUMENT activity.
+  questionCount Int
+
+  questions ClassActivityQuestion[]
+  targets   ClassActivityTarget[]
+  quizzes   Quiz[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([schoolId, grade, section])
+  @@index([teacherId])
+  @@map("class_activities")
+}
+
+/// The pinned paper: which questions, in which order.
+model ClassActivityQuestion {
+  id         String        @id @default(cuid())
+  activityId String
+  activity   ClassActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  order      Int
+
+  @@unique([activityId, questionId])
+  @@unique([activityId, order])
+  @@map("class_activity_questions")
+}
+
+/// Who it was set for. Materialised at creation so membership is frozen: a
+/// student who joins the section next month does not retroactively owe it.
+model ClassActivityTarget {
+  id         String        @id @default(cuid())
+  activityId String
+  activity   ClassActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    User          @relation("ActivityTargets", fields: [studentId], references: [id], onDelete: Cascade)
+
+  // DOCUMENT activities only: when the student marked it done. A QUESTIONS
+  // activity derives completion from its Quiz instead, so this stays null
+  // there rather than duplicating — and drifting from — that signal.
+  completedAt DateTime?
+
+  // ── Submission (DOCUMENT activities that require one) ────────────────
+  // Typed rather than uploaded: this project has no file storage at all, and
+  // a typed answer works on a connection that a photo upload would not.
+  submissionText String?   @db.Text
+  submittedAt    DateTime?
+
+  // ── Marking ──────────────────────────────────────────────────────────
+  // `marks` is null when the activity carries no maxMarks, or when the
+  // teacher has left feedback without a score. `markedAt` is the thing to
+  // test for "has this been marked", never `marks`.
+  marks      Int?
+  feedback   String?   @db.Text
+  markedAt   DateTime?
+  markedById String?
+  markedBy   User?     @relation("ActivityMarker", fields: [markedById], references: [id])
+
+  files SubmissionFile[]
+
+  @@unique([activityId, studentId])
+  @@index([studentId])
+  @@map("class_activity_targets")
+}
+
+/// A file a student handed in against work their teacher set.
+///
+/// Bytes live on disk, never in this table — only the metadata needed to
+/// find, authorise and display them. `storedPath` is relative to the upload
+/// root, so moving the volume does not invalidate every row.
+///
+/// `studentId` and `schoolId` are denormalised deliberately. Authorisation
+/// runs on every download, and it must not depend on walking
+/// file -> target -> activity -> class to discover who may read the thing.
+model SubmissionFile {
+  id       String              @id @default(cuid())
+  targetId String
+  target   ClassActivityTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  /// Who handed it in. The only student who may read it back.
+  studentId String
+  student   User   @relation("SubmissionOwner", fields: [studentId], references: [id], onDelete: Cascade)
+
+  /// Whose school it belongs to, so an admin of another school can never
+  /// reach it even if they guess the id.
+  schoolId String
+
+  /// As the student named it. Shown to the teacher, never used to build a
+  /// path — a filename from a client is untrusted input.
+  originalName String
+  /// Relative to the upload root, generated server-side.
+  storedPath   String  @unique
+  mimeType     String
+  sizeBytes    Int
+  /// SHA-256 of the bytes, so a re-upload of the same file is recognisable.
+  checksum     String?
+
+  uploadedAt DateTime  @default(now())
+  /// Soft delete: a student replacing a page should not destroy what the
+  /// teacher may already have marked against.
+  deletedAt  DateTime?
+
+  @@index([targetId])
+  @@index([studentId])
+  @@map("submission_files")
 }
 
 model QuizAnswer {

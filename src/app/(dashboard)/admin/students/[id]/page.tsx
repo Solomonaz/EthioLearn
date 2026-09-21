@@ -18,6 +18,7 @@ import {
   ShieldOff,
   ShieldAlert,
   KeyRound,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -66,6 +67,10 @@ interface PointEntry {
   description: string | null;
   createdAt: string;
 }
+
+/** Shared styling for the edit form's inputs. */
+const editFieldClass =
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
 
 interface StudentDetailResponse {
   student: {
@@ -130,6 +135,68 @@ export default function AdminStudentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  /**
+   * Editing the student's record.
+   *
+   * These are the fields the student themself can no longer change — name,
+   * grade and section are how their teachers identify them, and the phone
+   * number is how they sign in. The school owns all four, so this is the only
+   * place they can be corrected.
+   */
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    phoneNumber: "",
+    grade: "" as number | "",
+    section: "",
+  });
+
+  function startEditing(student: StudentDetailResponse["student"]) {
+    setForm({
+      name: student.name,
+      // Shown as the local 9-digit number the forms ask for, not the stored
+      // +251 form — an admin should not have to retype a country code.
+      phoneNumber: student.phoneNumber.replace(/^\+251/, ""),
+      grade: student.grade ?? "",
+      section: student.section ?? "",
+    });
+    setFormError(null);
+    setEditing(true);
+  }
+
+  async function saveProfile(studentId: string) {
+    setSaving(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/admin/students/${studentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          phoneNumber: form.phoneNumber,
+          grade: form.grade === "" ? undefined : String(form.grade),
+          section: form.section,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error ?? "Could not save those changes");
+
+      // Merge rather than refetch: the rest of this page is quiz history and
+      // achievements, none of which an edit can have changed.
+      setData((prev) =>
+        prev ? { ...prev, student: { ...prev.student, ...payload.student } } : prev,
+      );
+      setEditing(false);
+      toast.success("Student updated.");
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -206,9 +273,21 @@ export default function AdminStudentDetailPage() {
 
             {/* Details */}
             <div className="flex-1 text-center sm:text-left">
-              <h2 className="text-xl font-bold text-text-primary">
-                {student.name}
-              </h2>
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <h2 className="text-xl font-bold text-text-primary">
+                  {student.name}
+                </h2>
+                {!editing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs text-text-secondary"
+                    onClick={() => startEditing(student)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Button>
+                )}
+              </div>
 
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm text-text-secondary sm:justify-start">
                 <span className="flex items-center gap-1.5">
@@ -245,6 +324,137 @@ export default function AdminStudentDetailPage() {
                   </span>
                 )}
               </div>
+
+              {/* ── Edit form ──────────────────────────────────────────
+                  Shown below the read-only summary rather than replacing
+                  it, so an admin can see what they are changing from. */}
+              {editing && (
+                <div className="mt-4 space-y-3 border-t border-border pt-4 text-left">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="edit-name"
+                        className="mb-1 block text-xs font-semibold uppercase text-text-muted"
+                      >
+                        Full name
+                      </label>
+                      <input
+                        id="edit-name"
+                        value={form.name}
+                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                        disabled={saving}
+                        maxLength={50}
+                        className={editFieldClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="edit-phone"
+                        className="mb-1 block text-xs font-semibold uppercase text-text-muted"
+                      >
+                        Phone number
+                      </label>
+                      <div className="flex items-stretch">
+                        <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-border/30 px-2.5 text-sm text-text-secondary">
+                          +251
+                        </span>
+                        <input
+                          id="edit-phone"
+                          value={form.phoneNumber}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, phoneNumber: e.target.value }))
+                          }
+                          disabled={saving}
+                          inputMode="tel"
+                          placeholder="9XXXXXXXX"
+                          className={`${editFieldClass} rounded-l-none`}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] text-text-muted">
+                        This is how they sign in. Changing it means they must use
+                        the new number next time.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="edit-grade"
+                        className="mb-1 block text-xs font-semibold uppercase text-text-muted"
+                      >
+                        Grade
+                      </label>
+                      <select
+                        id="edit-grade"
+                        value={form.grade}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            grade: e.target.value === "" ? "" : Number(e.target.value),
+                          }))
+                        }
+                        disabled={saving}
+                        className={editFieldClass}
+                      >
+                        <option value="">Select grade</option>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                          <option key={g} value={g}>
+                            Grade {g}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="edit-section"
+                        className="mb-1 block text-xs font-semibold uppercase text-text-muted"
+                      >
+                        Section
+                      </label>
+                      <input
+                        id="edit-section"
+                        value={form.section}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, section: e.target.value }))
+                        }
+                        disabled={saving}
+                        maxLength={8}
+                        placeholder="e.g. A"
+                        className={editFieldClass}
+                      />
+                      <p className="mt-1 text-[11px] text-text-muted">
+                        Decides whose class they appear in. Saved in capitals.
+                      </p>
+                    </div>
+                  </div>
+
+                  {formError && (
+                    <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {formError}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => saveProfile(student.id)}
+                      disabled={saving}
+                    >
+                      {saving ? <Spinner size="sm" /> : "Save changes"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditing(false);
+                        setFormError(null);
+                      }}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* XP badge */}

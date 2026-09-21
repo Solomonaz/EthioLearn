@@ -8,6 +8,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "./db";
 import { isOllamaEnabled } from "./ollama";
+import { estimateTokens } from "./content-chunker";
+import { logUsage, type UsageActor, type UsageFeature } from "./usage-logger";
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -360,20 +362,89 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
   }
 }
 
+// ─── Usage Accounting ───────────────────────────────────
+
+/** The subset of usage features that embedding call sites may report as. */
+export type EmbeddingFeature = Extract<UsageFeature, `embedding-${string}`>;
+
+/**
+ * Where an embedding call came from, so its spend lands on a feature (and, for
+ * student-triggered work, on a student and a school) instead of vanishing.
+ *
+ * Optional throughout: a call site that passes nothing is simply not metered,
+ * which keeps this from becoming a required argument on every internal helper.
+ */
+export interface EmbeddingUsageContext {
+  feature: EmbeddingFeature;
+  actor?: UsageActor;
+}
+
+/** The model id each provider should be billed under. */
+const PROVIDER_MODEL: Record<EmbeddingProvider, string> = {
+  gemini: EMBEDDING_MODEL,
+  ollama: OLLAMA_EMBEDDING_MODEL,
+  fingerprint: "fingerprint",
+};
+
+/**
+ * Record one embedding call.
+ *
+ * IMPORTANT — these token counts are ESTIMATED, not provider-reported.
+ * `:batchEmbedContents` returns only `{ embeddings: [...] }`; there is no
+ * `usageMetadata` on an embedding response, and asking `:countTokens` for a
+ * true count would double the request volume for a number worth fractions of a
+ * cent. `estimateTokens` is the same estimator the chunker sizes chunks with,
+ * so the figure is consistent with `content_chunks.tokenCount`.
+ *
+ * An embedding response is a vector, not text, so there are no output or
+ * thinking tokens: total equals prompt, and `costUsd` bills the input side
+ * only.
+ */
+function logEmbeddingUsage(
+  texts: string[],
+  provider: EmbeddingProvider,
+  ctx: EmbeddingUsageContext | undefined
+): void {
+  if (!ctx || texts.length === 0) return;
+  const promptTokens = texts.reduce((n, t) => n + estimateTokens(t), 0);
+  logUsage({
+    feature: ctx.feature,
+    provider,
+    model: PROVIDER_MODEL[provider],
+    usage: {
+      promptTokens,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      totalTokens: promptTokens,
+    },
+    actor: ctx.actor,
+  });
+}
+
 // ─── Single Embedding ───────────────────────────────────
 
 export async function generateEmbedding(
   text: string,
-  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_QUERY"
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_QUERY",
+  usage?: EmbeddingUsageContext
 ): Promise<number[]> {
   // Gemini first (available in all environments with GEMINI_API_KEY)
   const gemini = await tryGeminiEmbeddings([text], taskType);
-  if (gemini) return gemini[0];
+  if (gemini) {
+    logEmbeddingUsage([text], "gemini", usage);
+    return gemini[0];
+  }
 
   // Ollama second (local dev only, skipped in production unless OLLAMA_BASE_URL set)
   const ollama = await tryOllamaEmbeddings([text]);
-  if (ollama) return ollama[0];
+  if (ollama) {
+    logEmbeddingUsage([text], "ollama", usage);
+    return ollama[0];
+  }
 
+  // Logged too, at zero cost: a run that silently degraded to fingerprints is
+  // exactly the thing you want visible in the usage breakdown.
+  logEmbeddingUsage([text], "fingerprint", usage);
   return ngramFingerprint(text, EMBEDDING_DIMENSIONS);
 }
 
@@ -383,7 +454,8 @@ export async function generateEmbedding(
 
 export async function generateEmbeddings(
   texts: string[],
-  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_DOCUMENT"
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" = "RETRIEVAL_DOCUMENT",
+  usage?: EmbeddingUsageContext
 ): Promise<EmbeddingResult[]> {
   if (texts.length === 0) return [];
 
@@ -395,6 +467,7 @@ export async function generateEmbeddings(
     // 1. Gemini — ONE request for the whole batch (not one per text).
     const geminiResults = await tryGeminiEmbeddings(batch, taskType);
     if (geminiResults) {
+      logEmbeddingUsage(batch, "gemini", usage);
       results.push(
         ...batch.map((text, j) => ({
           text,
@@ -409,6 +482,7 @@ export async function generateEmbeddings(
     // 2. Ollama BGE-M3 — local dev fallback (skipped in production unless OLLAMA_BASE_URL set)
     const ollamaResults = await tryOllamaEmbeddings(batch);
     if (ollamaResults) {
+      logEmbeddingUsage(batch, "ollama", usage);
       results.push(
         ...batch.map((text, j) => ({
           text,
@@ -434,6 +508,7 @@ export async function generateEmbeddings(
       `[Embeddings] Falling back to n-gram fingerprints for ${batch.length} chunk(s) — ` +
         `these are NOT semantic and will be marked as such.`
     );
+    logEmbeddingUsage(batch, "fingerprint", usage);
     results.push(
       ...batch.map((text) => ({
         text,
@@ -546,12 +621,14 @@ export async function semanticSearch(
     chapterId?: string;
     textbookId?: string;
     limit?: number;
+    /** Who this search is for, so the query embedding is attributable. */
+    usage?: EmbeddingUsageContext;
   } = {}
 ): Promise<SemanticSearchResult[]> {
-  const { chapterId, textbookId, limit = 5 } = options;
+  const { chapterId, textbookId, limit = 5, usage } = options;
 
   // Generate embedding for the query
-  const queryEmbedding = await generateEmbedding(query);
+  const queryEmbedding = await generateEmbedding(query, "RETRIEVAL_QUERY", usage);
   const vectorStr = `[${queryEmbedding.join(",")}]`;
 
   try {

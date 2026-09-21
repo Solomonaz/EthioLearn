@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
+import { homeRouteForRole } from "@/lib/teacher-band";
 import { useState, Suspense, useEffect } from "react";
 import { signIn, getSession, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -45,14 +46,14 @@ function LoginForm() {
     (AUTH_ERROR_MESSAGES[errorCode] ?? (errorCode ? AUTH_ERROR_MESSAGES.Default : ""));
 
   useEffect(() => {
-    if (status === "authenticated") {
+    // With a callbackUrl present, a dashboard layout just turned this session
+    // away (deactivated or deleted account). Auto-redirecting back would loop,
+    // so show the form and let them sign in again.
+    if (status === "authenticated" && !callbackUrl) {
       const role = (session?.user as any)?.role;
-      if (role === "SUPER_ADMIN") router.replace("/admin");
-      else if (role === "SCHOOL_ADMIN") router.replace("/school-admin");
-      else if (role === "TEACHER") router.replace("/teacher");
-      else router.replace("/student");
+      router.replace(homeRouteForRole(role));
     }
-  }, [status, session, router]);
+  }, [status, session, router, callbackUrl]);
 
   const [step, setStep]               = useState<"input" | "otp">("input");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -102,30 +103,24 @@ function LoginForm() {
       if (result?.ok) {
         const sess = await getSession();
         const role = (sess?.user as any)?.role;
-        const isSuperAdmin = role === "SUPER_ADMIN";
-        const isSchoolAdmin = role === "SCHOOL_ADMIN";
-        const isTeacher = role === "TEACHER";
+        const home = homeRouteForRole(role);
 
         if (callbackUrl) {
           const isSafeRelative = /^\/[^/]/.test(callbackUrl) && !callbackUrl.includes(":");
-          const isAdminCb   = callbackUrl.startsWith("/admin");
-          const isSchoolAdminCb = callbackUrl.startsWith("/school-admin");
-          const isTeacherCb = callbackUrl.startsWith("/teacher");
-          const isStudentCb = callbackUrl.startsWith("/student");
-          if (isSafeRelative && (
-            (isSuperAdmin && isAdminCb) ||
-            (isSchoolAdmin && isSchoolAdminCb) ||
-            (isTeacher && isTeacherCb) ||
-            (!isSuperAdmin && !isSchoolAdmin && !isTeacher && isStudentCb)
-          )) {
+          // Follow a callbackUrl only when it lives under this role's own home
+          // segment, matched on a path boundary so "/admin" cannot authorise
+          // "/admin-something" (and "/teacher" cannot authorise
+          // "/secondary-teacher", or the reverse).
+          const isOwnSurface =
+            callbackUrl === home ||
+            callbackUrl.startsWith(home + "/") ||
+            callbackUrl.startsWith(home + "?");
+          if (isSafeRelative && isOwnSurface) {
             router.push(callbackUrl);
             return;
           }
         }
-        if (isSuperAdmin) router.push("/admin");
-        else if (isSchoolAdmin) router.push("/school-admin");
-        else if (isTeacher) router.push("/teacher");
-        else router.push("/student");
+        router.push(home);
       }
     } catch {
       setError("Network error. Please check your connection and try again.");
