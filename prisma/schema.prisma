@@ -342,6 +342,60 @@ model PlatformSettings {
   @@map("platform_settings")
 }
 
+// ─── AI Provider Configuration ──────────────────────────────
+//
+// Model ids and chain order live in the DATABASE, not in code or env, because
+// providers retire model ids on their own schedule: meta/llama-3.3-70b-instruct
+// started answering 410 Gone mid-2026, and DeepSeek churned through three ids
+// (deepseek-chat -> deepseek-v4-flash -> deepseek-flash) in a few months. When
+// that happens an admin must be able to point the system at a live model in
+// seconds, from the UI, without a code edit or a redeploy.
+//
+// API KEYS ARE DELIBERATELY NOT HERE. They stay in the environment: a key in a
+// database row is a key in every backup, every dump and every admin's browser.
+// The UI reports only whether a key is present.
+enum AiProviderId {
+  GEMINI
+  GROQ
+  NVIDIA
+  OPENROUTER
+  OLLAMA
+}
+
+model AiProviderConfig {
+  id AiProviderId @id
+
+  /// Off means "never try this provider", regardless of priority or keys.
+  enabled Boolean @default(true)
+
+  /// Chain order — LOWER RUNS FIRST. Lets an admin demote a provider whose
+  /// daily quota is exhausted and promote another, without a deploy.
+  priority Int @default(100)
+
+  /// Flagship slot: question generation, chapter detection, the verifier, vision.
+  chatModel String?
+  /// Cheap/fast slot: Bloom tagging, quality checks, tutor fallback.
+  fastModel String?
+  /// Embedding slot. Null for providers that serve no embedding model.
+  embeddingModel String?
+
+  /// Override the provider's API base (self-hosted Ollama, a proxy, a region).
+  /// Null uses the built-in default for that provider.
+  baseUrl String?
+
+  /// Last health probe, written by the admin "check" action. Purely
+  /// informational — the chain never reads these to make routing decisions,
+  /// because a stale probe must not silently disable a working provider.
+  lastStatus    String?   // "ok" | "rate_limited" | "bad_model" | "unauthorized" | "no_key" | "payment_required" | "error"
+  lastCheckedAt DateTime?
+  lastLatencyMs Int?
+  lastMessage   String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_provider_configs")
+}
+
 // ─── Subjects ───────────────────────────────────────────────
 
 model Subject {

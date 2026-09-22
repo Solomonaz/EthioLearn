@@ -35,6 +35,7 @@ import {
   Boxes,
   Receipt,
   Coins,
+  Cpu,
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
@@ -117,6 +118,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "payments",   href: "/admin/payments",     icon: Receipt },
     { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
     { labelKey: "aiUsage",    href: "/admin/usage",        icon: Coins },
+    { labelKey: "aiModels",   href: "/admin/ai-models",    icon: Cpu },
     { labelKey: "settings",   href: "/admin/settings",     icon: Settings },
   ];
 

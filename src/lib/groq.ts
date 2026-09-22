@@ -9,6 +9,7 @@ import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt } from "./ai-prompts";
 import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
 import { logUsage, openAiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
+import { modelIdFor } from "./ai-settings";
 
 // Re-export the shared validators so NVIDIA can keep importing them
 // from "./groq" (their historical import path) without change.
@@ -19,7 +20,10 @@ export { extractJson, validateQuestions, validateDetectedChapters };
 // Configurable via env so the model can be swapped without code changes when
 // Groq retires one (they deprecated llama-3.3-70b-versatile). `openai/gpt-oss-20b`
 // is a current, fast, general model that fits the free-tier limits.
-const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+const GROQ_MODEL_FALLBACK = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+function groqModel(): string {
+  return modelIdFor("GROQ", "chat") ?? GROQ_MODEL_FALLBACK;
+}
 
 // ─── Native Structured Schemas (JSON Schema for Groq) ───
 
@@ -128,7 +132,7 @@ export async function groqChat(
     let completion;
     try {
       completion = await client.chat.completions.create({
-        model: GROQ_MODEL,
+        model: groqModel(),
         messages: [
           ...(opts.system
             ? [{ role: "system" as const, content: opts.system }]
@@ -146,7 +150,7 @@ export async function groqChat(
           schemaErr?.message || schemaErr
         );
         completion = await client.chat.completions.create({
-          model: GROQ_MODEL,
+          model: groqModel(),
           messages: [
             ...(opts.system
               ? [{ role: "system" as const, content: opts.system }]
@@ -161,7 +165,7 @@ export async function groqChat(
         throw schemaErr;
       }
     }
-    logUsage({ feature: opts.feature ?? "quality-check", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage), actor: opts.actor });
+    logUsage({ feature: opts.feature ?? "quality-check", provider: "groq", model: groqModel(), usage: openAiUsage(completion.usage), actor: opts.actor });
     return completion.choices[0]?.message?.content ?? null;
   } catch (err) {
     console.warn(
@@ -222,7 +226,7 @@ export async function groqGenerateQuestions(
     let completion;
     try {
       completion = await client.chat.completions.create({
-        model: GROQ_MODEL,
+        model: groqModel(),
         messages: [
           {
             role: "system",
@@ -242,7 +246,7 @@ export async function groqGenerateQuestions(
       // If the model does not support json_schema, gracefully fall back to json_object
       if (String(schemaErr?.message || "").includes("json_schema")) {
         completion = await client.chat.completions.create({
-          model: GROQ_MODEL,
+          model: groqModel(),
           messages: [
             {
               role: "system",
@@ -260,7 +264,7 @@ export async function groqGenerateQuestions(
       }
     }
 
-    logUsage({ feature: "question-generation", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
+    logUsage({ feature: "question-generation", provider: "groq", model: groqModel(), usage: openAiUsage(completion.usage) });
     const text = completion.choices[0]?.message?.content ?? "";
 
     try {
@@ -301,7 +305,7 @@ export async function groqDetectChapters(
     let completion;
     try {
       completion = await client.chat.completions.create({
-        model: GROQ_MODEL,
+        model: groqModel(),
         messages: [
           {
             role: "system",
@@ -320,7 +324,7 @@ export async function groqDetectChapters(
     } catch (schemaErr: any) {
       if (String(schemaErr?.message || "").includes("json_schema")) {
         completion = await client.chat.completions.create({
-          model: GROQ_MODEL,
+          model: groqModel(),
           messages: [
             {
               role: "system",
@@ -338,7 +342,7 @@ export async function groqDetectChapters(
       }
     }
 
-    logUsage({ feature: "chapter-detection", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage) });
+    logUsage({ feature: "chapter-detection", provider: "groq", model: groqModel(), usage: openAiUsage(completion.usage) });
     const text = completion.choices[0]?.message?.content ?? "";
 
     try {
@@ -382,7 +386,7 @@ export async function groqTutorChatResponse(opts: {
   const systemPrompt = buildTutorSystemPrompt(opts);
 
   const completion = await client.chat.completions.create({
-    model: GROQ_MODEL,
+    model: groqModel(),
     messages: [
       { role: "system", content: systemPrompt },
       ...opts.history,
@@ -392,6 +396,6 @@ export async function groqTutorChatResponse(opts: {
     max_tokens: 2048,
   });
 
-  logUsage({ feature: "tutor-chat", provider: "groq", model: GROQ_MODEL, usage: openAiUsage(completion.usage), actor: opts.actor });
+  logUsage({ feature: "tutor-chat", provider: "groq", model: groqModel(), usage: openAiUsage(completion.usage), actor: opts.actor });
   return completion.choices[0]?.message?.content ?? "I apologize, but I'm having trouble responding right now.";
 }

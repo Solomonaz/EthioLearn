@@ -10,10 +10,14 @@ import { db } from "./db";
 import { isOllamaEnabled } from "./ollama";
 import { estimateTokens } from "./content-chunker";
 import { logUsage, type UsageActor, type UsageFeature } from "./usage-logger";
+import { modelIdFor } from "./ai-settings";
 
 // ─── Constants ──────────────────────────────────────────
 
-const EMBEDDING_MODEL = "gemini-embedding-001";
+const EMBEDDING_MODEL_FALLBACK = "gemini-embedding-001";
+function embeddingModel(): string {
+  return modelIdFor("GEMINI", "embedding") ?? EMBEDDING_MODEL_FALLBACK;
+}
 const EMBEDDING_DIMENSIONS = 768;
 const BATCH_SIZE = 50; // Gemini supports up to 100, use 50 for safety
 
@@ -50,12 +54,15 @@ export class EmbeddingUnavailableError extends Error {
 
 // ─── Ollama config ───────────────────────────────────────
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-const OLLAMA_EMBEDDING_MODEL = "bge-m3";
+const OLLAMA_EMBEDDING_MODEL_FALLBACK = "bge-m3";
+function ollamaEmbeddingModel(): string {
+  return modelIdFor("OLLAMA", "embedding") ?? OLLAMA_EMBEDDING_MODEL_FALLBACK;
+}
 
 /** Identifier stored in ContentChunk.embeddingModel, for provenance. */
 const PROVIDER_MODEL_ID: Record<EmbeddingProvider, string> = {
-  gemini: EMBEDDING_MODEL,
-  ollama: OLLAMA_EMBEDDING_MODEL,
+  gemini: embeddingModel(),
+  ollama: ollamaEmbeddingModel(),
   fingerprint: "ngram-fingerprint-v1",
 };
 
@@ -245,7 +252,7 @@ async function tryGeminiEmbeddings(
 
   const body = JSON.stringify({
     requests: texts.map((text) => ({
-      model: `models/${EMBEDDING_MODEL}`,
+      model: `models/${embeddingModel()}`,
       content: { parts: [{ text }] },
       taskType,
       outputDimensionality: EMBEDDING_DIMENSIONS,
@@ -257,7 +264,7 @@ async function tryGeminiEmbeddings(
   for (let attempt = 1; attempt <= MAX_EMBED_ATTEMPTS; attempt++) {
     try {
       const response = await fetch(
-        `${GEMINI_API_BASE}/models/${EMBEDDING_MODEL}:batchEmbedContents?key=${apiKey}`,
+        `${GEMINI_API_BASE}/models/${embeddingModel()}:batchEmbedContents?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -323,7 +330,7 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
     const response = await fetch(`${OLLAMA_BASE_URL}/api/embed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: OLLAMA_EMBEDDING_MODEL, input: texts }),
+      body: JSON.stringify({ model: ollamaEmbeddingModel(), input: texts }),
       signal: AbortSignal.timeout(5_000), // fail fast if Ollama is unreachable
     });
 
@@ -341,7 +348,7 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
     }
 
     if (ollamaEmbeddingsAvailable === null) {
-      console.info(`[Embeddings] Using Ollama ${OLLAMA_EMBEDDING_MODEL} for embeddings.`);
+      console.info(`[Embeddings] Using Ollama ${ollamaEmbeddingModel()} for embeddings.`);
     }
     ollamaEmbeddingsAvailable = true;
 
@@ -354,7 +361,7 @@ async function tryOllamaEmbeddings(texts: string[]): Promise<number[][] | null> 
   } catch {
     if (ollamaEmbeddingsAvailable === null) {
       console.warn(
-        `[Embeddings] Ollama (${OLLAMA_EMBEDDING_MODEL}) unavailable — falling back to local n-gram fingerprint.`
+        `[Embeddings] Ollama (${ollamaEmbeddingModel()}) unavailable — falling back to local n-gram fingerprint.`
       );
     }
     ollamaEmbeddingsAvailable = false;
@@ -381,8 +388,8 @@ export interface EmbeddingUsageContext {
 
 /** The model id each provider should be billed under. */
 const PROVIDER_MODEL: Record<EmbeddingProvider, string> = {
-  gemini: EMBEDDING_MODEL,
-  ollama: OLLAMA_EMBEDDING_MODEL,
+  gemini: embeddingModel(),
+  ollama: ollamaEmbeddingModel(),
   fingerprint: "fingerprint",
 };
 
@@ -605,7 +612,7 @@ export async function countStaleEmbeddings(textbookId: string): Promise<number> 
        WHERE ch."textbookId" = $1
          AND (cc."embeddingModel" IS DISTINCT FROM $2 OR cc.embedding IS NULL)`,
       textbookId,
-      EMBEDDING_MODEL
+      embeddingModel()
     );
     return Number(rows[0]?.count ?? 0);
   } catch {

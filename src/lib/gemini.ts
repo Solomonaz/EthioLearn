@@ -3,6 +3,7 @@ import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt } from "./ai-prompts";
 import { validateQuestions, validateDetectedChapters } from "./question-validation";
 import { logUsage, geminiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
+import { modelIdFor } from "./ai-settings";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -126,14 +127,22 @@ export const CHAPTER_DETECTION_SCHEMA: ResponseSchema = {
 // every vision task (graph/equation/solid reading). gemini-3.8-flash is the
 // newest stable Flash and is priced identically to 3.6-flash ($0.75/$3.75 per
 // 1M through 2026), so there is no reason to sit on the older one.
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+/** Flagship model id: admin setting -> env -> built-in default. */
+export function geminiModel(): string {
+  return modelIdFor("GEMINI", "chat") ?? GEMINI_MODEL_FALLBACK;
+}
 
 // FAST — high-volume or latency-sensitive work where flagship reasoning is not
 // what decides the outcome: Bloom tagging (one call per chunk batch across a
 // whole book), the post-generation quality checks, and the tutor-chat fallback.
 // gemini-3.1-flash-lite is a third of the flagship's input price and 40% of its
 // output price, which is what keeps whole-book tagging cheap.
-export const GEMINI_FAST_MODEL = process.env.GEMINI_FAST_MODEL || "gemini-3.1-flash-lite";
+const GEMINI_FAST_MODEL_FALLBACK = process.env.GEMINI_FAST_MODEL || "gemini-3.1-flash-lite";
+/** Fast/cheap model id: admin setting -> env -> built-in default. */
+export function geminiFastModel(): string {
+  return modelIdFor("GEMINI", "fast") ?? GEMINI_FAST_MODEL_FALLBACK;
+}
 
 /**
  * Hard cap on how much the model is allowed to "think" before answering.
@@ -212,7 +221,7 @@ export async function geminiChat(
   } = {}
 ): Promise<string | null> {
   if (!process.env.GEMINI_API_KEY) return null;
-  const modelId = opts.model ?? GEMINI_MODEL;
+  const modelId = opts.model ?? geminiModel();
   try {
     let model = getClient().getGenerativeModel({
       model: modelId,
@@ -279,7 +288,7 @@ export async function explainGraphImage(
 ): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: geminiModel(),
     generationConfig: withThinkingCap({}),
   });
   const prompt =
@@ -305,7 +314,7 @@ export async function explainGraphImage(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "vision-graph", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
+  logUsage({ feature: "vision-graph", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -321,7 +330,7 @@ export async function readEquationsFromImage(
 ): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: geminiModel(),
     generationConfig: withThinkingCap({}),
   });
   const prompt =
@@ -338,7 +347,7 @@ export async function readEquationsFromImage(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "vision-equation", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
+  logUsage({ feature: "vision-equation", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -349,7 +358,7 @@ export async function readEquationsFromImage(
 export async function readSolidFromImage(base64: string, mimeType: string, actor?: UsageActor): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: geminiModel(),
     generationConfig: withThinkingCap({}),
   });
   const prompt =
@@ -364,7 +373,7 @@ export async function readSolidFromImage(base64: string, mimeType: string, actor
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "vision-solid", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
+  logUsage({ feature: "vision-solid", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -381,7 +390,7 @@ export async function askAboutGraph(
 ): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: geminiModel(),
     generationConfig: withThinkingCap({}),
   });
   const ctx = history.length
@@ -402,7 +411,7 @@ export async function askAboutGraph(
     { text: prompt },
     { inlineData: { mimeType, data: base64 } },
   ]);
-  logUsage({ feature: "graph-qa", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response), actor });
+  logUsage({ feature: "graph-qa", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
   return result.response.text();
 }
 
@@ -421,7 +430,7 @@ export async function generateQuestionsFromContent(
 ): Promise<GeneratedQuestion[]> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: geminiModel(),
     generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       responseSchema: QUESTION_GENERATION_SCHEMA,
@@ -438,7 +447,7 @@ export async function generateQuestionsFromContent(
       const result = await model.generateContent(prompt);
       // Log before parsing: a call that returns unparseable JSON still spent
       // tokens, and a retry issues a fresh billable call.
-      logUsage({ feature: "question-generation", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
+      logUsage({ feature: "question-generation", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response) });
       const text = result.response.text();
       const parsed = JSON.parse(text);
       const questions = validateQuestions(parsed);
@@ -509,7 +518,7 @@ export async function detectChaptersFromContent(
 ): Promise<DetectedChapter[]> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: geminiModel(),
     generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       responseSchema: CHAPTER_DETECTION_SCHEMA,
@@ -524,7 +533,7 @@ export async function detectChaptersFromContent(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent(prompt);
-      logUsage({ feature: "chapter-detection", provider: "gemini", model: GEMINI_MODEL, usage: geminiUsage(result.response) });
+      logUsage({ feature: "chapter-detection", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response) });
       const text = result.response.text();
       const parsed = JSON.parse(text);
       const chapters = validateDetectedChapters(parsed);
@@ -1068,7 +1077,7 @@ export async function tutorResponseFromContent(opts: {
 }): Promise<string> {
   const client = getClient();
   const model = client.getGenerativeModel({
-    model: GEMINI_FAST_MODEL,
+    model: geminiFastModel(),
     systemInstruction: buildTutorSystemPrompt(opts),
   });
 
@@ -1081,6 +1090,6 @@ export async function tutorResponseFromContent(opts: {
   });
 
   const result = await chat.sendMessage(opts.message);
-  logUsage({ feature: "tutor-chat", provider: "gemini", model: GEMINI_FAST_MODEL, usage: geminiUsage(result.response), actor: opts.actor });
+  logUsage({ feature: "tutor-chat", provider: "gemini", model: geminiFastModel(), usage: geminiUsage(result.response), actor: opts.actor });
   return result.response.text();
 }

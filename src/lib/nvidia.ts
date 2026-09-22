@@ -5,7 +5,7 @@
  * an additional fallback: its ~40 RPM free tier (no hard credit cap, no card)
  * is the highest of the free providers, so it survives Gemini/Groq
  * rate limits. Get a free key at https://build.nvidia.com and set NVIDIA_API_KEY
- * (optionally NVIDIA_MODEL) in .env.
+ * (optionally nvidiaModel()) in .env.
  */
 
 import type {
@@ -23,9 +23,10 @@ import {
   buildChapterDetectionPrompt,
 } from "./groq";
 import { logUsage, openAiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
+import { modelIdFor } from "./ai-settings";
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-// Default NIM model. Override with NVIDIA_MODEL if your account/catalog exposes
+// Default NIM model. Override with nvidiaModel() if your account/catalog exposes
 // a different set (see https://build.nvidia.com/models).
 //
 // Was meta/llama-3.3-70b-instruct, which NVIDIA retired on 2026-08-26 and now
@@ -40,7 +41,10 @@ const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 //   mistralai/mistral-nemotron             → timed out at 45s
 // Re-test with the same criteria if this one is ever retired: the whole chain
 // depends on the model honouring JSON mode.
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
+const NVIDIA_MODEL_FALLBACK = process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
+function nvidiaModel(): string {
+  return modelIdFor("NVIDIA", "chat") ?? NVIDIA_MODEL_FALLBACK;
+}
 
 export function hasNvidiaKey(): boolean {
   return !!process.env.NVIDIA_API_KEY;
@@ -60,7 +64,7 @@ async function nvidiaChatCompletion(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: NVIDIA_MODEL,
+      model: nvidiaModel(),
       messages,
       temperature: opts.temperature ?? 0.5,
       max_tokens: opts.maxTokens ?? 8192,
@@ -81,7 +85,7 @@ async function nvidiaChatCompletion(
   logUsage({
     feature: opts.feature ?? "quality-check",
     provider: "nvidia",
-    model: NVIDIA_MODEL,
+    model: nvidiaModel(),
     usage: openAiUsage(data.usage),
     actor: opts.actor,
   });

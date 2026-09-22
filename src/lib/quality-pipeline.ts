@@ -16,7 +16,7 @@ import { generateEmbeddings, cosineSimilarity } from "./embeddings";
 import { ollamaChat, isOllamaEnabled } from "./ollama";
 import { groqChat } from "./groq";
 import { nvidiaChat } from "./nvidia";
-import { geminiChat, GEMINI_FAST_MODEL } from "./gemini";
+import { geminiChat, geminiFastModel } from "./gemini";
 import type { UsageFeature } from "./usage-logger";
 
 // ─── Types ──────────────────────────────────────────────
@@ -544,7 +544,7 @@ Return JSON only — no markdown, no code fences:
     try {
       rawText =
         (await geminiChat(prompt, {
-          model: GEMINI_FAST_MODEL,
+          model: geminiFastModel(),
           temperature: 0.1,
           maxTokens: 4096,
           feature: "quality-check",

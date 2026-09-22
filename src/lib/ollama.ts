@@ -11,10 +11,14 @@ import type {
 } from "./gemini";
 import { buildQuestionGenerationPrompt, sanitizeQuestionText } from "./question-prompts";
 import { shuffleArray } from "./utils";
+import { modelIdFor } from "./ai-settings";
 
 const DEFAULT_BASE_URL = "http://localhost:11434";
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? DEFAULT_BASE_URL;
-export const OLLAMA_CHAT_MODEL = "mistral";
+const OLLAMA_CHAT_MODEL_FALLBACK = "mistral";
+export function ollamaChatModel(): string {
+  return modelIdFor("OLLAMA", "chat") ?? OLLAMA_CHAT_MODEL_FALLBACK;
+}
 
 /**
  * Whether Ollama should be used as a provider at all.
@@ -69,7 +73,7 @@ export async function ollamaChat(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: OLLAMA_CHAT_MODEL,
+        model: ollamaChatModel(),
         messages: [{ role: "user", content: prompt }],
         format: "json",
         stream: true,

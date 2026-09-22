@@ -6,7 +6,7 @@
  * history, so pgvector semantic search retrieves the correct textbook passages.
  */
 
-import { geminiChat, GEMINI_FAST_MODEL } from "./gemini";
+import { geminiChat, geminiFastModel } from "./gemini";
 import { groqChat } from "./groq";
 import type { UsageActor } from "./usage-logger";
 
@@ -92,7 +92,7 @@ STANDALONE SEARCH QUERY:`;
 
     // Try Gemini fast model first (gemini-3.1-flash-lite)
     const geminiPromise = geminiChat(prompt, {
-      model: GEMINI_FAST_MODEL,
+      model: geminiFastModel(),
       temperature: 0.0,
       maxTokens: 80,
       feature: "tutor-chat",

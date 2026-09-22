@@ -10,7 +10,7 @@
 
 import { ollamaChat, isOllamaEnabled } from "./ollama";
 import { groqChat } from "./groq";
-import { geminiChat, GEMINI_FAST_MODEL } from "./gemini";
+import { geminiChat, geminiFastModel } from "./gemini";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -168,7 +168,7 @@ async function tagBatch(
   if (process.env.GEMINI_API_KEY) {
     try {
       const raw = await geminiChat(prompt, {
-        model: GEMINI_FAST_MODEL,
+        model: geminiFastModel(),
         temperature: 0.2,
         maxTokens: 4096,
         feature: "bloom-tagging",

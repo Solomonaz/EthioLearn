@@ -25,6 +25,8 @@ import { extractJson } from "./question-validation";
 import { QUESTION_CONTENT_CHARS } from "./question-prompts";
 import type { UsageActor } from "./usage-logger";
 import { ollamaGenerateQuestions, ollamaDetectChapters, isOllamaEnabled } from "./ollama";
+import { openRouterGenerateQuestions, openRouterDetectChapters } from "./openrouter";
+import { getProviderChain, type AiProviderId } from "./ai-settings";
 
 import type {
   GenerateOptions,
@@ -51,6 +53,98 @@ export { tagChunksWithBloomLevel, tagQuestionBloomLevel } from "./bloom-tagger";
 export type { BloomLevel, BloomTagResult } from "./bloom-tagger";
 export { runQualityPipeline, verifyQuestions, hasBlockingStructuralIssue } from "./quality-pipeline";
 export type { QualityResult, QualityPipelineResult, QualityFlag, VerifyResult } from "./quality-pipeline";
+
+// ─── Dynamic provider chain ─────────────────────────────
+//
+// Order and model ids come from the DATABASE (see lib/ai-settings), not from
+// the sequence of `if` blocks this file used to contain. That is what lets an
+// admin demote a provider whose daily quota just ran out, or repoint a retired
+// model id, without a code change or a deploy.
+
+/** Provider names as reported to callers and recorded in usage events. */
+export type ProviderName = "gemini" | "groq" | "nvidia" | "openrouter" | "ollama";
+
+interface Runner {
+  name: ProviderName;
+  questions: (o: GenerateOptions) => Promise<GeneratedQuestion[]>;
+  chapters: (o: DetectChaptersOptions) => Promise<DetectedChapter[]>;
+}
+
+const RUNNERS: Record<AiProviderId, Runner> = {
+  GEMINI: { name: "gemini", questions: generateQuestionsFromContent, chapters: detectChaptersFromContent },
+  GROQ: { name: "groq", questions: groqGenerateQuestions, chapters: groqDetectChapters },
+  NVIDIA: { name: "nvidia", questions: nvidiaGenerateQuestions, chapters: nvidiaDetectChapters },
+  OPENROUTER: { name: "openrouter", questions: openRouterGenerateQuestions, chapters: openRouterDetectChapters },
+  OLLAMA: { name: "ollama", questions: ollamaGenerateQuestions, chapters: ollamaDetectChapters },
+};
+
+/**
+ * Providers that must be tried LAST for a given task regardless of the priority
+ * an admin set, because they are known to fail that specific task badly.
+ *
+ * This is not second-guessing the admin — priority still orders everything else.
+ * It encodes a measured result: asked to detect two units, the NIM Nemotron
+ * model returned malformed JSON and invented "UNIT 5: ???" through
+ * "UNIT 18: ???". Detection feeds chapter creation, so a hallucinated chapter
+ * is a corrupt split, and that is worth protecting against a well-meaning
+ * reordering.
+ */
+const TASK_DEMOTIONS: Record<"chapters", AiProviderId[]> = {
+  chapters: ["NVIDIA"],
+};
+
+/**
+ * Walk the configured chain until one provider succeeds.
+ *
+ * Falls through on ANY failure — rate limit, transient 500, parse error, bad
+ * key — because failing fast would waste the fallbacks that exist precisely for
+ * these cases. The last error is surfaced only once every provider is spent.
+ */
+async function runChain<T>(
+  task: string,
+  pick: (r: Runner) => (() => Promise<T>),
+  demote: AiProviderId[] = []
+): Promise<{ value: T; provider: ProviderName }> {
+  let chain = await getProviderChain("chat");
+
+  // Ollama keeps its own production guard: local inference must never serve
+  // real users, whatever the database says.
+  chain = chain.filter((p) => p.id !== "OLLAMA" || isOllamaEnabled());
+
+  if (demote.length) {
+    chain = [
+      ...chain.filter((p) => !demote.includes(p.id)),
+      ...chain.filter((p) => demote.includes(p.id)),
+    ];
+  }
+
+  console.log(
+    `[AI Provider] ${task} chain: ${chain.map((p) => `${p.id}(${p.models.chat})`).join(" -> ") || "(empty)"}`
+  );
+
+  let lastError: unknown = null;
+  for (const p of chain) {
+    const runner = RUNNERS[p.id];
+    try {
+      const value = await pick(runner)();
+      console.log(`[AI Provider] ${task}: served by ${p.id} (${p.models.chat}).`);
+      return { value, provider: runner.name };
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `[AI Provider] ${task}: ${p.id} failed (${err instanceof Error ? err.message : String(err)}) — trying next.`
+      );
+    }
+  }
+
+  throw new Error(
+    `All AI providers failed for ${task}. ` +
+      (lastError
+        ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}. `
+        : "No AI provider is enabled, keyed and configured with a model. ") +
+      "Check Admin -> AI Models: a provider may be disabled, out of quota, or pointing at a retired model id."
+  );
+}
 
 // ─── Helpers ────────────────────────────────────────────
 
@@ -84,73 +178,12 @@ function hasOllama(): boolean {
 
 export async function generateQuestions(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
-  // Every provider in the chain falls through to the next on ANY failure —
-  // rate-limit OR transient error (500, parse failure, bad key). Failing fast
-  // on a non-429 error would waste the configured fallbacks, so the last
-  // error is captured and surfaced only if the ENTIRE chain is exhausted.
-  let lastError: unknown = null;
-
-  // 1. Gemini — primary; 1M TPM on a billed key.
-  if (hasGeminiKey()) {
-    try {
-      const questions = await generateQuestionsFromContent(opts);
-      return { questions, provider: "gemini" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Gemini failed (${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
-      );
-    }
-  }
-
-  // 2. Groq — fast; small batched requests fit its 12K TPM free tier.
-  if (hasGroqKey()) {
-    try {
-      const questions = await groqGenerateQuestions(opts);
-      return { questions, provider: "groq" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Groq failed (${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`
-      );
-    }
-  }
-
-  // 3. NVIDIA NIM — high RPM, no hard cap, but slow; a capacity fallback.
-  if (hasNvidiaKey()) {
-    try {
-      const questions = await nvidiaGenerateQuestions(opts);
-      return { questions, provider: "nvidia" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] NVIDIA failed (${err instanceof Error ? err.message : String(err)}), falling back to Ollama Mistral…`
-      );
-    }
-  }
-
-  // 4. Ollama Mistral — local dev only, skipped in production
-  if (hasOllama()) {
-    try {
-      const questions = await ollamaGenerateQuestions(opts);
-      console.info("[AI Provider] Used Ollama Mistral for question generation.");
-      return { questions, provider: "ollama" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Ollama failed (${err instanceof Error ? err.message : String(err)}).`
-      );
-    }
-  }
-
-  throw new Error(
-    `All AI providers failed for question generation. ` +
-    (lastError
-      ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}. `
-      : "No AI provider is configured. ") +
-    "Add a free NVIDIA_API_KEY (https://build.nvidia.com) or GROQ_API_KEY (https://console.groq.com) for more capacity, or wait a moment and try again."
+): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName }> {
+  const { value, provider } = await runChain(
+    "question generation",
+    (r) => () => r.questions(opts)
   );
+  return { questions: value, provider };
 }
 
 // ─── Batched question generation ────────────────────────
@@ -231,7 +264,7 @@ export async function generateQuestionsBatched(
   opts: GenerateOptions & {
     onProgress?: (info: { batchIndex: number; totalBatches: number; questionsSoFar: number }) => void;
   }
-): Promise<{ questions: GeneratedQuestion[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
+): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName }> {
   const total = Math.max(1, opts.count ?? 10);
   const content = opts.content ?? "";
 
@@ -290,7 +323,7 @@ export async function generateQuestionsBatched(
   // Run sequentially: firing every batch at once trips the providers' per-minute
   // token caps simultaneously. Spread over time, each small batch succeeds.
   const all: GeneratedQuestion[] = [];
-  let usedProvider: "gemini" | "nvidia" | "groq" | "ollama" | undefined;
+  let usedProvider: ProviderName | undefined;
   let lastError: unknown = null;
 
   for (let i = 0; i < batches.length; i++) {
@@ -340,86 +373,14 @@ export async function generateQuestionsBatched(
 
 export async function detectChapters(
   opts: DetectChaptersOptions
-): Promise<{ chapters: DetectedChapter[]; provider: "gemini" | "nvidia" | "groq" | "ollama" }> {
-  // Same fall-through-on-any-error policy as generateQuestions: a transient
-  // (non-429) failure from any provider must not abort the whole chain.
-  let lastError: unknown = null;
-
-  // NVIDIA is deliberately NOT tried first for chapter detection, unlike
-  // question generation where it remains the primary.
-  //
-  // The current NIM model (nvidia/nemotron-3-super-120b-a12b) generates
-  // questions well but fails this task badly: asked to detect two units it
-  // returned malformed JSON AND invented "UNIT 5: ???" … "UNIT 18: ???".
-  // Every other servable NIM model tested either 404s or emits reasoning text
-  // instead of JSON. Detection feeds chapter creation, so a hallucinated
-  // chapter is a corrupt split — and calling it first also burned ~30s per
-  // window before falling through. Left last as a desperation fallback only.
-
-  // 1. Gemini — 1M TPM handles large textbook content when available.
-  if (hasGeminiKey()) {
-    try {
-      const chapters = await detectChaptersFromContent(opts);
-      return { chapters, provider: "gemini" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Gemini failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Groq…`
-      );
-    }
-  }
-
-  // 2. Groq — fast fallback
-  if (hasGroqKey()) {
-    try {
-      const chapters = await groqDetectChapters(opts);
-      return { chapters, provider: "groq" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Groq failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Ollama Mistral…`
-      );
-    }
-  }
-
-  // 3. NVIDIA — last resort only (see the note at the top of this function:
-  //    the available NIM models hallucinate chapters or won't emit JSON).
-  if (hasNvidiaKey()) {
-    try {
-      const chapters = await nvidiaDetectChapters(opts);
-      console.warn(
-        "[AI Provider] Chapter detection fell through to NVIDIA — verify the resulting split manually."
-      );
-      return { chapters, provider: "nvidia" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] NVIDIA failed (Chapters: ${err instanceof Error ? err.message : String(err)}), falling back to Ollama Mistral…`
-      );
-    }
-  }
-
-  // 4. Ollama Mistral — local dev only, skipped in production
-  if (hasOllama()) {
-    try {
-      const chapters = await ollamaDetectChapters(opts);
-      console.info("[AI Provider] Used Ollama Mistral for chapter detection.");
-      return { chapters, provider: "ollama" };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] Ollama failed (Chapters: ${err instanceof Error ? err.message : String(err)}).`
-      );
-    }
-  }
-
-  throw new Error(
-    `All AI providers failed for chapter detection. ` +
-    (lastError
-      ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}. `
-      : "No AI provider is configured. ") +
-    "Please wait a moment and try again."
+): Promise<{ chapters: DetectedChapter[]; provider: ProviderName }> {
+  // NVIDIA is demoted for this task only — see TASK_DEMOTIONS.
+  const { value, provider } = await runChain(
+    "chapter detection",
+    (r) => () => r.chapters(opts),
+    TASK_DEMOTIONS.chapters
   );
+  return { chapters: value, provider };
 }
 
 // ─── AI Tutor Chat (Groq → Gemini → NVIDIA) ─────────────
