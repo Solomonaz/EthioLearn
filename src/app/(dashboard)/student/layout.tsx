@@ -35,7 +35,13 @@ export default async function StudentLayout({
 
   return (
     <>
-      {children}
+      {/* --notes-fab-clear: how far board tool buttons (graph, 3D geometry) keep
+          from the right edge so they never sit under the Notes button below.
+          Pages outside this layout (e.g. the public /grapher) don't set it, so
+          their buttons stay in the corner. */}
+      <div className="contents" style={{ "--notes-fab-clear": "76px" } as React.CSSProperties}>
+        {children}
+      </div>
       {/* Floating, draggable study-notes scratchpad — persists across every
           student page and only closes when the student clicks ✕. */}
       <StudentNotes />

@@ -317,6 +317,12 @@ model StudentNote {
   title     String   @default("Untitled")
   content   String?  @db.Text // typed notes
   drawing   String?  @db.Text // PNG data URL of the sketch canvas
+  /// What the student was studying when the note was created, e.g.
+  /// "Genetics · biology" (a chapter) or "3D Geometry" (a page). Read and
+  /// written with raw SQL in the notes API — see route.ts there.
+  contextLabel String?
+  /// The app path the note was created on, e.g. "/student/tutor".
+  contextPath  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

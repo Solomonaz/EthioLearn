@@ -22,7 +22,12 @@ export async function GET(_req: Request, { params }: Ctx) {
   });
   if (!note) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json({ note });
+  // Context columns via raw SQL — see the note in ../route.ts.
+  const ctx = await db.$queryRaw<{ contextLabel: string | null; contextPath: string | null }[]>`
+    SELECT "contextLabel", "contextPath" FROM student_notes WHERE id = ${id} AND "userId" = ${user.id}
+  `;
+
+  return NextResponse.json({ note: { ...note, ...(ctx[0] ?? { contextLabel: null, contextPath: null }) } });
 }
 
 // ─── PATCH: update a note's title / content / drawing ──
@@ -44,7 +49,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   const data: { title?: string; content?: string | null; drawing?: string | null } = {};
   if (typeof body.title === "string") {
-    data.title = (body.title.trim() || "Untitled").slice(0, MAX_TITLE);
+    // Empty is allowed: the panel shows the note’s first line instead.
+    data.title = body.title.trim().slice(0, MAX_TITLE);
   }
   if ("content" in body) {
     data.content = typeof body.content === "string" ? body.content.slice(0, MAX_CONTENT) : null;

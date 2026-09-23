@@ -33,6 +33,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFitViewport } from "@/lib/use-fit-viewport";
 import { toast } from "@/components/ui/sonner";
 
 /**
@@ -247,6 +248,7 @@ export function GraphPlotter({
 
   // ── Measure the plot area ─────────────────────────────────
   const boxRef = useRef<HTMLDivElement>(null);
+  useFitViewport(boxRef);
   const svgRef = useRef<SVGSVGElement>(null);
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
   const [size, setSize] = useState({ w: 640, h: 420 });
@@ -855,7 +857,7 @@ export function GraphPlotter({
   return (
     <div
       ref={boxRef}
-      className="relative h-[78vh] min-h-[560px] w-full overflow-hidden rounded-2xl border shadow-sm"
+      className="relative h-[78vh] min-h-[420px] w-full overflow-hidden rounded-2xl border shadow-sm"
       style={{ touchAction: "none", backgroundColor: bt.bg, borderColor: bt.cardBorder }}
     >
         <svg
@@ -1242,11 +1244,17 @@ export function GraphPlotter({
           </div>
         )}
 
-        {/* Tool dot — tap to expand every graph tool (keeps the board clean) */}
-        <div className="absolute bottom-4 right-4 z-40 flex flex-col items-end gap-2">
+        {/* Tool dot — tap to expand every graph tool (keeps the board clean).
+            Kept clear of the student Notes button: the student layout sets
+            --notes-fab-clear; elsewhere (public /grapher) and in full screen
+            there is no Notes button, so it stays in the corner. */}
+        <div
+          className="absolute bottom-4 z-40 flex flex-col items-end gap-2"
+          style={{ right: isFull ? 16 : "var(--notes-fab-clear, 16px)" }}
+        >
           {menuOpen && (
             <div
-              className="mb-1 grid w-[240px] grid-cols-3 gap-1 rounded-2xl border p-2 shadow-2xl backdrop-blur"
+              className="mb-1 grid max-h-[60vh] w-[min(240px,calc(100vw-2rem))] grid-cols-3 gap-1 overflow-y-auto rounded-2xl border p-2 shadow-2xl backdrop-blur"
               style={{ backgroundColor: bt.card, borderColor: bt.cardBorder }}
             >
               {[
@@ -1286,10 +1294,10 @@ export function GraphPlotter({
             onClick={() => setMenuOpen((m) => !m)}
             title={menuOpen ? "Close tools" : "Tools"}
             aria-label={menuOpen ? "Close tools" : "Open tools"}
-            className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-2xl transition hover:brightness-110 active:scale-95"
+            className="flex h-12 w-12 items-center justify-center rounded-full text-white shadow-2xl transition hover:brightness-110 active:scale-95 sm:h-14 sm:w-14"
             style={{ backgroundImage: "linear-gradient(135deg,#2563eb,#7c3aed)" }}
           >
-            {menuOpen ? <X className="h-6 w-6" /> : <LayoutGrid className="h-6 w-6" />}
+            {menuOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <LayoutGrid className="h-5 w-5 sm:h-6 sm:w-6" />}
           </button>
         </div>
       </div>

@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { UpgradeNotice } from "@/components/student/upgrade-notice";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { useNotesContext } from "@/lib/notes-context";
 
 interface Chapter {
   id: string;
@@ -48,6 +49,8 @@ export default function TutorPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedTextbook, setSelectedTextbook] = useState<Textbook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  // New study notes taken here are tagged with the chapter being studied.
+  useNotesContext(selectedChapter && selectedTextbook ? `${selectedChapter.title} · ${selectedTextbook.subject}` : null);
 
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);

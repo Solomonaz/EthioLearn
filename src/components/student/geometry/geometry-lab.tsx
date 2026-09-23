@@ -31,8 +31,10 @@ import {
   Pen,
   Trash2,
   GripHorizontal,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFitViewport } from "@/lib/use-fit-viewport";
 import { toast } from "@/components/ui/sonner";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import {
@@ -170,6 +172,9 @@ export function GeometryLab() {
   const [dark, setDark] = useState(() => typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
   const [shapesOpen, setShapesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The info card can be collapsed on small screens so the board isn't crowded.
+  // Starts collapsed on narrow screens, where it would sit under the action bar.
+  const [infoOpen, setInfoOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1024);
   const [isFull, setIsFull] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
   const [add, setAdd] = useState({ kind: "prism" as AddKind, sides: 6, w: 2, h: 2, d: 2, r: 1.2, ph: 2, verts: SAMPLE_VERTS, faces: SAMPLE_FACES });
@@ -212,6 +217,27 @@ export function GeometryLab() {
   // `def` is null when the board is empty (the default blank teaching board).
   const def = useMemo(() => allSolids.find((s) => s.id === solidId) ?? null, [allSolids, solidId]);
   const stats = useMemo(() => (def ? computeStats(def) : EMPTY_STATS), [def]);
+  // Size shown in the info card, so students can check area/volume by hand.
+  // For a box the extents ARE its length/width/height; for any other solid they
+  // are the smallest axis-aligned box it fits in, and are labelled as such.
+  const dims = useMemo(() => {
+    if (!def) return null;
+    if (def.curved) {
+      const { type, r, h } = def.curved;
+      return type === "sphere"
+        ? { label: "Radius", value: `${round2(r)} u` }
+        : { label: "Radius · height", value: `${round2(r)} · ${round2(h)} u` };
+    }
+    if (def.vertices.length === 0) return null;
+    const span = (k: number) =>
+      Math.max(...def.vertices.map((v) => v[k])) - Math.min(...def.vertices.map((v) => v[k]));
+    const [lx, hy, wz] = [span(0), span(1), span(2)];
+    const isBox = Math.abs(lx * hy * wz - stats.volume) < 1e-3 * Math.max(1, stats.volume);
+    return {
+      label: isBox ? "Size (L × W × H)" : "Fits in a box",
+      value: `${round2(lx)} × ${round2(wz)} × ${round2(hy)} u`,
+    };
+  }, [def, stats.volume]);
   const extent = useMemo(() => {
     if (!def) return 3;
     if (def.curved) return Math.max(def.curved.r, (def.curved.h || 0) / 2) + 0.2;
@@ -234,6 +260,7 @@ export function GeometryLab() {
 
   const mountRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  useFitViewport(boardRef);
   const engineRef = useRef<Engine | null>(null);
 
   // ── Drag the draw toolbar card around the board ───────────
@@ -399,6 +426,29 @@ export function GeometryLab() {
     (axes.material as THREE.Material).transparent = true;
     (axes.material as THREE.Material).opacity = 0.55;
     scene.add(axes);
+    // Label the axis ends (x red, y green, z blue — AxesHelper's colours) so
+    // students can tell which way each axis runs.
+    const axisLabel = (text: string, color: string, pos: [number, number, number]) => {
+      const cv = document.createElement("canvas");
+      cv.width = 64;
+      cv.height = 64;
+      const ctx = cv.getContext("2d");
+      if (!ctx) return;
+      ctx.font = "bold 44px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = color;
+      ctx.fillText(text, 32, 34);
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false })
+      );
+      sprite.position.set(pos[0], pos[1], pos[2]);
+      sprite.scale.set(0.3, 0.3, 1);
+      scene.add(sprite);
+    };
+    axisLabel("x", "#ef4444", [1.9, 0, 0]);
+    axisLabel("y", "#22c55e", [0, 1.9, 0]);
+    axisLabel("z", "#3b82f6", [0, 0, 1.9]);
 
     const group = new THREE.Group();
     scene.add(group);
@@ -935,21 +985,41 @@ export function GeometryLab() {
 
   const euler = stats.V - stats.E + stats.F;
 
-  const tools = [
-    { icon: Layers, label: "Faces", onClick: () => setPickMode("face"), active: pickMode === "face" },
-    { icon: Circle, label: "Vertices", onClick: () => setPickMode("vertex"), active: pickMode === "vertex" },
-    { icon: Ban, label: "No pick", onClick: () => setPickMode("off"), active: pickMode === "off" },
-    { icon: Grid3x3, label: "Edges", onClick: () => setWireframe((w) => !w), active: wireframe },
-    { icon: SlidersHorizontal, label: "Clip", onClick: () => setClip((c) => ({ ...c, on: !c.on })), active: clip.on },
-    { icon: RotateCcw, label: "Reset", onClick: resetView, active: false },
-    { icon: isFull ? Minimize : Maximize, label: isFull ? "Window" : "Full", onClick: toggleFull, active: false },
-    { icon: dark ? Sun : Moon, label: dark ? "Light" : "Dark", onClick: () => setDark((d) => !d), active: false },
+  // Tools grouped by what they do. While Slice is on, a tap adds a slice point,
+  // so the "Tap selects" modes are disabled rather than shown as active — the
+  // menu used to highlight "No pick" while Slice was asking for taps.
+  type Tool = { icon: LucideIcon; label: string; onClick: () => void; active: boolean; disabled?: boolean; hint?: string };
+  const toolGroups: { title: string; note?: string; tools: Tool[] }[] = [
+    {
+      title: "Tap selects",
+      note: sliceOn ? "Slice is on — taps add slice points." : undefined,
+      tools: [
+        { icon: Layers, label: "Faces", hint: "Tap a face to see its true shape", onClick: () => setPickMode("face"), active: !sliceOn && pickMode === "face", disabled: sliceOn },
+        { icon: Circle, label: "Vertices", hint: "Tap a corner to see its position", onClick: () => setPickMode("vertex"), active: !sliceOn && pickMode === "vertex", disabled: sliceOn },
+        { icon: Ban, label: "Nothing", hint: "Taps only rotate the shape", onClick: () => setPickMode("off"), active: !sliceOn && pickMode === "off", disabled: sliceOn },
+      ],
+    },
+    {
+      title: "View",
+      tools: [
+        { icon: Grid3x3, label: "Edges", hint: "Show or hide the edges", onClick: () => setWireframe((w) => !w), active: wireframe },
+        { icon: SlidersHorizontal, label: "Cut-away", hint: "Cut the solid open along x, y or z", onClick: () => setClip((c) => ({ ...c, on: !c.on })), active: clip.on },
+        { icon: RotateCcw, label: "Reset view", hint: "Put the camera back", onClick: resetView, active: false },
+        { icon: isFull ? Minimize : Maximize, label: isFull ? "Exit full" : "Full screen", onClick: toggleFull, active: false },
+        { icon: dark ? Sun : Moon, label: dark ? "Light" : "Dark", onClick: () => setDark((d) => !d), active: false },
+      ],
+    },
     // Sketch→3D ("Draw") and the "Ask AI" panel both need AI — hidden when the
     // global AI switch (or its Graphing & 3D Geometry sub-switch) is off.
     ...(aiTools
       ? [
-          { icon: Pen, label: "Draw", onClick: () => { setDrawOn((o) => !o); setAiOpen(false); setMenuOpen(false); }, active: drawOn },
-          { icon: Sparkles, label: "Ask AI", onClick: () => { setAiOpen((o) => !o); setDrawOn(false); }, active: aiOpen },
+          {
+            title: "AI",
+            tools: [
+              { icon: Pen, label: "Draw", hint: "Draw a shape and turn it into 3D", onClick: () => { setDrawOn((o) => !o); setAiOpen(false); setMenuOpen(false); }, active: drawOn },
+              { icon: Sparkles, label: "Ask AI", hint: "Ask the tutor about this shape", onClick: () => { setAiOpen((o) => !o); setDrawOn(false); }, active: aiOpen },
+            ],
+          },
         ]
       : []),
   ];
@@ -957,7 +1027,7 @@ export function GeometryLab() {
   return (
     <div
       ref={boardRef}
-      className={cn("relative h-[80vh] min-h-[520px] w-full overflow-hidden rounded-2xl border border-border shadow-sm", dark && "dark")}
+      className={cn("relative h-[80vh] min-h-[420px] w-full overflow-hidden rounded-2xl border border-border shadow-sm", dark && "dark")}
       style={{ backgroundColor: dark ? C.bg.dark : C.bg.light }}
     >
       <div ref={mountRef} className="absolute inset-0" />
@@ -1094,7 +1164,7 @@ export function GeometryLab() {
         {clip.on && (
           <div className="rounded-2xl border border-border bg-surface/95 p-3 shadow-lg backdrop-blur">
             <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary">
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Clip cutaway
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Cut-away
             </div>
             <div className="mb-2 flex gap-1">
               {(["x", "y", "z"] as Axis[]).map((a) => (
@@ -1137,8 +1207,9 @@ export function GeometryLab() {
             </p>
             <div className="mt-2 flex items-center gap-1">
               <Palette className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+              <span className="mr-0.5 text-[10px] font-medium text-text-muted">Colour</span>
               {SLICE_COLORS.map((col) => (
-                <button key={col} onClick={() => setActiveColor(col)} title={col}
+                <button key={col} onClick={() => setActiveColor(col)} title="Colour for this slice"
                   className={cn("h-4 w-4 rounded-full border transition hover:scale-110", activeSliceObj?.color === col ? "border-text-primary ring-1 ring-text-primary" : "border-border")}
                   style={{ backgroundColor: col }} />
               ))}
@@ -1163,11 +1234,20 @@ export function GeometryLab() {
       </div>
 
       {/* Info panel (bottom-left) */}
-      <div className="absolute bottom-3 left-3 z-20 w-60 rounded-2xl border border-border bg-surface/95 p-3 text-xs shadow-lg backdrop-blur">
-        <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-text-primary">
+      <div className={cn("absolute bottom-3 left-3 z-20 rounded-2xl border border-border bg-surface/95 p-3 text-xs shadow-lg backdrop-blur", infoOpen ? "w-60" : "w-auto max-w-[40%]")}>
+        <div className={cn("flex items-center gap-1.5 text-sm font-bold text-text-primary", infoOpen && "mb-1")}>
           {drawOn ? <Pen className="h-4 w-4 text-primary" /> : <Box className="h-4 w-4 text-primary" />}
-          {drawOn ? "Drawing" : def ? def.name : "Teaching board"}
+          <span className="min-w-0 flex-1 truncate">{drawOn ? "Drawing" : def ? def.name : "Teaching board"}</span>
+          <button
+            onClick={() => setInfoOpen((o) => !o)}
+            title={infoOpen ? "Collapse" : "Expand"}
+            aria-label={infoOpen ? "Collapse the info card" : "Expand the info card"}
+            className="rounded-md p-0.5 text-text-muted transition hover:bg-border/40 hover:text-text-primary"
+          >
+            <ChevronDown className={cn("h-4 w-4 transition-transform", infoOpen && "rotate-180")} />
+          </button>
         </div>
+        {infoOpen && (<>
         <p className="mb-2 leading-relaxed text-text-secondary">
           {drawOn
             ? "Draw, describe, or upload a shape — it becomes a full 3D solid with every tool (slice, inscribe, faces…)."
@@ -1201,6 +1281,7 @@ export function GeometryLab() {
         {buildMsg && <p className="mt-1 text-[10px] leading-snug text-error">{buildMsg}</p>}
         {def && (
           <div className="mt-2 space-y-0.5 border-t border-border pt-2 text-text-secondary">
+            {dims && <Row k={dims.label} v={dims.value} />}
             <Row k="Euler (V−E+F)" v={`${euler}`} good={euler === 2} />
             <Row k="Surface area" v={`${round2(stats.surfaceArea)} u²`} />
             <Row k="Volume" v={`${round2(stats.volume)} u³`} />
@@ -1220,6 +1301,7 @@ export function GeometryLab() {
             <Row k="Position" v={`(${def.vertices[selVertex].map((c) => round2(c)).join(", ")})`} />
           </div>
         )}
+        </>)}
       </div>
 
       {/* Contextual action bar (below the shape) — shown for ANY solid, curved
@@ -1326,23 +1408,38 @@ export function GeometryLab() {
       )}
 
       {/* Tool dot — tap to expand every tool (keeps the board clean) */}
-      <div className="absolute bottom-3 right-3 z-40 flex flex-col items-end gap-2">
+      {/* Kept clear of the student Notes button (fixed bottom-right on every
+          student page; the student layout sets --notes-fab-clear). Full screen
+          hides Notes, so the dot returns to the corner there. */}
+      <div
+        className="absolute bottom-3 z-40 flex flex-col items-end gap-2"
+        style={{ right: isFull ? 12 : "var(--notes-fab-clear, 12px)" }}
+      >
         {menuOpen && (
-          <div className="mb-1 grid w-[228px] grid-cols-3 gap-1 rounded-2xl border border-border bg-surface/95 p-2 shadow-2xl backdrop-blur">
-            {tools.map((t) => (
-              <button
-                key={t.label}
-                onClick={t.onClick}
-                title={t.label}
-                className={cn(
-                  "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition",
-                  !t.active && "text-text-secondary hover:bg-border/40",
-                )}
-                style={t.active ? { backgroundColor: "#2563eb", color: "#ffffff" } : undefined}
-              >
-                <t.icon className="h-4 w-4" />
-                {t.label}
-              </button>
+          <div className="mb-1 max-h-[60vh] w-[min(236px,calc(100vw-2rem))] space-y-2 overflow-y-auto rounded-2xl border border-border bg-surface/95 p-2 shadow-2xl backdrop-blur">
+            {toolGroups.map((g) => (
+              <div key={g.title}>
+                <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-text-muted">{g.title}</div>
+                {g.note && <p className="px-1 pb-1 text-[10px] leading-snug text-primary">{g.note}</p>}
+                <div className="grid grid-cols-3 gap-1">
+                  {g.tools.map((t) => (
+                    <button
+                      key={t.label}
+                      onClick={t.onClick}
+                      disabled={t.disabled}
+                      title={t.hint ?? t.label}
+                      className={cn(
+                        "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition",
+                        t.active ? "bg-primary text-white" : "text-text-secondary hover:bg-border/40",
+                        t.disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+                      )}
+                    >
+                      <t.icon className="h-4 w-4" />
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -1350,10 +1447,10 @@ export function GeometryLab() {
           onClick={() => setMenuOpen((m) => !m)}
           title={menuOpen ? "Close tools" : "Tools"}
           aria-label={menuOpen ? "Close tools" : "Open tools"}
-          className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-2xl transition hover:brightness-110 active:scale-95"
+          className="flex h-12 w-12 items-center justify-center rounded-full text-white shadow-2xl transition hover:brightness-110 active:scale-95 sm:h-14 sm:w-14"
           style={{ backgroundImage: "linear-gradient(135deg,#6d28d9,#3b82f6)" }}
         >
-          {menuOpen ? <X className="h-6 w-6" /> : <LayoutGrid className="h-6 w-6" />}
+          {menuOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <LayoutGrid className="h-5 w-5 sm:h-6 sm:w-6" />}
         </button>
       </div>
 
