@@ -13,7 +13,7 @@
  * is unchanged — one call, same token budget — but the model now sees the
  * entire chapter's range rather than its first fifth.
  *
- * A rotation offset shifts which chunks are picked on each call, so generating
+ * A rotation shifts which chunks are picked on each run, so generating
  * repeatedly sweeps different material instead of returning to the same place.
  */
 
@@ -39,9 +39,14 @@ interface SelectOptions {
   /** Character budget — should match the prompt builder's limit. */
   budgetChars: number;
   /**
-   * Shifts which chunks are sampled. Pass something that advances between
-   * calls (the chapter's existing question count works well) so successive
-   * generations cover different parts of the chapter.
+   * Which generation RUN this is for the chapter (0, 1, 2 …) — use
+   * `generationRunIndex` from lib/question-dedupe. Successive runs read
+   * different chunks until the whole chapter has been covered, then cycle.
+   *
+   * Must advance by 1 per run. It used to be the chapter's question count,
+   * which advances by the batch size: with a stride of 2 (every 2nd chunk) any
+   * even count picked the same half of the chapter, so runs at 0, 10, 20 …
+   * questions all read identical text and every model repeated itself.
    */
   rotation?: number;
 }
@@ -101,17 +106,42 @@ export async function selectGenerationContent(
   // ── Stratified sampling ──────────────────────────────────────────────────
   // Work out how many chunks fit, then step through the chapter at an even
   // stride so the excerpts span it end to end.
-  const avgChunkChars = joined.length / chunks.length;
-  const affordable = Math.max(1, Math.floor(budgetChars / (avgChunkChars + ELISION.length)));
-  const take = Math.min(affordable, chunks.length);
-  const stride = chunks.length / take;
+  //
+  // Each run starts the same evenly-spaced walk one chunk further along. A
+  // stride of s leaves ceil(s) distinct starting phases, and together those
+  // phases visit every chunk — so ceil(s) consecutive runs cover the chapter.
+  //
+  // That only holds if every phase's picks actually FIT the budget. Sizing
+  // `take` from the average chunk length did not guarantee it: in a chapter
+  // with some large chunks the last pick of each phase overflowed and was cut,
+  // and because it was always the same tail position, those chunks were never
+  // read by any run. So `take` is the largest count for which every phase fits.
+  const n = chunks.length;
+  const sizes = chunks.map((c) => c.content.length);
+  const picksFor = (take: number, offset: number): number[] => {
+    const stride = n / take;
+    const out = new Set<number>();
+    for (let i = 0; i < take; i++) out.add((Math.floor(i * stride) + offset) % n);
+    return [...out];
+  };
+  const costOf = (idx: number[]) =>
+    idx.reduce((sum, i) => sum + sizes[i], 0) + ELISION.length * Math.max(0, idx.length - 1);
 
-  const offset = take < chunks.length ? Math.abs(Math.trunc(rotation)) % chunks.length : 0;
-
-  const picked = new Set<number>();
-  for (let i = 0; i < take; i++) {
-    picked.add((Math.round(i * stride) + offset) % chunks.length);
+  const avgChunkChars = joined.length / n;
+  let take = Math.min(
+    Math.max(1, Math.floor(budgetChars / (avgChunkChars + ELISION.length))),
+    n - 1
+  );
+  for (; take > 1; take--) {
+    const phaseCount = Math.ceil(n / take);
+    let fits = true;
+    for (let p = 0; p < phaseCount && fits; p++) fits = costOf(picksFor(take, p)) <= budgetChars;
+    if (fits) break;
   }
+  const phases = Math.max(1, Math.ceil(n / take));
+  const offset = Math.abs(Math.trunc(rotation)) % phases;
+
+  const picked = new Set<number>(picksFor(take, offset));
 
   // Rounding collisions can leave us short — backfill with unused chunks so the
   // budget isn't wasted.
@@ -130,6 +160,10 @@ export async function selectGenerationContent(
     if (used + cost > budgetChars) break;
     parts.push(piece);
     used += cost;
+  }
+  // A single chunk larger than the whole budget would otherwise yield no text.
+  if (parts.length === 0 && ordered.length > 0) {
+    parts.push(chunks[ordered[0]].content.slice(0, budgetChars));
   }
 
   return {

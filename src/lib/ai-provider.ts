@@ -1,12 +1,8 @@
 /**
- * Unified AI provider: Gemini → Groq → NVIDIA fallback chain (production).
- * Ollama Mistral is available as a local-dev-only tertiary fallback when
- * OLLAMA_BASE_URL is set to a non-localhost address.
- *
- * Gemini is the primary for the batch/offline tasks — question generation,
- * chapter detection, Bloom tagging, embeddings. The two paths
- * where latency beats capacity keep Groq first: the student-facing tutor chat
- * and the post-generation AI quality checks.
+ * Unified AI provider entry points: question generation, chapter detection and
+ * the tutor chat. Which provider and model serves each one is decided per task
+ * by lib/ai-routing (configured in Admin -> AI Models); this file only supplies
+ * the provider-specific call for each step.
  *
  * Usage:
  *   import { generateQuestions, detectChapters } from "@/lib/ai-provider";
@@ -17,16 +13,16 @@ import {
   generateQuestionsFromContent,
   detectChaptersFromContent,
   splitTextByChapters,
-  geminiChat,
+  tutorResponseFromContent,
 } from "./gemini";
-import { groqGenerateQuestions, groqDetectChapters, groqChat } from "./groq";
-import { nvidiaGenerateQuestions, nvidiaDetectChapters, hasNvidiaKey, nvidiaChat } from "./nvidia";
-import { extractJson } from "./question-validation";
+import { groqGenerateQuestions, groqDetectChapters, groqTutorChatResponse } from "./groq";
+import { nvidiaGenerateQuestions, nvidiaDetectChapters, nvidiaTutorChat } from "./nvidia";
 import { QUESTION_CONTENT_CHARS } from "./question-prompts";
 import type { UsageActor } from "./usage-logger";
-import { ollamaGenerateQuestions, ollamaDetectChapters, isOllamaEnabled } from "./ollama";
+import { ollamaGenerateQuestions, ollamaDetectChapters } from "./ollama";
 import { openRouterGenerateQuestions, openRouterDetectChapters } from "./openrouter";
-import { getProviderChain, type AiProviderId } from "./ai-settings";
+import { runTask, getTaskChain, type ProviderName } from "./ai-routing";
+import { avoidList, AVOID_LIST_SIZE } from "./question-dedupe";
 
 import type {
   GenerateOptions,
@@ -54,136 +50,33 @@ export type { BloomLevel, BloomTagResult } from "./bloom-tagger";
 export { runQualityPipeline, verifyQuestions, hasBlockingStructuralIssue } from "./quality-pipeline";
 export type { QualityResult, QualityPipelineResult, QualityFlag, VerifyResult } from "./quality-pipeline";
 
-// ─── Dynamic provider chain ─────────────────────────────
+// ─── Per-task routing ───────────────────────────────────
 //
-// Order and model ids come from the DATABASE (see lib/ai-settings), not from
-// the sequence of `if` blocks this file used to contain. That is what lets an
-// admin demote a provider whose daily quota just ran out, or repoint a retired
-// model id, without a code change or a deploy.
+// Order and model ids come from the DATABASE, per task (see lib/ai-routing and
+// lib/ai-tasks), not from a sequence of `if` blocks. That is what lets an admin
+// run question generation on one provider and the tutor on another, demote a
+// provider whose daily quota just ran out, or repoint a retired model id —
+// without a code change or a deploy.
 
-/** Provider names as reported to callers and recorded in usage events. */
-export type ProviderName = "gemini" | "groq" | "nvidia" | "openrouter" | "ollama";
+export type { ProviderName };
 
-interface Runner {
-  name: ProviderName;
-  questions: (o: GenerateOptions) => Promise<GeneratedQuestion[]>;
-  chapters: (o: DetectChaptersOptions) => Promise<DetectedChapter[]>;
-}
-
-const RUNNERS: Record<AiProviderId, Runner> = {
-  GEMINI: { name: "gemini", questions: generateQuestionsFromContent, chapters: detectChaptersFromContent },
-  GROQ: { name: "groq", questions: groqGenerateQuestions, chapters: groqDetectChapters },
-  NVIDIA: { name: "nvidia", questions: nvidiaGenerateQuestions, chapters: nvidiaDetectChapters },
-  OPENROUTER: { name: "openrouter", questions: openRouterGenerateQuestions, chapters: openRouterDetectChapters },
-  OLLAMA: { name: "ollama", questions: ollamaGenerateQuestions, chapters: ollamaDetectChapters },
-};
-
-/**
- * Providers that must be tried LAST for a given task regardless of the priority
- * an admin set, because they are known to fail that specific task badly.
- *
- * This is not second-guessing the admin — priority still orders everything else.
- * It encodes a measured result: asked to detect two units, the NIM Nemotron
- * model returned malformed JSON and invented "UNIT 5: ???" through
- * "UNIT 18: ???". Detection feeds chapter creation, so a hallucinated chapter
- * is a corrupt split, and that is worth protecting against a well-meaning
- * reordering.
- */
-const TASK_DEMOTIONS: Record<"chapters", AiProviderId[]> = {
-  chapters: ["NVIDIA"],
-};
-
-/**
- * Walk the configured chain until one provider succeeds.
- *
- * Falls through on ANY failure — rate limit, transient 500, parse error, bad
- * key — because failing fast would waste the fallbacks that exist precisely for
- * these cases. The last error is surfaced only once every provider is spent.
- */
-async function runChain<T>(
-  task: string,
-  pick: (r: Runner) => (() => Promise<T>),
-  demote: AiProviderId[] = []
-): Promise<{ value: T; provider: ProviderName }> {
-  let chain = await getProviderChain("chat");
-
-  // Ollama keeps its own production guard: local inference must never serve
-  // real users, whatever the database says.
-  chain = chain.filter((p) => p.id !== "OLLAMA" || isOllamaEnabled());
-
-  if (demote.length) {
-    chain = [
-      ...chain.filter((p) => !demote.includes(p.id)),
-      ...chain.filter((p) => demote.includes(p.id)),
-    ];
-  }
-
-  console.log(
-    `[AI Provider] ${task} chain: ${chain.map((p) => `${p.id}(${p.models.chat})`).join(" -> ") || "(empty)"}`
-  );
-
-  let lastError: unknown = null;
-  for (const p of chain) {
-    const runner = RUNNERS[p.id];
-    try {
-      const value = await pick(runner)();
-      console.log(`[AI Provider] ${task}: served by ${p.id} (${p.models.chat}).`);
-      return { value, provider: runner.name };
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[AI Provider] ${task}: ${p.id} failed (${err instanceof Error ? err.message : String(err)}) — trying next.`
-      );
-    }
-  }
-
-  throw new Error(
-    `All AI providers failed for ${task}. ` +
-      (lastError
-        ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}. `
-        : "No AI provider is enabled, keyed and configured with a model. ") +
-      "Check Admin -> AI Models: a provider may be disabled, out of quota, or pointing at a retired model id."
-  );
-}
-
-// ─── Helpers ────────────────────────────────────────────
-
-function hasGroqKey(): boolean {
-  return !!process.env.GROQ_API_KEY;
-}
-
-function hasGeminiKey(): boolean {
-  return !!process.env.GEMINI_API_KEY;
-}
-
-// Enablement lives in lib/ollama (isOllamaEnabled) so there is ONE definition
-// instead of four slightly different copies of the same string comparison.
-function hasOllama(): boolean {
-  return isOllamaEnabled();
-}
-
-// ─── Generate Questions (Gemini → Groq → NVIDIA → Ollama) ──────────────────
+// ─── Generate Questions ─────────────────────────────────
 //
-// Cerebras was removed from every chain: its free tier returns 402 Payment
-// Required, so it only ever added a failed call and a delay before the real
-// provider ran.
-//
-// Gemini is first: it is the configured primary for every task, and its 1M TPM
-// (on a paid key) comfortably absorbs the small per-batch payloads
-// generateQuestionsBatched sends. Groq follows as the fast fallback, NVIDIA as
-// the high-RPM capacity fallback, then local Ollama in dev. Note that on a FREE
-// Gemini key this ordering means every batch pays a failed call and a 429 before
-// reaching Groq — set GEMINI_API_KEY to a billed key, or the chain will be
-// slower than it was with Groq first.
+// Default chain: GPT-6 Luna (OpenRouter) → Gemini → Groq → NVIDIA → Ollama —
+// see lib/ai-tasks. `model` is the model that actually served, so the answer
+// verifier can avoid re-checking a question with the model that wrote it.
 
 export async function generateQuestions(
   opts: GenerateOptions
-): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName }> {
-  const { value, provider } = await runChain(
-    "question generation",
-    (r) => () => r.questions(opts)
-  );
-  return { questions: value, provider };
+): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName; model: string | null }> {
+  const { value, provider, model } = await runTask("question-generation", {
+    GEMINI: () => generateQuestionsFromContent(opts),
+    GROQ: () => groqGenerateQuestions(opts),
+    NVIDIA: () => nvidiaGenerateQuestions(opts),
+    OPENROUTER: () => openRouterGenerateQuestions(opts),
+    OLLAMA: () => ollamaGenerateQuestions(opts),
+  });
+  return { questions: value, provider, model };
 }
 
 // ─── Batched question generation ────────────────────────
@@ -210,6 +103,19 @@ const CONTENT_CHARS_PER_BATCH = 9000;
  * the log line below says so instead of leaving it invisible.
  */
 const MAX_QUESTION_BATCHES = 12;
+
+/**
+ * Large-context providers (Gemini, OpenRouter models) do not need the small
+ * batches above, which exist for Groq's 12K-TPM free tier and NVIDIA's timeout.
+ * Measured 2026-09-23: 5 questions from a 44K-char chapter took 5 calls of ONE
+ * question each, and every call re-sent the ~6K-token rulebook — so the rules
+ * cost 5x and the run took 60s. When the first step of the question-generation
+ * chain is one of these, batches are merged up to these limits instead.
+ */
+const LARGE_CONTEXT_PROVIDERS = new Set(["GEMINI", "OPENROUTER"]);
+const LARGE_BATCH_QUESTIONS = 10;
+/** One call's chapter text — the prompt builder's own cap, so nothing is cut. */
+const LARGE_BATCH_CHARS = QUESTION_CONTENT_CHARS;
 
 /**
  * How many provider calls `generateQuestionsBatched` will make.
@@ -264,14 +170,26 @@ export async function generateQuestionsBatched(
   opts: GenerateOptions & {
     onProgress?: (info: { batchIndex: number; totalBatches: number; questionsSoFar: number }) => void;
   }
-): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName }> {
+): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName; model: string | null }> {
   const total = Math.max(1, opts.count ?? 10);
   const content = opts.content ?? "";
 
   // Batch count follows CHAPTER LENGTH as well as question count, so how much
   // of a chapter gets read no longer depends on how many questions someone
   // asked for. See `batchCountFor`.
-  const numBatches = batchCountFor(total, content.length);
+  let numBatches = batchCountFor(total, content.length);
+
+  // Merge into fewer, larger calls when the provider that will serve them can
+  // take it (see LARGE_CONTEXT_PROVIDERS). Coverage is unchanged: the merged
+  // windows still carry the whole selected content.
+  const lead = (await getTaskChain("question-generation"))[0];
+  const large = !!lead && LARGE_CONTEXT_PROVIDERS.has(lead.provider);
+  if (large) {
+    numBatches = Math.min(
+      numBatches,
+      Math.max(Math.ceil(total / LARGE_BATCH_QUESTIONS), Math.ceil(content.length / LARGE_BATCH_CHARS))
+    );
+  }
 
   // One call is not a degenerate batch: the prompt builder carries
   // QUESTION_CONTENT_CHARS (30,000), far more than a single batch window
@@ -304,7 +222,7 @@ export async function generateQuestionsBatched(
   // instead of all being drawn from the opening pages.
   const canSplit = content.length > 6000;
   const windowSize = canSplit ? Math.ceil(content.length / batches.length) : 0;
-  const CONTENT_CAP = CONTENT_CHARS_PER_BATCH;
+  const CONTENT_CAP = large ? LARGE_BATCH_CHARS : CONTENT_CHARS_PER_BATCH;
 
   // Say out loud how much of the chapter these calls can actually carry. When a
   // chapter is long enough to hit MAX_QUESTION_BATCHES this is the only place
@@ -324,6 +242,8 @@ export async function generateQuestionsBatched(
   // token caps simultaneously. Spread over time, each small batch succeeds.
   const all: GeneratedQuestion[] = [];
   let usedProvider: ProviderName | undefined;
+  let usedModel: string | null = null;
+  const servedBy: string[] = [];
   let lastError: unknown = null;
 
   for (let i = 0; i < batches.length; i++) {
@@ -331,7 +251,7 @@ export async function generateQuestionsBatched(
       canSplit ? content.slice(i * windowSize, (i + 1) * windowSize) || content : content
     ).slice(0, CONTENT_CAP);
     try {
-      const { questions, provider } = await generateQuestions({
+      const { questions, provider, model } = await generateQuestions({
         ...opts,
         content: sliceContent,
         count: batches[i],
@@ -340,9 +260,17 @@ export async function generateQuestionsBatched(
         // which is how a chapter ended up with HARD questions that all opened
         // "A student claims that…".
         variantSeed: (opts.variantSeed ?? 0) + i,
+        // What this run has already produced leads the avoid list, then what
+        // the chapter already had — so batch 2 does not re-ask batch 1.
+        avoidQuestions: avoidList(
+          [...all.map((q) => q.questionText).reverse(), ...(opts.avoidQuestions ?? [])],
+          AVOID_LIST_SIZE
+        ),
       });
       all.push(...questions);
       usedProvider ??= provider;
+      usedModel ??= model;
+      servedBy.push(`${provider}(${model})`);
       opts.onProgress?.({
         batchIndex: i + 1,
         totalBatches: batches.length,
@@ -363,27 +291,37 @@ export async function generateQuestionsBatched(
       ? lastError
       : new Error("All AI providers failed for question generation.");
   }
-  return { questions: all.slice(0, total), provider: usedProvider ?? "gemini" };
+  if (new Set(servedBy).size > 1) {
+    console.log(`[AI Provider] Batches were served by different models: ${servedBy.join(", ")}`);
+  }
+  return { questions: all.slice(0, total), provider: usedProvider ?? "gemini", model: usedModel };
 }
 
-// ─── Detect Chapters (Gemini → Groq → NVIDIA → Ollama) ─
+// ─── Detect Chapters ────────────────────────────────────
 //
-// Same reasoning as generateQuestions: chapter detection sends up to 50K chars
-// of content (~12,500 tokens), which Gemini's context handles in one call.
+// Chapter detection sends up to 50K chars of content (~12,500 tokens) in one
+// call. Default chain keeps NVIDIA last: its Nemotron model was measured
+// inventing chapters ("UNIT 5: ???" … "UNIT 18: ???" for a two-unit book), and
+// detection feeds chapter creation, so a hallucinated chapter is a corrupt split.
 
 export async function detectChapters(
   opts: DetectChaptersOptions
 ): Promise<{ chapters: DetectedChapter[]; provider: ProviderName }> {
-  // NVIDIA is demoted for this task only — see TASK_DEMOTIONS.
-  const { value, provider } = await runChain(
-    "chapter detection",
-    (r) => () => r.chapters(opts),
-    TASK_DEMOTIONS.chapters
-  );
+  const { value, provider } = await runTask("chapter-detection", {
+    GEMINI: () => detectChaptersFromContent(opts),
+    GROQ: () => groqDetectChapters(opts),
+    NVIDIA: () => nvidiaDetectChapters(opts),
+    OPENROUTER: () => openRouterDetectChapters(opts),
+    OLLAMA: () => ollamaDetectChapters(opts),
+  });
   return { chapters: value, provider };
 }
 
-// ─── AI Tutor Chat (Groq → Gemini → NVIDIA) ─────────────
+// ─── AI Tutor Chat ──────────────────────────────────────
+//
+// Default chain Groq → Gemini → NVIDIA: the tutor is the one interactive,
+// student-facing path in the app, so a fast provider leads. Every step falls
+// through on ANY error so the tutor keeps working even if the first two are down.
 
 export async function chatWithTutor(opts: {
   message: string;
@@ -395,13 +333,6 @@ export async function chatWithTutor(opts: {
   /** Who the chat is for, so its token cost lands on that student and school. */
   actor?: UsageActor;
 }): Promise<{ response: string; provider: "gemini" | "groq" | "nvidia" }> {
-  // Groq (fast) → Gemini → NVIDIA. The tutor is the one interactive,
-  // student-facing path in the app, so it keeps Groq first for latency rather
-  // than following the Gemini-first order the batch/offline tasks use. Every
-  // provider falls through on ANY error so the tutor keeps working even if
-  // Groq AND Gemini are down.
-  let lastError: unknown = null;
-
   // History transform shared by the OpenAI-style providers (assistant, not model).
   const chatOpts = {
     message: opts.message,
@@ -416,46 +347,16 @@ export async function chatWithTutor(opts: {
     actor: opts.actor,
   };
 
-  // 1. Groq — fast primary (latency matters most on this path)
-  if (hasGroqKey()) {
-    try {
-      const { groqTutorChatResponse } = await import("./groq");
-      const response = await groqTutorChatResponse(chatOpts);
-      return { response, provider: "groq" };
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] Groq failed (Tutor: ${err instanceof Error ? err.message : String(err)}), falling back to Gemini…`);
-    }
-  }
-
-  // 2. Gemini — uses native history format (role: "model")
-  if (hasGeminiKey()) {
-    try {
-      const { tutorResponseFromContent } = await import("./gemini");
-      const response = await tutorResponseFromContent(opts);
-      return { response, provider: "gemini" };
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] Gemini failed (Tutor: ${err instanceof Error ? err.message : String(err)}), falling back to NVIDIA…`);
-    }
-  }
-
-  // 3. NVIDIA — final capacity fallback
-  if (hasNvidiaKey()) {
-    try {
-      const { nvidiaTutorChat } = await import("./nvidia");
-      const response = await nvidiaTutorChat(chatOpts);
-      return { response, provider: "nvidia" };
-    } catch (err) {
-      lastError = err;
-      console.warn(`[AI Provider] NVIDIA failed (Tutor: ${err instanceof Error ? err.message : String(err)}).`);
-    }
-  }
-
-  throw new Error(
-    `All AI providers failed for the tutor chat. ` +
-    (lastError
-      ? `Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}.`
-      : "No AI provider is configured.")
+  const { value, provider } = await runTask(
+    "tutor-chat",
+    {
+      GROQ: () => groqTutorChatResponse(chatOpts),
+      // Gemini uses its native history format (role: "model").
+      GEMINI: () => tutorResponseFromContent(opts),
+      NVIDIA: () => nvidiaTutorChat(chatOpts),
+    },
+    // An empty reply is a failure a student would see as a blank bubble.
+    { accept: (r) => typeof r === "string" && r.trim().length > 0 }
   );
+  return { response: value, provider: provider as "gemini" | "groq" | "nvidia" };
 }

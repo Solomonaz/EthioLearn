@@ -396,6 +396,22 @@ model AiProviderConfig {
   @@map("ai_provider_configs")
 }
 
+/// Per-task provider chain, edited in Admin -> AI Models. A task with no row
+/// uses its built-in default chain (lib/ai-tasks), so a fresh database behaves
+/// exactly as before routing existed.
+model AiTaskRoute {
+  /// Task id from lib/ai-tasks, e.g. "question-generation".
+  task String @id
+
+  /// Ordered steps: [{ "provider": "GEMINI", "model": "gemini-3.8-flash" | null }].
+  /// A null model means the provider's default model.
+  chain Json
+
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_task_routes")
+}
+
 // ─── Subjects ───────────────────────────────────────────────
 
 model Subject {

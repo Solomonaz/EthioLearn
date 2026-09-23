@@ -39,15 +39,29 @@ export async function POST(req: NextRequest) {
   }
 
   let ids: AiProviderId[] | undefined;
+  let models: Partial<Record<AiProviderId, string>> | undefined;
   try {
-    const body = (await req.json()) as { ids?: AiProviderId[] };
+    const body = (await req.json()) as {
+      ids?: AiProviderId[];
+      models?: Partial<Record<AiProviderId, string>>;
+    };
     if (Array.isArray(body?.ids)) {
       ids = body.ids.filter((i): i is AiProviderId => ALL_PROVIDERS.includes(i));
+    }
+    // Model ids the admin has typed but not yet saved — test those, so the
+    // button reports on what is on screen.
+    if (body?.models && typeof body.models === "object") {
+      models = {};
+      for (const [k, v] of Object.entries(body.models)) {
+        if (ALL_PROVIDERS.includes(k as AiProviderId) && typeof v === "string" && v.trim()) {
+          models[k as AiProviderId] = v.trim();
+        }
+      }
     }
   } catch {
     // No body means "check everything".
   }
 
-  const results = await probeAll(ids);
+  const results = await probeAll(ids, models);
   return NextResponse.json({ results, checkedAt: new Date().toISOString() });
 }

@@ -53,8 +53,40 @@ function isWeakOption(option: string): boolean {
 }
 
 /**
+ * The first complete JSON object or array in `text`, found by matching
+ * brackets (string-aware), or null. Models sometimes emit valid JSON followed by
+ * stray text or a second object — seen 2026-09-23 with GPT-6 Luna: "Unexpected
+ * non-whitespace character after JSON at position 532" failed a batch twice and
+ * handed it to a 6x pricier fallback, although the JSON itself was fine.
+ */
+function firstJsonValue(text: string): string | null {
+  const start = text.search(/[[{]/);
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
  * Extract a JSON value from a raw LLM response. Tries a direct parse first,
- * then a fenced ```json code block, then the outermost [...] array.
+ * then a fenced ```json code block, then the first complete JSON value (for
+ * valid JSON followed by stray text), then the outermost [...] array.
  */
 export function extractJson(text: string): unknown {
   // Try direct parse first
@@ -65,6 +97,15 @@ export function extractJson(text: string): unknown {
     const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (codeBlockMatch) {
       return JSON.parse(codeBlockMatch[1].trim());
+    }
+    // Valid JSON with something after (or before) it.
+    const first = firstJsonValue(text);
+    if (first) {
+      try {
+        return JSON.parse(first);
+      } catch {
+        /* fall through to the array heuristic */
+      }
     }
     // Try extracting array from text
     const arrayMatch = text.match(/\[[\s\S]*\]/);

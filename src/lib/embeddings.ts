@@ -59,12 +59,15 @@ function ollamaEmbeddingModel(): string {
   return modelIdFor("OLLAMA", "embedding") ?? OLLAMA_EMBEDDING_MODEL_FALLBACK;
 }
 
-/** Identifier stored in ContentChunk.embeddingModel, for provenance. */
-const PROVIDER_MODEL_ID: Record<EmbeddingProvider, string> = {
-  gemini: embeddingModel(),
-  ollama: ollamaEmbeddingModel(),
-  fingerprint: "ngram-fingerprint-v1",
-};
+/**
+ * Identifier stored in ContentChunk.embeddingModel, for provenance. Resolved per
+ * call so a model changed in Admin -> AI Models is recorded as that model.
+ */
+function providerModelId(provider: EmbeddingProvider): string {
+  if (provider === "gemini") return embeddingModel();
+  if (provider === "ollama") return ollamaEmbeddingModel();
+  return "ngram-fingerprint-v1";
+}
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -386,12 +389,16 @@ export interface EmbeddingUsageContext {
   actor?: UsageActor;
 }
 
-/** The model id each provider should be billed under. */
-const PROVIDER_MODEL: Record<EmbeddingProvider, string> = {
-  gemini: embeddingModel(),
-  ollama: ollamaEmbeddingModel(),
-  fingerprint: "fingerprint",
-};
+/**
+ * The model id each provider should be billed under. Resolved per call, not at
+ * module load: a constant captured the env/default before admin settings were
+ * read, so a model changed in Admin -> AI Models was billed under the old id.
+ */
+function providerModel(provider: EmbeddingProvider): string {
+  if (provider === "gemini") return embeddingModel();
+  if (provider === "ollama") return ollamaEmbeddingModel();
+  return "fingerprint";
+}
 
 /**
  * Record one embedding call.
@@ -417,7 +424,7 @@ function logEmbeddingUsage(
   logUsage({
     feature: ctx.feature,
     provider,
-    model: PROVIDER_MODEL[provider],
+    model: providerModel(provider),
     usage: {
       promptTokens,
       outputTokens: 0,
@@ -584,7 +591,7 @@ export async function storeChunkEmbeddings(
       chunk.tokenCount,
       chunk.bloomLevel || null,
       `[${embeddings[i].join(",")}]`,
-      PROVIDER_MODEL_ID[providers?.[i] ?? "gemini"]
+      providerModelId(providers?.[i] ?? "gemini")
     );
   });
 

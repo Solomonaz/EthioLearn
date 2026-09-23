@@ -585,8 +585,8 @@ export function buildQuestionGenerationPrompt(
 
   const difficultyInstruction =
     opts.difficulty && opts.difficulty !== "MIXED"
-      ? `All ${count} questions must be ${opts.difficulty} difficulty — and they must TRULY meet that level per the rubric below.`
-      : `Mix difficulties: roughly 30% EASY, 40% MEDIUM, 30% HARD. Each question's label must TRULY match the rubric below.`;
+      ? `All ${count} questions must be ${opts.difficulty} difficulty — and they must TRULY meet that level per the rubric above.`
+      : `Mix difficulties: roughly 30% EASY, 40% MEDIUM, 30% HARD. Each question's label must TRULY match the rubric above.`;
 
   // Timed / Battle play can't fairly ask heavy calculation or graph questions
   // under a countdown, so those modes get the "fast" ruleset instead of the
@@ -600,6 +600,21 @@ ${buildHardTemplateBlock(opts.variantSeed ?? 0)}
 `
     : "";
 
+  // Already-asked stems go in the per-call tail (see ORDER MATTERS below), so
+  // the fixed rulebook stays a cacheable prefix. Empty = the block is omitted
+  // and the prompt is byte-identical to one built without the option.
+  const avoid = (opts.avoidQuestions ?? []).filter((q) => q.trim());
+  const avoidBlock = avoid.length
+    ? `
+ALREADY ASKED — DO NOT REPEAT:
+These questions already exist for this chapter. Do NOT write a question that
+tests the same fact, definition, example or calculation as any of them — not
+reworded, not with different numbers. Choose other concepts from the chapter
+content instead.
+${avoid.map((q) => `- ${q}`).join("\n")}
+`
+    : "";
+
   const fastMode = opts.mode === "TIMED" || opts.mode === "GROUP";
   const quantitativeBlock = fastMode
     ? `\n${FAST_MODE_INSTRUCTIONS}\n`
@@ -607,24 +622,17 @@ ${buildHardTemplateBlock(opts.variantSeed ?? 0)}
       ? `\n${QUANTITATIVE_INSTRUCTIONS}\n`
       : "";
 
+  // ORDER MATTERS FOR COST. Everything that is identical across calls comes
+  // first and everything that varies comes last, so Gemini's implicit prefix
+  // caching can bill the long fixed rulebook (~5K tokens) at the cached-input
+  // rate. Any per-call value placed early — even the question count — ends the
+  // shared prefix at that point. Roughly: fixed rules → rules that vary only by
+  // question type / subject → this batch's specifics → the chapter itself.
   return `You are an expert educational content designer for the Ethiopian national curriculum, with deep experience in assessment writing and Bloom's Taxonomy.
-
-TASK: Generate exactly ${count} high-quality exam questions based ONLY on the textbook chapter content provided below.
-
-SUBJECT: ${opts.subject}
-GRADE:   Grade ${opts.grade}
-CHAPTER: ${opts.chapterTitle}
-LANGUAGE: ${lang === "en" ? "English" : lang}
-REQUESTED TYPES: ${types.join(", ")}
 
 ${DIFFICULTY_RUBRIC}
 
 ${QUALITY_RULES}
-
-${formatRulesFor(types)}
-${quantitativeBlock}${hardTemplateBlock}
-DIFFICULTY TARGET FOR THIS BATCH:
-${difficultyInstruction}
 
 FINAL SELF-AUDIT (do this silently before producing the JSON):
 For each candidate question, verify ALL of the following:
@@ -680,6 +688,19 @@ For each candidate question, verify ALL of the following:
 If a question fails ANY check, REWRITE it before emitting. Do not lower the bar —
 rewrite until all checks pass or replace with an entirely different question.
 
+${formatRulesFor(types)}
+${quantitativeBlock}
+TASK: Generate exactly ${count} high-quality exam questions based ONLY on the textbook chapter content provided below.
+
+SUBJECT: ${opts.subject}
+GRADE:   Grade ${opts.grade}
+CHAPTER: ${opts.chapterTitle}
+LANGUAGE: ${lang === "en" ? "English" : lang}
+REQUESTED TYPES: ${types.join(", ")}
+${hardTemplateBlock}
+DIFFICULTY TARGET FOR THIS BATCH:
+${difficultyInstruction}
+${avoidBlock}
 OUTPUT FORMAT: Return ONLY a valid JSON object (no markdown, no code fences,
 no commentary) with a single key "questions" containing an array of EXACTLY
 ${count} question objects. Each object must have:

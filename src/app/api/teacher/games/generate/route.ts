@@ -4,6 +4,8 @@ import { rateLimit } from "@/lib/rate-limit";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { generateQuestions } from "@/lib/ai-provider";
 import { getRequester } from "../_shared";
+import { getCurrentUser } from "@/lib/get-session";
+import { usageActor, withUsageActor } from "@/lib/usage-logger";
 
 /**
  * POST /api/teacher/games/generate — best-effort AI question generation for
@@ -48,7 +50,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { questions } = await generateQuestions({
+    // Bill the tokens to the teacher's school in Admin -> Usage.
+    const actor = usageActor(await getCurrentUser());
+    const { questions } = await withUsageActor(actor, () => generateQuestions({
       content: `Create simple multiple-choice questions for grade ${grade} pupils about "${topic}" in the subject ${subject}. Keep the language and numbers age-appropriate for young learners.`,
       chapterTitle: topic,
       subject,
@@ -58,7 +62,7 @@ export async function POST(request: NextRequest) {
       questionTypes: ["MCQ"],
       language,
       mode: "GROUP",
-    });
+    }));
 
     const rows = questions
       .filter((q) => q.type === "MCQ" && q.options?.length >= 2)

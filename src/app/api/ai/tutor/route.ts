@@ -12,6 +12,34 @@ import { rewriteQueryForRAG } from "@/lib/query-rewriter";
 // How many of the most relevant chunks to retrieve as tutor context.
 const TUTOR_RETRIEVAL_LIMIT = 8;
 
+// Cost guard. The client sends the WHOLE conversation on every message, so
+// without a cap each turn re-bills every earlier turn and a long session grows
+// quadratically. The last 6 messages (3 exchanges) is plenty of context for a
+// follow-up; each is also length-capped so one pasted wall of text can't
+// dominate the prompt.
+const MAX_HISTORY_TURNS = 6;
+const MAX_TURN_CHARS = 2000;
+
+type TutorTurn = { role: "user" | "model"; parts: { text: string }[] };
+
+/** Validate, trim and cap the client-supplied history. Never throws. */
+function capHistory(raw: unknown): TutorTurn[] {
+  if (!Array.isArray(raw)) return [];
+  const turns: TutorTurn[] = [];
+  for (const h of raw) {
+    const role = h?.role;
+    const text = h?.parts?.[0]?.text;
+    if ((role !== "user" && role !== "model") || typeof text !== "string" || !text.trim()) continue;
+    const capped = text.length > MAX_TURN_CHARS ? `${text.slice(0, MAX_TURN_CHARS)}…` : text;
+    turns.push({ role, parts: [{ text: capped }] });
+  }
+  const recent = turns.slice(-MAX_HISTORY_TURNS);
+  // Gemini rejects a chat history that opens with a model turn, which slicing
+  // can produce — drop any leading model turns.
+  while (recent.length && recent[0].role !== "user") recent.shift();
+  return recent;
+}
+
 /**
  * Build the grounding content for the tutor. Prefers semantic retrieval over
  * the chapter's embedded chunks — the chunks most relevant to the student's
@@ -83,7 +111,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { chapterId, message, history = [] } = await req.json();
+    const { chapterId, message, history: rawHistory } = await req.json();
+    const history = capHistory(rawHistory);
 
     if (!chapterId || !message) {
       return NextResponse.json({ error: "Chapter ID and message are required" }, { status: 400 });

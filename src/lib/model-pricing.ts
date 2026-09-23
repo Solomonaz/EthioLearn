@@ -9,10 +9,10 @@
  * necessarily what post-credit money changes hands. Set USAGE_FX_PER_USD +
  * USAGE_CURRENCY to show a converted amount alongside USD.
  *
- * Only the flagship and fast Gemini models carry real prices — they are what
- * appears on the user's Gemini API Spend dashboard. Groq and NVIDIA are used on
- * their free tiers here, so they are priced at 0; give them real rates if you
- * ever move to a paid tier. Ollama is local (no API cost).
+ * Gemini and paid OpenRouter models carry real prices. Groq and NVIDIA are used
+ * on their free tiers here, so they are priced at 0 (as is any OpenRouter
+ * ":free" model); give them real rates if you ever move to a paid tier. Ollama
+ * is local (no API cost).
  */
 
 export interface ModelPrice {
@@ -20,6 +20,11 @@ export interface ModelPrice {
   inputPerMillion: number;
   /** USD per 1,000,000 output tokens (answer + billed reasoning). */
   outputPerMillion: number;
+  /**
+   * USD per 1,000,000 input tokens served from the provider's prompt cache.
+   * Omitted = no cache discount (cached tokens bill at the full input rate).
+   */
+  cachedInputPerMillion?: number;
   /** False for free-tier / local models priced at 0, so the UI can say so. */
   billed: boolean;
 }
@@ -30,11 +35,21 @@ export interface ModelPrice {
 // than silently costed at 0.
 export const MODEL_PRICING: Record<string, ModelPrice> = {
   // Gemini flagship — question generation, chapter detection, the verifier,
-  // video scripts, all vision. $0.75 / $3.75 per 1M through 2026.
-  "gemini-3.8-flash": { inputPerMillion: 0.75, outputPerMillion: 3.75, billed: true },
-  // Gemini fast — Bloom tagging, quality checks, tutor-chat fallback. A third of
-  // the flagship input price and 40% of its output price.
-  "gemini-3.1-flash-lite": { inputPerMillion: 0.25, outputPerMillion: 1.5, billed: true },
+  // all vision. $0.75 / $3.75 per 1M, cached input $0.075, through 2026.
+  // PRICE RISE: from 1 Jan 2027 Google lists $1.50 / $7.50 (cached $0.15).
+  "gemini-3.8-flash": { inputPerMillion: 0.75, outputPerMillion: 3.75, cachedInputPerMillion: 0.075, billed: true },
+  // Gemini light — Bloom tagging, quality checks, tutor, search rewrite.
+  "gemini-3.1-flash-lite": { inputPerMillion: 0.25, outputPerMillion: 1.5, cachedInputPerMillion: 0.025, billed: true },
+
+  // DeepSeek V4 Flash via OpenRouter (paid). OpenRouter's live list price on
+  // 2026-09-22; its prices move, so OpenRouter calls record the cost OpenRouter
+  // itself reports per request and only fall back to this table. Listed under
+  // both the id you request and the dated id OpenRouter may answer with.
+  "deepseek/deepseek-v4-flash": { inputPerMillion: 0.049, outputPerMillion: 0.098, cachedInputPerMillion: 0.0098, billed: true },
+  "deepseek/deepseek-v4-flash-20260423": { inputPerMillion: 0.049, outputPerMillion: 0.098, cachedInputPerMillion: 0.0098, billed: true },
+  // GPT-6 Luna via OpenRouter — the default question generator. List price on
+  // 2026-09-23 for prompts under 272K tokens (ours are ~10-20K).
+  "openai/gpt-6-luna": { inputPerMillion: 0.1, outputPerMillion: 0.5, cachedInputPerMillion: 0.01, billed: true },
 
   // Embeddings. These have NO output tokens — the response is a vector, not
   // text — so outputPerMillion is 0 and the whole cost is the input side.
@@ -50,8 +65,14 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
   "nvidia/nemotron-3-super-120b-a12b": { inputPerMillion: 0, outputPerMillion: 0, billed: false },
 };
 
+const FREE: ModelPrice = { inputPerMillion: 0, outputPerMillion: 0, billed: false };
+
 export function priceFor(model: string): ModelPrice | null {
-  return MODEL_PRICING[model] ?? null;
+  const exact = MODEL_PRICING[model];
+  if (exact) return exact;
+  // OpenRouter ":free" variants cost nothing, whatever the base model.
+  if (model.endsWith(":free")) return FREE;
+  return null;
 }
 
 /**
@@ -73,13 +94,18 @@ export function priceFor(model: string): ModelPrice | null {
 export function costUsd(
   model: string,
   promptTokens: number,
-  totalTokens: number
+  totalTokens: number,
+  /** Portion of promptTokens served from the prompt cache (already inside promptTokens). */
+  cachedTokens = 0
 ): number | null {
   const price = priceFor(model);
   if (!price) return null;
   const billableOutput = Math.max(0, totalTokens - promptTokens);
+  const cached = Math.min(Math.max(0, cachedTokens), promptTokens);
+  const cachedRate = price.cachedInputPerMillion ?? price.inputPerMillion;
   return (
-    (promptTokens * price.inputPerMillion) / 1_000_000 +
+    ((promptTokens - cached) * price.inputPerMillion) / 1_000_000 +
+    (cached * cachedRate) / 1_000_000 +
     (billableOutput * price.outputPerMillion) / 1_000_000
   );
 }

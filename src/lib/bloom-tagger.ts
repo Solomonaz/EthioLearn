@@ -5,12 +5,17 @@
  *   Remember → Understand → Apply → Analyze → Evaluate → Create
  *
  * Batch processes multiple chunks in a single AI call for efficiency.
- * Provider priority: Gemini → Groq → Ollama (remote only) → default "Understand".
+ * Provider order: the "bloom-tagging" route (Admin -> AI Models), then a
+ * keyword heuristic when every provider fails.
  */
 
-import { ollamaChat, isOllamaEnabled } from "./ollama";
+import { ollamaChat } from "./ollama";
 import { groqChat } from "./groq";
 import { geminiChat, geminiFastModel } from "./gemini";
+import { nvidiaChat } from "./nvidia";
+import { openRouterChat } from "./openrouter";
+import { extractJson } from "./question-validation";
+import { runTask } from "./ai-routing";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -164,59 +169,47 @@ async function tagBatch(
   const expectedIndices = batch.map((c) => c.chunkIndex);
   const prompt = buildBloomTaggingPrompt(batch, subject, grade);
 
-  // 1. Gemini — primary
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const raw = await geminiChat(prompt, {
-        model: geminiFastModel(),
-        temperature: 0.2,
-        maxTokens: 4096,
-        feature: "bloom-tagging",
-      });
-      if (raw) {
-        const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
-        if (tags.length > 0) return tags;
-      }
-    } catch (err) {
-      const msg = String(err);
-      if (msg.includes("429")) {
-        console.warn("[Bloom Tagger] Gemini rate-limited.");
-      }
-    }
-  }
+  // Provider order and models come from the "bloom-tagging" route (Admin ->
+  // AI Models). Default: Gemini (light model) → Groq → Ollama (dev only).
+  // A step counts only when its reply yields tags for this batch.
+  const tagsFrom = (raw: string | null): BloomTagResult[] | null =>
+    raw ? validateBloomTags(extractJson(raw), expectedIndices) : null;
+  const system = "You are an expert in Bloom's Taxonomy. Always respond with valid JSON only.";
 
-  // 2. Groq — fast cloud fallback
   try {
-    const raw = await groqChat(prompt, {
-      system:
-        "You are an expert in Bloom's Taxonomy. Always respond with valid JSON only.",
-      temperature: 0.2,
-      maxTokens: 2048,
-      feature: "bloom-tagging",
-    });
-    if (raw) {
-      const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
-      if (tags.length > 0) return tags;
-    }
+    const { value, provider } = await runTask(
+      "bloom-tagging",
+      {
+        GEMINI: async () =>
+          tagsFrom(
+            await geminiChat(prompt, {
+              model: geminiFastModel(),
+              temperature: 0.2,
+              maxTokens: 4096,
+              feature: "bloom-tagging",
+            })
+          ),
+        GROQ: async () =>
+          tagsFrom(
+            await groqChat(prompt, { system, temperature: 0.2, maxTokens: 2048, feature: "bloom-tagging" })
+          ),
+        NVIDIA: async () =>
+          tagsFrom(
+            await nvidiaChat(prompt, { system, temperature: 0.2, maxTokens: 2048, feature: "bloom-tagging" })
+          ),
+        OPENROUTER: async () =>
+          tagsFrom(
+            await openRouterChat(prompt, { system, temperature: 0.2, maxTokens: 2048, feature: "bloom-tagging" })
+          ),
+        // Short timeout so a slow/hung local model can't stall the pipeline.
+        OLLAMA: async () => tagsFrom(await ollamaChat(prompt, 30_000)),
+      },
+      { accept: (tags) => tags.length > 0 }
+    );
+    if (provider === "ollama") console.info("[Bloom Tagger] Used Ollama.");
+    return value;
   } catch {
-    // fall through
-  }
-
-  // 3. Ollama Mistral — only when pointed at a real (non-localhost) host, and
-  //    with a short timeout so a slow/hung local model can't stall the pipeline.
-  if (isOllamaEnabled()) {
-    try {
-      const raw = await ollamaChat(prompt, 30_000);
-      if (raw) {
-        const tags = validateBloomTags(JSON.parse(raw), expectedIndices);
-        if (tags.length > 0) {
-          console.info("[Bloom Tagger] Used Ollama Mistral.");
-          return tags;
-        }
-      }
-    } catch {
-      // fall through
-    }
+    // Every step failed — fall through to the heuristic.
   }
 
   // 4. Heuristic fallback — all AI providers exhausted/unavailable. Classify
@@ -233,7 +226,8 @@ async function tagBatch(
 
 /**
  * Tag multiple chunks with Bloom's Taxonomy levels in a single AI call.
- * Provider priority: Gemini → Groq → Ollama (remote only) → default "Understand".
+ * Provider order: the "bloom-tagging" route (Admin -> AI Models), then a
+ * keyword heuristic when every provider fails.
  *
  * Batches are kept small so each prompt stays modest and the JSON output stays
  * well under the model's output-token cap (a batch too large truncates the

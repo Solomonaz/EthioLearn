@@ -17,6 +17,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { costUsd } from "./model-pricing";
 import { db } from "./db";
 
@@ -34,6 +35,11 @@ export interface TokenUsage {
   thinkingTokens: number;
   /** promptTokens + outputTokens + thinkingTokens as the provider reported it. */
   totalTokens: number;
+  /**
+   * Portion of promptTokens served from the provider's prompt cache, billed at
+   * the cheaper cached-input rate. Already INSIDE promptTokens, never added.
+   */
+  cachedTokens?: number;
 }
 
 /**
@@ -48,6 +54,8 @@ export type UsageFeature =
   | "quality-check"
   | "bloom-tagging"
   | "tutor-chat"
+  /** Rewrites a tutor follow-up into a search query before retrieval. */
+  | "query-rewrite"
   | "teacher-assistant"
   | "vision-graph"
   | "vision-equation"
@@ -93,6 +101,21 @@ export function usageActor(
   };
 }
 
+// ─── Actor scope ────────────────────────────────────────
+//
+// Question generation runs deep inside provider libraries that have no idea who
+// asked, so a student's on-demand AI quiz used to be logged with no student or
+// school. A route that knows the user wraps the work in `withUsageActor`, and
+// every call logged inside it — generation, the verifier, dedup embeddings —
+// is attributed, without threading an actor through every signature. An actor
+// passed explicitly to `logUsage` still wins.
+
+const actorScope = new AsyncLocalStorage<UsageActor | undefined>();
+
+export function withUsageActor<T>(actor: UsageActor | undefined, fn: () => Promise<T>): Promise<T> {
+  return actorScope.run(actor, fn);
+}
+
 interface UsageTotal {
   calls: number;
   promptTokens: number;
@@ -120,9 +143,11 @@ export function geminiUsage(response: unknown): TokenUsage {
   const prompt = meta.promptTokenCount ?? 0;
   const output = meta.candidatesTokenCount ?? 0;
   const thinking = meta.thoughtsTokenCount ?? 0;
+  // Implicit/explicit cache hits, counted inside promptTokenCount.
+  const cached = meta.cachedContentTokenCount ?? 0;
   // Prefer the provider's own total; fall back to the sum when it is absent.
   const total = meta.totalTokenCount ?? prompt + output + thinking;
-  return { promptTokens: prompt, outputTokens: output, thinkingTokens: thinking, totalTokens: total };
+  return { promptTokens: prompt, outputTokens: output, thinkingTokens: thinking, totalTokens: total, cachedTokens: cached };
 }
 
 /**
@@ -138,8 +163,11 @@ export function openAiUsage(usage: unknown): TokenUsage {
   const output = Number(u.completion_tokens) || 0;
   const details = (u.completion_tokens_details as Record<string, unknown> | undefined) ?? {};
   const thinking = Number(details.reasoning_tokens) || 0;
+  // Prompt-cache hits (DeepSeek, OpenAI-style providers), inside prompt_tokens.
+  const promptDetails = (u.prompt_tokens_details as Record<string, unknown> | undefined) ?? {};
+  const cached = Number(promptDetails.cached_tokens) || 0;
   const total = Number(u.total_tokens) || prompt + output;
-  return { promptTokens: prompt, outputTokens: output, thinkingTokens: thinking, totalTokens: total };
+  return { promptTokens: prompt, outputTokens: output, thinkingTokens: thinking, totalTokens: total, cachedTokens: cached };
 }
 
 /**
@@ -153,11 +181,21 @@ export function logUsage(args: {
   model: string;
   usage: TokenUsage;
   actor?: UsageActor;
+  /**
+   * The cost the provider itself reported for this call (OpenRouter does).
+   * Preferred over the price table: it includes live prices, discounts and
+   * cache hits exactly as billed.
+   */
+  reportedCostUsd?: number | null;
 }): void {
-  const { feature, provider, model, usage, actor } = args;
+  const { feature, provider, model, usage, reportedCostUsd } = args;
+  const actor = args.actor ?? actorScope.getStore();
   const key = `${feature}|${provider}|${model}`;
 
-  const cost = costUsd(model, usage.promptTokens, usage.totalTokens);
+  const cost =
+    typeof reportedCostUsd === "number" && Number.isFinite(reportedCostUsd) && reportedCostUsd >= 0
+      ? reportedCostUsd
+      : costUsd(model, usage.promptTokens, usage.totalTokens, usage.cachedTokens ?? 0);
 
   const acc = totals.get(key) ?? {
     calls: 0,
@@ -179,7 +217,7 @@ export function logUsage(args: {
 
   console.log(
     `[Usage] feature=${feature} provider=${provider} model=${model} ` +
-      `prompt=${usage.promptTokens} output=${usage.outputTokens} ` +
+      `prompt=${usage.promptTokens} cached=${usage.cachedTokens ?? 0} output=${usage.outputTokens} ` +
       `thinking=${usage.thinkingTokens} total=${usage.totalTokens} ` +
       `costUSD=${cost === null ? "unpriced" : cost.toFixed(6)}` +
       (actor?.studentId ? ` student=${actor.studentId}` : "") +

@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateQuestionsBatched, verifyQuestions, hasBlockingStructuralIssue, generationContentBudget } from "@/lib/ai-provider";
+import { usageActor, withUsageActor } from "@/lib/usage-logger";
+import { generateQuestionsBatched, runQualityPipeline, hasBlockingStructuralIssue, generationContentBudget } from "@/lib/ai-provider";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { selectGenerationContent } from "@/lib/generation-content";
+import { avoidList, generationRunIndex, recentChapterQuestions } from "@/lib/question-dedupe";
 
 class ApiError extends Error {
   status: number;
@@ -131,6 +133,9 @@ async function runGeneration(
     priorQuestions = await db.question.count({
       where: { chapterId: chapter.id },
     });
+    // Content rotation advances by RUN, not by question count — see
+    // lib/question-dedupe (generationRunIndex) for why the count failed.
+    const runIndex = await generationRunIndex(chapter.id);
     const selected = await selectGenerationContent({
       chapterId: chapter.id,
       fallbackContent: finalContent,
@@ -140,12 +145,12 @@ async function runGeneration(
         // cover it instead of being sampled down to the question count.
         finalContent.length
       ),
-      rotation: priorQuestions,
+      rotation: runIndex,
     });
     finalContent = selected.content;
     console.log(
       `[Generate AI] Content strategy: ${selected.strategy} ` +
-      `(${selected.chunksUsed}/${selected.chunksAvailable} chunks, rotation ${priorQuestions})`
+      `(${selected.chunksUsed}/${selected.chunksAvailable} chunks, run ${runIndex})`
     );
   }
 
@@ -161,66 +166,148 @@ async function runGeneration(
     ? (body.questionTypes.filter((t: string) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[])
     : ["MCQ" as const];
 
-  onProgress?.({
-    step: "generating",
-    message: "Drafting Bloom-aligned questions with AI...",
-    percent: 35,
-  });
+  // What this chapter already has: listed in the prompt so the model writes
+  // something new, and passed to the quality pipeline so a repeat is caught.
+  const chapterBank = targetChapterId ? await recentChapterQuestions(targetChapterId) : [];
+  const bankTexts = chapterBank.map((q) => q.questionText);
+  const bankForCheck = chapterBank.map((q) => ({ questionText: q.questionText, correctAnswer: q.correctAnswer }));
 
-  const { questions: rawQuestions, provider } = await generateQuestionsBatched({
-    content: finalContent,
-    chapterTitle: finalTitle,
-    subject: textbook.subject,
-    grade: textbook.grade,
-    count: genCount,
-    difficulty: difficulty as any,
-    questionTypes: questionTypes as any,
-    mode: (mode === "TIMED" || mode === "GROUP" ? mode : "SOLO") as "SOLO" | "TIMED" | "GROUP",
-    variantSeed: priorQuestions,
-    onProgress: (info) => {
-      const pct = Math.min(70, Math.round(35 + (info.batchIndex / info.totalBatches) * 35));
-      onProgress?.({
-        step: "generating",
-        message: `Drafting questions (batch ${info.batchIndex} of ${info.totalBatches})...`,
-        percent: pct,
-      });
-    },
-  });
+  // 3b. Generate → full quality pipeline → keep only clean questions → refill.
+  //
+  // Students (and battles) get questions nobody reviews, so they go through the
+  // SAME pipeline as the admin flow — blind verifier, AI quality checker,
+  // duplicate and relevance checks — and anything with an issue is DROPPED
+  // rather than flagged. The shortfall is regenerated, telling the model what
+  // was already accepted or dropped so it writes something else. Bounded to
+  // MAX_GENERATION_ROUNDS so a hard chapter cannot loop forever; whatever
+  // passed by then is served.
+  //
+  // ANSWER_SKEW is the one flag ignored: it is a batch-level note about where
+  // correct answers sit, and MCQ options are shuffled when served (step 5).
+  type GenQuestion = Awaited<ReturnType<typeof generateQuestionsBatched>>["questions"][number];
+  const MAX_GENERATION_ROUNDS = 3; // first attempt + up to 2 refills
+  const IGNORED_FLAGS = new Set<string>(["ANSWER_SKEW"]);
+  const accepted: { q: GenQuestion; score: number }[] = [];
+  const droppedTexts: string[] = [];
+  const dropCounts: Record<string, number> = {};
+  let lastRound = { generated: 0, unverifiable: 0 };
 
-  // 3b. Independent-solver verification. Students take the test immediately and
-  // cannot vet questions themselves, so they are served ONLY verified ones — a
-  // second model re-solves each question blind and must agree with the answer
-  // key. Rejected/unverified questions are dropped (fail-closed), never served.
-  onProgress?.({
-    step: "verifying",
-    message: "Double-checking questions with independent AI solver...",
-    percent: 75,
-  });
+  for (let round = 0; round < MAX_GENERATION_ROUNDS && accepted.length < count; round++) {
+    const shortfall = count - accepted.length;
+    // First round keeps the +3 buffer; refills ask for the shortfall plus 2.
+    const ask = round === 0 ? genCount : shortfall + 2;
 
-  const verdicts = await verifyQuestions(
-    rawQuestions,
-    textbook.subject,
-    textbook.grade,
-    { avoidProvider: provider }
-  );
+    onProgress?.({
+      step: "generating",
+      message:
+        round === 0
+          ? "Drafting Bloom-aligned questions with AI..."
+          : `Replacing ${shortfall} question${shortfall > 1 ? "s" : ""} that failed quality checks...`,
+      percent: round === 0 ? 35 : 80,
+    });
 
-  const aiQuestions = rawQuestions
-    .filter(
-      (q, i) =>
-        verdicts[i]?.verdict === "verified" && !hasBlockingStructuralIssue(q)
-    )
-    .slice(0, count);
+    let generated: GenQuestion[];
+    let provider: string;
+    let model: string | null;
+    try {
+      ({ questions: generated, provider, model } = await generateQuestionsBatched({
+        avoidQuestions: avoidList([
+          ...accepted.map((a) => a.q.questionText).reverse(),
+          ...droppedTexts.slice().reverse(),
+          ...bankTexts,
+        ]),
+        content: finalContent,
+        chapterTitle: finalTitle,
+        subject: textbook.subject,
+        grade: textbook.grade,
+        count: ask,
+        difficulty: difficulty as any,
+        questionTypes: questionTypes as any,
+        mode: (mode === "TIMED" || mode === "GROUP" ? mode : "SOLO") as "SOLO" | "TIMED" | "GROUP",
+        // Different HARD templates on a refill than on the first attempt.
+        variantSeed: priorQuestions + round * 7,
+        onProgress:
+          round === 0
+            ? (info) => {
+                const pct = Math.min(60, Math.round(35 + (info.batchIndex / info.totalBatches) * 25));
+                onProgress?.({
+                  step: "generating",
+                  message: `Drafting questions (batch ${info.batchIndex} of ${info.totalBatches})...`,
+                  percent: pct,
+                });
+              }
+            : undefined,
+      }));
+    } catch (err) {
+      // First attempt failing is a real error; a failed REFILL still serves
+      // what already passed.
+      if (round === 0) throw err;
+      console.warn(`[Generate AI] Refill round ${round} failed: ${err instanceof Error ? err.message : String(err)}`);
+      break;
+    }
 
-  if (aiQuestions.length === 0) {
-    const unverifiable = verdicts.filter((v) => v?.flag === "UNVERIFIED").length;
-    const providersUnavailable = unverifiable > rawQuestions.length / 2;
+    onProgress?.({
+      step: "verifying",
+      message: "Checking every question: blind re-solve, facts, difficulty and scope...",
+      percent: round === 0 ? 65 : 85,
+    });
 
-    console.warn(
-      `[Generate AI] 0 of ${rawQuestions.length} questions served — ` +
-      `${unverifiable} unverifiable (provider unreachable), ` +
-      `${rawQuestions.length - unverifiable} rejected by the solver.`
+    let results: Awaited<ReturnType<typeof runQualityPipeline>>["results"];
+    try {
+      results = (
+        await runQualityPipeline(
+          generated,
+          finalContent,
+          textbook.subject,
+          textbook.grade,
+          provider,
+          // Accepted this run + the chapter's bank, so repeats of either are caught.
+          [...accepted.map((a) => a.q).reverse(), ...bankForCheck],
+          model
+        )
+      ).results;
+    } catch (err) {
+      // Never serve unchecked questions.
+      console.warn(`[Generate AI] Quality pipeline failed: ${err instanceof Error ? err.message : String(err)}`);
+      if (accepted.length === 0) {
+        throw new ApiError(
+          "The AI is busy right now and couldn't check the questions. Please try again in a minute.",
+          503,
+          "VERIFIER_UNAVAILABLE",
+          true
+        );
+      }
+      break;
+    }
+
+    lastRound = {
+      generated: generated.length,
+      unverifiable: results.filter((r) => r.flags.includes("UNVERIFIED")).length,
+    };
+
+    generated.forEach((q, i) => {
+      const r = results[i];
+      const issues = (r?.flags ?? ["UNVERIFIED"]).filter((f) => !IGNORED_FLAGS.has(f));
+      const clean = !!r?.verified && issues.length === 0 && !hasBlockingStructuralIssue(q);
+      if (clean && accepted.length < count) {
+        accepted.push({ q, score: r.qualityScore });
+      } else if (!clean) {
+        droppedTexts.push(q.questionText);
+        for (const f of issues.length ? issues : ["STRUCTURAL"]) dropCounts[f] = (dropCounts[f] ?? 0) + 1;
+      }
+    });
+
+    console.log(
+      `[Generate AI] Round ${round + 1}: ${generated.length} generated, ` +
+        `${accepted.length}/${count} accepted so far, dropped: ${JSON.stringify(dropCounts)}`
     );
+  }
 
+  if (accepted.length === 0) {
+    const providersUnavailable = lastRound.unverifiable > lastRound.generated / 2;
+    console.warn(
+      `[Generate AI] 0 questions passed after ${MAX_GENERATION_ROUNDS} round(s) — dropped: ${JSON.stringify(dropCounts)}`
+    );
     if (providersUnavailable) {
       throw new ApiError(
         "The AI is busy right now and couldn't double-check the questions. Please try again in a minute.",
@@ -228,16 +315,23 @@ async function runGeneration(
         "VERIFIER_UNAVAILABLE",
         true
       );
-    } else {
-      throw new ApiError(
-        "Couldn't build questions that passed our accuracy check for this chapter. " +
-        "It may have too little content — try another chapter, or a different question type.",
-        502,
-        "NO_QUESTIONS_PASSED_REVIEW",
-        false
-      );
     }
+    throw new ApiError(
+      "Couldn't build questions that passed our accuracy check for this chapter. " +
+        "It may have too little content — try another chapter, or a different question type.",
+      502,
+      "NO_QUESTIONS_PASSED_REVIEW",
+      false
+    );
   }
+  if (accepted.length < count) {
+    console.warn(
+      `[Generate AI] Serving ${accepted.length}/${count} — the rest failed quality checks after ${MAX_GENERATION_ROUNDS} round(s).`
+    );
+  }
+
+  const aiQuestions = accepted.map((a) => a.q);
+  const scoreByText = new Map(accepted.map((a) => [a.q.questionText, a.score]));
 
   onProgress?.({
     step: "saving",
@@ -269,7 +363,8 @@ async function runGeneration(
           correctAnswer: q.correctAnswer,
           explanation: q.explanation,
           bloomLevel: (q as any).bloomLevel ?? null,
-          qualityScore: 1.0,
+          // The pipeline's own score, not a blanket 1.0.
+          qualityScore: scoreByText.get(q.questionText) ?? 1.0,
           status: "PUBLISHED",
         },
       })
@@ -434,9 +529,13 @@ export async function POST(request: Request) {
         percent: 5,
       });
 
-      const result = await runGeneration(user, body, (progress) => {
-        emit("progress", progress);
-      });
+      // Attribute every model call in this generation (questions, verifier,
+      // dedup) to the student who asked for it.
+      const result = await withUsageActor(usageActor(user), () =>
+        runGeneration(user, body, (progress) => {
+          emit("progress", progress);
+        })
+      );
 
       emit("complete", result);
     });
@@ -444,7 +543,7 @@ export async function POST(request: Request) {
 
   // Non-streaming fallback
   try {
-    const result = await runGeneration(user, body);
+    const result = await withUsageActor(usageActor(user), () => runGeneration(user, body));
     return NextResponse.json(result);
   } catch (error: any) {
     console.error("[Student AI Generation Error]", error);

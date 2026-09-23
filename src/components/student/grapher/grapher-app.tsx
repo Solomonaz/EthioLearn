@@ -260,7 +260,7 @@ export function GrapherApp({
               className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold text-text-secondary transition hover:border-primary/40 hover:text-primary"
             >
               <ExternalLink className="h-4 w-4" />
-              <span className="hidden xl:inline">Open in window</span>
+              <span className="hidden xl:inline"></span>
             </button>
           )}
         </div>

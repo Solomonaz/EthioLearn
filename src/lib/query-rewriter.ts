@@ -8,6 +8,7 @@
 
 import { geminiChat, geminiFastModel } from "./gemini";
 import { groqChat } from "./groq";
+import { getTaskChain, runStep, type AiProvider } from "./ai-routing";
 import type { UsageActor } from "./usage-logger";
 
 export interface QueryRewriteOptions {
@@ -86,30 +87,44 @@ STANDALONE SEARCH QUERY:`;
 
   try {
     // Timeout guard: 2500ms max so the chat turn never stalls
+    let timedOut = false;
     const timeoutPromise = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), 2500)
+      setTimeout(() => {
+        timedOut = true;
+        resolve(null);
+      }, 2500)
     );
 
-    // Try Gemini fast model first (gemini-3.1-flash-lite)
-    const geminiPromise = geminiChat(prompt, {
-      model: geminiFastModel(),
-      temperature: 0.0,
-      maxTokens: 80,
-      feature: "tutor-chat",
-      actor,
-    });
+    // Provider order and models come from the "query-rewrite" route (Admin ->
+    // AI Models). Default: Gemini (light model) → Groq. Every step shares the
+    // same 2.5s budget, so a slow chain degrades to the raw message rather than
+    // stalling the chat turn.
+    const impl: Partial<Record<AiProvider, () => Promise<string | null>>> = {
+      GEMINI: () =>
+        geminiChat(prompt, {
+          model: geminiFastModel(),
+          temperature: 0.0,
+          maxTokens: 80,
+          feature: "query-rewrite",
+          actor,
+        }),
+      GROQ: () =>
+        groqChat(prompt, {
+          temperature: 0.0,
+          maxTokens: 80,
+          feature: "query-rewrite",
+          actor,
+        }),
+    };
 
-    let rewritten = await Promise.race([geminiPromise, timeoutPromise]);
-
-    // Fallback to Groq if Gemini failed or timed out
-    if (!rewritten && process.env.GROQ_API_KEY) {
-      const groqPromise = groqChat(prompt, {
-        temperature: 0.0,
-        maxTokens: 80,
-        feature: "tutor-chat",
-        actor,
-      });
-      rewritten = await Promise.race([groqPromise, timeoutPromise]);
+    let rewritten: string | null = null;
+    for (const step of await getTaskChain("query-rewrite")) {
+      const call = impl[step.provider];
+      if (!call) continue;
+      // Budget spent: don't fire (and pay for) a request whose answer we'd ignore.
+      if (timedOut) break;
+      rewritten = await Promise.race([runStep(step, call), timeoutPromise]);
+      if (rewritten) break;
     }
 
     if (rewritten && typeof rewritten === "string") {

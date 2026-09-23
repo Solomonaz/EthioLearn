@@ -143,9 +143,20 @@ async function probeOllama(base: string, model: string): Promise<{ ok: boolean; 
   return { ok: res.ok, httpStatus: res.status, body: res.ok ? "" : await res.text().catch(() => "") };
 }
 
-/** Probe one provider against its currently-configured chat model. */
-export async function probeProvider(p: ResolvedProvider): Promise<ProbeResult> {
-  const model = p.models.chat ?? p.models.fast ?? p.models.embedding;
+/**
+ * Probe one provider.
+ *
+ * `modelOverride` lets the admin screen test the model id currently TYPED into
+ * the form rather than the one saved in the database. Without it, editing a
+ * model and pressing Test reports on the old value — which reads as the button
+ * being broken, because the error names a model no longer on screen.
+ */
+export async function probeProvider(
+  p: ResolvedProvider,
+  modelOverride?: string | null
+): Promise<ProbeResult> {
+  const model =
+    modelOverride?.trim() || p.models.chat || p.models.fast || p.models.embedding;
   const base = { id: p.id, model } as const;
 
   if (!p.enabled) {
@@ -195,14 +206,26 @@ export async function probeProvider(p: ResolvedProvider): Promise<ProbeResult> {
  * Parallel is safe here: each probe is one tiny request to a DIFFERENT provider,
  * so there is no per-provider burst that could itself trigger a 429.
  */
-export async function probeAll(ids?: AiProviderId[]): Promise<ProbeResult[]> {
+export async function probeAll(
+  ids?: AiProviderId[],
+  /** Unsaved model ids from the admin form, keyed by provider. */
+  modelOverrides?: Partial<Record<AiProviderId, string>>
+): Promise<ProbeResult[]> {
   const all = await getProviderSettings();
   const targets = ids?.length ? all.filter((p) => ids.includes(p.id)) : all;
 
-  const results = await Promise.all(targets.map(probeProvider));
+  const results = await Promise.all(
+    targets.map((p) => probeProvider(p, modelOverrides?.[p.id]))
+  );
+
+  // Only record a probe that tested the SAVED configuration. Persisting the
+  // result of an unsaved experiment would leave the dashboard asserting a
+  // status for a model the system is not actually using.
+  const saved = new Map(targets.map((p) => [p.id, p.models.chat ?? p.models.fast ?? p.models.embedding]));
+  const persistable = results.filter((r) => r.model === saved.get(r.id));
 
   await Promise.all(
-    results.map((r) =>
+    persistable.map((r) =>
       db.aiProviderConfig
         .upsert({
           where: { id: r.id },

@@ -4,6 +4,7 @@ import { buildTutorSystemPrompt } from "./ai-prompts";
 import { validateQuestions, validateDetectedChapters } from "./question-validation";
 import { logUsage, geminiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
 import { modelIdFor } from "./ai-settings";
+import { runTask } from "./ai-routing";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -26,6 +27,12 @@ export interface GenerateOptions {
    * chapter's existing question count for a single-batch call).
    */
   variantSeed?: number;
+  /**
+   * Question stems this chapter already has (newest first, already trimmed —
+   * see lib/question-dedupe). Listed in the prompt so the model writes about
+   * something else instead of re-asking them.
+   */
+  avoidQuestions?: string[];
 }
 
 // ─── Chapter Detection Types ────────────────────────────
@@ -273,12 +280,23 @@ export async function geminiChat(
   }
 }
 
+// ─── Vision ─────────────────────────────────────────────
+//
+// Every image task runs through the "vision" route, so an admin can pick the
+// Gemini model and add a second Gemini model as a fallback. Only Gemini is
+// supported: this is the only code path that sends image data.
+
+async function runVision(call: () => Promise<string>): Promise<string> {
+  const { value } = await runTask("vision", { GEMINI: call });
+  return value;
+}
+
 /**
  * Explain a graph image for a student. Gemini's flash models are multimodal, so
  * this can look at a photo/screenshot of a curve and describe it. Returns the
  * model's raw reply, expected to be JSON:
  *   { "explanation": string, "equations": string[] }
- * where `equations` are 0–3 likely functions of x (mathjs syntax) the student
+ * where `equations` are 0–4 functions of x (mathjs syntax), one per curve, the student
  * can then plot. Callers parse it defensively.
  */
 export async function explainGraphImage(
@@ -286,36 +304,38 @@ export async function explainGraphImage(
   mimeType: string,
   actor?: UsageActor,
 ): Promise<string> {
-  const client = getClient();
-  const model = client.getGenerativeModel({
-    model: geminiModel(),
-    generationConfig: withThinkingCap({}),
+  return runVision(async () => {
+    const client = getClient();
+    const model = client.getGenerativeModel({
+      model: geminiModel(),
+      generationConfig: withThinkingCap({}),
+    });
+    const prompt =
+      "You are a friendly math tutor for a school student. The image shows a GRAPH. " +
+      "Identify it and describe it clearly.\n" +
+      "Prioritise a VISUAL MATCH for the equation: choose the function AND its " +
+      "vertical scale so the plotted curve LOOKS LIKE the drawing — the peak/valley " +
+      "heights and where it crosses the axes should match what you see, not just the " +
+      "roots. It is fine if the equation is approximate.\n" +
+      "Respond ONLY as JSON with EXACTLY this shape (plain text values, NO markdown, " +
+      "NO asterisks, NO bullet characters):\n" +
+      '{"summary": string, "features": [{"label": string, "value": string}], "equations": string[]}\n' +
+      "- summary: one or two friendly plain sentences (say 'approximate' if the drawing isn't an exact function).\n" +
+      "- features: short label/value pairs for what is visible, e.g. " +
+      '{"label":"x-intercepts","value":"x = -5, -1, and 4"}, plus y-intercept, ' +
+      "turning points (with coordinates), end behavior, and domain & range.\n" +
+      "- equations: ONE equation for EACH distinct curve or line in the image (at most 4), as expressions in " +
+      "x using mathjs syntax (^ powers, ln, log(x,10), sqrt, e^x, sin/cos/tan, abs), " +
+      "no 'y='. Scale them to visually match the graph. Never list the same function " +
+      "two ways (0.1*f and f/10 are identical — give it once).\n" +
+      "If the image is not a graph, put a short note in summary, features [], equations [].";
+    const result = await model.generateContent([
+      { text: prompt },
+      { inlineData: { mimeType, data: base64 } },
+    ]);
+    logUsage({ feature: "vision-graph", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    return result.response.text();
   });
-  const prompt =
-    "You are a friendly math tutor for a school student. The image shows a GRAPH. " +
-    "Identify it and describe it clearly.\n" +
-    "Prioritise a VISUAL MATCH for the equation: choose the function AND its " +
-    "vertical scale so the plotted curve LOOKS LIKE the drawing — the peak/valley " +
-    "heights and where it crosses the axes should match what you see, not just the " +
-    "roots. It is fine if the equation is approximate.\n" +
-    "Respond ONLY as JSON with EXACTLY this shape (plain text values, NO markdown, " +
-    "NO asterisks, NO bullet characters):\n" +
-    '{"summary": string, "features": [{"label": string, "value": string}], "equations": string[]}\n' +
-    "- summary: one or two friendly plain sentences (say 'approximate' if the drawing isn't an exact function).\n" +
-    "- features: short label/value pairs for what is visible, e.g. " +
-    '{"label":"x-intercepts","value":"x = -5, -1, and 4"}, plus y-intercept, ' +
-    "turning points (with coordinates), end behavior, and domain & range.\n" +
-    "- equations: the DISTINCT most-likely equation(s), at most 2, as expressions in " +
-    "x using mathjs syntax (^ powers, ln, log(x,10), sqrt, e^x, sin/cos/tan, abs), " +
-    "no 'y='. Scale them to visually match the graph. Never list the same function " +
-    "two ways (0.1*f and f/10 are identical — give it once).\n" +
-    "If the image is not a graph, put a short note in summary, features [], equations [].";
-  const result = await model.generateContent([
-    { text: prompt },
-    { inlineData: { mimeType, data: base64 } },
-  ]);
-  logUsage({ feature: "vision-graph", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
-  return result.response.text();
 }
 
 /**
@@ -328,27 +348,29 @@ export async function readEquationsFromImage(
   mimeType: string,
   actor?: UsageActor,
 ): Promise<string> {
-  const client = getClient();
-  const model = client.getGenerativeModel({
-    model: geminiModel(),
-    generationConfig: withThinkingCap({}),
+  return runVision(async () => {
+    const client = getClient();
+    const model = client.getGenerativeModel({
+      model: geminiModel(),
+      generationConfig: withThinkingCap({}),
+    });
+    const prompt =
+      "Read the handwritten or printed math in this image. Output ONLY a JSON array " +
+      "of the equations as plottable expressions in x using mathjs syntax (^ for " +
+      "powers, ln(x), log(x,10), sqrt, e^x, sin/cos/tan, abs). Drop any 'y=' or " +
+      "'f(x)='. Keep letter coefficients/parameters (A, B, C, k, m, or a spelled-out " +
+      "Greek name like theta) as LITERAL symbols — do NOT replace them with numbers — " +
+      "so they can become interactive sliders. Always put an explicit '*' between a " +
+      "parameter and what follows and write functions with parentheses, e.g. " +
+      "'A*sin(x)+B', 'A*x^2+B*x+C', 'x^2+5*cos(theta)'. Use x as the only horizontal " +
+      "graph variable. At most 4 functions. No words, no markdown.";
+    const result = await model.generateContent([
+      { text: prompt },
+      { inlineData: { mimeType, data: base64 } },
+    ]);
+    logUsage({ feature: "vision-equation", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    return result.response.text();
   });
-  const prompt =
-    "Read the handwritten or printed math in this image. Output ONLY a JSON array " +
-    "of the equations as plottable expressions in x using mathjs syntax (^ for " +
-    "powers, ln(x), log(x,10), sqrt, e^x, sin/cos/tan, abs). Drop any 'y=' or " +
-    "'f(x)='. Keep letter coefficients/parameters (A, B, C, k, m, or a spelled-out " +
-    "Greek name like theta) as LITERAL symbols — do NOT replace them with numbers — " +
-    "so they can become interactive sliders. Always put an explicit '*' between a " +
-    "parameter and what follows and write functions with parentheses, e.g. " +
-    "'A*sin(x)+B', 'A*x^2+B*x+C', 'x^2+5*cos(theta)'. Use x as the only horizontal " +
-    "graph variable. At most 4 functions. No words, no markdown.";
-  const result = await model.generateContent([
-    { text: prompt },
-    { inlineData: { mimeType, data: base64 } },
-  ]);
-  logUsage({ feature: "vision-equation", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
-  return result.response.text();
 }
 
 /**
@@ -356,25 +378,27 @@ export async function readEquationsFromImage(
  * as a JSON spec the geometry explorer can build. Returns the model's raw reply.
  */
 export async function readSolidFromImage(base64: string, mimeType: string, actor?: UsageActor): Promise<string> {
-  const client = getClient();
-  const model = client.getGenerativeModel({
-    model: geminiModel(),
-    generationConfig: withThinkingCap({}),
+  return runVision(async () => {
+    const client = getClient();
+    const model = client.getGenerativeModel({
+      model: geminiModel(),
+      generationConfig: withThinkingCap({}),
+    });
+    const prompt =
+      "This image is a sketch, drawing or photo of a single 3D solid. Identify the solid. " +
+      'Output ONLY a JSON object: {"shape": string, "sides": number, "label": string}. ' +
+      '"shape" must be exactly one of: cube, cuboid, sphere, cylinder, cone, tetrahedron, octahedron, ' +
+      "square-pyramid, triangular-prism, prism, pyramid, antiprism, bipyramid. " +
+      'Include "sides" (an integer 3-12) ONLY for prism/pyramid/antiprism/bipyramid, giving how many sides the base ' +
+      'polygon has (a hexagonal prism → {"shape":"prism","sides":6}). "label" is a short human name like "Hexagonal prism". ' +
+      "No words, no markdown, JSON only.";
+    const result = await model.generateContent([
+      { text: prompt },
+      { inlineData: { mimeType, data: base64 } },
+    ]);
+    logUsage({ feature: "vision-solid", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    return result.response.text();
   });
-  const prompt =
-    "This image is a sketch, drawing or photo of a single 3D solid. Identify the solid. " +
-    'Output ONLY a JSON object: {"shape": string, "sides": number, "label": string}. ' +
-    '"shape" must be exactly one of: cube, cuboid, sphere, cylinder, cone, tetrahedron, octahedron, ' +
-    "square-pyramid, triangular-prism, prism, pyramid, antiprism, bipyramid. " +
-    'Include "sides" (an integer 3-12) ONLY for prism/pyramid/antiprism/bipyramid, giving how many sides the base ' +
-    'polygon has (a hexagonal prism → {"shape":"prism","sides":6}). "label" is a short human name like "Hexagonal prism". ' +
-    "No words, no markdown, JSON only.";
-  const result = await model.generateContent([
-    { text: prompt },
-    { inlineData: { mimeType, data: base64 } },
-  ]);
-  logUsage({ feature: "vision-solid", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
-  return result.response.text();
 }
 
 /**
@@ -388,31 +412,33 @@ export async function askAboutGraph(
   history: { role: "user" | "assistant"; text: string }[] = [],
   actor?: UsageActor,
 ): Promise<string> {
-  const client = getClient();
-  const model = client.getGenerativeModel({
-    model: geminiModel(),
-    generationConfig: withThinkingCap({}),
+  return runVision(async () => {
+    const client = getClient();
+    const model = client.getGenerativeModel({
+      model: geminiModel(),
+      generationConfig: withThinkingCap({}),
+    });
+    const ctx = history.length
+      ? "Earlier in this conversation:\n" +
+        history
+          .map((h) => `${h.role === "user" ? "Student" : "Tutor"}: ${h.text}`)
+          .join("\n") +
+        "\n\n"
+      : "";
+    const prompt =
+      "You are a friendly, encouraging math tutor. The image shows a GRAPH. Answer " +
+      "the student's question about THIS graph clearly and simply, in 1–3 short " +
+      "sentences of plain text (no markdown, no asterisks). " +
+      ctx +
+      "Student question: " +
+      question;
+    const result = await model.generateContent([
+      { text: prompt },
+      { inlineData: { mimeType, data: base64 } },
+    ]);
+    logUsage({ feature: "graph-qa", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    return result.response.text();
   });
-  const ctx = history.length
-    ? "Earlier in this conversation:\n" +
-      history
-        .map((h) => `${h.role === "user" ? "Student" : "Tutor"}: ${h.text}`)
-        .join("\n") +
-      "\n\n"
-    : "";
-  const prompt =
-    "You are a friendly, encouraging math tutor. The image shows a GRAPH. Answer " +
-    "the student's question about THIS graph clearly and simply, in 1–3 short " +
-    "sentences of plain text (no markdown, no asterisks). " +
-    ctx +
-    "Student question: " +
-    question;
-  const result = await model.generateContent([
-    { text: prompt },
-    { inlineData: { mimeType, data: base64 } },
-  ]);
-  logUsage({ feature: "graph-qa", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
-  return result.response.text();
 }
 
 // ─── Prompt builder ─────────────────────────────────────

@@ -1,6 +1,8 @@
 import { geminiChat } from "./gemini";
 import { groqChat } from "./groq";
 import { nvidiaChat } from "./nvidia";
+import { openRouterChat } from "./openrouter";
+import { getTaskChain, runStep, type AiProvider } from "./ai-routing";
 import type { UsageActor } from "./usage-logger";
 import { ASSISTANT_TASKS, type AssistantTask } from "./assistant-tasks";
 
@@ -62,7 +64,7 @@ export interface AssistantRequest {
 export interface AssistantResult {
   title: string;
   markdown: string;
-  provider: "gemini" | "groq" | "nvidia";
+  provider: "gemini" | "groq" | "nvidia" | "openrouter";
 }
 
 /**
@@ -159,7 +161,8 @@ function parseReply(raw: string | null): { title: string; markdown: string } | n
 }
 
 /**
- * Gemini → Groq → NVIDIA. Gemini leads because this is long-form written work
+ * Provider order and models come from the "teacher-assistant" route (Admin ->
+ * AI Models). Default Gemini → Groq → NVIDIA: Gemini leads because this is long-form written work
  * where quality matters more than the latency the tutor optimises for, and the
  * teacher is already waiting on a deliberate action. Every provider falls
  * through on any error or unusable reply.
@@ -179,17 +182,18 @@ export async function askTeachingAssistant(
 
   // Each provider is asked for PROSE, not JSON — see the note at the top of
   // this file for why that distinction is load-bearing here.
-  const providers: {
-    name: AssistantResult["provider"];
-    call: () => Promise<string | null>;
-  }[] = [
-    { name: "gemini", call: () => geminiChat(prompt, { ...opts, plainText: true }) },
-    {
-      name: "groq",
-      call: () => groqChat(prompt, { ...opts, responseFormat: { type: "text" } }),
-    },
-    { name: "nvidia", call: () => nvidiaChat(prompt, { ...opts, jsonMode: false }) },
-  ];
+  const impl: Partial<Record<AiProvider, () => Promise<string | null>>> = {
+    GEMINI: () => geminiChat(prompt, { ...opts, plainText: true }),
+    GROQ: () => groqChat(prompt, { ...opts, responseFormat: { type: "text" } }),
+    NVIDIA: () => nvidiaChat(prompt, { ...opts, jsonMode: false }),
+    OPENROUTER: () => openRouterChat(prompt, { ...opts, jsonMode: false }),
+  };
+  const providers = (await getTaskChain("teacher-assistant"))
+    .filter((s) => impl[s.provider])
+    .map((s) => ({
+      name: s.name as AssistantResult["provider"],
+      call: () => runStep(s, impl[s.provider]!),
+    }));
 
   const attempts: string[] = [];
   const report = req.onProgress ?? (() => {});

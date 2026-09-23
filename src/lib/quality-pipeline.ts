@@ -13,11 +13,15 @@
 
 import { SchemaType, type ResponseSchema } from "@google/generative-ai";
 import { generateEmbeddings, cosineSimilarity } from "./embeddings";
-import { ollamaChat, isOllamaEnabled } from "./ollama";
+import { ollamaChat } from "./ollama";
 import { groqChat } from "./groq";
 import { nvidiaChat } from "./nvidia";
+import { openRouterChat } from "./openrouter";
 import { geminiChat, geminiFastModel } from "./gemini";
+import { extractJson } from "./question-validation";
+import { runTask, getTaskChain, runStep, type ResolvedStep, type AiProvider } from "./ai-routing";
 import type { UsageFeature } from "./usage-logger";
+import { SIMILAR, judgeRepeat, questionFacts, type QuestionLike } from "./question-similarity";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -96,15 +100,21 @@ const AI_QUALITY_CHECKS_GEMINI_SCHEMA: ResponseSchema = {
         type: SchemaType.OBJECT,
         properties: {
           index: { type: SchemaType.INTEGER },
+          factualReason: { type: SchemaType.STRING },
+          factualPassed: { type: SchemaType.BOOLEAN },
           difficulty: { type: SchemaType.STRING },
           grammarIssue: { type: SchemaType.STRING, nullable: true },
-          factualPassed: { type: SchemaType.BOOLEAN },
-          factualReason: { type: SchemaType.STRING },
           weakDistractor: { type: SchemaType.STRING, nullable: true },
           scopeIssue: { type: SchemaType.STRING, nullable: true },
         },
-        required: ["index", "difficulty", "factualPassed", "factualReason"],
-      },
+        required: ["index", "factualReason", "factualPassed", "difficulty"],
+        // REASON BEFORE VERDICT. With thinking capped, the reason field is where
+        // the model actually works the problem; if the boolean comes first it
+        // commits before thinking, and seen 2026-09-23 it wrote "The marked
+        // answer is incorrect … therefore D is correct" about a correct D.
+        // Gemini orders properties alphabetically unless told otherwise.
+        propertyOrdering: ["index", "factualReason", "factualPassed", "difficulty", "grammarIssue", "weakDistractor", "scopeIssue"],
+      } as ResponseSchema,
     },
   },
   required: ["checks"],
@@ -121,15 +131,16 @@ const GROQ_AI_QUALITY_CHECKS_SCHEMA = {
         items: {
           type: "object",
           properties: {
+            // Reason before verdict — see AI_QUALITY_CHECKS_GEMINI_SCHEMA.
             index: { type: "integer" },
+            factualReason: { type: "string" },
+            factualPassed: { type: "boolean" },
             difficulty: { type: "string" },
             grammarIssue: { type: ["string", "null"] },
-            factualPassed: { type: "boolean" },
-            factualReason: { type: "string" },
             weakDistractor: { type: ["string", "null"] },
             scopeIssue: { type: ["string", "null"] },
           },
-          required: ["index", "difficulty", "grammarIssue", "factualPassed", "factualReason", "weakDistractor", "scopeIssue"],
+          required: ["index", "factualReason", "factualPassed", "difficulty", "grammarIssue", "weakDistractor", "scopeIssue"],
           additionalProperties: false,
         },
       },
@@ -148,12 +159,14 @@ const VERIFIER_GEMINI_SCHEMA: ResponseSchema = {
         type: SchemaType.OBJECT,
         properties: {
           index: { type: SchemaType.INTEGER },
+          reason: { type: SchemaType.STRING },
           answer: { type: SchemaType.STRING, nullable: true },
           correctCount: { type: SchemaType.INTEGER },
-          reason: { type: SchemaType.STRING },
         },
-        required: ["index", "correctCount", "reason"],
-      },
+        required: ["index", "reason", "correctCount"],
+        // Solve first, then answer — see AI_QUALITY_CHECKS_GEMINI_SCHEMA.
+        propertyOrdering: ["index", "reason", "answer", "correctCount"],
+      } as ResponseSchema,
     },
   },
   required: ["verdicts"],
@@ -170,12 +183,13 @@ const GROQ_VERIFIER_JSON_SCHEMA = {
         items: {
           type: "object",
           properties: {
+            // Solve first, then answer.
             index: { type: "integer" },
+            reason: { type: "string" },
             answer: { type: ["string", "null"] },
             correctCount: { type: "integer" },
-            reason: { type: "string" },
           },
-          required: ["index", "answer", "correctCount", "reason"],
+          required: ["index", "reason", "answer", "correctCount"],
           additionalProperties: false,
         },
       },
@@ -206,7 +220,9 @@ const RELEVANCE_THRESHOLD = 0.5;
  * matched an MRI question at 0.81. 0.90 sits in the empty gap, catching every
  * verified duplicate with ~6 points of margin on each side.
  */
-const DUPLICATE_THRESHOLD = 0.9;
+// Similarity alone no longer decides a repeat — see lib/question-similarity
+// (SIMILAR / NEAR_IDENTICAL / WORDING_ONLY). Kept for reference and callers.
+export const DUPLICATE_THRESHOLD = 0.9;
 const MIN_QUESTION_LENGTH = 15;
 /**
  * Cap on question text sent to the AI quality checker.
@@ -227,9 +243,6 @@ const MIN_QUESTION_LENGTH = 15;
 const MAX_CHECKED_QUESTION_CHARS = 1200;
 /** How many already-saved questions a new batch is compared against. */
 const MAX_EXISTING_COMPARED = 300;
-
-// Shared guard from lib/ollama — off in production, on when OLLAMA_ENABLED=true.
-const ollamaChatEnabled = isOllamaEnabled();
 
 // Compound question endings that are invalid for MCQ / TRUE_FALSE (Q12)
 const COMPOUND_QUESTION_PATTERNS = [
@@ -507,74 +520,68 @@ when all distractors are credible.
 QUESTIONS:
 ${questionList}
 
+For each question write factualReason FIRST — work the question out there —
+and only then set factualPassed to match what that reasoning concluded.
+
 Return JSON only — no markdown, no code fences:
 {
   "checks": [
-    { "index": 0, "difficulty": "MEDIUM", "grammarIssue": null, "factualPassed": true, "factualReason": "", "weakDistractor": null, "scopeIssue": null },
-    { "index": 1, "difficulty": "HARD", "grammarIssue": null, "factualPassed": false, "factualReason": "Premise wrong: primary sexual characteristics are present from birth.", "weakDistractor": "Option B (nuclear fusion from a radiofrequency pulse) is physically absurd — no student would pick it.", "scopeIssue": "Needs the speed of sound in tissue (1540 m/s) and v = f x lambda; the source states neither." }
+    { "index": 0, "factualReason": "Q = mcΔT gives 20,000 / (0.50 × 40) = 1,000, matching the marked option.", "factualPassed": true, "difficulty": "MEDIUM", "grammarIssue": null, "weakDistractor": null, "scopeIssue": null },
+    { "index": 1, "factualReason": "Premise wrong: primary sexual characteristics are present from birth.", "factualPassed": false, "difficulty": "HARD", "grammarIssue": null, "weakDistractor": "Option B (nuclear fusion from a radiofrequency pulse) is physically absurd — no student would pick it.", "scopeIssue": "Needs the speed of sound in tissue (1540 m/s) and v = f x lambda; the source states neither." }
   ]
 }`;
 
+  // Provider order and models come from the "quality-check" route (Admin ->
+  // AI Models). Default: Groq → Gemini (light model) → Ollama (dev only).
+  // A step counts only when its reply parses into a checks array: a non-empty
+  // but unparseable reply used to stop the chain and silently skip every check.
+  const system = "You are a strict exam-question quality checker. Always respond with valid JSON only.";
   let rawText = "";
-
-  // 1. Groq — fast, high rate limits, always available in production.
-  //    Goes through groqChat so the model id comes from GROQ_MODEL in one
-  //    place; this call site used to pin llama-3.3-70b-versatile, which Groq
-  //    has since decommissioned (404) while groq.ts had already moved on.
-  if (process.env.GROQ_API_KEY) {
-    try {
-      rawText =
-        (await groqChat(prompt, {
-          temperature: 0.1,
-          maxTokens: 4096,
-          feature: "quality-check",
-          responseFormat: {
-            type: "json_schema",
-            json_schema: GROQ_AI_QUALITY_CHECKS_SCHEMA,
-          },
-        })) ?? "";
-      if (rawText) console.info("[Quality Pipeline] AI checks via groq");
-    } catch (err) {
-      console.warn("[Quality Pipeline] Groq failed AI checks:", err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // 2. Gemini — fallback (lower free-tier rate limits than Groq)
-  if (!rawText && process.env.GEMINI_API_KEY) {
-    try {
-      rawText =
-        (await geminiChat(prompt, {
-          model: geminiFastModel(),
-          temperature: 0.1,
-          maxTokens: 4096,
-          feature: "quality-check",
-          responseSchema: AI_QUALITY_CHECKS_GEMINI_SCHEMA,
-        })) ?? "";
-      if (rawText) console.info("[Quality Pipeline] AI checks via gemini");
-    } catch (err) {
-      if (String(err).includes("429")) {
-        console.warn("[Quality Pipeline] Gemini rate-limited.");
-      } else {
-        console.warn("[Quality Pipeline] Gemini failed AI checks:", err instanceof Error ? err.message : String(err));
-      }
-    }
-  }
-
-  // 3. Ollama — local dev only, skipped in production (ollamaChatEnabled guard)
-  if (!rawText && ollamaChatEnabled) {
-    try {
-      const raw = await ollamaChat(prompt);
-      if (raw) {
-        rawText = raw;
-        console.info("[Quality Pipeline] AI checks via ollama");
-      }
-    } catch { /* fall through */ }
+  try {
+    const { value, provider } = await runTask(
+      "quality-check",
+      {
+        GROQ: () =>
+          groqChat(prompt, {
+            temperature: 0.1,
+            maxTokens: 4096,
+            feature: "quality-check",
+            responseFormat: {
+              type: "json_schema",
+              json_schema: GROQ_AI_QUALITY_CHECKS_SCHEMA,
+            },
+          }),
+        GEMINI: () =>
+          geminiChat(prompt, {
+            model: geminiFastModel(),
+            temperature: 0.1,
+            maxTokens: 4096,
+            feature: "quality-check",
+            responseSchema: AI_QUALITY_CHECKS_GEMINI_SCHEMA,
+          }),
+        NVIDIA: () => nvidiaChat(prompt, { system, temperature: 0.1, maxTokens: 4096, feature: "quality-check" }),
+        OPENROUTER: () =>
+          openRouterChat(prompt, {
+            system,
+            temperature: 0.1,
+            maxTokens: 4096,
+            feature: "quality-check",
+            jsonSchema: GROQ_AI_QUALITY_CHECKS_SCHEMA,
+          }),
+        OLLAMA: () => ollamaChat(prompt),
+      },
+      { accept: hasUsableChecks }
+    );
+    rawText = value;
+    console.info(`[Quality Pipeline] AI checks via ${provider}`);
+  } catch (err) {
+    console.warn("[Quality Pipeline] No provider completed the AI checks:", err instanceof Error ? err.message : String(err));
   }
 
   if (!rawText) return result;
 
   try {
-    const parsed = JSON.parse(rawText);
+    const parsed = extractJson(rawText) as { checks?: unknown };
     for (const c of (Array.isArray(parsed.checks) ? parsed.checks : [])) {
       const idx = Number(c.index);
       if (idx < 0 || idx >= questions.length) continue;
@@ -659,25 +666,36 @@ async function runAIQualityChecks(
 function detectDuplicates(
   questions: GeneratedQuestion[],
   questionEmbeddings: number[][]
-): { duplicatePairs: [number, number][]; similarities: Map<string, number> } {
+): {
+  duplicatePairs: [number, number][];
+  similarities: Map<string, number>;
+  /** Later question of each repeat pair -> why it counts as a repeat. */
+  reasons: Map<number, string>;
+} {
   const duplicatePairs: [number, number][] = [];
   const similarities = new Map<string, number>();
+  const reasons = new Map<number, string>();
 
   if (questions.length < 2 || questionEmbeddings.length < 2) {
-    return { duplicatePairs, similarities };
+    return { duplicatePairs, similarities, reasons };
   }
 
+  // Repeat = same PROBLEM, not just similar wording — see lib/question-similarity.
+  const facts = questions.map((q) => questionFacts(q));
   for (let i = 0; i < questionEmbeddings.length; i++) {
     for (let j = i + 1; j < questionEmbeddings.length; j++) {
       const sim = cosineSimilarity(questionEmbeddings[i], questionEmbeddings[j]);
       similarities.set(`${i}-${j}`, sim);
-      if (sim >= DUPLICATE_THRESHOLD) {
+      if (sim < SIMILAR) continue;
+      const verdict = judgeRepeat(sim, facts[i], facts[j]);
+      if (verdict.repeat) {
         duplicatePairs.push([i, j]);
+        if (!reasons.has(j)) reasons.set(j, `Repeats question ${i + 1} (${verdict.reason})`);
       }
     }
   }
 
-  return { duplicatePairs, similarities };
+  return { duplicatePairs, similarities, reasons };
 }
 
 // ─── 6. Relevance Check (question vs source content) ───
@@ -741,28 +759,36 @@ function splitSourceForRelevance(
  * saved question it repeats.
  */
 function detectExistingDuplicates(
+  questions: GeneratedQuestion[],
   questionEmbeddings: number[][],
   existingEmbeddings: number[][],
-  existingTexts: string[]
+  existing: QuestionLike[]
 ): Map<number, string> {
   const hits = new Map<number, string>();
   if (existingEmbeddings.length === 0 || questionEmbeddings.length === 0) return hits;
+  const existingFacts = existing.map((e) => questionFacts(e));
 
   for (let i = 0; i < questionEmbeddings.length; i++) {
     const qe = questionEmbeddings[i];
     if (!qe) continue;
-    let bestSim = 0;
-    let bestIdx = -1;
+    const facts = questionFacts(questions[i]);
+    // Every rule needs at least SIMILAR, so only those are judged — most
+    // similar first, and the first one judged a repeat is reported.
+    const close: { j: number; sim: number }[] = [];
     for (let j = 0; j < existingEmbeddings.length; j++) {
       const sim = cosineSimilarity(qe, existingEmbeddings[j]);
-      if (sim > bestSim) { bestSim = sim; bestIdx = j; }
+      if (sim >= SIMILAR) close.push({ j, sim });
     }
-    if (bestIdx >= 0 && bestSim >= DUPLICATE_THRESHOLD) {
-      const text = existingTexts[bestIdx] ?? "";
+    close.sort((a, b) => b.sim - a.sim);
+    for (const { j, sim } of close) {
+      const verdict = judgeRepeat(sim, facts, existingFacts[j]);
+      if (!verdict.repeat) continue;
+      const text = existing[j]?.questionText ?? "";
       hits.set(
         i,
-        `Already in this chapter (${(bestSim * 100).toFixed(0)}% similar): "${text.slice(0, 110)}${text.length > 110 ? "…" : ""}"`
+        `Already in this chapter (${verdict.reason}): "${text.slice(0, 110)}${text.length > 110 ? "…" : ""}"`
       );
+      break;
     }
   }
   return hits;
@@ -897,48 +923,52 @@ type ChatFn = (
 // Try providers in an order that puts the generator's own provider LAST, so the
 // critic is a different model whenever another is available. Returns "" if none
 // respond (→ fail closed).
-async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<string> {
-  const providers: { name: string; fn: ChatFn }[] = [
-    // NOTE: Cerebras was removed (free tier returns 402). Gemini leads the pool
-    // to match every other chain, but `avoidProvider` still outranks this order:
-    // when Gemini generated the questions it is demoted so the critic is a
-    // different model. In the common case (Gemini generates) the verifier is
-    // therefore Groq — which is the point of the blind cross-check.
-    {
-      name: "gemini",
-      fn: (p, o) => geminiChat(p, { ...o, responseSchema: VERIFIER_GEMINI_SCHEMA }),
-    },
-    {
-      name: "groq",
-      fn: (p, o) =>
-        groqChat(p, {
-          ...o,
-          responseFormat: {
-            type: "json_schema",
-            json_schema: GROQ_VERIFIER_JSON_SCHEMA,
-          },
-        }),
-    },
-    { name: "nvidia", fn: (p, o) => nvidiaChat(p, o) },
-  ];
-  // Preference order:
+async function runVerifierChat(
+  prompt: string,
+  avoidProvider?: string,
+  /**
+   * The generator's model. When given, only a step running THIS model is
+   * demoted — OpenRouter hosts many models, so "same provider" is not "same
+   * model": demoting by provider pushed a free Nemotron verifier behind a paid
+   * Gemini one whenever GPT-6 Luna (also OpenRouter) wrote the questions.
+   */
+  avoidModel?: string | null
+): Promise<string> {
+  const impl: Partial<Record<AiProvider, ChatFn>> = {
+    GEMINI: (p, o) => geminiChat(p, { ...o, responseSchema: VERIFIER_GEMINI_SCHEMA }),
+    GROQ: (p, o) =>
+      groqChat(p, {
+        ...o,
+        responseFormat: {
+          type: "json_schema",
+          json_schema: GROQ_VERIFIER_JSON_SCHEMA,
+        },
+      }),
+    NVIDIA: (p, o) => nvidiaChat(p, o),
+    OPENROUTER: (p, o) => openRouterChat(p, { ...o, jsonSchema: GROQ_VERIFIER_JSON_SCHEMA }),
+    OLLAMA: (p) => ollamaChat(p) as Promise<string | null>,
+  };
+
+  // Order and models come from the "answer-verification" route (Admin -> AI
+  // Models). On top of it, the provider that GENERATED these questions is moved
+  // to the end — but ahead of local Ollama — so the critic is a different model
+  // whenever another is available:
   //   1. a cloud provider that did NOT generate these questions (true second opinion)
   //   2. the generating provider itself — not independent, but a real check,
   //      and seconds rather than minutes
   //   3. local Ollama LAST
   //
-  // Ollama is last deliberately. It used to sit ahead of the generating
-  // provider, so when the independent cloud verifier failed, verification fell
-  // to CPU inference and took 203s where Groq answers in about 10 — turning a
-  // one-minute quiz into a four-minute wait. Preferring a fast non-independent
-  // check over a slow independent one is the right trade here: the alternative
-  // the student actually experiences is giving up.
+  // Ollama stays behind the generating provider deliberately. When it sat ahead,
+  // a failed independent verifier fell to CPU inference and took 203s where Groq
+  // answers in about 10 — turning a one-minute quiz into a four-minute wait.
+  const chain = (await getTaskChain("answer-verification")).filter((s) => impl[s.provider]);
+  const isLocal = (s: ResolvedStep) => s.provider === "OLLAMA";
+  const isGenerator = (s: ResolvedStep) =>
+    s.name === avoidProvider && (!avoidModel || s.effectiveModel === avoidModel);
   const ordered = [
-    ...providers.filter((p) => p.name !== avoidProvider),
-    ...providers.filter((p) => p.name === avoidProvider),
-    ...(ollamaChatEnabled
-      ? [{ name: "ollama", fn: (p: string) => ollamaChat(p) as Promise<string | null> }]
-      : []),
+    ...chain.filter((s) => !isGenerator(s) && !isLocal(s)),
+    ...chain.filter((s) => isGenerator(s) && !isLocal(s)),
+    ...chain.filter(isLocal),
   ];
 
   // Retry the whole chain with backoff before giving up.
@@ -960,9 +990,11 @@ async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    for (const p of ordered) {
+    for (const step of ordered) {
       try {
-        const out = await p.fn(prompt, { temperature: 0.1, maxTokens: 1200, feature: "answer-verification" });
+        const out = await runStep(step, () =>
+          impl[step.provider]!(prompt, { temperature: 0.1, maxTokens: 2400, feature: "answer-verification" })
+        );
         // A non-empty string is NOT success. Accepting one was the bug: NVIDIA
         // answers this prompt with prose or a malformed object rather than the
         // verdict schema, and because that is "non-empty" the chain stopped
@@ -973,7 +1005,7 @@ async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<
         if (out && out.trim() && hasUsableVerdicts(out)) return out;
         if (out && out.trim()) {
           console.warn(
-            `[Quality] Verifier "${p.name}" replied but produced no usable verdicts — trying the next provider.`
+            `[Quality] Verifier "${step.name}" (${step.effectiveModel}) replied but produced no usable verdicts — trying the next provider.`
           );
         }
       } catch {
@@ -983,6 +1015,16 @@ async function runVerifierChat(prompt: string, avoidProvider?: string): Promise<
   }
 
   return "";
+}
+
+/** Does this raw reply actually contain the per-question checks array? */
+function hasUsableChecks(raw: string): boolean {
+  try {
+    const parsed = extractJson(raw) as { checks?: unknown } | null;
+    return Array.isArray(parsed?.checks) && parsed.checks.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /** Does this raw reply actually contain the verdict array the caller needs? */
@@ -1020,11 +1062,13 @@ function buildVerifyPrompt(
 
 Be strict. If two options are both true, if none is clearly correct, or if the stem is ambiguous, correctCount must NOT be 1.
 
+Write "reason" FIRST — solve the question there in a few short steps — and only then fill in "answer" and "correctCount" so they match what the reasoning concluded.
+
 QUESTIONS:
 ${list}
 
 Return JSON ONLY (no markdown):
-{"verdicts":[{"index":0,"answer":"C","correctCount":1,"reason":""},{"index":1,"answer":null,"correctCount":2,"reason":"Both B and C are correct"}]}`;
+{"verdicts":[{"index":0,"reason":"v = d/t = 120/1.5 = 80 km/h, which is option C","answer":"C","correctCount":1},{"index":1,"reason":"B and C are both true for this setup","answer":null,"correctCount":2}]}`;
 }
 
 function resolveVerdict(
@@ -1077,7 +1121,7 @@ export async function verifyQuestions(
   questions: GeneratedQuestion[],
   subject: string,
   grade: number,
-  opts?: { avoidProvider?: string },
+  opts?: { avoidProvider?: string; avoidModel?: string | null },
 ): Promise<VerifyResult[]> {
   const results: VerifyResult[] = questions.map(() => ({ verdict: "verified", reason: "" }));
 
@@ -1092,7 +1136,11 @@ export async function verifyQuestions(
   for (let s = 0; s < checkable.length; s += VERIFY_BATCH_SIZE) {
     const batch = checkable.slice(s, s + VERIFY_BATCH_SIZE);
     const items = batch.map((b, localIndex) => ({ localIndex, q: b.q }));
-    const raw = await runVerifierChat(buildVerifyPrompt(items, subject, grade), opts?.avoidProvider);
+    const raw = await runVerifierChat(
+      buildVerifyPrompt(items, subject, grade),
+      opts?.avoidProvider,
+      opts?.avoidModel
+    );
 
     const verdictMap = new Map<number, { answer?: unknown; correctCount?: unknown; reason?: unknown }>();
     if (raw) {
@@ -1136,7 +1184,9 @@ export async function runQualityPipeline(
    * visible once they were all in the database. Passing the existing bank makes
    * each new question checkable against what the chapter already has.
    */
-  existingQuestions: string[] = []
+  existingQuestions: (string | QuestionLike)[] = [],
+  /** The generator's model, so the verifier only avoids that exact model. */
+  generatorModel?: string | null
 ): Promise<QualityPipelineResult> {
   // Pre-compute all embeddings in a single batch (source windows + all
   // questions). The source is split into windows so relevance is scored against
@@ -1145,11 +1195,15 @@ export async function runQualityPipeline(
   const sourceWindows = splitSourceForRelevance(sourceContent);
   // Cap the saved bank so a large chapter cannot make this call unbounded.
   // Newest first: a repeat of something generated recently is the likely case.
-  const existingSlice = existingQuestions.slice(0, MAX_EXISTING_COMPARED);
+  // Plain strings are accepted for callers that only have the text; passing
+  // the correct answer too lets conceptual repeats be judged by answer.
+  const existingSlice: QuestionLike[] = existingQuestions
+    .slice(0, MAX_EXISTING_COMPARED)
+    .map((e) => (typeof e === "string" ? { questionText: e } : e));
   const allTexts = [
     ...sourceWindows,
     ...questions.map((q) => q.questionText),
-    ...existingSlice,
+    ...existingSlice.map((e) => e.questionText),
   ];
   let sourceEmbeddings: number[][] = [];
   let questionEmbeddings: number[][] = [];
@@ -1193,14 +1247,15 @@ export async function runQualityPipeline(
   // Independent-solver verification (blind re-solve, cross-model, fail-closed).
   const verifyResults = await verifyQuestions(questions, subject, grade, {
     avoidProvider: generatorProvider,
+    avoidModel: generatorModel,
   });
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
-  const existingDupes = detectExistingDuplicates(questionEmbeddings, existingEmbeddings, existingSlice);
+  const existingDupes = detectExistingDuplicates(questions, questionEmbeddings, existingEmbeddings, existingSlice);
   const relevanceMap = checkRelevance(questions, sourceEmbeddings, questionEmbeddings);
 
-  const duplicateIndices = new Set(
-    duplicateResult.duplicatePairs.flat()
-  );
+  // Only the LATER question of a repeat pair is flagged — flagging both threw
+  // away (or sent to review) the original along with its copy.
+  const duplicateIndices = new Set(duplicateResult.reasons.keys());
 
   // Batch-level answer-balance check (position / true-false skew).
   const answerSkew = detectAnswerSkew(questions);
@@ -1265,10 +1320,7 @@ export async function runQualityPipeline(
     // 5. Duplicate
     if (duplicateIndices.has(idx)) {
       flags.push("DUPLICATE_QUESTION");
-      const pairs = duplicateResult.duplicatePairs
-        .filter((p) => p.includes(idx))
-        .map((p) => p.find((i) => i !== idx)!);
-      details["DUPLICATE_QUESTION"] = `Semantically similar to question(s): ${pairs.map((i) => i + 1).join(", ")}`;
+      details["DUPLICATE_QUESTION"] = duplicateResult.reasons.get(idx) ?? "Repeats an earlier question in this batch";
       penalty += 0.2;
     }
 

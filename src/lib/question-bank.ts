@@ -1,5 +1,12 @@
 import { db } from "./db";
 import { isAiFeatureEnabled } from "./platform-settings";
+import { selectGenerationContent } from "./generation-content";
+import {
+  avoidList,
+  findNearDuplicates,
+  generationRunIndex,
+  recentChapterQuestions,
+} from "./question-dedupe";
 
 /**
  * Question bank replenishment.
@@ -121,8 +128,12 @@ export async function replenishQuestionBank(
     // some, and over-generating burns budget for no gain.
     const neededCount = Math.min(needed + 2, maxGenerate);
 
-    const { generateQuestionsBatched, verifyQuestions, hasBlockingStructuralIssue } =
-      await import("@/lib/ai-provider");
+    const {
+      generateQuestionsBatched,
+      verifyQuestions,
+      hasBlockingStructuralIssue,
+      generationContentBudget,
+    } = await import("@/lib/ai-provider");
 
     const resolvedTextbookId =
       textbookId ??
@@ -142,10 +153,25 @@ export async function replenishQuestionBank(
 
     if (!textbookMeta) return [];
 
+    // Read a different part of the chapter on each top-up (it used to send
+    // the same opening 30,000 characters every time), and tell the model what
+    // the chapter already has. See lib/question-dedupe.
+    const [runIndex, chapterBank] = await Promise.all([
+      generationRunIndex(replenishChapterId),
+      recentChapterQuestions(replenishChapterId),
+    ]);
+    const selected = await selectGenerationContent({
+      chapterId: replenishChapterId,
+      fallbackContent: replenishContent,
+      budgetChars: generationContentBudget(neededCount, replenishContent.length),
+      rotation: runIndex,
+    });
+
     onProgress?.({ message: "Drafting Bloom-aligned questions with AI...", percent: 35 });
 
-    const { questions: rawGen, provider } = await generateQuestionsBatched({
-      content: replenishContent.slice(0, 30000),
+    const { questions: rawGen, provider, model } = await generateQuestionsBatched({
+      avoidQuestions: avoidList(chapterBank.map((q) => q.questionText)),
+      content: selected.content,
       chapterTitle: replenishTitle,
       subject: textbookMeta.subject,
       grade: textbookMeta.grade,
@@ -168,6 +194,7 @@ export async function replenishQuestionBank(
 
     const verdicts = await verifyQuestions(rawGen, textbookMeta.subject, textbookMeta.grade, {
       avoidProvider: provider,
+      avoidModel: model,
     });
     const verifiedNew = rawGen.filter(
       (q, idx) => verdicts[idx]?.verdict === "verified" && !hasBlockingStructuralIssue(q),
@@ -175,14 +202,13 @@ export async function replenishQuestionBank(
 
     if (verifiedNew.length === 0) return [];
 
-    // Cross-generation dedupe against what this chapter already holds.
-    const genTexts = verifiedNew.map((q) => q.questionText);
-    const existing = await db.question.findMany({
-      where: { chapterId: replenishChapterId, questionText: { in: genTexts } },
-      select: { questionText: true },
-    });
-    const existingSet = new Set(existing.map((e) => e.questionText));
-    const toInsert = verifiedNew.filter((q) => !existingSet.has(q.questionText));
+    // Cross-generation dedupe against what this chapter already holds —
+    // reworded repeats included, not only word-for-word copies.
+    const dupes = await findNearDuplicates(verifiedNew, chapterBank);
+    const toInsert = verifiedNew.filter((_, i) => !dupes.has(i));
+    if (dupes.size > 0) {
+      console.log(`[Question Bank] Dropped ${dupes.size} repeat(s) of existing or in-batch questions.`);
+    }
 
     if (toInsert.length === 0) return [];
 

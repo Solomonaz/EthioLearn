@@ -22,6 +22,7 @@
  * whether a key is PRESENT.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { AiProviderId } from "@prisma/client";
 import { db } from "./db";
 
@@ -69,7 +70,7 @@ export const PROVIDER_META: Record<AiProviderId, ProviderMeta> = {
     },
     defaultPriority: 10,
     local: false,
-    hint: "Primary. Strongest quality; billed per token.",
+    hint: "Strongest quality; billed per token. The only provider that can read images.",
   },
   GROQ: {
     label: "Groq",
@@ -176,11 +177,22 @@ function resolveModel(
  * measured in minutes would defeat the entire point of the feature. One indexed
  * primary-key read of at most five rows is cheap enough to pay per call.
  */
-export async function getProviderSettings(): Promise<ResolvedProvider[]> {
+export async function getProviderSettings(
+  opts: {
+    /**
+     * Throw when the saved settings cannot be read, instead of falling back to
+     * env/defaults. The admin screen uses this: showing defaults there looks
+     * exactly like "my settings were reset", and saving from that screen would
+     * then overwrite the real ones.
+     */
+    strict?: boolean;
+  } = {}
+): Promise<ResolvedProvider[]> {
   let rows: Awaited<ReturnType<typeof db.aiProviderConfig.findMany>> = [];
   try {
     rows = await db.aiProviderConfig.findMany();
-  } catch {
+  } catch (err) {
+    if (opts.strict) throw err;
     // A missing table (migration not yet applied) must not take AI down —
     // fall through to pure env/default resolution.
     rows = [];
@@ -238,6 +250,8 @@ export async function getModelFor(
   id: AiProviderId,
   slot: ModelSlot
 ): Promise<string | null> {
+  const override = overrideFor(id, slot);
+  if (override) return override;
   const all = await getProviderSettings();
   return all.find((p) => p.id === id)?.models[slot] ?? null;
 }
@@ -283,13 +297,54 @@ function primeSyncCache(resolved: ResolvedProvider[]): void {
   }
 }
 
+// ─── Per-call model override ────────────────────────────
+//
+// Per-task routing (lib/ai-routing) lets a task pick a model other than the
+// provider's default — "Gemini 3.1-flash-lite for question generation". The
+// provider libraries resolve their model id through `modelIdFor`/`getModelFor`
+// in dozens of places, so rather than thread a `model` parameter through every
+// one of them, the router runs each step inside an async scope and those two
+// functions consult it first.
+//
+// AsyncLocalStorage keeps the override confined to that one call chain:
+// concurrent requests, and anything that runs after the step returns, see the
+// normal defaults. Embedding models are never overridden — changing one would
+// silently mix vector spaces in the index.
+
+const modelOverrideScope = new AsyncLocalStorage<ReadonlyMap<AiProviderId, string>>();
+
+/**
+ * Run `fn` with `provider` using `model` for its chat and fast slots. A null or
+ * blank model runs `fn` unchanged (provider default). Scopes nest: an inner
+ * override wins for its provider and leaves the others as the outer scope set.
+ */
+export function withModelOverride<T>(
+  provider: AiProviderId,
+  model: string | null | undefined,
+  fn: () => Promise<T>
+): Promise<T> {
+  const m = model?.trim();
+  if (!m) return fn();
+  const next = new Map(modelOverrideScope.getStore() ?? []);
+  next.set(provider, m);
+  return modelOverrideScope.run(next, fn);
+}
+
+function overrideFor(id: AiProviderId, slot: ModelSlot): string | null {
+  if (slot === "embedding") return null;
+  return modelOverrideScope.getStore()?.get(id) ?? null;
+}
+
 /**
  * The model id a provider library should use RIGHT NOW, without awaiting.
  *
- * Reads the mirrored database value when one has been loaded, otherwise falls
- * back to env then the built-in default.
+ * A per-task override (see `withModelOverride`) wins; otherwise reads the
+ * mirrored database value when one has been loaded, then env, then the
+ * built-in default.
  */
 export function modelIdFor(id: AiProviderId, slot: ModelSlot): string | null {
+  const override = overrideFor(id, slot);
+  if (override) return override;
   const cached = syncModelCache.get(cacheKey(id, slot));
   if (cached !== undefined) return cached;
   return envModelFor(id, slot);

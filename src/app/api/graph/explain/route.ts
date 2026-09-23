@@ -50,14 +50,15 @@ function dedupeEquations(eqs: string[]): string[] {
     if (seen.has(sig)) continue; // same curve as an earlier one → drop
     seen.add(sig);
     out.push(e);
-    if (out.length >= 2) break;
+    // One per curve in the image, matching the prompt (explainGraphImage).
+    if (out.length >= 4) break;
   }
   return out;
 }
 
 /**
  * POST /api/graph/explain — a student uploads/snaps a photo of a GRAPH and gets
- * a student-friendly explanation of it, plus 0–3 likely equations they can plot.
+ * a student-friendly explanation of it, plus 0–4 equations (one per curve) they can plot.
  * Uses Gemini vision (multimodal, free tier), gated by the platform AI switch.
  *
  * Body: { image: <base64, with or without data: prefix>, mimeType: string }

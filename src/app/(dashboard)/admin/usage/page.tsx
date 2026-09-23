@@ -79,6 +79,7 @@ const FEATURE_LABELS: Record<string, string> = {
   "quality-check": "Quality checks",
   "bloom-tagging": "Bloom tagging",
   "tutor-chat": "AI tutor chat",
+  "query-rewrite": "Tutor search rewrite",
   "vision-graph": "Graph reading (vision)",
   "vision-equation": "Equation reading (vision)",
   "vision-solid": "3D solid reading (vision)",

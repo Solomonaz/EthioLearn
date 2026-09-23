@@ -12,11 +12,20 @@
  * generation issues six to ten calls in a burst and those reliably come back
  * `429 ... temporarily rate-limited upstream`. Treat `:free` as suitable for
  * evaluation and interactive one-shots, not for batch ingestion.
+ *
+ * REASONING IS OFF BY DEFAULT. Most models on OpenRouter now think before they
+ * answer, and that thinking is billed as output and counted against max_tokens.
+ * Benchmarked on the real question-generation prompt (2026-09-23), DeepSeek V4
+ * Flash spent all 8,192 tokens thinking and returned no JSON on half its HARD
+ * batches, took ~130s per batch, and as a judge exhausted the verifier's 1,200
+ * tokens. Gemini avoids this with its thinking cap (lib/gemini.ts), which leaves
+ * it at ~0 thinking tokens; `reasoning: { enabled: false }` is the OpenRouter
+ * equivalent. Set OPENROUTER_REASONING=low|medium|high|default to change it.
  */
 
 import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
-import { buildChapterDetectionPrompt } from "./groq";
+import { buildChapterDetectionPrompt, GROQ_QUESTION_JSON_SCHEMA } from "./groq";
 import { logUsage, openAiUsage, type UsageActor, type UsageFeature } from "./usage-logger";
 import { getModelFor, PROVIDER_META } from "./ai-settings";
 import type {
@@ -38,12 +47,36 @@ function baseUrl(): string {
   );
 }
 
+/**
+ * The `reasoning` field sent with every call, or undefined to send none (the
+ * model's own default). See the note at the top of this file.
+ */
+function reasoningParam(): Record<string, unknown> | undefined {
+  const mode = (process.env.OPENROUTER_REASONING ?? "off").trim().toLowerCase();
+  if (mode === "default") return undefined;
+  if (mode === "low" || mode === "medium" || mode === "high") return { effort: mode };
+  return { enabled: false };
+}
+
+/**
+ * A strict JSON schema for `response_format` (OpenAI structured outputs).
+ * Gemini gets its schema natively; this gives OpenRouter models the same
+ * guarantee of well-formed, correctly-typed output instead of "any JSON".
+ */
+export interface JsonSchemaFormat {
+  name: string;
+  strict?: boolean;
+  schema: Record<string, unknown>;
+}
+
 async function openRouterCompletion(
   messages: { role: "system" | "user" | "assistant"; content: string }[],
   opts: {
     temperature?: number;
     maxTokens?: number;
     jsonMode?: boolean;
+    /** Strict schema for the reply; implies JSON. Falls back to plain JSON mode if the model rejects it. */
+    jsonSchema?: JsonSchemaFormat;
     feature?: UsageFeature;
     actor?: UsageActor;
     slot?: "chat" | "fast";
@@ -55,30 +88,65 @@ async function openRouterCompletion(
   const model = await getModelFor("OPENROUTER", opts.slot ?? "chat");
   if (!model) throw new Error("No OpenRouter model is configured.");
 
-  const res = await fetch(`${baseUrl()}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      // OpenRouter attributes traffic with these; harmless if absent.
-      "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3001",
-      "X-Title": "EthioLearn",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: opts.temperature ?? 0.5,
-      max_tokens: opts.maxTokens ?? 8192,
-      ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
-    }),
-    // Free-tier routes queue behind other tenants, so this is deliberately
-    // longer than NVIDIA's 35s.
-    signal: AbortSignal.timeout(120_000),
-  });
+  let reasoning = reasoningParam();
+  let responseFormat: unknown = opts.jsonSchema
+    ? { type: "json_schema", json_schema: opts.jsonSchema }
+    : opts.jsonMode
+      ? { type: "json_object" }
+      : undefined;
+  // With reasoning on, thinking is counted against max_tokens — give the answer
+  // room so a small budget (the verifier's 1,200) is not spent entirely thinking.
+  const maxTokens = () =>
+    reasoning && reasoning.enabled === false
+      ? opts.maxTokens ?? 8192
+      : Math.max(opts.maxTokens ?? 8192, 8192);
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`OpenRouter API error ${res.status}: ${body.slice(0, 300)}`);
+  // Not every model accepts every option. A 400 naming the option we sent is
+  // retried once without it (reasoning) or with plain JSON mode (schema), rather
+  // than failing a step the model could have served. Rejected calls are not billed.
+  let res: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(`${baseUrl()}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        // OpenRouter attributes traffic with these; harmless if absent.
+        "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3001",
+        "X-Title": "EthioLearn",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: opts.temperature ?? 0.5,
+        max_tokens: maxTokens(),
+        ...(responseFormat ? { response_format: responseFormat } : {}),
+        ...(reasoning ? { reasoning } : {}),
+        // Ask OpenRouter to report what this call actually cost (usage.cost, in
+        // USD) so usage tracking follows its live prices and cache discounts.
+        usage: { include: true },
+      }),
+      // Free-tier routes queue behind other tenants, so this is deliberately
+      // longer than NVIDIA's 35s.
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (res.ok || res.status !== 400) break;
+
+    const body = await res.clone().text().catch(() => "");
+    if (reasoning && /reasoning/i.test(body)) {
+      console.warn(`[OpenRouter] ${model} rejected the reasoning setting — retrying with the model default.`);
+      reasoning = undefined;
+    } else if (opts.jsonSchema && /json_schema|response_format|structured/i.test(body)) {
+      console.warn(`[OpenRouter] ${model} rejected the JSON schema — retrying in plain JSON mode.`);
+      responseFormat = { type: "json_object" };
+    } else {
+      break;
+    }
+  }
+
+  if (!res || !res.ok) {
+    const body = await res?.text().catch(() => "");
+    throw new Error(`OpenRouter API error ${res?.status}: ${(body ?? "").slice(0, 300)}`);
   }
 
   const data = (await res.json()) as {
@@ -94,6 +162,7 @@ async function openRouterCompletion(
     model: data.model || model,
     usage: openAiUsage(data.usage),
     actor: opts.actor,
+    reportedCostUsd: Number((data.usage as { cost?: unknown } | undefined)?.cost),
   });
   return data.choices?.[0]?.message?.content ?? "";
 }
@@ -108,6 +177,7 @@ export async function openRouterChat(
     feature?: UsageFeature;
     actor?: UsageActor;
     jsonMode?: boolean;
+    jsonSchema?: JsonSchemaFormat;
     slot?: "chat" | "fast";
   } = {}
 ): Promise<string | null> {
@@ -145,7 +215,12 @@ export async function openRouterGenerateQuestions(
         },
         { role: "user", content: prompt },
       ],
-      { temperature: 0.5, maxTokens: 8192, jsonMode: true, feature: "question-generation" }
+      {
+        temperature: 0.5,
+        maxTokens: 8192,
+        jsonSchema: GROQ_QUESTION_JSON_SCHEMA,
+        feature: "question-generation",
+      }
     );
 
     try {

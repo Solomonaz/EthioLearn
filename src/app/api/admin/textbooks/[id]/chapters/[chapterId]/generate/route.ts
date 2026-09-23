@@ -6,6 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { generateQuestionsBatched, generationContentBudget } from "@/lib/ai-provider";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { selectGenerationContent } from "@/lib/generation-content";
+import { avoidList, generationRunIndex } from "@/lib/question-dedupe";
 import { QUESTION_CONTENT_CHARS } from "@/lib/question-prompts";
 
 interface RouteParams {
@@ -116,6 +117,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // lib/generation-content. Rotation advances with the existing question
     // count so repeat generations reach new material.
     priorQuestions = await db.question.count({ where: { chapterId: chapter.id } });
+    // Content rotation advances by RUN, not question count — see lib/question-dedupe.
+    const runIndex = await generationRunIndex(chapter.id);
     const selected = await selectGenerationContent({
       chapterId: chapter.id,
       fallbackContent: finalContent,
@@ -124,12 +127,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // Pass the chapter's true length so the budget is sized by how much
       // there is to read, not only by how many questions were asked for.
       budgetChars: generationContentBudget(count, finalContent.length),
-      rotation: priorQuestions,
+      rotation: runIndex,
     });
     finalContent = selected.content;
     console.log(
       `[Admin Generate] Content strategy: ${selected.strategy} ` +
-      `(${selected.chunksUsed}/${selected.chunksAvailable} chunks, rotation ${priorQuestions})`
+      `(${selected.chunksUsed}/${selected.chunksAvailable} chunks, run ${runIndex})`
     );
   }
 
@@ -165,7 +168,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const { questions, provider } = await generateQuestionsBatched({
+    // The questions this chapter ALREADY has: listed in the prompt so the model
+    // writes something new, and passed to the pipeline so a repeat that still
+    // slips through is flagged before it reaches the admin's save list. "all"
+    // spans the book, so it compares against the whole textbook.
+    const existingQuestions = await db.question.findMany({
+      where: chapterId === "all" ? { chapter: { textbookId } } : { chapterId },
+      select: { questionText: true, correctAnswer: true },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    });
+
+    const { questions, provider, model } = await generateQuestionsBatched({
       content: finalContent,
       chapterTitle: finalTitle,
       subject: textbook.subject,
@@ -174,19 +188,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       difficulty,
       questionTypes: questionTypes as any,
       variantSeed: priorQuestions,
+      avoidQuestions: avoidList(existingQuestions.map((q) => q.questionText)),
     });
 
-    console.log(`[AI Generation] Used provider: ${provider}`);
-
-    // The questions this chapter ALREADY has, so the pipeline can reject a
-    // repeat before it reaches the admin's save list. "all" spans the book, so
-    // it compares against the whole textbook rather than one chapter.
-    const existingQuestions = await db.question.findMany({
-      where: chapterId === "all" ? { chapter: { textbookId } } : { chapterId },
-      select: { questionText: true },
-      orderBy: { createdAt: "desc" },
-      take: 300,
-    });
+    console.log(`[AI Generation] Used provider: ${provider} (${model})`);
 
     // Run Post-Processing Quality Pipeline
     const { runQualityPipeline } = await import("@/lib/ai-provider");
@@ -196,7 +201,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       textbook.subject,
       textbook.grade,
       provider,
-      existingQuestions.map((q) => q.questionText)
+      existingQuestions,
+      model
     );
 
     // Map quality results back to questions
