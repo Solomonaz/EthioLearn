@@ -4,9 +4,8 @@ import { useEffect, useState, useTransition, Suspense } from "react";
 import {
   User,
   Phone,
-  Calendar,
-  Star,
   Shield,
+  Lock,
   LogOut,
   Moon,
   Monitor,
@@ -45,10 +44,8 @@ interface UserSettings {
   grade: number | null;
   section: string | null;
   avatarUrl: string | null;
-  totalPoints: number;
-  xpLevel: number;
-  createdAt: string;
   telegramLinked: boolean;
+  schoolManaged: boolean;
 }
 
 const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
@@ -97,9 +94,6 @@ function StudentSettingsInner() {
   const { data: session } = useSession();
   const currentSessionId = (session as typeof session & { sessionId?: string })
     ?.sessionId;
-  // Section is a within-school class attribute — only relevant to students who
-  // belong to a school. Individual students never have one.
-  const belongsToSchool = !!(session?.user as { schoolId?: string | null } | undefined)?.schoolId;
   const searchParams = useSearchParams();
 
   const [userData, setUserData] = useState<UserSettings | null>(null);
@@ -110,9 +104,10 @@ function StudentSettingsInner() {
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [grade, setGrade]       = useState<number | "">("");
-  const [section, setSection]   = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving]     = useState(false);
+  // Enrolled at a school → the school owns name, grade and section.
+  const [schoolManaged, setSchoolManaged] = useState(false);
 
   // Language toggle
   const [isPending, startTransition] = useTransition();
@@ -161,9 +156,9 @@ function StudentSettingsInner() {
         setName(user.name);
         setEmail(user.email || "");
         setGrade(user.grade ?? "");
-        setSection(user.section || "");
         setAvatarUrl(user.avatarUrl || "");
         setTelegramLinked(user.telegramLinked);
+        setSchoolManaged(user.schoolManaged);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -201,12 +196,15 @@ function StudentSettingsInner() {
 
     try {
       const body: Record<string, unknown> = {
-        name:      name.trim(),
         email:     email.trim() || "",
-        section:   section.trim(),
         avatarUrl: avatarUrl.trim(),
       };
-      if (grade !== "") body.grade = Number(grade);
+      // The API refuses identity edits from school students, so only send
+      // them when the student owns those fields.
+      if (!schoolManaged) {
+        body.name = name.trim();
+        if (grade !== "") body.grade = Number(grade);
+      }
 
       const res = await fetch("/api/students/me/settings", {
         method: "PATCH",
@@ -305,7 +303,7 @@ function StudentSettingsInner() {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Manage your profile and preferences
+          Manage your account and preferences
         </p>
       </div>
 
@@ -319,20 +317,17 @@ function StudentSettingsInner() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-5">
-            {/* Avatar preview */}
-            <div className="flex flex-col items-center gap-3">
+            {/* Avatar picker with a small live preview */}
+            <div>
+              <p className="mb-2 text-sm font-medium text-text-primary">Avatar</p>
+              <div className="flex items-start gap-4">
               <Avatar
                 name={name || userData.name}
                 src={avatarUrl || null}
                 size="lg"
-                className="h-20 w-20 text-2xl"
+                className="h-12 w-12 shrink-0 text-lg"
               />
-            </div>
-
-            {/* Avatar picker */}
-            <div>
-              <p className="mb-2 text-sm font-medium text-text-primary">Avatar</p>
-              <div className="grid grid-cols-6 gap-2 sm:grid-cols-12">
+              <div className="grid flex-1 grid-cols-6 gap-2 sm:grid-cols-12">
                 {AVATAR_PRESETS.map((preset) => (
                   <button
                     key={preset.id}
@@ -351,8 +346,24 @@ function StudentSettingsInner() {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
 
+            {schoolManaged ? (
+              <div className="space-y-3 rounded-lg border border-border bg-border/20 p-4">
+                <InfoRow label="Name" value={userData.name} />
+                <InfoRow
+                  label="Grade"
+                  value={userData.grade ? `Grade ${userData.grade}` : "—"}
+                />
+                <InfoRow label="Section" value={userData.section || "—"} />
+                <p className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <Lock className="h-3 w-3" />
+                  Set by your school. Ask your school administrator to change them.
+                </p>
+              </div>
+            ) : (
+            <>
             <Input
               label="Name"
               placeholder="Your full name"
@@ -361,14 +372,6 @@ function StudentSettingsInner() {
               required
               minLength={2}
               maxLength={50}
-            />
-
-            <Input
-              label="Email"
-              type="email"
-              placeholder="your@email.com (optional)"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
             />
 
             <div className="w-full">
@@ -394,15 +397,16 @@ function StudentSettingsInner() {
                 ))}
               </select>
             </div>
-
-            {belongsToSchool && (
-              <Input
-                label="Section"
-                placeholder='e.g. "A", "B"'
-                value={section}
-                onChange={(e) => setSection(e.target.value)}
-              />
+            </>
             )}
+
+            <Input
+              label="Email"
+              type="email"
+              placeholder="your@email.com (optional)"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
 
             <Button type="submit" isLoading={saving} className="w-full">
               Save Changes
@@ -411,14 +415,12 @@ function StudentSettingsInner() {
         </CardContent>
       </Card>
 
-      {/* ── Account Info ──────────────────────────────────────────────────── */}
+      {/* ── Account ───────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold text-text-primary">
-              Account Info
-            </h2>
+            <h2 className="text-lg font-semibold text-text-primary">Account</h2>
           </div>
         </CardHeader>
         <CardContent>
@@ -432,84 +434,55 @@ function StudentSettingsInner() {
                   : userData.phoneNumber || "—"
               }
             />
-            <InfoRow
-              icon={<Calendar className="h-4 w-4 text-text-secondary" />}
-              label="Member Since"
-              value={formatDate(userData.createdAt, {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            />
-            <InfoRow
-              icon={<Star className="h-4 w-4 text-text-secondary" />}
-              label="Total Points"
-              value={userData.totalPoints.toLocaleString()}
-            />
-            <InfoRow
-              icon={<Shield className="h-4 w-4 text-text-secondary" />}
-              label="XP Level"
-              value={`Level ${userData.xpLevel}`}
-            />
+
+            {TELEGRAM_ENABLED && (
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-sm text-text-secondary">
+                  <Link2 className="h-4 w-4" />
+                  Connected accounts
+                </p>
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Telegram logo */}
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#229ED9]/10">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-5 w-5 fill-[#229ED9]"
+                        aria-hidden="true"
+                      >
+                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">Telegram</p>
+                      <p className="text-xs text-text-secondary">
+                        {telegramLinked ? "Account linked" : "Not connected"}
+                      </p>
+                    </div>
+                    {telegramLinked && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                  </div>
+
+                  {!telegramLinked && (
+                    <div className="flex-shrink-0">
+                      {telegramLoading ? (
+                        <div className="flex h-10 items-center px-2 text-sm text-text-secondary">
+                          Linking…
+                        </div>
+                      ) : (
+                        <TelegramLinkButton
+                          botUsername={TELEGRAM_BOT_USERNAME}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
-
-      {/* ── Connected Accounts ────────────────────────────────────────────── */}
-      {TELEGRAM_ENABLED && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-text-primary">
-                Connected Accounts
-              </h2>
-            </div>
-            <p className="text-xs text-text-secondary">
-              Link social accounts to sign in faster.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-lg border border-border p-4">
-              <div className="flex items-center gap-3">
-                {/* Telegram logo */}
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#229ED9]/10">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5 fill-[#229ED9]"
-                    aria-hidden="true"
-                  >
-                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Telegram</p>
-                  <p className="text-xs text-text-secondary">
-                    {telegramLinked ? "Account linked" : "Not connected"}
-                  </p>
-                </div>
-                {telegramLinked && (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-
-              {!telegramLinked && (
-                <div className="flex-shrink-0">
-                  {telegramLoading ? (
-                    <div className="flex h-10 items-center px-2 text-sm text-text-secondary">
-                      Linking…
-                    </div>
-                  ) : (
-                    <TelegramLinkButton
-                      botUsername={TELEGRAM_BOT_USERNAME}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* ── Active Sessions (§4.1.2) ──────────────────────────────────────── */}
       <Card>
@@ -518,7 +491,7 @@ function StudentSettingsInner() {
             <div className="flex items-center gap-2">
               <Globe className="h-5 w-5 text-primary" />
               <h2 className="text-lg font-semibold text-text-primary">
-                Active Sessions
+                Security
               </h2>
               <Badge variant="default" className="text-xs">
                 {sessions.length}
@@ -536,7 +509,7 @@ function StudentSettingsInner() {
             </button>
           </div>
           <p className="text-xs text-text-secondary">
-            These are the devices currently signed into your account.
+            Devices currently signed into your account.
           </p>
         </CardHeader>
         <CardContent>
@@ -734,7 +707,7 @@ function InfoRow({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   label: string;
   value: string;
 }) {

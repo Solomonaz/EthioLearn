@@ -8,6 +8,7 @@ import { notifyLevelUp } from "@/lib/notifications";
 import { checkAndAwardAchievements } from "@/lib/achievements";
 import { normalizeOption } from "@/lib/utils";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { answerKey, normalizeMathText } from "@/lib/math-notation";
 
 // ── Anti-gaming constants (SRS §4.9.2) ───────────────────────────────────────
 const MAX_SCORED_QUIZZES_PER_DAY = 20;
@@ -145,13 +146,16 @@ export async function POST(
         };
       }
 
-      const normalizedCorrect = String(question.correctAnswer || "").trim();
-      const studentAns = String(answer.studentAnswer || "").trim();
+      // Both sides through the same maths conversion: a quiz started before a
+      // question's LaTeX was converted to Unicode still submits the old text.
+      const normalizedCorrect = normalizeMathText(String(question.correctAnswer || "").trim());
+      const studentAns = normalizeMathText(String(answer.studentAnswer || "").trim());
       let isCorrect = false;
 
       if (question.type === "FILL_IN_BLANK") {
-        const c = normalizedCorrect.toLowerCase().replace(/[.,!?;:]/g, "").trim();
-        const s = studentAns.toLowerCase().replace(/[.,!?;:]/g, "").trim();
+        // Notation-blind: \(7^5\), 7^5 and 7⁵ are one answer; H₂O = H2O.
+        const c = answerKey(normalizedCorrect);
+        const s = answerKey(studentAns);
         if (s === c) {
           isCorrect = true;
         } else if (s.length >= 4 && (c.includes(s) || s.includes(c))) {

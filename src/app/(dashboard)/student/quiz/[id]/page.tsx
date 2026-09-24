@@ -13,6 +13,7 @@ import { getQuestionSeconds } from "@/lib/quiz-timing";
 import { cn } from "@/lib/utils";
 import { useAntiCheat } from "@/lib/useAntiCheat";
 import { useTranslations } from "next-intl";
+import { MathText } from "@/components/ui/math-text";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 
@@ -22,13 +23,13 @@ const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 function FillInBlankRenderer({ text, value, onChange }: { text: string; value: string; onChange: (val: string) => void }) {
   // Find underscores (e.g., "The ____ is...")
   const parts = text.split(/_{3,}/g);
-  if (parts.length < 2) return <span>{text}</span>;
+  if (parts.length < 2) return <MathText text={text} />;
 
   return (
     <div className="flex flex-wrap items-center gap-1">
       {parts.map((part, i) => (
         <span key={i} className="flex items-center gap-2">
-          {part}
+          <MathText text={part} />
           {i < parts.length - 1 && (
             <input
               type="text"
@@ -103,7 +104,7 @@ function MatchPairsInterface({ options, value, onChange }: { options: any[]; val
             )}
             onClick={() => setSelectedLeft(item)}
           >
-            {item}
+            <MathText text={item} />
           </button>
         ))}
       </div>
@@ -121,7 +122,7 @@ function MatchPairsInterface({ options, value, onChange }: { options: any[]; val
               onClick={() => handlePair(item)}
               disabled={isPaired}
             >
-              {item}
+              <MathText text={item} />
             </button>
           );
         })}
@@ -170,7 +171,7 @@ function OrderingInterface({ options, value, onChange }: { options: any[]; value
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-text-secondary">
             {index + 1}
           </span>
-          <span className="flex-1 text-sm font-medium text-text-primary">{item}</span>
+          <span className="flex-1 text-sm font-medium text-text-primary"><MathText text={item} /></span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" onClick={() => move(index, -1)} disabled={index === 0}>
               <ChevronLeft className="h-4 w-4 rotate-90" />
@@ -443,7 +444,7 @@ export default function QuizTakingPage() {
                 onChange={handleSelectAnswer}
               />
             ) : (
-              currentQuestion.questionText
+              <MathText text={currentQuestion.questionText} />
             )}
           </div>
 
@@ -482,7 +483,7 @@ export default function QuizTakingPage() {
                     {label}
                   </span>
                   <span className={cn("pt-1 text-sm sm:text-base", isSelected ? "font-medium text-text-primary" : "text-text-secondary")}>
-                    {option.text}
+                    <MathText text={option.text} />
                   </span>
                 </button>
               );

@@ -23,6 +23,7 @@ export async function GET() {
       xpLevel: user.xpLevel,
       createdAt: user.createdAt,
       telegramLinked: !!(user as any).telegramId,
+      schoolManaged: !!user.schoolId,
     },
   });
 }

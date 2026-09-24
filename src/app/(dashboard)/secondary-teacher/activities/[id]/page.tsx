@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { formatAccuracy, accuracyTone, WEAK_THRESHOLD } from "@/lib/class-insights";
 import { MarkdownView } from "@/components/ui/markdown-view";
 import { ResourceActions } from "@/components/secondary-teacher/resource-actions";
+import { MathText } from "@/components/ui/math-text";
 
 /**
  * One activity: who has done it, and which questions the class actually got
@@ -548,7 +549,7 @@ export default function ActivityDetailPage() {
                   <div className="min-w-0">
                     <p className="text-sm text-text-primary">
                       <span className="font-bold">Q{q.order + 1}.</span>{" "}
-                      {q.questionText}
+                      <MathText text={q.questionText} />
                     </p>
                     <p className="text-[11px] text-text-muted">
                       {activity.status === "DRAFT"

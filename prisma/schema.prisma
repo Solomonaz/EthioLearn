@@ -523,6 +523,14 @@ model Chapter {
   bloomLevels   String[] @default([])
   questionCount Int      @default(0)
   ocrConfidence Float?
+  /// Set when generation stops finding new material: most of a round's
+  /// questions were rejected as repeats of the bank. While it holds (and the
+  /// content is unchanged — see saturatedContentHash), quizzes recycle the
+  /// bank instead of paying for generation that only produces duplicates.
+  saturatedAt          DateTime?
+  /// contentHash when saturatedAt was set. Reprocessed content changes the
+  /// hash, which lifts saturation: new text means new questions are possible.
+  saturatedContentHash String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

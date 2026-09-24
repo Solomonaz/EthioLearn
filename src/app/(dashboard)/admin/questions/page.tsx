@@ -27,6 +27,8 @@ import { toast } from "@/components/ui/sonner";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import Papa from "papaparse";
 import { cn } from "@/lib/utils";
+import { MathText } from "@/components/ui/math-text";
+import { normalizeMathText } from "@/lib/math-notation";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -844,7 +846,7 @@ export default function AdminQuestionsPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-2 text-sm text-text-primary">
-                            {q.questionText}
+                            <MathText text={q.questionText} />
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-secondary">
                             <Badge variant={DIFFICULTY_BADGE_VARIANT[q.difficulty]}>
@@ -1109,7 +1111,8 @@ export default function AdminQuestionsPage() {
                     <option value="">Select correct answer…</option>
                     {validOptions.map((opt) => (
                       <option key={opt} value={opt}>
-                        {opt}
+                        {/* A <select> cannot render maths — show Unicode. */}
+                        {normalizeMathText(opt)}
                       </option>
                     ))}
                   </select>
@@ -1619,11 +1622,11 @@ export default function AdminQuestionsPage() {
                                     <Badge variant="success">✓ Verified</Badge>
                                   )}
                                 </div>
-                                <p className="text-text-primary mb-1">{q.questionText}</p>
+                                <p className="text-text-primary mb-1"><MathText text={q.questionText} /></p>
                                 <div className="grid grid-cols-2 gap-1">
                                   {q.options.map((opt, oi) => (
                                     <div key={oi} className={cn("rounded px-2 py-0.5 text-xs", opt === q.correctAnswer ? "bg-green-100 text-green-800 font-medium" : "bg-background text-text-secondary")}>
-                                      {String.fromCharCode(65 + oi)}. {opt}
+                                      {String.fromCharCode(65 + oi)}. <MathText text={opt} />
                                     </div>
                                   ))}
                                 </div>

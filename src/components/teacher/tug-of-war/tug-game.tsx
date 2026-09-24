@@ -18,6 +18,7 @@ import {
   type Team,
 } from "@/lib/games/tug-of-war";
 import { TugScene } from "./tug-scene";
+import { MathText } from "@/components/ui/math-text";
 
 interface TugGameProps {
   match: TugMatch;
@@ -432,7 +433,7 @@ function TeamPanel({
 
       {/* body — question, entry box, pad */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3 sm:p-4">
-        <p className={cn("shrink-0 text-center text-2xl font-extrabold sm:text-3xl", accent)}>{question}</p>
+        <p className={cn("shrink-0 text-center text-2xl font-extrabold sm:text-3xl", accent)}><MathText text={question} /></p>
 
         {mode === "keypad" ? (
           <>
@@ -481,7 +482,7 @@ function TeamPanel({
                   accent,
                 )}
               >
-                {opt}
+                <MathText text={opt} />
               </button>
             ))}
           </div>

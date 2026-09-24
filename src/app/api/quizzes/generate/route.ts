@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
+import { bankPoolsFor } from "@/lib/quiz-selection";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
@@ -145,48 +146,36 @@ export async function POST(request: Request) {
       where.difficulty = difficulty;
     }
 
-    // Fetch all matching questions and shuffle
-    const allQuestions = await db.question.findMany({
-      where,
-      select: {
-        id: true,
-        questionText: true,
-        options: true,
-        type: true,
-        difficulty: true,
-      },
-    });
+    // Unseen first, then what this student answered longest ago — the same
+    // rule as the AI source (see lib/quiz-selection). Previously a random
+    // draw, which re-served answered questions while unseen ones waited.
+    const pools = await bankPoolsFor(user.id, where);
+    const available = pools.unseen.length + pools.seen.length;
 
     // If the bank is short, top it up with AI and reuse the result. The logic
     // lives in lib/question-bank so teacher-set activities share it exactly —
     // the verify and dedupe rules are calibrated and must not be duplicated.
-    if (allQuestions.length < count) {
+    if (available < count) {
       const created = await replenishQuestionBank({
         chapterId: typeof chapterId === "string" ? chapterId : "",
         textbookId,
-        needed: count - allQuestions.length,
+        needed: count - available,
         difficulty,
         questionTypes,
         mode,
       });
-      allQuestions.push(...(created as typeof allQuestions));
+      pools.unseen.push(...(created as typeof pools.unseen));
     }
 
-    if (allQuestions.length === 0) {
+    if (pools.unseen.length + pools.seen.length === 0) {
       return NextResponse.json(
         { error: "No questions available for this selection" },
         { status: 404 }
       );
     }
 
-    // Fisher-Yates shuffle
-    const shuffled = [...allQuestions];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    // Pick in priority order, then shuffle so recycled and unseen questions mix.
+    const selected = shuffleArray([...pools.unseen, ...pools.seen].slice(0, count));
 
     // Create quiz record
     const quiz = await db.quiz.create({

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
+import { MathText } from "@/components/ui/math-text";
 import {
   FP,
   boardSizeForRound,
@@ -379,7 +380,7 @@ export function FindPairGame({ match, onExit }: { match: PairMatch; onExit?: () 
                   )}
                 >
                   {isUp ? (
-                    <span className="line-clamp-4">{card.text}</span>
+                    <span className="line-clamp-4"><MathText text={card.text} /></span>
                   ) : (
                     <Sparkles className="h-1/3 max-h-8 w-1/3 max-w-8 text-white/70" />
                   )}
@@ -538,7 +539,7 @@ function Column({
                     : "bg-surface text-text-primary ring-1 ring-border hover:ring-primary/50 active:scale-[0.98]",
             )}
           >
-            <span className="line-clamp-3">{card.text}</span>
+            <span className="line-clamp-3"><MathText text={card.text} /></span>
           </button>
         );
       })}

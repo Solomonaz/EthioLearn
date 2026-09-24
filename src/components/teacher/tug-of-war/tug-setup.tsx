@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MathText } from "@/components/ui/math-text";
 import {
   questionsFromStored,
   TUG,
@@ -329,8 +330,8 @@ export function TugSetup({
                 {manual.map((q, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                     <span className="truncate text-text-primary">
-                      {q.text}{" "}
-                      <span className="text-text-muted">— {q.options[q.correctIndex]}</span>
+                      <MathText text={q.text} />{" "}
+                      <span className="text-text-muted">— <MathText text={q.options[q.correctIndex]} /></span>
                     </span>
                     <button
                       onClick={() => setManual((m) => m.filter((_, j) => j !== i))}

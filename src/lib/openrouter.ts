@@ -23,7 +23,7 @@
  * equivalent. Set OPENROUTER_REASONING=low|medium|high|default to change it.
  */
 
-import { buildQuestionGenerationPrompt } from "./question-prompts";
+import { buildQuestionGenerationPrompt, PROMPT_VARIABLE_PART_MARKER } from "./question-prompts";
 import { extractJson, validateQuestions, validateDetectedChapters } from "./question-validation";
 import { buildChapterDetectionPrompt, GROQ_QUESTION_JSON_SCHEMA } from "./groq";
 import { logUsage, openAiUsage, type UsageActor, type UsageFeature } from "./usage-logger";
@@ -69,8 +69,22 @@ export interface JsonSchemaFormat {
   schema: Record<string, unknown>;
 }
 
+/**
+ * A message whose content may be split into parts, so a `cache_control`
+ * breakpoint can sit after the fixed part of a prompt.
+ */
+type ContentPart = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+type ChatMessage = { role: "system" | "user" | "assistant"; content: string | ContentPart[] };
+
+/** The same messages with every multi-part content joined back into one string. */
+function flattenMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((m) =>
+    typeof m.content === "string" ? m : { ...m, content: m.content.map((p) => p.text).join("") }
+  );
+}
+
 async function openRouterCompletion(
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  messages: ChatMessage[],
   opts: {
     temperature?: number;
     maxTokens?: number;
@@ -89,6 +103,7 @@ async function openRouterCompletion(
   if (!model) throw new Error("No OpenRouter model is configured.");
 
   let reasoning = reasoningParam();
+  let body = messages;
   let responseFormat: unknown = opts.jsonSchema
     ? { type: "json_schema", json_schema: opts.jsonSchema }
     : opts.jsonMode
@@ -117,7 +132,7 @@ async function openRouterCompletion(
       },
       body: JSON.stringify({
         model,
-        messages,
+        messages: body,
         temperature: opts.temperature ?? 0.5,
         max_tokens: maxTokens(),
         ...(responseFormat ? { response_format: responseFormat } : {}),
@@ -132,11 +147,14 @@ async function openRouterCompletion(
     });
     if (res.ok || res.status !== 400) break;
 
-    const body = await res.clone().text().catch(() => "");
-    if (reasoning && /reasoning/i.test(body)) {
+    const errBody = await res.clone().text().catch(() => "");
+    if (/cache_control/i.test(errBody) && body === messages) {
+      console.warn(`[OpenRouter] ${model} rejected the cache breakpoint — retrying as plain text.`);
+      body = flattenMessages(messages);
+    } else if (reasoning && /reasoning/i.test(errBody)) {
       console.warn(`[OpenRouter] ${model} rejected the reasoning setting — retrying with the model default.`);
       reasoning = undefined;
-    } else if (opts.jsonSchema && /json_schema|response_format|structured/i.test(body)) {
+    } else if (opts.jsonSchema && /json_schema|response_format|structured/i.test(errBody)) {
       console.warn(`[OpenRouter] ${model} rejected the JSON schema — retrying in plain JSON mode.`);
       responseFormat = { type: "json_object" };
     } else {
@@ -150,7 +168,7 @@ async function openRouterCompletion(
   }
 
   const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
     usage?: unknown;
     model?: string;
   };
@@ -164,6 +182,14 @@ async function openRouterCompletion(
     actor: opts.actor,
     reportedCostUsd: Number((data.usage as { cost?: unknown } | undefined)?.cost),
   });
+  if (data.choices?.[0]?.finish_reason === "length") {
+    // A cut-off reply burns the whole budget and usually loses the tail of the
+    // JSON. Seen once on question generation (output=8192 for a 4-question
+    // batch) and not reproducible, so it is logged rather than guessed at.
+    console.warn(
+      `[OpenRouter] ${data.model || model} hit max_tokens (${maxTokens()}) — reply was cut off.`
+    );
+  }
   return data.choices?.[0]?.message?.content ?? "";
 }
 
@@ -204,6 +230,23 @@ export async function openRouterGenerateQuestions(
   opts: GenerateOptions
 ): Promise<GeneratedQuestion[]> {
   const prompt = buildQuestionGenerationPrompt(opts);
+  // Cache breakpoint after the fixed rulebook. Without one, OpenAI-backed
+  // models on OpenRouter only hit the cache on a byte-identical prompt, and
+  // every batch carries a different chapter slice — measured 2026-09-24 on
+  // gpt-6-luna: cached=0 on every call, vs 5,862 of 8,667 prompt tokens read
+  // from cache (half the call's cost) with this breakpoint.
+  const split = prompt.indexOf(PROMPT_VARIABLE_PART_MARKER);
+  const userContent: string | ContentPart[] =
+    split > 0
+      ? [
+          { type: "text", text: prompt.slice(0, split), cache_control: { type: "ephemeral" } },
+          { type: "text", text: prompt.slice(split) },
+        ]
+      : prompt;
+  // Measured replies run ~150–450 tokens per question. Sizing the budget to
+  // the batch bounds what a runaway reply can cost instead of always allowing
+  // 8,192.
+  const maxTokens = Math.min(8192, 1500 + 800 * (opts.count ?? 10));
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const text = await openRouterCompletion(
@@ -213,11 +256,11 @@ export async function openRouterGenerateQuestions(
           content:
             "You are an expert educational content creator. Always respond with valid JSON only. No markdown, no explanations outside the JSON.",
         },
-        { role: "user", content: prompt },
+        { role: "user", content: userContent },
       ],
       {
         temperature: 0.5,
-        maxTokens: 8192,
+        maxTokens,
         jsonSchema: GROQ_QUESTION_JSON_SCHEMA,
         feature: "question-generation",
       }
@@ -230,11 +273,19 @@ export async function openRouterGenerateQuestions(
         : (parsed as Record<string, unknown>).questions;
       const questions = validateQuestions(arr);
       if (questions.length === 0) {
+        console.warn(
+          `[OpenRouter] Attempt ${attempt + 1}: no valid questions in the reply ` +
+            `(${Array.isArray(arr) ? `${arr.length} failed validation` : "no questions array"}; ${text.length} chars).`
+        );
         if (attempt === 0) continue;
         throw new Error("OpenRouter returned no valid questions after validation");
       }
       return questions;
     } catch (e) {
+      console.warn(
+        `[OpenRouter] Attempt ${attempt + 1}: unparseable reply (${text.length} chars, ends ${JSON.stringify(text.slice(-60))}): ` +
+          (e instanceof Error ? e.message : String(e))
+      );
       if (attempt === 1) {
         throw new Error(
           `Failed to parse OpenRouter response: ${e instanceof Error ? e.message : String(e)}`

@@ -169,10 +169,31 @@ export function generationContentBudget(count: number, contentChars?: number): n
 export async function generateQuestionsBatched(
   opts: GenerateOptions & {
     onProgress?: (info: { batchIndex: number; totalBatches: number; questionsSoFar: number }) => void;
+    /**
+     * A top-up for questions that failed review. Coverage was already paid for
+     * by the first round, so a refill makes only as many calls as its question
+     * count needs, over one randomly placed stretch of the chapter. Without
+     * this, replacing 5 questions of a long chapter made 4 calls of 1–2
+     * questions, each re-sending ~12K prompt tokens.
+     */
+    refill?: boolean;
   }
 ): Promise<{ questions: GeneratedQuestion[]; provider: ProviderName; model: string | null }> {
   const total = Math.max(1, opts.count ?? 10);
-  const content = opts.content ?? "";
+  let content = opts.content ?? "";
+
+  const lead = (await getTaskChain("question-generation"))[0];
+  const large = !!lead && LARGE_CONTEXT_PROVIDERS.has(lead.provider);
+
+  if (opts.refill && content.length > 0) {
+    const perCall = large ? LARGE_BATCH_QUESTIONS : QUESTION_BATCH_SIZE;
+    const reach = Math.ceil(total / perCall) * (large ? LARGE_BATCH_CHARS : CONTENT_CHARS_PER_BATCH);
+    if (content.length > reach) {
+      const start = Math.floor(Math.random() * content.length);
+      content = (content.slice(start) + "\n\n" + content.slice(0, start)).slice(0, reach);
+      opts = { ...opts, content };
+    }
+  }
 
   // Batch count follows CHAPTER LENGTH as well as question count, so how much
   // of a chapter gets read no longer depends on how many questions someone
@@ -182,8 +203,6 @@ export async function generateQuestionsBatched(
   // Merge into fewer, larger calls when the provider that will serve them can
   // take it (see LARGE_CONTEXT_PROVIDERS). Coverage is unchanged: the merged
   // windows still carry the whole selected content.
-  const lead = (await getTaskChain("question-generation"))[0];
-  const large = !!lead && LARGE_CONTEXT_PROVIDERS.has(lead.provider);
   if (large) {
     numBatches = Math.min(
       numBatches,

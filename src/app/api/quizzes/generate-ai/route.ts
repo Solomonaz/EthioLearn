@@ -11,6 +11,14 @@ import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { selectGenerationContent } from "@/lib/generation-content";
 import { avoidList, generationRunIndex, recentChapterQuestions } from "@/lib/question-dedupe";
+import {
+  bankPoolsFor,
+  isChapterSaturated,
+  markChapterSaturated,
+  roundShowsSaturation,
+  type BankQuestion,
+} from "@/lib/quiz-selection";
+import type { Prisma } from "@prisma/client";
 
 class ApiError extends Error {
   status: number;
@@ -60,7 +68,15 @@ async function runGeneration(
         textbookId,
       });
       difficulty = adaptiveInsights.difficulty;
-      console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty} (${adaptiveInsights.scope} scope, theta=${adaptiveInsights.theta})`);
+      // Only chapter/subject scopes estimate theta; global calibrates from
+      // weighted accuracy and baseline from nothing — log what was used.
+      const basis =
+        adaptiveInsights.theta !== undefined
+          ? `theta=${adaptiveInsights.theta.toFixed(2)}`
+          : adaptiveInsights.scope === "global"
+            ? `accuracy=${Math.round(adaptiveInsights.weightedAccuracy * 100)}% over ${adaptiveInsights.quizzesAnalyzed} quizzes`
+            : "no history";
+      console.log(`[Adaptive AI] Calibrated difficulty to: ${difficulty} (${adaptiveInsights.scope} scope, ${basis})`);
     } else {
       difficulty = "MEDIUM";
     }
@@ -94,6 +110,8 @@ async function runGeneration(
   let finalContent = "";
   let finalTitle = "";
   let targetChapterId: string | null = null;
+  /** Every chapter this quiz draws from — one, or all of the book's. */
+  let scopeChapterIds: string[] = [];
 
   // 2. Resolve Content (Chapter or All)
   if (chapterId === "all") {
@@ -114,6 +132,7 @@ async function runGeneration(
       .slice(0, 80000);
 
     targetChapterId = chapters[0].id;
+    scopeChapterIds = chapters.map((c) => c.id);
   } else {
     const chapter = await db.chapter.findFirst({
       where: { id: chapterId, textbookId },
@@ -126,6 +145,7 @@ async function runGeneration(
     finalTitle = chapter.title;
     finalContent = chapter.content || textbook.content || "";
     targetChapterId = chapter.id;
+    scopeChapterIds = [chapter.id];
 
     // Spend the prompt's character budget across the WHOLE chapter instead of
     // its opening 30k. Rotation advances with the chapter's existing question
@@ -154,17 +174,46 @@ async function runGeneration(
     );
   }
 
-  if (!finalContent || finalContent.length < 100) {
-    throw new ApiError("Not enough book content to generate questions.", 400);
-  }
-
-  // 3. AI Generation
   const count = Math.min(Math.max(Number(questionCount) || 10, 1), 20);
-  const genCount = count + 3;
   const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
   const questionTypes = Array.isArray(body.questionTypes) && body.questionTypes.length > 0
     ? (body.questionTypes.filter((t: string) => validTypes.includes(t)) as ("MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING")[])
     : ["MCQ" as const];
+
+  // 3. Bank first (see lib/quiz-selection). Questions this student has never
+  // answered are served before anything is generated — even though they chose
+  // AI — and a saturated chapter recycles the ones they saw longest ago.
+  const bankWhere: Prisma.QuestionWhereInput = {
+    status: "PUBLISHED",
+    chapterId: { in: scopeChapterIds },
+    type: { in: questionTypes },
+    ...(difficulty && difficulty !== "MIXED" ? { difficulty } : {}),
+  };
+  const pools = await bankPoolsFor(user.id, bankWhere);
+  let saturated =
+    chapterId !== "all" && !!targetChapterId && (await isChapterSaturated(targetChapterId));
+  const fromUnseen = pools.unseen.slice(0, count);
+  const recycled: BankQuestion[] = saturated ? pools.seen.slice(0, count - fromUnseen.length) : [];
+  const target = count - fromUnseen.length - recycled.length;
+  console.log(
+    `[Generate AI] Bank: ${pools.unseen.length} unseen, ${pools.seen.length} seen` +
+      (saturated ? " (chapter saturated)" : "") +
+      ` → serving ${fromUnseen.length} unseen + ${recycled.length} recycled, generating ${target}`
+  );
+
+  if (target === 0) return finishQuiz([...fromUnseen, ...recycled], 0);
+  if (!finalContent || finalContent.length < 100) {
+    if (fromUnseen.length + recycled.length > 0) return finishQuiz([...fromUnseen, ...recycled], 0);
+    throw new ApiError("Not enough book content to generate questions.", 400);
+  }
+  /** Bank questions already in this quiz — a failed generation still serves them. */
+  const bankServed = fromUnseen.length + recycled.length;
+
+  // 4. AI Generation — only for what the bank could not supply.
+  // ~20% over-generation covers what review drops (typically 0–2 of 13
+  // once scope claims stopped counting as factual errors) without paying for
+  // questions that are thrown away.
+  const genCount = target + Math.max(1, Math.ceil(target * 0.2));
 
   // What this chapter already has: listed in the prompt so the model writes
   // something new, and passed to the quality pipeline so a repeat is caught.
@@ -192,9 +241,9 @@ async function runGeneration(
   const dropCounts: Record<string, number> = {};
   let lastRound = { generated: 0, unverifiable: 0 };
 
-  for (let round = 0; round < MAX_GENERATION_ROUNDS && accepted.length < count; round++) {
-    const shortfall = count - accepted.length;
-    // First round keeps the +3 buffer; refills ask for the shortfall plus 2.
+  for (let round = 0; round < MAX_GENERATION_ROUNDS && accepted.length < target; round++) {
+    const shortfall = target - accepted.length;
+    // First round keeps the ~20% buffer; refills ask for the shortfall plus 2.
     const ask = round === 0 ? genCount : shortfall + 2;
 
     onProgress?.({
@@ -226,6 +275,7 @@ async function runGeneration(
         mode: (mode === "TIMED" || mode === "GROUP" ? mode : "SOLO") as "SOLO" | "TIMED" | "GROUP",
         // Different HARD templates on a refill than on the first attempt.
         variantSeed: priorQuestions + round * 7,
+        refill: round > 0,
         onProgress:
           round === 0
             ? (info) => {
@@ -239,9 +289,9 @@ async function runGeneration(
             : undefined,
       }));
     } catch (err) {
-      // First attempt failing is a real error; a failed REFILL still serves
-      // what already passed.
-      if (round === 0) throw err;
+      // First attempt failing is a real error — unless bank questions are
+      // already in the quiz; a failed REFILL still serves what already passed.
+      if (round === 0 && bankServed === 0) throw err;
       console.warn(`[Generate AI] Refill round ${round} failed: ${err instanceof Error ? err.message : String(err)}`);
       break;
     }
@@ -269,7 +319,7 @@ async function runGeneration(
     } catch (err) {
       // Never serve unchecked questions.
       console.warn(`[Generate AI] Quality pipeline failed: ${err instanceof Error ? err.message : String(err)}`);
-      if (accepted.length === 0) {
+      if (accepted.length === 0 && bankServed === 0) {
         throw new ApiError(
           "The AI is busy right now and couldn't check the questions. Please try again in a minute.",
           503,
@@ -289,21 +339,51 @@ async function runGeneration(
       const r = results[i];
       const issues = (r?.flags ?? ["UNVERIFIED"]).filter((f) => !IGNORED_FLAGS.has(f));
       const clean = !!r?.verified && issues.length === 0 && !hasBlockingStructuralIssue(q);
-      if (clean && accepted.length < count) {
+      if (clean && accepted.length < target) {
         accepted.push({ q, score: r.qualityScore });
       } else if (!clean) {
         droppedTexts.push(q.questionText);
+        // The reason is the only way to tell a bad question from an over-strict
+        // checker, and it was never surfaced.
+        for (const flag of ["FACTUAL_ERROR", "OUT_OF_SCOPE"] as const) {
+          if (r?.details?.[flag]) {
+            console.info(
+              `[Generate AI] Dropped (${flag}): "${q.questionText.slice(0, 100)}" — ${r.details[flag]}`
+            );
+          }
+        }
         for (const f of issues.length ? issues : ["STRUCTURAL"]) dropCounts[f] = (dropCounts[f] ?? 0) + 1;
       }
     });
 
     console.log(
       `[Generate AI] Round ${round + 1}: ${generated.length} generated, ` +
-        `${accepted.length}/${count} accepted so far, dropped: ${JSON.stringify(dropCounts)}`
+        `${accepted.length}/${target} accepted so far, dropped: ${JSON.stringify(dropCounts)}`
+    );
+
+    // Mostly repeats of the bank: the chapter has run out of new material.
+    // Stop paying for rounds that can only produce more duplicates.
+    const repeats = results.filter((r) => r.flags.includes("DUPLICATE_EXISTING")).length;
+    if (chapterId !== "all" && targetChapterId && roundShowsSaturation(generated.length, repeats)) {
+      await markChapterSaturated(targetChapterId);
+      saturated = true;
+      console.log(
+        `[Generate AI] Chapter saturated — ${repeats}/${generated.length} repeated the bank; recycling seen questions from now on.`
+      );
+      break;
+    }
+  }
+
+  // Saturated with a shortfall left: fill it with what the student saw
+  // longest ago rather than serving a short quiz.
+  if (saturated && accepted.length < target) {
+    const already = new Set(recycled.map((q) => q.id));
+    recycled.push(
+      ...pools.seen.filter((q) => !already.has(q.id)).slice(0, target - accepted.length)
     );
   }
 
-  if (accepted.length === 0) {
+  if (accepted.length === 0 && fromUnseen.length + recycled.length === 0) {
     const providersUnavailable = lastRound.unverifiable > lastRound.generated / 2;
     console.warn(
       `[Generate AI] 0 questions passed after ${MAX_GENERATION_ROUNDS} round(s) — dropped: ${JSON.stringify(dropCounts)}`
@@ -324,9 +404,10 @@ async function runGeneration(
       false
     );
   }
-  if (accepted.length < count) {
+  if (fromUnseen.length + recycled.length + accepted.length < count) {
     console.warn(
-      `[Generate AI] Serving ${accepted.length}/${count} — the rest failed quality checks after ${MAX_GENERATION_ROUNDS} round(s).`
+      `[Generate AI] Serving ${fromUnseen.length + recycled.length + accepted.length}/${count} — ` +
+        `the rest failed quality checks after ${MAX_GENERATION_ROUNDS} round(s).`
     );
   }
 
@@ -383,58 +464,80 @@ async function runGeneration(
     });
   }
 
-  const allQuizQuestions = [...existingQuestions, ...newlyCreatedQuestions];
+  return finishQuiz(
+    [...fromUnseen, ...recycled, ...existingQuestions, ...newlyCreatedQuestions],
+    newlyCreatedQuestions.length
+  );
 
-  // 5. Create Quiz Session
-  const quiz = await db.quiz.create({
-    data: {
-      studentId: user.id,
-      mode: mode as any,
-      isDailyChallenge,
-      totalQuestions: allQuizQuestions.length,
-    } as any,
-  });
+  /**
+   * Create the quiz session and its response. Order is shuffled so recycled,
+   * unseen and freshly generated questions are mixed, not served in blocks.
+   */
+  async function finishQuiz(
+    questions: Pick<BankQuestion, "id" | "questionText" | "options" | "type" | "difficulty">[],
+    generatedCount: number
+  ) {
+    // By id: a generated question whose text matched a bank row resolves to
+    // that row, which may already be in the quiz as an unseen pick.
+    const allQuizQuestions = shuffleArray([...new Map(questions.map((q) => [q.id, q])).values()]);
 
-  onProgress?.({
-    step: "saving",
-    message: "Ready!",
-    percent: 100,
-  });
+    // 5. Create Quiz Session
+    const quiz = await db.quiz.create({
+      data: {
+        studentId: user.id,
+        mode: mode as any,
+        isDailyChallenge,
+        totalQuestions: allQuizQuestions.length,
+      } as any,
+    });
 
-  return {
-    quizId: quiz.id,
-    questions: allQuizQuestions.map((q) => {
-      const options = (q.options as any[]).map(normalizeOption);
-      return {
-        id: q.id,
-        questionText: q.questionText,
-        options: q.type === "MCQ" ? shuffleArray(options) : options,
-        type: q.type,
-        difficulty: q.difficulty,
-      };
-    }),
-    adaptiveCalibrated: body.difficulty === "ADAPTIVE" ? difficulty : undefined,
-    adaptiveInsights: adaptiveInsights
-      ? {
-          difficulty: adaptiveInsights.difficulty,
-          weightedAccuracy: Math.round(adaptiveInsights.weightedAccuracy * 100),
-          quizzesAnalyzed: adaptiveInsights.quizzesAnalyzed,
-          reasoning: adaptiveInsights.reasoning,
-          trend: adaptiveInsights.trend,
-          scope: adaptiveInsights.scope,
-          theta:
-            adaptiveInsights.theta !== undefined
-              ? Number(adaptiveInsights.theta.toFixed(2))
-              : undefined,
-        }
-      : undefined,
-    requestedQuestions: count,
-    deliveredQuestions: allQuizQuestions.length,
-    shortfallReason:
-      allQuizQuestions.length < count
-        ? "Some generated questions didn't pass our accuracy check and were left out."
+    onProgress?.({
+      step: "saving",
+      message: "Ready!",
+      percent: 100,
+    });
+
+    return {
+      quizId: quiz.id,
+      questions: allQuizQuestions.map((q) => {
+        const options = (q.options as any[]).map(normalizeOption);
+        return {
+          id: q.id,
+          questionText: q.questionText,
+          options: q.type === "MCQ" ? shuffleArray(options) : options,
+          type: q.type,
+          difficulty: q.difficulty,
+        };
+      }),
+      adaptiveCalibrated: body.difficulty === "ADAPTIVE" ? difficulty : undefined,
+      adaptiveInsights: adaptiveInsights
+        ? {
+            difficulty: adaptiveInsights.difficulty,
+            weightedAccuracy: Math.round(adaptiveInsights.weightedAccuracy * 100),
+            quizzesAnalyzed: adaptiveInsights.quizzesAnalyzed,
+            reasoning: adaptiveInsights.reasoning,
+            trend: adaptiveInsights.trend,
+            scope: adaptiveInsights.scope,
+            theta:
+              adaptiveInsights.theta !== undefined
+                ? Number(adaptiveInsights.theta.toFixed(2))
+                : undefined,
+          }
         : undefined,
-  };
+      requestedQuestions: count,
+      deliveredQuestions: allQuizQuestions.length,
+      /** Where the questions came from, for the UI and for cost tracking. */
+      sources: {
+        unseen: fromUnseen.length,
+        recycled: recycled.length,
+        generated: generatedCount,
+      },
+      shortfallReason:
+        allQuizQuestions.length < count
+          ? "Some generated questions didn't pass our accuracy check and were left out."
+          : undefined,
+    };
+  }
 }
 
 /**

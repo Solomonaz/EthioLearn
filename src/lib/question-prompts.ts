@@ -575,6 +575,13 @@ ${t1Rule}
   template appears more than twice, rewrite the extras.`;
 }
 
+/**
+ * Where the per-call part of the generation prompt begins. Everything before it
+ * is identical across the batches of one run, so providers with explicit cache
+ * breakpoints (OpenRouter) place one here.
+ */
+export const PROMPT_VARIABLE_PART_MARKER = "TASK: Generate exactly";
+
 export function buildQuestionGenerationPrompt(
   opts: GenerateOptions,
   contentCharLimit: number = QUESTION_CONTENT_CHARS
@@ -688,9 +695,18 @@ For each candidate question, verify ALL of the following:
 If a question fails ANY check, REWRITE it before emitting. Do not lower the bar —
 rewrite until all checks pass or replace with an entirely different question.
 
+MATHS NOTATION: Write maths in plain Unicode wherever it can be expressed —
+7⁵, x², 10⁻³, H₂O, SO₄²⁻, 3 × 10⁸, a ÷ b, √9, π, θ, Δ, 30°, ≤, ≥, ≠, ≈, →.
+Use LaTeX inside \\( \\) ONLY for what Unicode cannot write: fractions
+(\\(\\frac{a}{b}\\)), roots of expressions (\\(\\sqrt{2gh}\\)) and nested or
+lettered exponents. Never use $ as a maths delimiter, and never write a bare
+caret (7^5, x^(1/2)) or underscore (H_2O) in text — a fractional exponent is
+\\(x^{1/2}\\). Unicode √ is ONLY for a single number or letter (√9, √x);
+anything longer is \\(\\sqrt{x + 1}\\), so it is clear what the root covers.
+
 ${formatRulesFor(types)}
 ${quantitativeBlock}
-TASK: Generate exactly ${count} high-quality exam questions based ONLY on the textbook chapter content provided below.
+${PROMPT_VARIABLE_PART_MARKER} ${count} high-quality exam questions based ONLY on the textbook chapter content provided below.
 
 SUBJECT: ${opts.subject}
 GRADE:   Grade ${opts.grade}

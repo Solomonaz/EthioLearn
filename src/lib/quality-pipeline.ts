@@ -504,6 +504,10 @@ CHECK 3 — FACTUAL ACCURACY & SINGLE ANSWER: Verify all six:
 (f) No option is a meta-option like "All of the above", "None of the above",
     or "Both A and B" — every option must be a concrete, substantive answer.
 Return factualPassed: false with a concise reason if ANY sub-check fails.
+Judge CHECK 3 on subject knowledge ONLY. Whether the source passages mention
+the topic is NOT a factual question — a correct question about something the
+excerpts do not show still passes CHECK 3; report that under scopeIssue instead
+(when that check applies), never as a factual failure.
 
 CHECK 4 — DISTRACTOR PLAUSIBILITY: Every WRONG option must be a mistake a
 student who half-understood the material could actually make. Set
@@ -599,8 +603,13 @@ Return JSON only — no markdown, no code fences:
           typeof c.weakDistractor === "string" && c.weakDistractor.trim().length > 0
             ? c.weakDistractor.trim()
             : null,
+        // A "flag" that concludes the question is fine ("…so it is
+        // acceptable") is the checker saying null in prose — seen twice in one
+        // run. Treat it as no issue rather than rejecting a good question.
         scopeIssue:
-          typeof c.scopeIssue === "string" && c.scopeIssue.trim().length > 0
+          typeof c.scopeIssue === "string" &&
+          c.scopeIssue.trim().length > 0 &&
+          !/\b(it is|it's|so|thus|therefore|still|remains)\b[^.]{0,40}\b(acceptable|fine|in scope|within scope|answerable|reasonable)\b/i.test(c.scopeIssue)
             ? c.scopeIssue.trim()
             : null,
       });
@@ -817,6 +826,19 @@ const SCOPE_STOPWORDS = new Set([
   "constant", "value", "source", "content", "chapter", "question", "given",
   "stated", "state", "states", "never", "does", "no",
 ]);
+
+/**
+ * True when a factual-check reason only says the SOURCE does not cover the
+ * topic, rather than that the question or its answer is wrong. A reason that
+ * also names a real error ("the marked answer is incorrect") is not one.
+ */
+export function isSourceAbsenceReason(reason: string): boolean {
+  const absence =
+    /\b(source|provided (text|content|material)|excerpts?|passages?)\b[^.]{0,80}\b(does not|doesn't|do not|don't|contains? no|no information|not (define|mention|cover|contain|provide|include|state|discuss))|outside (of )?(the )?scope/i;
+  const realError =
+    /\b(incorrect|wrong|false|inaccurate|mistaken|ambiguous|defensible|both (are )?(correct|true|valid)|also (be )?(correct|true)|two (options|answers)|more than one|premise)\b/i;
+  return absence.test(reason) && !realError.test(reason);
+}
 
 function scopeClaimContradicted(issue: string, fullSource: string): boolean {
   const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -1168,6 +1190,36 @@ export async function verifyQuestions(
 // ─── Main Pipeline ──────────────────────────────────────
 
 /**
+ * Gemini embeddings of texts this process has already embedded, keyed by text.
+ * A generation run calls the pipeline once per round with the SAME chapter
+ * windows and a bank that only grows, and re-embedding all of it cost ~24K
+ * tokens per round — more than a whole generation call. Only Gemini vectors are
+ * kept: a fallback provider's vectors live in a different space and cannot be
+ * compared with them. Oldest entries are evicted first (Map insertion order).
+ */
+const EMBED_CACHE = new Map<string, number[]>();
+const EMBED_CACHE_MAX = 500;
+
+async function embedWithCache(texts: string[]): Promise<number[][]> {
+  const missing = [...new Set(texts.filter((t) => !EMBED_CACHE.has(t)))];
+  if (missing.length > 0) {
+    const fresh = await generateEmbeddings(missing, "RETRIEVAL_DOCUMENT", { feature: "embedding-dedup" });
+    if (fresh.some((r) => r.provider !== "gemini")) {
+      // Mixing spaces would make every similarity meaningless — embed all of
+      // it together with whatever provider is serving now.
+      return (await generateEmbeddings(texts, "RETRIEVAL_DOCUMENT", { feature: "embedding-dedup" })).map(
+        (r) => r.embedding
+      );
+    }
+    for (const r of fresh) EMBED_CACHE.set(r.text, r.embedding);
+    while (EMBED_CACHE.size > EMBED_CACHE_MAX) {
+      EMBED_CACHE.delete(EMBED_CACHE.keys().next().value as string);
+    }
+  }
+  return texts.map((t) => EMBED_CACHE.get(t)!);
+}
+
+/**
  * Run the full quality pipeline on generated questions.
  * All checks run in parallel for speed.
  */
@@ -1210,20 +1262,13 @@ export async function runQualityPipeline(
   let existingEmbeddings: number[][] = [];
 
   try {
-    const embeddingResults = await generateEmbeddings(
-      allTexts,
-      "RETRIEVAL_DOCUMENT",
-      { feature: "embedding-dedup" }
+    const embeddingResults = await embedWithCache(allTexts);
+    sourceEmbeddings = embeddingResults.slice(0, sourceWindows.length);
+    questionEmbeddings = embeddingResults.slice(
+      sourceWindows.length,
+      sourceWindows.length + questions.length
     );
-    sourceEmbeddings = embeddingResults
-      .slice(0, sourceWindows.length)
-      .map((r) => r.embedding);
-    questionEmbeddings = embeddingResults
-      .slice(sourceWindows.length, sourceWindows.length + questions.length)
-      .map((r) => r.embedding);
-    existingEmbeddings = embeddingResults
-      .slice(sourceWindows.length + questions.length)
-      .map((r) => r.embedding);
+    existingEmbeddings = embeddingResults.slice(sourceWindows.length + questions.length);
   } catch (error) {
     console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
   }
@@ -1364,9 +1409,28 @@ export async function runQualityPipeline(
 
     // 7. Factual accuracy
     if (aiCheck && !aiCheck.factualPassed) {
-      flags.push("FACTUAL_ERROR");
-      details["FACTUAL_ERROR"] = aiCheck.factualReason || "Factual accuracy check failed";
-      penalty += 0.45; // Severe — a wrong correct answer directly harms students
+      const reason = aiCheck.factualReason || "Factual accuracy check failed";
+      if (isSourceAbsenceReason(reason)) {
+        // "Correct, but the excerpts don't cover it" is a scope claim wearing
+        // a factual label — the checker does this even when told not to, and
+        // it threw away correct questions on topics the chapter DOES teach.
+        // Judge it the way a scope flag is judged: against the full source.
+        const scopeWasContradicted =
+          !!aiCheck.scopeIssue && !flags.includes("OUT_OF_SCOPE");
+        if (scopeWasContradicted || scopeClaimContradicted(reason, sourceContent)) {
+          console.info(
+            `[Quality] Factual flag on Q${idx + 1} dropped — it only claimed the source lacks the topic, and the source has it: "${reason}"`
+          );
+        } else if (!flags.includes("OUT_OF_SCOPE")) {
+          flags.push("OUT_OF_SCOPE");
+          details["OUT_OF_SCOPE"] = reason;
+          penalty += 0.3;
+        }
+      } else {
+        flags.push("FACTUAL_ERROR");
+        details["FACTUAL_ERROR"] = reason;
+        penalty += 0.45; // Severe — a wrong correct answer directly harms students
+      }
     }
 
     // 8. Answer-key skew (batch-level: lopsided position or true/false balance)

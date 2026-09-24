@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { cn } from "@/lib/utils";
 import { useQuizStore } from "@/stores/quiz-store";
+import { MathText } from "@/components/ui/math-text";
 
 interface AnswerResultOption {
   label: string;
@@ -311,7 +312,7 @@ export default function QuizResultsPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-text-primary">
-                      Q{index + 1}. {a.questionText}
+                      Q{index + 1}. <MathText text={a.questionText} />
                     </p>
                     <div className="mt-0.5 flex items-center gap-2">
                       <span className="text-xs text-text-secondary">
@@ -322,7 +323,7 @@ export default function QuizResultsPage() {
                             a.isCorrect ? "text-success" : "text-error"
                           )}
                         >
-                          {a.studentAnswer || "—"}
+                          <MathText text={a.studentAnswer || "—"} />
                         </span>
                       </span>
                       {a.pointsEarned > 0 && (
@@ -358,7 +359,7 @@ export default function QuizResultsPage() {
                           )}
                         >
                           <span className="font-bold">{opt.label}.</span>
-                          <span>{opt.text}</span>
+                          <MathText text={opt.text} />
                           {opt.text === a.correctAnswer && (
                             <CheckCircle className="ml-auto h-4 w-4 text-success" />
                           )}
@@ -370,7 +371,7 @@ export default function QuizResultsPage() {
                   {a.explanation && (
                     <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
                       <span className="font-semibold">Explanation: </span>
-                      {a.explanation}
+                      <MathText text={a.explanation} />
                     </div>
                   )}
 

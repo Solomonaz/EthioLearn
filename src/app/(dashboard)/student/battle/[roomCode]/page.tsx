@@ -31,6 +31,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useAntiCheat } from "@/lib/useAntiCheat";
+import { MathText } from "@/components/ui/math-text";
 
 interface PlayerScore {
   userId: string;
@@ -598,7 +599,7 @@ export default function BattleRoomPage() {
             <Card>
               <CardContent className="py-6">
                 <p className="text-lg font-semibold leading-relaxed text-text-primary sm:text-xl">
-                  {currentQuestion.question}
+                  <MathText text={currentQuestion.question} />
                 </p>
               </CardContent>
             </Card>
@@ -643,7 +644,7 @@ export default function BattleRoomPage() {
                       {OPTION_LABELS[i]}
                     </span>
                     <span className="text-sm font-medium leading-snug">
-                      {option}
+                      <MathText text={option} />
                     </span>
                     {showResult && isCorrectOption && (
                       <CheckCircle className="ml-auto h-5 w-5 shrink-0 text-green-600" />

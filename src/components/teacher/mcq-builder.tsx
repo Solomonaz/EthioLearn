@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { MathText } from "@/components/ui/math-text";
 
 /**
  * Create & manage MCQ question sets (the "Teacher's Questions" that feed Tug of
@@ -333,8 +334,8 @@ export function McqBuilder({ initialEditId }: { initialEditId?: string } = {}) {
           {editing.questions.map((q, i) => (
             <li key={i} className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
               <span className="min-w-0 truncate text-text-primary">
-                <span className="font-medium">{i + 1}.</span> {q.text}{" "}
-                <span className="text-text-muted">— {q.options[q.correctIndex]}</span>
+                <span className="font-medium">{i + 1}.</span> <MathText text={q.text} />{" "}
+                <span className="text-text-muted">— <MathText text={q.options[q.correctIndex]} /></span>
               </span>
               <button
                 onClick={() => setEditing({ ...editing, questions: editing.questions.filter((_, j) => j !== i) })}

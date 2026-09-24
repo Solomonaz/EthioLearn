@@ -10,6 +10,7 @@
 import type { GeneratedQuestion, DetectedChapter } from "./gemini";
 import { sanitizeQuestionText } from "./question-prompts";
 import { shuffleArray } from "./utils";
+import { normalizeMathText, normalizeOptionSet } from "./math-notation";
 
 /**
  * Accept either a bare array or the `{ "<key>": [...] }` wrapper.
@@ -145,8 +146,12 @@ export function validateQuestions(input: unknown): GeneratedQuestion[] {
     const difficulty: "EASY" | "MEDIUM" | "HARD" =
       diff === "EASY" ? "EASY" : diff === "HARD" ? "HARD" : "MEDIUM";
 
-    const options = q.options.map((o: unknown) => String(o));
-    const correctAnswer = String(q.correctAnswer).trim();
+    // Simple maths becomes plain Unicode (7⁵, H₂O). Options and answer are
+    // converted as one set so they keep matching and keep looking alike.
+    const { options, answer: correctAnswer } = normalizeOptionSet(
+      q.options.map((o: unknown) => String(o)),
+      String(q.correctAnswer).trim()
+    );
     let finalOptions = options;
 
     // Type-specific validation
@@ -170,14 +175,14 @@ export function validateQuestions(input: unknown): GeneratedQuestion[] {
     }
 
     validated.push({
-      questionText: sanitizeQuestionText(q.questionText),
+      questionText: normalizeMathText(sanitizeQuestionText(q.questionText)),
       type,
       // Shuffle MCQ options so the correct answer isn't biased toward slot A.
       // Only MCQ — MATCH_PAIRS/ORDERING option order carries meaning.
       options: type === "MCQ" ? shuffleArray(finalOptions) : finalOptions,
       correctAnswer,
       difficulty,
-      explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
+      explanation: typeof q.explanation === "string" ? normalizeMathText(q.explanation.trim()) : "",
     });
   }
 
