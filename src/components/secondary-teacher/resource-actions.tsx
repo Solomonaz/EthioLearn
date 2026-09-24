@@ -26,6 +26,8 @@ export function ResourceActions({
   grade,
   chapterTitle,
   onSaved,
+  give,
+  resourceId,
 }: {
   title: string;
   markdown: string;
@@ -35,6 +37,19 @@ export function ResourceActions({
   chapterTitle?: string | null;
   /** Provided only when this is unsaved; omitting it hides Save. */
   onSaved?: () => void;
+  /**
+   * The "Give to class" action. Omitted: shown as "Give to class". `false`
+   * hides it — for an answer key (which must never reach students) and for a
+   * draft (sent with its own Send button). On work already given, pass the
+   * class it went to, so it reads "Give to another class" and leaves it out.
+   */
+  give?: false | { label?: string; excludeClassId?: string | null };
+  /**
+   * The stored copy, when there is one. Every assistant result is stored
+   * automatically, so Save then just marks it kept — POSTing would store a
+   * second copy of the same document.
+   */
+  resourceId?: string | null;
 }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -59,11 +74,17 @@ export function ResourceActions({
     if (saving) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/secondary-teacher/resources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task, title, body: markdown, subject, grade, chapterTitle }),
-      });
+      const res = resourceId
+        ? await fetch(`/api/secondary-teacher/resources/${resourceId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kept: true }),
+          })
+        : await fetch("/api/secondary-teacher/resources", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task, title, body: markdown, subject, grade, chapterTitle }),
+          });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not save that");
       setSaved(true);
@@ -193,15 +214,18 @@ export function ResourceActions({
         <Button type="button" variant="outline" size="sm" onClick={copy}>
           <Copy className="mr-1.5 h-4 w-4" /> Copy
         </Button>
-        <Button type="button" size="sm" onClick={() => setGiving(true)}>
-          <Send className="mr-1.5 h-4 w-4" /> Give to class
-        </Button>
+        {give !== false && (
+          <Button type="button" size="sm" onClick={() => setGiving(true)}>
+            <Send className="mr-1.5 h-4 w-4" /> {give?.label ?? "Give to class"}
+          </Button>
+        )}
       </div>
 
       {giving && (
         <GiveToClassDialog
           title={title}
           markdown={markdown}
+          excludeClassId={give ? give.excludeClassId : null}
           onClose={() => setGiving(false)}
         />
       )}

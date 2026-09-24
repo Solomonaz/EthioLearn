@@ -1093,20 +1093,26 @@ export default function QuizLauncherPage() {
             </Card>
           )}
 
-          <Button
-            size="lg"
-            className="w-full gap-2 text-base shadow-lg shadow-primary/20"
-            onClick={handleStartQuiz}
-            isLoading={generating}
-            disabled={generating}
-          >
-            {selectedSource === "AI" ? (
-              <Sparkles className="h-5 w-5" />
-            ) : (
-              <CheckCircle className="h-5 w-5" />
-            )}
-            {selectedSource === "AI" ? t("generateStart") : t("startQuiz")}
-          </Button>
+          {/* Hidden while an AI quiz is being built: the progress card above
+              already shows it, and a spinning button under it said the same
+              thing twice. A bank quiz has no card, so its button keeps the
+              spinner — the only sign anything is happening. */}
+          {!(generating && selectedSource === "AI") && (
+            <Button
+              size="lg"
+              className="w-full gap-2 text-base shadow-lg shadow-primary/20"
+              onClick={handleStartQuiz}
+              isLoading={generating}
+              disabled={generating}
+            >
+              {selectedSource === "AI" ? (
+                <Sparkles className="h-5 w-5" />
+              ) : (
+                <CheckCircle className="h-5 w-5" />
+              )}
+              {selectedSource === "AI" ? t("generateStart") : t("startQuiz")}
+            </Button>
+          )}
         </div>
       )}
     </div>

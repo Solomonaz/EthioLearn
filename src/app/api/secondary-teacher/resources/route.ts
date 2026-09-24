@@ -5,7 +5,9 @@ import { validateCsrfOrigin } from "@/lib/csrf";
 import { ASSISTANT_TASKS } from "@/lib/assistant-tasks";
 
 /**
- * A teacher's saved AI assistant output — their own library.
+ * A teacher's AI material — their own library. Everything they generate is
+ * stored here automatically (lib/teacher-library); what they Save is "kept".
+ * Reuse across teachers happens behind the scenes and is never listed here.
  *
  * Deliberately separate from ClassActivity: a lesson plan is for the teacher
  * and may never reach a student, while a worksheet might. Saving something and
@@ -59,18 +61,23 @@ export async function POST(req: NextRequest) {
 
   const task = VALID_TASKS.has(body.task ?? "") ? (body.task as string) : "FREEFORM";
 
+  const subject = typeof body.subject === "string" && body.subject ? body.subject : null;
+  const grade = Number.isInteger(body.grade) ? (body.grade as number) : null;
   const resource = await db.teacherResource.create({
     data: {
       teacherId: user.id,
       task,
       title,
       body: content,
-      subject: typeof body.subject === "string" && body.subject ? body.subject : null,
-      grade: Number.isInteger(body.grade) ? (body.grade as number) : null,
+      subject,
+      grade,
       chapterTitle:
         typeof body.chapterTitle === "string" && body.chapterTitle
           ? body.chapterTitle.slice(0, 200)
           : null,
+      // Saved by hand, so kept on purpose. Not reusable: a hand-saved copy
+      // has no request to match against.
+      kept: true,
     },
     select: {
       id: true,
@@ -91,12 +98,13 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const limit = Math.min(
-    100,
-    Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "50", 10)),
+    200,
+    Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") || "100", 10)),
   );
 
-  // The list omits the body — a library of 50 lesson plans would otherwise be
-  // hundreds of kilobytes for a screen that only shows titles.
+  // Only ever this teacher's own. The list omits the body — a library of
+  // lesson plans would otherwise be hundreds of kilobytes for a screen that
+  // only shows titles.
   const resources = await db.teacherResource.findMany({
     where: { teacherId: user.id },
     orderBy: { createdAt: "desc" },
@@ -108,6 +116,8 @@ export async function GET(req: NextRequest) {
       subject: true,
       grade: true,
       chapterTitle: true,
+      kept: true,
+      source: true,
       createdAt: true,
     },
   });

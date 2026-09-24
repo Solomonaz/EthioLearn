@@ -90,7 +90,7 @@ const MAX_CONTENT_CHARS = 16000;
 /** Longest earlier result sent back for a revision. */
 const MAX_REVISE_CHARS = 16000;
 
-function buildSystem(): string {
+function buildSystem(task: AssistantTask): string {
   return [
     "You are an experienced Ethiopian secondary-school teacher (grades 9-12) helping a colleague prepare for class.",
     "Write everything in English — English is the medium of instruction at this level. Never answer in Amharic.",
@@ -115,6 +115,15 @@ function buildSystem(): string {
     "• Write mathematics in LaTeX: $...$ inline, $$...$$ on its own line for display.",
     "• Use LaTeX ONLY for real mathematics. Plain numbers, percentages and units are plain text: write 18.0 g, 11.2%, 0.30 m/s — never wrap a bare quantity or a percentage in maths delimiters.",
     "• Be consistent: do not switch between LaTeX and plain text for the same kind of quantity.",
+    // Curriculum documents are reused for other teachers of the same subject
+    // and grade (lib/teacher-library), so nothing in them may point at one
+    // classroom. "Anything else" is never reused and may be personal (a letter
+    // to a named parent), so it keeps names.
+    ...(task === "FREEFORM"
+      ? []
+      : [
+          "• Never include the name of a teacher, student, school or town, even if the request mentions one — write for any class of this grade.",
+        ]),
   ].join("\n");
 }
 
@@ -194,7 +203,7 @@ function parseReply(raw: string | null): { title: string; markdown: string } | n
 export async function askTeachingAssistant(
   req: AssistantRequest,
 ): Promise<AssistantResult | AssistantFailure> {
-  const system = buildSystem();
+  const system = buildSystem(req.task);
   const prompt = buildPrompt(req);
   const opts = {
     system,

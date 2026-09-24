@@ -4,10 +4,11 @@ import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
 /**
- * One saved resource: read it back in full, rename it, or delete it.
+ * One resource: read it back in full, rename it, keep it, or delete it.
  *
- * Every query is scoped to the owning teacher, so one teacher can never reach
- * another's library.
+ * Every query is scoped to the owning teacher. Reuse across teachers
+ * (lib/teacher-library) gives each teacher their OWN copy, so nothing here
+ * ever reads another teacher's row.
  */
 
 const MAX_TITLE = 160;
@@ -36,6 +37,8 @@ export async function GET(
       subject: true,
       grade: true,
       chapterTitle: true,
+      kept: true,
+      source: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -61,29 +64,37 @@ export async function PATCH(
 
   const { id } = await params;
 
-  let body: { title?: unknown };
+  let body: { title?: unknown; kept?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const title = typeof body.title === "string" ? body.title.trim().slice(0, MAX_TITLE) : "";
-  if (title.length < 2) {
-    return NextResponse.json({ error: "Give it a title." }, { status: 400 });
+  const data: { title?: string; kept?: boolean } = {};
+  if (body.title !== undefined) {
+    const title = typeof body.title === "string" ? body.title.trim().slice(0, MAX_TITLE) : "";
+    if (title.length < 2) {
+      return NextResponse.json({ error: "Give it a title." }, { status: 400 });
+    }
+    data.title = title;
+  }
+  if (typeof body.kept === "boolean") data.kept = body.kept;
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
   }
 
   // updateMany scopes by owner in the same statement, so a resource belonging
   // to another teacher is simply not matched.
   const result = await db.teacherResource.updateMany({
     where: { id, teacherId: user.id },
-    data: { title },
+    data,
   });
   if (result.count === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, title });
+  return NextResponse.json({ ok: true, ...data });
 }
 
 export async function DELETE(

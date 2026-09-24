@@ -30,6 +30,8 @@ import { MathText } from "@/components/ui/math-text";
 
 interface ActivityDetail {
   id: string;
+  /** The class it was set for. */
+  teachingAssignmentId: string | null;
   kind: string;
   format: "QUESTIONS" | "DOCUMENT";
   body: string | null;
@@ -467,7 +469,18 @@ export default function ActivityDetailPage() {
                       <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                     </Button>
                   ))}
-                <ResourceActions title={activity.title} markdown={activity.body} />
+                {/* A draft is sent with its own Send button; once sent, this
+                    reuses the same work for ANOTHER class. It used to say
+                    "Give to class" here and quietly make a duplicate. */}
+                <ResourceActions
+                  title={activity.title}
+                  markdown={activity.body}
+                  give={
+                    activity.status === "DRAFT"
+                      ? false
+                      : { label: "Give to another class", excludeClassId: activity.teachingAssignmentId }
+                  }
+                />
               </div>
             </div>
           </CardHeader>
@@ -501,9 +514,13 @@ export default function ActivityDetailPage() {
                   this, whether the work is sent or not.
                 </p>
               </div>
+              {/* Download, print, copy — but never "give to class": this is
+                  the answers, and that button would have assigned them to
+                  students as their work. */}
               <ResourceActions
                 title={`${activity.title} — answer key`}
                 markdown={activity.answerKey}
+                give={false}
               />
             </div>
           </CardHeader>
@@ -520,10 +537,13 @@ export default function ActivityDetailPage() {
         </Card>
       )}
 
+      {/* The paper takes the room; the student list is a narrow column. A
+          name and a state need ~20rem — splitting 50/50 squeezed the
+          questions into half the page while the names sat in empty space. */}
       <div
         className={cn(
-          "grid gap-5",
-          activity.format === "DOCUMENT" ? "" : "lg:grid-cols-2",
+          "grid items-start gap-5",
+          activity.format === "DOCUMENT" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem]",
         )}
       >
         {/* ── Per question ───────────────────────────────────────────── */}
@@ -586,7 +606,8 @@ export default function ActivityDetailPage() {
         )}
 
         {/* ── Per student ────────────────────────────────────────────── */}
-        <Card>
+        {/* Stays in view while the teacher scrolls a long paper. */}
+        <Card className={cn(activity.format !== "DOCUMENT" && "lg:sticky lg:top-4")}>
           <CardHeader>
             <h2 className="font-semibold text-text-primary">By student</h2>
             <p className="text-xs text-text-muted">

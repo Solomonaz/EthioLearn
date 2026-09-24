@@ -143,7 +143,7 @@
     "activities": "Activities",
     "myWork": "My Work",
     "assistant": "AI Assistant",
-    "myMaterials": "My Materials"
+    "myMaterials": "Materials"
   },
   "teacher": {
     "welcome": "Welcome, {name}",

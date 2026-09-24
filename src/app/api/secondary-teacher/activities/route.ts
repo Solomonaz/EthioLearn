@@ -12,6 +12,13 @@ import { askTeachingAssistant } from "@/lib/teaching-assistant";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { replenishQuestionBank, type BankQuestion } from "@/lib/question-bank";
 import { splitAnswerKey, looksLikeItContainsAnswers } from "@/lib/answer-key";
+import { selectGenerationContent } from "@/lib/generation-content";
+import {
+  embedInstructions,
+  normaliseInstructions,
+  serveFromBank,
+  storeResource,
+} from "@/lib/teacher-library";
 
 /**
  * Teacher-set activities for a grades 9-12 class — homework, classwork, a
@@ -329,48 +336,101 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
         );
       }
 
-      emit?.({ message: "Reading the chapters...", percent: 10 });
-
-      // Ground the problems in the actual chapter text, the same budget the
-      // assistant uses. Several chapters share it rather than each taking a
-      // full slice, so a six-chapter request does not blow the prompt.
-      const perChapter = Math.floor(WORKOUT_CONTENT_BUDGET / chapters.length);
-      const sources = await db.chapter.findMany({
-        where: { id: { in: chapterIds } },
-        orderBy: { chapterNumber: "asc" },
-        select: { title: true, content: true, textbook: { select: { content: true } } },
-      });
-      const grounding = sources
-        .map(
-          (c) =>
-            `## ${c.title}\n` +
-            (c.content || c.textbook?.content || "").slice(0, perChapter),
-        )
-        .join("\n\n");
-
       const problemCount = Math.min(Math.max(questionCount, 1), 30);
-      const result = await askTeachingAssistant({
+      const teacherAdds = normaliseInstructions(
+        typeof body.instructions === "string" ? body.instructions.slice(0, 500) : "",
+      );
+      const chaptersLabel = chapters.map((c) => c.title).join("; ");
+      // Exact part of the request: the same chapters, count and difficulty.
+      const requestKey =
+        `WORKOUT|${[...chapterIds].sort().join(",")}|${problemCount}|${difficulty || "MIXED"}`;
+
+      // ── Bank first (lib/teacher-library) ─────────────────────────────────
+      // Another teacher of this subject and grade may already have had exactly
+      // this set written. If so it is used — no chapter reading, no AI call.
+      const embedding = await embedInstructions(teacherAdds, usageActor(user));
+      const served = await serveFromBank({
+        teacherId: user.id,
         task: "WORKOUT",
-        prompt:
-          `Write exactly ${problemCount} workout problems` +
-          (difficulty ? ` at ${difficulty.toLowerCase()} difficulty` : "") +
-          `, drawn from the chapters below` +
-          (typeof body.instructions === "string" && body.instructions.trim()
-            ? `. The teacher adds: ${body.instructions.trim().slice(0, 500)}`
-            : "."),
         subject: klass.subject,
         grade: klass.grade,
-        chapterTitle: chapters.map((c) => c.title).join("; "),
-        chapterContent: grounding,
-        actor: usageActor(user),
-        onProgress: emit,
+        requestKey,
+        instructions: teacherAdds,
+        embedding,
+        chapterTitle: chaptersLabel,
+        source: "WORKOUT_ACTIVITY",
       });
 
-      if ("failed" in result) {
-        return NextResponse.json(
-          { error: "The AI could not write those problems just now. Please try again." },
-          { status: 502 },
+      let result: { title: string; markdown: string };
+      if (served) {
+        emit?.({ message: "Formatting the problems...", percent: 88 });
+        result = { title: served.title, markdown: served.body };
+      } else {
+        emit?.({ message: "Reading the chapters...", percent: 10 });
+
+        // Ground the problems in the actual chapter text, the same budget the
+        // assistant uses. Several chapters share it rather than each taking a
+        // full slice, so a six-chapter request does not blow the prompt.
+        const perChapter = Math.floor(WORKOUT_CONTENT_BUDGET / chapters.length);
+        const sources = await db.chapter.findMany({
+          where: { id: { in: chapterIds } },
+          orderBy: { chapterNumber: "asc" },
+          select: { id: true, title: true, content: true, textbook: { select: { content: true } } },
+        });
+        // Passages spread across each WHOLE chapter — it used to send each
+        // chapter's opening characters only, so problems all came from the
+        // first pages (the same fault the assistant had).
+        const excerpts = await Promise.all(
+          sources.map((c) =>
+            selectGenerationContent({
+              chapterId: c.id,
+              fallbackContent: c.content || c.textbook?.content || "",
+              budgetChars: perChapter,
+            }),
+          ),
         );
+        const grounding = sources
+          .map((c, i) => `## ${c.title}\n` + excerpts[i].content)
+          .join("\n\n");
+
+        const written = await askTeachingAssistant({
+          task: "WORKOUT",
+          prompt:
+            `Write exactly ${problemCount} workout problems` +
+            (difficulty ? ` at ${difficulty.toLowerCase()} difficulty` : "") +
+            `, drawn from the chapters below` +
+            (teacherAdds ? `. The teacher adds: ${teacherAdds}` : "."),
+          subject: klass.subject,
+          grade: klass.grade,
+          chapterTitle: chaptersLabel,
+          chapterContent: grounding,
+          actor: usageActor(user),
+          onProgress: emit,
+        });
+
+        if ("failed" in written) {
+          return NextResponse.json(
+            { error: "The AI could not write those problems just now. Please try again." },
+            { status: 502 },
+          );
+        }
+        result = written;
+
+        // Stored with its answer key (teachers only) and added to the bank
+        // for the next teacher of this subject and grade.
+        await storeResource({
+          teacherId: user.id,
+          task: "WORKOUT",
+          title: result.title,
+          body: result.markdown,
+          subject: klass.subject,
+          grade: klass.grade,
+          chapterTitle: chaptersLabel,
+          source: "WORKOUT_ACTIVITY",
+          requestKey,
+          instructions: teacherAdds,
+          embedding,
+        });
       }
 
       // The worked solutions are separated HERE, before anything is stored,

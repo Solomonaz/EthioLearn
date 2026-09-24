@@ -301,10 +301,37 @@ model TeacherResource {
   grade        Int?
   chapterTitle String?
 
+  /// Every AI result is stored, not only the ones a teacher saves. `kept` is
+  /// the author pressing Save: kept on purpose, rather than auto-saved.
+  kept     Boolean @default(false)
+  /// ASSISTANT (the teaching assistant) or WORKOUT_ACTIVITY (workout problems
+  /// written for a class through "Set an activity").
+  source   String  @default("ASSISTANT")
+
+  // ── Reuse (lib/teacher-library) — invisible to teachers ────────────────
+  // The same bank-first rule as student quizzes: before paying for a new
+  // document, serve one another teacher of the same subject and grade already
+  // generated for the same request, if this teacher has not had it.
+  /// May be served to another teacher. Only originals of curriculum work;
+  /// never "Anything else", never a revised document, never a served copy.
+  reusable Boolean @default(false) @map("shared")
+  /// Exact part of the request: task, chapter(s), and for workout activities
+  /// the problem count and difficulty.
+  requestKey             String?
+  /// The teacher's own instructions, compared by meaning AND topic words.
+  instructions           String?
+  instructionsEmbedding  Float[]  @default([])
+  embeddingModel         String?
+  /// Set on a copy served from the bank: the original it came from. Also how
+  /// a teacher is never served the same document twice.
+  originId               String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([teacherId])
+  @@index([grade, reusable])
+  @@index([originId])
   @@map("teacher_resources")
 }
 

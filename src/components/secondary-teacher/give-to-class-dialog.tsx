@@ -1,21 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, Check, PenLine, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 import { displaySubject } from "@/lib/display-text";
+import { OptionCard, Segmented } from "./form-pieces";
 
 /**
  * Give a piece of written work to a class.
  *
- * Creates a DOCUMENT activity: students read it and mark it done. There is
- * nothing to auto-mark — a worksheet is usually done in an exercise book — so
- * this is deliberately not the quiz flow.
+ * Creates a DOCUMENT activity: students read it and mark it done, or hand in
+ * an answer the teacher marks. Nothing is auto-marked — a worksheet is usually
+ * done in an exercise book — so this is deliberately not the quiz flow. It is
+ * created as a DRAFT: the teacher checks the student view before sending.
+ *
+ * Same visual language as "Set an activity" (lib: ./form-pieces).
  */
 
 const KINDS = [
@@ -38,11 +42,17 @@ export function GiveToClassDialog({
   markdown,
   onClose,
   onGiven,
+  excludeClassId,
 }: {
   title: string;
   markdown: string;
   onClose: () => void;
   onGiven?: () => void;
+  /**
+   * A class to leave out — the one this work was already given to, when the
+   * dialog is opened as "Give to another class" from an activity.
+   */
+  excludeClassId?: string | null;
 }) {
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState("");
@@ -61,39 +71,37 @@ export function GiveToClassDialog({
     fetch("/api/secondary-teacher/classes?lite=1")
       .then((r) => (r.ok ? r.json() : { classes: [] }))
       .then((d) => {
-        const list: ClassOption[] = (d.classes ?? []).map(
-          (c: {
-            id: string;
-            subject: string;
-            grade: number;
-            section: string | null;
-            studentCount: number;
-          }) => ({
-            id: c.id,
-            subject: c.subject,
-            grade: c.grade,
-            section: c.section,
-            studentCount: c.studentCount,
-          }),
-        );
+        const list: ClassOption[] = (d.classes ?? [])
+          .map(
+            (c: {
+              id: string;
+              subject: string;
+              grade: number;
+              section: string | null;
+              studentCount: number;
+            }) => ({
+              id: c.id,
+              subject: c.subject,
+              grade: c.grade,
+              section: c.section,
+              studentCount: c.studentCount,
+            }),
+          )
+          .filter((c: ClassOption) => c.id !== excludeClassId);
         setClasses(list);
         // Default to the first class that actually has students in it.
-        setClassId(list.find((c) => c.studentCount > 0)?.id ?? list[0]?.id ?? "");
+        setClassId(list.find((c) => c.studentCount > 0)?.id ?? "");
       })
       .catch(() => setClasses([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [excludeClassId]);
 
   const selected = classes.find((c) => c.id === classId) ?? null;
 
   const submit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (saving) return;
-      if (!classId) {
-        toast.error("Choose a class.");
-        return;
-      }
+      if (saving || !classId) return;
 
       setSaving(true);
       try {
@@ -149,199 +157,214 @@ export function GiveToClassDialog({
   );
 
   const fieldClass =
-    "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary";
+    "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+  const label = "text-xs font-semibold uppercase tracking-wide text-text-muted";
+  const blocker = loading
+    ? null
+    : classes.length > 0 && classes.every((c) => c.studentCount === 0)
+      ? `None of your ${excludeClassId ? "other " : ""}classes has students yet.`
+      : !classId
+        ? "Choose a class with students in it."
+        : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-xl sm:rounded-3xl sm:p-6">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold text-text-primary">Give to a class</h2>
-            <p className="text-xs text-text-secondary">
-              Students read this and mark it done. Nothing is auto-marked.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded-lg p-1 text-text-muted transition hover:bg-border/50 hover:text-text-primary"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <Spinner size="lg" className="text-primary" />
-          </div>
-        ) : classes.length === 0 ? (
-          <p className="py-6 text-center text-sm text-text-secondary">
-            You have no classes yet. Add them on your profile first.
-          </p>
-        ) : (
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="gtc-class"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Class
-              </label>
-              <select
-                id="gtc-class"
-                value={classId}
-                onChange={(e) => setClassId(e.target.value)}
-                disabled={saving}
-                className={fieldClass}
-              >
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {displaySubject(c.subject)} · Grade {c.grade}
-                    {c.section ? ` ${c.section}` : ""} ({c.studentCount})
-                  </option>
-                ))}
-              </select>
-              {selected?.studentCount === 0 && (
-                <p className="text-xs text-amber-600">
-                  No students are registered in that class yet.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase text-text-muted">Type</span>
-              <div className="flex flex-wrap gap-1.5">
-                {KINDS.map((k) => (
-                  <button
-                    key={k.value}
-                    type="button"
-                    onClick={() => setKind(k.value)}
-                    disabled={saving}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                      kind === k.value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-text-secondary hover:border-primary/40",
-                    )}
-                  >
-                    {k.label}
-                  </button>
-                ))}
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center sm:p-6">
+      <form
+        onSubmit={submit}
+        className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] bg-surface shadow-2xl sm:max-h-[90vh] sm:rounded-[28px]"
+      >
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="shrink-0 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-5 pb-5 pt-5 sm:px-8 sm:pt-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-sm">
+                <Send className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-text-primary sm:text-xl">
+                  {excludeClassId ? "Give to another class" : "Give to a class"}
+                </h2>
+                <p className="truncate text-sm text-text-secondary">{title}</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="shrink-0 rounded-xl p-2 text-text-muted transition hover:bg-surface/80 hover:text-text-primary"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
 
-            <div className="space-y-1.5">
-              <label
-                htmlFor="gtc-title"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Title
-              </label>
-              <Input
-                id="gtc-title"
-                value={workTitle}
-                onChange={(e) => setWorkTitle(e.target.value)}
-                disabled={saving}
-                maxLength={120}
-              />
+        {/* ── Body ───────────────────────────────────────────────────────── */}
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Spinner size="lg" className="text-primary" />
             </div>
+          ) : classes.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border px-4 py-10 text-center text-sm text-text-secondary">
+              {excludeClassId
+                ? "You have no other classes to give this to."
+                : "You have no classes yet. Add them on your profile first."}
+            </p>
+          ) : (
+            <>
+              {/* Which class */}
+              <div className="space-y-2">
+                <span className={label}>Which class?</span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {classes.map((c) => {
+                    const on = c.id === classId;
+                    const empty = c.studentCount === 0;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled={empty}
+                        aria-pressed={on}
+                        onClick={() => setClassId(c.id)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-2xl border-2 p-3 text-left transition",
+                          on
+                            ? "border-primary bg-primary/[0.06] shadow-sm"
+                            : "border-border hover:border-primary/40",
+                          empty && "cursor-not-allowed opacity-50 hover:border-border",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition",
+                            on ? "bg-primary text-white" : "bg-border/50 text-text-secondary",
+                          )}
+                        >
+                          {on ? <Check className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-text-primary">
+                            {displaySubject(c.subject)} · Grade {c.grade}
+                            {c.section ? ` ${c.section}` : ""}
+                          </span>
+                          <span className="block text-xs text-text-muted">
+                            {empty
+                              ? "No students yet"
+                              : `${c.studentCount} student${c.studentCount === 1 ? "" : "s"}`}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-            <div className="space-y-1.5">
-              <label
-                htmlFor="gtc-instructions"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Instructions (optional)
-              </label>
-              <textarea
-                id="gtc-instructions"
-                rows={2}
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                disabled={saving}
-                maxLength={2000}
-                placeholder="e.g. Answer questions 1-8 in your exercise book."
-                className={fieldClass}
-              />
-            </div>
-
-            {/* Hand-in */}
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={requiresSubmission}
-                  onChange={(e) => setRequiresSubmission(e.target.checked)}
-                  disabled={saving}
-                  className="mt-0.5 h-4 w-4"
+              {/* Kind */}
+              <div className="space-y-2">
+                <span className={label}>It's a</span>
+                <Segmented
+                  options={KINDS.map((k) => ({ value: k.value, label: k.label }))}
+                  value={kind}
+                  onChange={setKind}
                 />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-text-primary">
-                    Students hand in an answer
-                  </span>
-                  <span className="block text-xs text-text-muted">
-                    They type it here and you mark it. Leave this off for work done
-                    in an exercise book — they just mark it as done.
-                  </span>
-                </span>
-              </label>
+              </div>
 
-              {requiresSubmission && (
-                <div className="flex items-center gap-2 pt-1">
-                  <label
-                    htmlFor="gtc-marks"
-                    className="text-xs font-semibold uppercase text-text-muted"
-                  >
-                    Out of
+              {/* How it's done */}
+              <div className="space-y-2">
+                <span className={label}>How do students do it?</span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <OptionCard
+                    selected={!requiresSubmission}
+                    onSelect={() => setRequiresSubmission(false)}
+                    icon={BookOpen}
+                    label="In their exercise book"
+                    hint="They do it on paper and mark it done here."
+                  />
+                  <OptionCard
+                    selected={requiresSubmission}
+                    onSelect={() => setRequiresSubmission(true)}
+                    icon={PenLine}
+                    label="Hand in an answer"
+                    hint="They type or photograph their work and you mark it."
+                  />
+                </div>
+                {requiresSubmission && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-border/20 px-4 py-3">
+                    <label htmlFor="gtc-marks" className="text-sm font-semibold text-text-primary">
+                      Marked out of
+                    </label>
+                    <Input
+                      id="gtc-marks"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={maxMarks}
+                      onChange={(e) => setMaxMarks(e.target.value)}
+                      className="w-24"
+                    />
+                    <span className="text-xs text-text-muted">Clear it to give feedback only.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Title + due date */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label htmlFor="gtc-title" className={label}>
+                    Title
                   </label>
                   <Input
-                    id="gtc-marks"
-                    type="number"
-                    min={1}
-                    max={1000}
-                    value={maxMarks}
-                    onChange={(e) => setMaxMarks(e.target.value)}
-                    disabled={saving}
-                    className="w-24"
+                    id="gtc-title"
+                    value={workTitle}
+                    onChange={(e) => setWorkTitle(e.target.value)}
+                    maxLength={120}
                   />
-                  <span className="text-xs text-text-muted">
-                    marks — clear it to give feedback only.
-                  </span>
                 </div>
-              )}
-            </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="gtc-due" className={label}>
+                    Due date <span className="normal-case tracking-normal">(optional)</span>
+                  </label>
+                  <Input id="gtc-due" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+                  <p className="text-xs text-text-muted">A reminder, not a lock.</p>
+                </div>
+              </div>
 
-            <div className="space-y-1.5">
-              <label
-                htmlFor="gtc-due"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Due date (optional)
-              </label>
-              <Input
-                id="gtc-due"
-                type="date"
-                value={dueAt}
-                onChange={(e) => setDueAt(e.target.value)}
-                disabled={saving}
-              />
-              <p className="text-xs text-text-muted">
-                A reminder, not a lock — late work is still accepted.
-              </p>
-            </div>
+              <div className="space-y-1.5">
+                <label htmlFor="gtc-instructions" className={label}>
+                  Instructions for students <span className="normal-case tracking-normal">(optional)</span>
+                </label>
+                <textarea
+                  id="gtc-instructions"
+                  rows={2}
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  maxLength={2000}
+                  placeholder="e.g. Answer problems 1–8 in your exercise book."
+                  className={fieldClass}
+                />
+              </div>
+            </>
+          )}
+        </div>
 
-            <div className="flex gap-2 pt-1">
-              <Button type="submit" className="flex-1" disabled={saving || !classId}>
-                {saving ? <Spinner size="sm" /> : "Give to class"}
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        )}
-      </div>
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-5 py-4 sm:px-8">
+          <p className={cn("min-w-0 text-sm", blocker ? "text-amber-700" : "text-text-muted")}>
+            {blocker ?? "Saved as a draft — you check it before students see it."}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            {/* A quick request with no progress card, so the button's own
+                spinner is the one indicator. */}
+            <Button type="submit" disabled={!classId} isLoading={saving} className="min-w-[10rem]">
+              {!saving && <Check className="mr-1.5 h-4 w-4" />}
+              Create draft{selected ? ` for ${selected.studentCount}` : ""}
+            </Button>
+          </div>
+        </div>
+      </form>
     </div>
   );
 }

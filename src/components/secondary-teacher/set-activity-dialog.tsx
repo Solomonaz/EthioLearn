@@ -2,7 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Library,
+  LifeBuoy,
+  ListChecks,
+  PenLine,
+  Send,
+  Sparkles,
+  Users,
+  X,
+} from "lucide-react";
+import { OptionCard, ReviewRow, Segmented } from "./form-pieces";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -321,497 +336,555 @@ export function SetActivityDialog({
     audience === "struggling" ? strugglingCount : target.studentCount;
 
   const fieldClass =
-    "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary";
+    "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+
+  // ── Steps ──────────────────────────────────────────────────────────────
+  // One question at a time instead of every field at once: the single
+  // scrolling form (and then two side-by-side scrolling panels) buried the
+  // chapter list and made twelve decisions look like one wall.
+  const STEPS = [
+    { title: "Cover", heading: "What should it cover?", icon: BookOpen },
+    { title: "Paper", heading: "What kind of paper?", icon: ListChecks },
+    { title: "Send", heading: "Who gets it, and when?", icon: Send },
+  ] as const;
+  const [step, setStep] = useState(0);
+
+  /** Why a step can't be left yet — null when it can. */
+  function blockerFor(i: number): string | null {
+    if (i === 0) {
+      if (loadingBooks || loadingChapters) return "Loading the textbook…";
+      if (textbooks.length === 0) return "No textbook is available for this class yet.";
+      if (chapterIds.length === 0) return "Pick at least one chapter.";
+    }
+    if (i === 1 && paperType === "QUESTIONS" && source === null) {
+      return "Choose where the questions come from.";
+    }
+    return null;
+  }
+  const blocker = blockerFor(step);
+  const canReach = (i: number) =>
+    Array.from({ length: i }, (_, k) => blockerFor(k)).every((b) => b === null);
+
+  const selectedChapters = chapters.filter((c) => chapterIds.includes(c.id));
+  const difficultyLabel = DIFFICULTIES.find((d) => d.value === difficulty)?.label ?? "Mixed";
+  const kindLabel = KINDS.find((k) => k.value === kind)?.label ?? "Homework";
+
+  const onFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Enter in a field moves forward; only the last step creates anything.
+    if (step < STEPS.length - 1) {
+      if (!blocker) setStep(step + 1);
+      return;
+    }
+    void submit(e);
+  };
+
+  const label = "text-xs font-semibold uppercase tracking-wide text-text-muted";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-xl sm:rounded-3xl sm:p-6">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold text-text-primary">Set an activity</h2>
-            <p className="text-xs text-text-secondary">
-              {displaySubject(target.subject)} · Grade {target.grade}
-              {target.section ? ` ${target.section}` : ""}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded-lg p-1 text-text-muted transition hover:bg-border/50 hover:text-text-primary"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="space-y-4">
-          {/* Who it goes to. Whole class is the default — homework,
-              assignments and practice are for everyone; narrowing to the
-              students who are behind is the exception, not the rule. */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-text-muted">
-              Assign to
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setAudience("class")}
-                disabled={submitting}
-                className={cn(
-                  "rounded-xl border px-3 py-2 text-sm font-semibold transition",
-                  audience === "class"
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background text-text-secondary hover:border-primary/40",
-                )}
-              >
-                Whole class ({target.studentCount})
-              </button>
-              {strugglingCount > 0 && strugglingCount < target.studentCount && (
-                <button
-                  type="button"
-                  onClick={() => setAudience("struggling")}
-                  disabled={submitting}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm font-semibold transition",
-                    audience === "struggling"
-                      ? "border-amber-500 bg-amber-50 text-amber-700"
-                      : "border-border bg-background text-text-secondary hover:border-amber-400",
-                  )}
-                >
-                  Needs help ({strugglingCount})
-                </button>
-              )}
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center sm:p-6">
+      <form
+        onSubmit={onFormSubmit}
+        className="flex h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[28px] bg-surface shadow-2xl sm:h-[min(46rem,92vh)] sm:rounded-[28px]"
+      >
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="relative shrink-0 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-5 pb-4 pt-5 sm:px-8 sm:pt-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-sm">
+                <ClipboardList className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-text-primary sm:text-xl">Set an activity</h2>
+                <p className="truncate text-sm text-text-secondary">
+                  {displaySubject(target.subject)} · Grade {target.grade}
+                  {target.section ? ` ${target.section}` : ""} · {target.studentCount} student
+                  {target.studentCount === 1 ? "" : "s"}
+                </p>
+              </div>
             </div>
-          </div>
-
-          {/* Kind */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-text-muted">Type</span>
-            <div className="flex flex-wrap gap-1.5">
-              {KINDS.map((k) => (
-                <button
-                  key={k.value}
-                  type="button"
-                  onClick={() => setKind(k.value)}
-                  disabled={submitting}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                    kind === k.value
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background text-text-secondary hover:border-primary/40",
-                  )}
-                >
-                  {k.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Textbook + chapter */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="act-textbook"
-              className="text-xs font-semibold uppercase text-text-muted"
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="shrink-0 rounded-xl p-2 text-text-muted transition hover:bg-surface/80 hover:text-text-primary"
             >
-              Textbook
-            </label>
-            {loadingBooks ? (
-              <div className="py-2">
-                <Spinner size="sm" className="text-primary" />
-              </div>
-            ) : textbooks.length === 0 ? (
-              <p className="text-xs text-amber-600">
-                No {displaySubject(target.subject)} textbook is available for grade {target.grade} yet.
-                Ask your administrator to upload one.
-              </p>
-            ) : (
-              <select
-                id="act-textbook"
-                value={textbookId}
-                onChange={(e) => setTextbookId(e.target.value)}
-                disabled={submitting}
-                className={fieldClass}
-              >
-                {textbooks.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.title} (Grade {b.grade})
-                  </option>
-                ))}
-              </select>
-            )}
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase text-text-muted">
-                Chapters
-                {chapterIds.length > 1 ? ` · ${chapterIds.length} selected` : ""}
-              </span>
-              {chapters.length > 0 && (
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() =>
-                    setChapterIds((cur) =>
-                      cur.length === chapters.length
-                        ? chapters[0]
-                          ? [chapters[0].id]
-                          : []
-                        : chapters.map((c) => c.id),
-                    )
-                  }
-                  className="text-xs font-semibold text-primary hover:underline disabled:opacity-50"
-                >
-                  {chapterIds.length === chapters.length
-                    ? "Clear"
-                    : `All ${chapters.length} chapters`}
-                </button>
-              )}
-            </div>
-
-            {loadingChapters ? (
-              <div className="py-2">
-                <Spinner size="sm" className="text-primary" />
-              </div>
-            ) : chapters.length === 0 ? (
-              <p className="rounded-xl border border-border px-3 py-2 text-sm text-text-muted">
-                This textbook has no chapters yet.
-              </p>
-            ) : (
-              <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-xl border border-border p-1.5">
-                {chapters.map((c) => {
-                  const checked = chapterIds.includes(c.id);
-                  return (
-                    <label
-                      key={c.id}
-                      className={cn(
-                        "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
-                        checked ? "bg-primary/10 text-text-primary" : "hover:bg-border/40",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={submitting}
-                        onChange={() =>
-                          setChapterIds((cur) =>
-                            cur.includes(c.id)
-                              ? cur.filter((id) => id !== c.id)
-                              : // Kept in the textbook's own order, so the
-                                // paper reads front-to-back rather than in
-                                // the order the teacher happened to tick.
-                                chapters
-                                  .filter((ch) => ch.id === c.id || cur.includes(ch.id))
-                                  .map((ch) => ch.id),
-                          )
-                        }
-                        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
-                      />
-                      <span className="min-w-0">
-                        {c.chapterNumber}. {displayChapterTitle(c.title)}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            {chapterIds.length > 1 && (
-              <p className="text-[11px] text-text-muted">
-                Questions are spread evenly across the chapters you picked.
-              </p>
-            )}
-          </div>
-
-          {/* Count + difficulty */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="act-count"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                {paperType === "WORKOUT" ? "Problems" : "Questions"}
-              </label>
-              <select
-                id="act-count"
-                value={questionCount}
-                onChange={(e) => setQuestionCount(Number(e.target.value))}
-                disabled={submitting}
-                className={fieldClass}
-              >
-                {COUNTS.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="act-difficulty"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Difficulty
-              </label>
-              <select
-                id="act-difficulty"
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                disabled={submitting}
-                className={fieldClass}
-              >
-                {DIFFICULTIES.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* ── Paper type ──────────────────────────────────────────── */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-text-muted">
-              Paper type
-            </span>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(
-                [
-                  {
-                    value: "QUESTIONS" as const,
-                    label: "Question paper",
-                    hint: "Marked automatically as they answer",
-                  },
-                  {
-                    value: "WORKOUT" as const,
-                    label: "Workout problems",
-                    hint: "Calculations worked on paper — you mark them",
-                  },
-                ]
-              ).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => setPaperType(opt.value)}
-                  className={cn(
-                    "rounded-xl border p-2.5 text-left transition",
-                    paperType === opt.value
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:border-primary/40",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "block text-sm font-semibold",
-                      paperType === opt.value ? "text-primary" : "text-text-primary",
-                    )}
-                  >
-                    {opt.label}
-                  </span>
-                  <span className="block text-[11px] text-text-muted">{opt.hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Marks — workout problems are always handed in and marked. */}
-          {paperType === "WORKOUT" && (
-            <div className="space-y-1.5">
-              <label
-                htmlFor="act-marks"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Marked out of (optional)
-              </label>
-              <input
-                id="act-marks"
-                type="number"
-                min={1}
-                max={1000}
-                value={maxMarks}
-                disabled={submitting}
-                onChange={(e) =>
-                  setMaxMarks(e.target.value === "" ? "" : Number(e.target.value))
-                }
-                placeholder="e.g. 20"
-                className={fieldClass}
-              />
-              <p className="text-xs text-text-muted">
-                Students hand in their working — typed or photographed — and you
-                mark it. Leave blank to give written feedback without a score.
-              </p>
-            </div>
-          )}
-
-          {/* Question types — only a question paper has them. */}
-          {paperType === "QUESTIONS" && (
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold uppercase text-text-muted">
-              Question types
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {QUESTION_TYPES.map((t) => {
-                const on = questionTypes.includes(t.value);
-                return (
+          {/* Stepper — completed steps can be revisited; a later step opens
+              only once everything before it is complete. */}
+          <ol className="mt-5 flex items-center">
+            {STEPS.map((s, i) => {
+              const done = i < step;
+              const current = i === step;
+              const reachable = !submitting && canReach(i);
+              return (
+                <li key={s.title} className={cn("flex items-center", i < STEPS.length - 1 && "flex-1")}>
                   <button
-                    key={t.value}
                     type="button"
-                    disabled={submitting}
-                    onClick={() =>
-                      setQuestionTypes((prev) => {
-                        const next = on
-                          ? prev.filter((v) => v !== t.value)
-                          : [...prev, t.value];
-                        // Never leave the paper with no type at all.
-                        return next.length > 0 ? next : prev;
-                      })
-                    }
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                      on
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-text-secondary hover:border-primary/40",
-                    )}
-                  >
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-text-muted">
-              Pick one or more. The paper is drawn from these types only.
-            </p>
-          </div>
-          )}
-
-          {/* Where the questions come from. Workout problems are always
-              written fresh, so there is no choice to offer. */}
-          {paperType === "QUESTIONS" ? (
-            <div className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase text-text-muted">
-                Questions from
-              </span>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(
-                  [
-                    {
-                      value: "BANK" as const,
-                      label: "Question bank",
-                      hint: "Questions already stored for these chapters. Instant; a thin bank gives a shorter paper.",
-                    },
-                    {
-                      value: "AI" as const,
-                      label: "Brand-new questions (AI)",
-                      hint: "A fresh set written from the chapters, with every quality check. About a minute.",
-                    },
-                  ]
-                ).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => setSource(opt.value)}
-                    aria-pressed={source === opt.value}
-                    className={cn(
-                      "rounded-xl border p-2.5 text-left transition",
-                      source === opt.value
-                        ? "border-primary bg-primary/10"
-                        : "border-border hover:border-primary/40",
-                    )}
+                    disabled={!reachable}
+                    onClick={() => setStep(i)}
+                    aria-current={current ? "step" : undefined}
+                    className="group flex items-center gap-2 disabled:cursor-not-allowed"
                   >
                     <span
                       className={cn(
-                        "block text-sm font-semibold",
-                        source === opt.value ? "text-primary" : "text-text-primary",
+                        "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition",
+                        current && "bg-primary text-white shadow-md ring-4 ring-primary/15",
+                        done && "bg-primary/15 text-primary",
+                        !current && !done && "border border-border bg-surface text-text-muted",
                       )}
                     >
-                      {opt.label}
+                      {done ? <Check className="h-4 w-4" /> : i + 1}
                     </span>
-                    <span className="block text-[11px] text-text-muted">{opt.hint}</span>
+                    <span
+                      className={cn(
+                        "hidden text-sm font-semibold sm:inline",
+                        current ? "text-text-primary" : "text-text-muted group-enabled:group-hover:text-text-primary",
+                      )}
+                    >
+                      {s.title}
+                    </span>
                   </button>
-                ))}
+                  {i < STEPS.length - 1 && (
+                    <span
+                      className={cn(
+                        "mx-3 h-0.5 flex-1 rounded-full transition-colors",
+                        i < step ? "bg-primary/40" : "bg-border",
+                      )}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        {/* ── Body ───────────────────────────────────────────────────────── */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
+          {submitting ? (
+            <div className="flex h-full flex-col items-center justify-center gap-5 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                {useAi || paperType === "WORKOUT" ? (
+                  <Sparkles className="h-7 w-7" />
+                ) : (
+                  <ClipboardList className="h-7 w-7" />
+                )}
+              </span>
+              <div>
+                <p className="text-lg font-bold text-text-primary">Building your {kindLabel.toLowerCase()}…</p>
+                <p className="text-sm text-text-secondary">
+                  {useAi || paperType === "WORKOUT"
+                    ? "Writing and checking every item. This takes about a minute."
+                    : "Drawing questions from the bank."}
+                </p>
               </div>
-              {source === null && (
-                <p className="text-xs text-text-muted">Choose one to continue.</p>
+              {progress ? (
+                <div className="w-full max-w-md text-left">
+                  <GenerationProgressCard progress={progress} />
+                </div>
+              ) : (
+                // Drawing from the bank reports no stages — one spinner here
+                // is the only activity indicator on screen.
+                <Spinner size="lg" className="text-primary" />
               )}
             </div>
           ) : (
-            <p className="rounded-xl border border-border bg-border/20 p-3 text-xs text-text-muted">
-              Workout problems are written fresh by AI from the chapters you picked,
-              with a full worked answer key for you.
-            </p>
-          )}
+            <>
+              <h3 className="mb-5 text-lg font-bold text-text-primary">{STEPS[step].heading}</h3>
 
-          {/* Due date */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="act-due"
-              className="text-xs font-semibold uppercase text-text-muted"
-            >
-              Due date (optional)
-            </label>
-            <Input
-              id="act-due"
-              type="date"
-              value={dueAt}
-              onChange={(e) => setDueAt(e.target.value)}
-              disabled={submitting}
-            />
-            <p className="text-xs text-text-muted">
-              A reminder, not a lock — students can still submit afterwards.
-            </p>
-          </div>
+              {/* ── Step 1: chapters ─────────────────────────────────── */}
+              {step === 0 && (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div className="min-w-[14rem] flex-1 space-y-1.5">
+                      <label htmlFor="act-textbook" className={label}>
+                        Textbook
+                      </label>
+                      {loadingBooks ? (
+                        <div className="py-2">
+                          <Spinner size="sm" className="text-primary" />
+                        </div>
+                      ) : textbooks.length === 0 ? (
+                        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                          No {displaySubject(target.subject)} textbook is available for grade{" "}
+                          {target.grade} yet. Ask your administrator to upload one.
+                        </p>
+                      ) : (
+                        <select
+                          id="act-textbook"
+                          value={textbookId}
+                          onChange={(e) => setTextbookId(e.target.value)}
+                          className={fieldClass}
+                        >
+                          {textbooks.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.title} (Grade {b.grade})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    {chapters.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setChapterIds((cur) =>
+                            cur.length === chapters.length
+                              ? [chapters[0].id]
+                              : chapters.map((c) => c.id),
+                          )
+                        }
+                        className="rounded-xl px-3 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/10"
+                      >
+                        {chapterIds.length === chapters.length ? "Clear selection" : `Select all ${chapters.length}`}
+                      </button>
+                    )}
+                  </div>
 
-          {/* Optional title + instructions */}
-          <details className="rounded-xl border border-border p-3">
-            <summary className="cursor-pointer text-xs font-semibold uppercase text-text-muted">
-              Title and instructions
-            </summary>
-            <div className="mt-3 space-y-3">
-              <Input
-                placeholder="Title (defaults to the chapter name)"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={submitting}
-                maxLength={120}
-              />
-              <textarea
-                placeholder="Instructions for your students (optional)"
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                disabled={submitting}
-                maxLength={2000}
-                rows={3}
-                className={fieldClass}
-              />
-            </div>
-          </details>
-
-          {progress && <GenerationProgressCard progress={progress} />}
-
-          <div className="sticky -bottom-5 -mx-5 flex gap-2 border-t border-border bg-surface px-5 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={
-                submitting ||
-                chapterIds.length === 0 ||
-                textbooks.length === 0 ||
-                (paperType === "QUESTIONS" && source === null)
-              }
-            >
-              {submitting ? (
-                <Spinner size="sm" />
-              ) : (
-                `Set for ${recipientCount} student${recipientCount === 1 ? "" : "s"}`
+                  {loadingChapters ? (
+                    <div className="flex justify-center py-10">
+                      <Spinner size="lg" className="text-primary" />
+                    </div>
+                  ) : chapters.length === 0 ? (
+                    textbooks.length > 0 && (
+                      <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-text-muted">
+                        This textbook has no chapters yet.
+                      </p>
+                    )
+                  ) : (
+                    // A plain checkbox list, as it was — the step has the room,
+                    // so every chapter shows without an inner scroll box.
+                    <div className="space-y-0.5 rounded-xl border border-border p-1.5">
+                      {chapters.map((c) => {
+                        const checked = chapterIds.includes(c.id);
+                        return (
+                          <label
+                            key={c.id}
+                            className={cn(
+                              "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                              checked ? "bg-primary/10 text-text-primary" : "hover:bg-border/40",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={submitting}
+                              onChange={() =>
+                                setChapterIds((cur) =>
+                                  cur.includes(c.id)
+                                    ? cur.filter((id) => id !== c.id)
+                                    : // Kept in the textbook's own order, so the
+                                      // paper reads front-to-back rather than in
+                                      // the order the teacher happened to tick.
+                                      chapters
+                                        .filter((ch) => ch.id === c.id || cur.includes(ch.id))
+                                        .map((ch) => ch.id),
+                                )
+                              }
+                              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
+                            />
+                            <span className="min-w-0">
+                              {c.chapterNumber}. {displayChapterTitle(c.title)}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {chapterIds.length > 1 && (
+                    <p className="text-xs text-text-muted">
+                      {chapterIds.length} chapters · questions are spread evenly across them.
+                    </p>
+                  )}
+                </div>
               )}
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              Cancel
-            </Button>
+
+              {/* ── Step 2: the paper ────────────────────────────────── */}
+              {step === 1 && (
+                <div className="space-y-6">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          value: "QUESTIONS" as const,
+                          icon: ListChecks,
+                          label: "Question paper",
+                          hint: "Students answer on screen and it marks itself.",
+                        },
+                        {
+                          value: "WORKOUT" as const,
+                          icon: PenLine,
+                          label: "Workout problems",
+                          hint: "Calculations worked on paper — you mark them.",
+                        },
+                      ]
+                    ).map((opt) => (
+                      <OptionCard
+                        key={opt.value}
+                        selected={paperType === opt.value}
+                        onSelect={() => setPaperType(opt.value)}
+                        icon={opt.icon}
+                        label={opt.label}
+                        hint={opt.hint}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <span className={label}>
+                        How many {paperType === "WORKOUT" ? "problems" : "questions"}
+                      </span>
+                      <Segmented
+                        options={COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
+                        value={String(questionCount)}
+                        onChange={(v) => setQuestionCount(Number(v))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <span className={label}>Difficulty</span>
+                      <Segmented
+                        options={DIFFICULTIES.map((d) => ({ value: d.value, label: d.label, dot: DIFFICULTY_DOT[d.value] }))}
+                        value={difficulty}
+                        onChange={setDifficulty}
+                      />
+                    </div>
+                  </div>
+
+                  {paperType === "QUESTIONS" ? (
+                    <>
+                      <div className="space-y-2">
+                        <span className={label}>Question types</span>
+                        <div className="flex flex-wrap gap-2">
+                          {QUESTION_TYPES.map((t) => {
+                            const on = questionTypes.includes(t.value);
+                            return (
+                              <button
+                                key={t.value}
+                                type="button"
+                                aria-pressed={on}
+                                onClick={() =>
+                                  setQuestionTypes((prev) => {
+                                    const next = on
+                                      ? prev.filter((v) => v !== t.value)
+                                      : [...prev, t.value];
+                                    // Never leave the paper with no type at all.
+                                    return next.length > 0 ? next : prev;
+                                  })
+                                }
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition",
+                                  on
+                                    ? "border-primary bg-primary text-white"
+                                    : "border-border bg-background text-text-secondary hover:border-primary/40",
+                                )}
+                              >
+                                {on && <Check className="h-3.5 w-3.5" />}
+                                {t.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* No default: the two differ in cost and freshness, so
+                          the teacher always makes this call. */}
+                      <div className="space-y-2">
+                        <span className={label}>Questions from</span>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <OptionCard
+                            selected={source === "BANK"}
+                            prompting={source === null}
+                            onSelect={() => setSource("BANK")}
+                            icon={Library}
+                            label="Question bank"
+                            hint="Questions already stored for these chapters. Instant — a thin bank gives a shorter paper."
+                            tag="Instant"
+                          />
+                          <OptionCard
+                            selected={source === "AI"}
+                            prompting={source === null}
+                            onSelect={() => setSource("AI")}
+                            icon={Sparkles}
+                            label="Brand-new questions"
+                            hint="A fresh set written from the chapters, with every quality check."
+                            tag="AI · ~1 min"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <label htmlFor="act-marks" className={label}>
+                        Marked out of (optional)
+                      </label>
+                      <input
+                        id="act-marks"
+                        type="number"
+                        min={1}
+                        max={1000}
+                        value={maxMarks}
+                        onChange={(e) => setMaxMarks(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="e.g. 20"
+                        className={cn(fieldClass, "max-w-[12rem]")}
+                      />
+                      <p className="flex items-start gap-2 rounded-2xl bg-primary/[0.06] p-3 text-sm text-text-secondary">
+                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        Written fresh by AI from your chapters, with a full worked answer key
+                        that only you see. Students hand in their working and you mark it.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Step 3: who, when, review ─────────────────────────── */}
+              {step === 2 && (
+                <div className="space-y-6">
+                  {/* Whole class is the default — narrowing to the students who
+                      are behind is the exception, not the rule. */}
+                  {strugglingCount > 0 && strugglingCount < target.studentCount && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <OptionCard
+                        selected={audience === "class"}
+                        onSelect={() => setAudience("class")}
+                        icon={Users}
+                        label={`Whole class · ${target.studentCount}`}
+                        hint="Everyone in this class."
+                      />
+                      <OptionCard
+                        selected={audience === "struggling"}
+                        onSelect={() => setAudience("struggling")}
+                        icon={LifeBuoy}
+                        label={`Needs help · ${strugglingCount}`}
+                        hint="Only the students who are behind."
+                        tone="amber"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <span className={label}>It's a</span>
+                    <Segmented
+                      options={KINDS.map((k) => ({ value: k.value, label: k.label }))}
+                      value={kind}
+                      onChange={setKind}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label htmlFor="act-due" className={label}>
+                        Due date <span className="normal-case tracking-normal">(optional)</span>
+                      </label>
+                      <Input id="act-due" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+                      <p className="text-xs text-text-muted">A reminder, not a lock.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="act-title" className={label}>
+                        Title <span className="normal-case tracking-normal">(optional)</span>
+                      </label>
+                      <Input
+                        id="act-title"
+                        placeholder={
+                          selectedChapters.length === 1
+                            ? displayChapterTitle(selectedChapters[0].title)
+                            : "Named after the chapters"
+                        }
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        maxLength={120}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="act-instructions" className={label}>
+                      Instructions for students <span className="normal-case tracking-normal">(optional)</span>
+                    </label>
+                    <textarea
+                      id="act-instructions"
+                      placeholder="e.g. Show all working. Bring your answers to Thursday's lesson."
+                      value={instructions}
+                      onChange={(e) => setInstructions(e.target.value)}
+                      maxLength={2000}
+                      rows={2}
+                      className={fieldClass}
+                    />
+                  </div>
+
+                  {/* Review — what the teacher is about to create, read back. */}
+                  <div className="rounded-2xl border border-border bg-border/15 p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Review</p>
+                    <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                      <ReviewRow icon={BookOpen} label="Covers" onEdit={() => setStep(0)}>
+                        {selectedChapters.length === 1
+                          ? displayChapterTitle(selectedChapters[0].title)
+                          : `${selectedChapters.length} chapters`}
+                      </ReviewRow>
+                      <ReviewRow icon={ListChecks} label="Paper" onEdit={() => setStep(1)}>
+                        {questionCount} {paperType === "WORKOUT" ? "workout problems" : "questions"} · {difficultyLabel}
+                      </ReviewRow>
+                      <ReviewRow icon={paperType === "WORKOUT" || useAi ? Sparkles : Library} label="Source" onEdit={() => setStep(1)}>
+                        {paperType === "WORKOUT" ? "Written by AI" : useAi ? "Brand-new (AI)" : "Question bank"}
+                      </ReviewRow>
+                      <ReviewRow icon={Users} label="Goes to">
+                        {audience === "struggling"
+                          ? `${recipientCount} who need help`
+                          : `Whole class · ${recipientCount}`}
+                      </ReviewRow>
+                    </dl>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-5 py-4 sm:px-8">
+          <p className={cn("min-w-0 text-sm", blocker ? "text-amber-700" : "text-text-muted")}>
+            {submitting
+              ? "Please keep this window open."
+              : blocker ??
+                (step === STEPS.length - 1
+                  ? "Saved as a draft — you check it before students see it."
+                  : `Step ${step + 1} of ${STEPS.length}`)}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            {step > 0 && !submitting && (
+              <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
+                <ChevronLeft className="mr-1 h-4 w-4" /> Back
+              </Button>
+            )}
+            {/* No button while it is being built: the body already shows the
+                progress, and a second spinner in the footer said the same
+                thing again. */}
+            {submitting ? null : step < STEPS.length - 1 ? (
+              <Button type="submit" disabled={blocker !== null}>
+                Next <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button type="submit" disabled={blocker !== null} className="min-w-[11rem]">
+                <Check className="mr-1.5 h-4 w-4" />
+                Create draft for {recipientCount}
+              </Button>
+            )}
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 }
+
+// ── Small pieces ─────────────────────────────────────────────────────────
+
+const DIFFICULTY_DOT: Record<string, string> = {
+  "": "bg-gradient-to-r from-green-500 via-amber-500 to-red-500",
+  EASY: "bg-green-500",
+  MEDIUM: "bg-amber-500",
+  HARD: "bg-red-500",
+};

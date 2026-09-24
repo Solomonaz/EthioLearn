@@ -45,6 +45,8 @@ export async function GET(
       createdAt: true,
       format: true,
       body: true,
+      // The class it was set for, so "give to another class" can leave it out.
+      teachingAssignmentId: true,
       // Teacher-only. This route is scoped to the owning teacher, which is
       // what makes selecting it safe here — and why no student-facing route
       // may ever copy this select.
@@ -215,6 +217,7 @@ export async function GET(
   return NextResponse.json({
     activity: {
       id: activity.id,
+      teachingAssignmentId: activity.teachingAssignmentId,
       kind: activity.kind,
       format: activity.format,
       body: activity.body,

@@ -69,6 +69,8 @@ interface Chapter {
 interface AssistantResult {
   title: string;
   markdown: string;
+  /** The stored copy — every result is saved to the library automatically. */
+  resourceId: string | null;
   task: AssistantTask;
   subject: string | null;
   grade: number | null;
@@ -211,7 +213,11 @@ export default function TeachingAssistantPage() {
             task: revise ? result?.task ?? task : task,
             prompt: prompt.trim(),
             chapterId: revise ? null : chapterId || null,
+            // Files the result under this class's subject and grade when no
+            // chapter says so — what the bank matches requests on.
+            teachingAssignmentId: classId || null,
             revise,
+            resourceId: revise ? result?.resourceId ?? null : null,
           }),
         });
         // A rejection (rate limit, validation, AI switched off) still comes
@@ -221,16 +227,17 @@ export default function TeachingAssistantPage() {
           throw new Error(data.error ?? "The AI could not respond");
         }
 
-        const data = await consumeSse<{ title: string; markdown: string }>(
+        const data = await consumeSse<{ title: string; markdown: string; resourceId?: string | null }>(
           res,
           setProgress,
           "The connection ended before the document was finished.",
         );
         const next: AssistantResult = revise && result
-          ? { ...result, title: data.title, markdown: data.markdown }
+          ? { ...result, title: data.title, markdown: data.markdown, resourceId: data.resourceId ?? result.resourceId }
           : {
               title: data.title,
               markdown: data.markdown,
+              resourceId: data.resourceId ?? null,
               task,
               subject: selectedClass?.subject ?? null,
               grade: selectedClass?.grade ?? null,
@@ -246,7 +253,7 @@ export default function TeachingAssistantPage() {
         setProgress(null);
       }
     },
-    [busy, task, prompt, chapterId, chapters, selectedClass, result],
+    [busy, task, prompt, chapterId, classId, chapters, selectedClass, result],
   );
 
   const submit = useCallback(
@@ -273,6 +280,11 @@ export default function TeachingAssistantPage() {
     "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-primary";
 
   const activeTask = ASSISTANT_TASKS.find((t) => t.value === task);
+
+  // The same rule the server enforces: "Anything else" needs a description;
+  // every other task needs a chapter or a described topic.
+  const hasTopic =
+    task === "FREEFORM" ? prompt.trim().length >= 3 : Boolean(chapterId) || prompt.trim().length >= 3;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -416,10 +428,24 @@ export default function TeachingAssistantPage() {
               />
             </div>
 
-            <Button type="submit" disabled={busy}>
-              <Wand2 className="mr-1.5 h-4 w-4" />
-              {busy ? "Generating..." : "Generate"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Disabled until there is something to write about: a chapter,
+                  or a described topic. Clicking it with neither used to fire
+                  a request the server would only refuse. */}
+              {/* Just disabled while busy — the progress card below reports
+                  the work, so the button doesn't announce it a second time. */}
+              <Button type="submit" disabled={busy || !hasTopic}>
+                <Wand2 className="mr-1.5 h-4 w-4" />
+                Generate
+              </Button>
+              {!hasTopic && !busy && (
+                <p className="text-xs text-text-muted">
+                  {task === "FREEFORM"
+                    ? "Describe what you need to continue."
+                    : "Pick a chapter or describe the topic to continue."}
+                </p>
+              )}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -445,6 +471,7 @@ export default function TeachingAssistantPage() {
                 subject={result.subject}
                 grade={result.grade}
                 chapterTitle={result.chapterTitle}
+                resourceId={result.resourceId}
                 onSaved={() => undefined}
               />
             </div>
@@ -454,6 +481,11 @@ export default function TeachingAssistantPage() {
             <p className="print-hide mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
               AI-generated. Read it before you use it in class.
             </p>
+            {result.resourceId && (
+              <p className="print-hide mt-2 text-xs text-text-muted">
+                Kept in Materials automatically. Press Save to move it to the top of your list.
+              </p>
+            )}
 
             {/* Refine instead of starting over. */}
             <form onSubmit={revise} className="print-hide mt-4 space-y-2 border-t border-border pt-4">

@@ -11,6 +11,13 @@ import { subjectFilter } from "@/lib/subject";
 import { sseResponse, type ProgressFn } from "@/lib/sse";
 import { semanticSearch } from "@/lib/embeddings";
 import { selectGenerationContent } from "@/lib/generation-content";
+import {
+  embedInstructions,
+  normaliseInstructions,
+  serveFromBank,
+  storeResource,
+  isReusableTask,
+} from "@/lib/teacher-library";
 
 /**
  * AI teaching assistant for a secondary teacher.
@@ -92,6 +99,8 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     chapterId?: string | null;
     teachingAssignmentId?: string | null;
     revise?: { previous?: unknown; instruction?: unknown } | null;
+    /** The stored result a revision replaces (see the end of this handler). */
+    resourceId?: string | null;
   };
   try {
     body = await req.json();
@@ -142,6 +151,8 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
   let grade: number | null = null;
   let chapterTitle: string | null = null;
   let chapterContent: string | null = null;
+  /** Full chapter text — only read into a prompt if the AI is actually called. */
+  let chapterText = "";
 
   const chapterId = typeof body.chapterId === "string" ? body.chapterId : "";
   if (chapterId) {
@@ -181,12 +192,56 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     subject = chapter.textbook?.subject ?? null;
     grade = chapter.textbook?.grade ?? null;
     chapterTitle = chapter.title;
-    chapterContent = await groundingFor(
-      chapterId,
-      chapter.content || chapter.textbook?.content || "",
-      prompt,
-      usageActor(user),
-    );
+    chapterText = chapter.content || chapter.textbook?.content || "";
+  }
+
+  // The class it is for, when no chapter says so: the subject and grade are
+  // what the stored result is filed and shared under.
+  if (!subject && typeof body.teachingAssignmentId === "string" && body.teachingAssignmentId) {
+    const cls = await db.teachingAssignment.findFirst({
+      where: { id: body.teachingAssignmentId, teacherId: user.id },
+      select: { subject: true, grade: true },
+    });
+    if (cls) {
+      subject = cls.subject;
+      grade = cls.grade;
+    }
+  }
+
+  // ── Bank first (lib/teacher-library) ───────────────────────────────────
+  // Another teacher of this subject and grade may already have had exactly
+  // this written. If so it is served — before any chapter search or AI call —
+  // and this teacher never knows it wasn't written just now. Revisions and
+  // "Anything else" are always written fresh.
+  const instructions = normaliseInstructions(prompt);
+  const requestKey = `${task}|${chapterId || "-"}`;
+  const reusable = !revise && isReusableTask(task) && Boolean(subject) && grade !== null;
+  const embedding = reusable ? await embedInstructions(instructions, usageActor(user)) : null;
+  if (reusable) {
+    const served = await serveFromBank({
+      teacherId: user.id,
+      task,
+      subject,
+      grade,
+      requestKey,
+      instructions,
+      embedding,
+      chapterTitle,
+      source: "ASSISTANT",
+    });
+    if (served) {
+      report({ message: "Formatting the document...", percent: 88 });
+      return NextResponse.json({
+        title: served.title,
+        markdown: served.body,
+        grounded: Boolean(chapterTitle),
+        resourceId: served.resourceId,
+      });
+    }
+  }
+
+  if (chapterId) {
+    chapterContent = await groundingFor(chapterId, chapterText, prompt, usageActor(user));
   }
 
   report({ message: "Preparing the request...", percent: 15 });
@@ -215,10 +270,42 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     );
   }
 
+  // Every result is stored (lib/teacher-library). A revision replaces the
+  // document it revised — and takes it out of the bank, since it is now
+  // tailored to this teacher. Anything else is a new entry, and curriculum
+  // work joins the bank for the next teacher of this subject and grade.
+  let resourceId: string | null = null;
+  if (revise && typeof body.resourceId === "string" && body.resourceId) {
+    const updated = await db.teacherResource
+      .updateMany({
+        where: { id: body.resourceId, teacherId: user.id },
+        data: { title: result.title.slice(0, 160), body: result.markdown, reusable: false },
+      })
+      .catch(() => ({ count: 0 }));
+    if (updated.count > 0) resourceId = body.resourceId;
+  }
+  if (!resourceId) {
+    resourceId = await storeResource({
+      teacherId: user.id,
+      task,
+      title: result.title,
+      body: result.markdown,
+      subject,
+      grade,
+      chapterTitle,
+      source: "ASSISTANT",
+      // A revision that lost its original is stored, but never reused.
+      requestKey: revise ? null : requestKey,
+      instructions,
+      embedding,
+    });
+  }
+
   return NextResponse.json({
     title: result.title,
     markdown: result.markdown,
     grounded: Boolean(chapterTitle),
+    resourceId,
   });
 }
 
