@@ -181,8 +181,8 @@ const THINKING_BUDGET = Number(process.env.GEMINI_THINKING_BUDGET ?? 512);
  * declare it on GenerationConfig. Verified against the live API — the same call
  * reports thoughtsTokenCount 3,929 without it and 0 with it.
  */
-function withThinkingCap<T extends object>(cfg: T): T {
-  return { ...cfg, thinkingConfig: { thinkingBudget: THINKING_BUDGET } } as T;
+function withThinkingCap<T extends object>(cfg: T, budget = THINKING_BUDGET): T {
+  return { ...cfg, thinkingConfig: { thinkingBudget: budget } } as T;
 }
 
 function getClient() {
@@ -225,6 +225,12 @@ export async function geminiChat(
      * to false so every existing caller keeps JSON mode.
      */
     plainText?: boolean;
+    /**
+     * Thinking tokens allowed, overriding the global cap. Only for a task that
+     * genuinely needs to work something out (the factual tie-break) — give it
+     * a maxTokens large enough to hold the thinking AND the answer.
+     */
+    thinkingBudget?: number;
   } = {}
 ): Promise<string | null> {
   if (!process.env.GEMINI_API_KEY) return null;
@@ -240,7 +246,7 @@ export async function geminiChat(
         ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
         temperature: opts.temperature ?? 0.2,
         maxOutputTokens: opts.maxTokens ?? 4096,
-      }),
+      }, opts.thinkingBudget),
     });
     let result;
     try {
@@ -257,7 +263,7 @@ export async function geminiChat(
             responseMimeType: "application/json",
             temperature: opts.temperature ?? 0.2,
             maxOutputTokens: opts.maxTokens ?? 4096,
-          }),
+          }, opts.thinkingBudget),
         });
         result = await model.generateContent(prompt);
       } else {

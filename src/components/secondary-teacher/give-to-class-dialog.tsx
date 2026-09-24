@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { displaySubject } from "@/lib/display-text";
 
 /**
  * Give a piece of written work to a class.
@@ -52,9 +54,11 @@ export function GiveToClassDialog({
   const [maxMarks, setMaxMarks] = useState("10");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    fetch("/api/secondary-teacher/classes")
+    // lite: names and head counts only — no answer analytics for a picker.
+    fetch("/api/secondary-teacher/classes?lite=1")
       .then((r) => (r.ok ? r.json() : { classes: [] }))
       .then((d) => {
         const list: ClassOption[] = (d.classes ?? []).map(
@@ -112,9 +116,15 @@ export function GiveToClassDialog({
         if (!res.ok) throw new Error(data.error ?? "Could not give that to the class");
 
         const n = data.activity?._count?.targets ?? 0;
-        toast.success(`Given to ${n} student${n === 1 ? "" : "s"}.`);
+        // It is a DRAFT — nothing has reached a student yet, so "Given to 30
+        // students" was untrue. The teacher checks it, then sends it.
+        toast.success(`Draft ready for ${n} student${n === 1 ? "" : "s"}. Check it, then send.`);
+        // The server says when it kept an answer key back, or thinks the
+        // student view may still give answers away.
+        if (data.notice) toast.warning(data.notice, { duration: 10000 });
         onGiven?.();
         onClose();
+        if (data.activity?.id) router.push(`/secondary-teacher/activities/${data.activity.id}`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -133,6 +143,7 @@ export function GiveToClassDialog({
       requiresSubmission,
       maxMarks,
       onGiven,
+      router,
       onClose,
     ],
   );
@@ -186,7 +197,7 @@ export function GiveToClassDialog({
               >
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.subject} · Grade {c.grade}
+                    {displaySubject(c.subject)} · Grade {c.grade}
                     {c.section ? ` ${c.section}` : ""} ({c.studentCount})
                   </option>
                 ))}

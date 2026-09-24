@@ -94,6 +94,8 @@ async function openRouterCompletion(
     feature?: UsageFeature;
     actor?: UsageActor;
     slot?: "chat" | "fast";
+    /** Per-call reasoning effort, overriding OPENROUTER_REASONING — for the one task that should think. */
+    reasoning?: "low" | "medium" | "high";
   } = {}
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -102,7 +104,9 @@ async function openRouterCompletion(
   const model = await getModelFor("OPENROUTER", opts.slot ?? "chat");
   if (!model) throw new Error("No OpenRouter model is configured.");
 
-  let reasoning = reasoningParam();
+  let reasoning: Record<string, unknown> | undefined = opts.reasoning
+    ? { effort: opts.reasoning }
+    : reasoningParam();
   let body = messages;
   let responseFormat: unknown = opts.jsonSchema
     ? { type: "json_schema", json_schema: opts.jsonSchema }
@@ -205,6 +209,7 @@ export async function openRouterChat(
     jsonMode?: boolean;
     jsonSchema?: JsonSchemaFormat;
     slot?: "chat" | "fast";
+    reasoning?: "low" | "medium" | "high";
   } = {}
 ): Promise<string | null> {
   if (!hasOpenRouterKey()) return null;

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
-import { MarkdownView } from "@/components/ui/markdown-view";
+import { TeacherDocument } from "@/components/secondary-teacher/teacher-document";
 import { ResourceActions } from "@/components/secondary-teacher/resource-actions";
 import { ASSISTANT_TASKS } from "@/lib/assistant-tasks";
 
@@ -133,7 +133,7 @@ export default function TeacherResourcesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <MarkdownView markdown={open.body} />
+            <TeacherDocument markdown={open.body} />
           </CardContent>
         </Card>
       )}

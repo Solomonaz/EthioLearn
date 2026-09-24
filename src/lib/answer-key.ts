@@ -111,3 +111,12 @@ export function looksLikeItContainsAnswers(body: string): boolean {
     body.split("\n").some((line) => re.test(line)),
   );
 }
+
+/**
+ * The document with the fence line turned into a readable heading, for the
+ * teacher's own copies (Word, Markdown, clipboard). The fence is a machine
+ * marker; a teacher should never see "<<<ANSWER_KEY>>>" in a printed file.
+ */
+export function fenceAsHeading(markdown: string): string {
+  return markdown.replace(ANSWER_KEY_FENCE, "## Answer key (teacher only)");
+}

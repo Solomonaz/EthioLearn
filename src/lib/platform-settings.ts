@@ -7,6 +7,7 @@ export interface PlatformSettings {
   aiQuizGenEnabled: boolean;
   aiAdaptiveEnabled: boolean;
   aiMathToolsEnabled: boolean;
+  aiTeacherAssistantEnabled: boolean;
   pricingEnabled: boolean;
   rewardsEnabled: boolean;
   antiCheatEnabled: boolean;
@@ -18,6 +19,11 @@ export interface EffectiveAiFlags {
   aiQuizGen: boolean;
   aiAdaptive: boolean;
   aiMathTools: boolean;
+  /**
+   * The teachers' assistant. It used to ride on `aiTutor`, so switching off
+   * the STUDENT tutor silently switched off a paid teacher tool as well.
+   */
+  aiTeacherAssistant: boolean;
 }
 
 const SINGLETON_ID = "singleton";
@@ -28,6 +34,7 @@ const DEFAULTS: PlatformSettings = {
   aiQuizGenEnabled: true,
   aiAdaptiveEnabled: true,
   aiMathToolsEnabled: true,
+  aiTeacherAssistantEnabled: true,
   pricingEnabled: true,
   rewardsEnabled: true,
   antiCheatEnabled: true,
@@ -50,6 +57,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
         aiQuizGenEnabled: true,
         aiAdaptiveEnabled: true,
         aiMathToolsEnabled: true,
+        aiTeacherAssistantEnabled: true,
         pricingEnabled: true,
         rewardsEnabled: true,
         antiCheatEnabled: true,
@@ -68,6 +76,7 @@ export function effectiveAiFlags(s: PlatformSettings): EffectiveAiFlags {
     aiQuizGen: s.aiEnabled && s.aiQuizGenEnabled,
     aiAdaptive: s.aiEnabled && s.aiAdaptiveEnabled,
     aiMathTools: s.aiEnabled && s.aiMathToolsEnabled,
+    aiTeacherAssistant: s.aiEnabled && s.aiTeacherAssistantEnabled,
   };
 }
 

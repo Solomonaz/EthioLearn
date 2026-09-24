@@ -201,6 +201,11 @@ INSTRUCTIONS:
 4. Return ONLY main chapters or units — do NOT include sub-sections, sub-topics, or lessons within chapters.
 5. Chapter numbers must be sequential starting from 1.
 6. Return the exact title as it appears in the textbook.
+7. Exercise and review sections are NOT chapters, even when they carry a
+   heading: "Part 2: Answer the following questions", "Part 4: Solve the
+   following problems", "Review exercise", "Unit summary", "Check list". They
+   belong to the unit they follow. A real unit has a subject-matter title
+   (e.g. "Chemical Bonding"), never an instruction to the student.
 
 OUTPUT FORMAT: Return ONLY a JSON array of objects. No markdown, no code fences, no extra text. Each object must have:
 - "chapterNumber": number (sequential, starting from 1)

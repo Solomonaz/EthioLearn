@@ -5,6 +5,7 @@ import { openRouterChat } from "./openrouter";
 import { getTaskChain, runStep, type AiProvider } from "./ai-routing";
 import type { UsageActor } from "./usage-logger";
 import { ASSISTANT_TASKS, type AssistantTask } from "./assistant-tasks";
+import { ANSWER_KEY_FENCE } from "./answer-key";
 
 export { ASSISTANT_TASKS };
 export type { AssistantTask };
@@ -30,7 +31,7 @@ const TASK_BRIEF: Record<AssistantTask, string> = {
   LESSON_PLAN:
     "Write a single-period lesson plan. Include: learning objectives, prior knowledge assumed, a timed sequence of activities, the worked examples the teacher should put on the board, at least two checks for understanding, and a short homework suggestion.",
   WORKSHEET:
-    "Write a student worksheet. Number every item. Progress from straightforward to demanding. End with a clearly separated ANSWER KEY that shows the working, not just the final answers.",
+    `Write a student worksheet. Number every item. Progress from straightforward to demanding. Then write a line containing exactly ${ANSWER_KEY_FENCE} and nothing else, and AFTER it give the answer key with the working shown, not just the final answers.`,
   WORKOUT:
     "Write a set of WORKOUT problems: calculations and derivations the student solves on paper, showing every step. Number every problem. State the data given in each one, and the units expected in the answer. Do NOT write multiple-choice options, do not hint at the answer in the wording, and do NOT show any solution, final value or working alongside a problem. Progress from straightforward to demanding. Then write a line containing exactly <<<ANSWER_KEY>>> and nothing else. AFTER that line, and only after it, give the full worked solution to every problem step by step - not just the final value - with a marking guide. Everything before that line is given to students; everything after it is seen only by the teacher, so no answer may appear before it.",
   NOTES:
@@ -52,6 +53,12 @@ export interface AssistantRequest {
   chapterTitle?: string | null;
   /** Textbook content to ground the answer in, already truncated by the caller. */
   chapterContent?: string | null;
+  /**
+   * Revise an earlier result instead of writing from scratch: the document as
+   * it stands, and the change the teacher asked for ("shorter", "add three
+   * harder items"). A one-shot tool made teachers start over for every tweak.
+   */
+  revise?: { previous: string; instruction: string } | null;
   actor?: UsageActor;
   /**
    * Called as the work passes a real stage. Provider fallback is reported
@@ -79,7 +86,9 @@ export interface AssistantFailure {
 // Raised from the old JSON-envelope value: prose carries no escaping overhead,
 // and a lesson plan grounded in a chapter genuinely needs the room.
 const MAX_TOKENS = 4000;
-const MAX_CONTENT_CHARS = 12000;
+const MAX_CONTENT_CHARS = 16000;
+/** Longest earlier result sent back for a revision. */
+const MAX_REVISE_CHARS = 16000;
 
 function buildSystem(): string {
   return [
@@ -87,7 +96,13 @@ function buildSystem(): string {
     "Write everything in English — English is the medium of instruction at this level. Never answer in Amharic.",
     "Stay aligned to the Ethiopian secondary curriculum and to the textbook content you are given.",
     "Be concrete and immediately usable: real worked examples with real numbers, not placeholders.",
-    "Where the provided textbook content does not cover something, say so plainly rather than inventing curriculum.",
+    "The textbook content you are given is a set of EXCERPTS chosen from the chapter, not the whole chapter.",
+    "Never tell the teacher that the textbook or chapter does not cover something — you have not seen all of it. Where the excerpts are silent, teach it from the Ethiopian curriculum for this grade.",
+    "",
+    // Anything a teacher might hand to a class must have its teacher-only
+    // parts fenced off: "Give to class" sends everything above the fence to
+    // students, and a worksheet once went out with its full answer key.
+    `Anything meant ONLY for the teacher — answer keys, worked solutions, marking guides, notes to the teacher — goes after a line containing exactly ${ANSWER_KEY_FENCE}, never before it. Everything before that line must be safe to give to students.`,
     "",
     "Reply in Markdown. Begin with a single H1 line giving a short title, then the answer.",
     "Use headings, lists and tables. Do not wrap the answer in JSON or in code fences.",
@@ -120,7 +135,16 @@ function buildPrompt(req: AssistantRequest): string {
 
   if (req.chapterContent && req.chapterContent.trim().length >= 100) {
     parts.push(
-      `TEXTBOOK CONTENT (ground your answer in this)\n${req.chapterContent.slice(0, MAX_CONTENT_CHARS)}`,
+      `TEXTBOOK EXCERPTS (ground your answer in these)\n${req.chapterContent.slice(0, MAX_CONTENT_CHARS)}`,
+    );
+  }
+
+  if (req.revise) {
+    parts.push(
+      `CURRENT DOCUMENT\n${req.revise.previous.slice(0, MAX_REVISE_CHARS)}`,
+      `CHANGE REQUESTED\n${req.revise.instruction}\n\n` +
+        "Rewrite the WHOLE document with that change applied. Keep everything the teacher did not ask to change, " +
+        "keep the same title line unless the change is to the title, and keep the answer-key fence rule.",
     );
   }
 

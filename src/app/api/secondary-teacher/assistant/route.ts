@@ -9,6 +9,8 @@ import { askTeachingAssistant } from "@/lib/teaching-assistant";
 import { ASSISTANT_TASKS, type AssistantTask } from "@/lib/assistant-tasks";
 import { subjectFilter } from "@/lib/subject";
 import { sseResponse, type ProgressFn } from "@/lib/sse";
+import { semanticSearch } from "@/lib/embeddings";
+import { selectGenerationContent } from "@/lib/generation-content";
 
 /**
  * AI teaching assistant for a secondary teacher.
@@ -17,16 +19,21 @@ import { sseResponse, type ProgressFn } from "@/lib/sse";
  * studies — the chapter is validated against their assignments, so this cannot
  * be used to read content outside what they teach.
  *
- * Gated by the platform `aiTutor` switch. It is the same class of feature
- * (interactive, chat-shaped generation) and reusing the flag avoids a schema
- * change; if it ever needs separate cost control, add its own flag.
+ * Gated by its own platform switch, `aiTeacherAssistant`. It used to share
+ * the student tutor's switch, so turning off the tutor for students silently
+ * took this away from teachers.
  *
  * Token cost lands on the teacher's school, not on any student — `usageActor`
  * sets studentId null for non-students.
  */
 
 const MAX_PROMPT = 2000;
-const CONTENT_BUDGET = 12000;
+/** Chapter text sent with one request — chosen passages, not the opening pages. */
+const CONTENT_BUDGET = 16000;
+/** Passages retrieved for a request that names a topic. */
+const RETRIEVED_CHUNKS = 10;
+/** Longest earlier result accepted for a revision. */
+const MAX_REVISE_CHARS = 20000;
 
 const VALID_TASKS = new Set<string>(ASSISTANT_TASKS.map((t) => t.value));
 
@@ -72,7 +79,7 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     );
   }
 
-  if (!(await isAiFeatureEnabled("aiTutor"))) {
+  if (!(await isAiFeatureEnabled("aiTeacherAssistant"))) {
     return NextResponse.json(
       { error: "AI features are currently switched off for this platform." },
       { status: 503 },
@@ -84,6 +91,7 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     prompt?: string;
     chapterId?: string | null;
     teachingAssignmentId?: string | null;
+    revise?: { previous?: unknown; instruction?: unknown } | null;
   };
   try {
     body = await req.json();
@@ -96,9 +104,35 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     : "FREEFORM";
 
   const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT) : "";
-  if (task === "FREEFORM" && prompt.length < 3) {
+  // A revision carries its own instruction, so it needs no new prompt.
+  if (task === "FREEFORM" && prompt.length < 3 && !body.revise) {
     return NextResponse.json(
       { error: "Describe what you need." },
+      { status: 400 },
+    );
+  }
+
+  // A revision of an earlier result, if one was asked for.
+  let revise: { previous: string; instruction: string } | null = null;
+  if (body.revise) {
+    const previous = typeof body.revise.previous === "string" ? body.revise.previous.trim() : "";
+    const instruction =
+      typeof body.revise.instruction === "string" ? body.revise.instruction.trim().slice(0, 500) : "";
+    if (previous.length < 20 || instruction.length < 3) {
+      return NextResponse.json({ error: "Describe the change you want." }, { status: 400 });
+    }
+    if (previous.length > MAX_REVISE_CHARS) {
+      return NextResponse.json({ error: "That document is too long to revise." }, { status: 400 });
+    }
+    revise = { previous, instruction };
+  }
+
+  // Something to write ABOUT. A lesson plan with no chapter and no
+  // instructions has no topic, and the model would invent one.
+  const hasChapter = typeof body.chapterId === "string" && body.chapterId.length > 0;
+  if (!revise && !hasChapter && prompt.length < 3) {
+    return NextResponse.json(
+      { error: "Pick a chapter, or describe the topic in your instructions." },
       { status: 400 },
     );
   }
@@ -147,9 +181,11 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     subject = chapter.textbook?.subject ?? null;
     grade = chapter.textbook?.grade ?? null;
     chapterTitle = chapter.title;
-    chapterContent = (chapter.content || chapter.textbook?.content || "").slice(
-      0,
-      CONTENT_BUDGET,
+    chapterContent = await groundingFor(
+      chapterId,
+      chapter.content || chapter.textbook?.content || "",
+      prompt,
+      usageActor(user),
     );
   }
 
@@ -162,6 +198,7 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     grade,
     chapterTitle,
     chapterContent,
+    revise,
     actor: usageActor(user),
     onProgress: report,
   });
@@ -183,4 +220,53 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     markdown: result.markdown,
     grounded: Boolean(chapterTitle),
   });
+}
+
+/**
+ * The chapter passages to ground a request in.
+ *
+ * It used to send the chapter's first 12,000 characters. Chapters run to
+ * ~100,000, so anything past the opening pages was invisible: asked for a
+ * worksheet on electron configuration (which starts at character 58,649 of
+ * its chapter), the model told the teacher the textbook did not cover it.
+ *
+ * With instructions, the passages closest to them are retrieved (the chunks
+ * are already embedded for the student tutor) and put back in reading order.
+ * Without — or if retrieval fails — passages are spread across the WHOLE
+ * chapter, the same selection question generation uses.
+ */
+async function groundingFor(
+  chapterId: string,
+  fullText: string,
+  prompt: string,
+  actor: ReturnType<typeof usageActor>,
+): Promise<string> {
+  if (prompt.length >= 3) {
+    try {
+      const hits = await semanticSearch(prompt, {
+        chapterId,
+        limit: RETRIEVED_CHUNKS,
+        usage: { feature: "embedding-query", actor },
+      });
+      if (hits.length > 0) {
+        const ordered = [...hits].sort((a, b) => a.chunkIndex - b.chunkIndex);
+        const out: string[] = [];
+        let used = 0;
+        for (const h of ordered) {
+          if (used + h.content.length > CONTENT_BUDGET) break;
+          out.push(h.content);
+          used += h.content.length;
+        }
+        if (out.length > 0) return out.join("\n\n---\n\n");
+      }
+    } catch {
+      /* fall back to the spread selection below */
+    }
+  }
+  const selected = await selectGenerationContent({
+    chapterId,
+    fallbackContent: fullText,
+    budgetChars: CONTENT_BUDGET,
+  });
+  return selected.content;
 }

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { usageActor, withUsageActor } from "@/lib/usage-logger";
-import { generateQuestionsBatched, runQualityPipeline, hasBlockingStructuralIssue, generationContentBudget } from "@/lib/ai-provider";
+import { generateQuestionsBatched, runQualityPipeline, passesAutoServe, generationContentBudget } from "@/lib/ai-provider";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
@@ -338,7 +338,7 @@ async function runGeneration(
     generated.forEach((q, i) => {
       const r = results[i];
       const issues = (r?.flags ?? ["UNVERIFIED"]).filter((f) => !IGNORED_FLAGS.has(f));
-      const clean = !!r?.verified && issues.length === 0 && !hasBlockingStructuralIssue(q);
+      const clean = passesAutoServe(q, r);
       if (clean && accepted.length < target) {
         accepted.push({ q, score: r.qualityScore });
       } else if (!clean) {

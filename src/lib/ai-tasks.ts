@@ -37,6 +37,7 @@ export type AiTask =
   | "vision"
   | "bloom-tagging"
   | "quality-check"
+  | "factual-tiebreak"
   | "tutor-chat"
   | "query-rewrite"
   | "teacher-assistant";
@@ -133,6 +134,24 @@ export const AI_TASKS: TaskMeta[] = [
     supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
     geminiSlot: "fast",
     defaultChain: ["GROQ", "GEMINI", "OLLAMA"].map((p) => step(p as AiProvider)),
+  },
+  {
+    id: "factual-tiebreak",
+    label: "Factual tie-break",
+    description:
+      "Decides when the answer verifier accepts a question but the quality check calls it factually wrong.",
+    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER"],
+    geminiSlot: "chat",
+    // DeepSeek first: a third model family (the generator is OpenAI, the
+    // verifier Google), so its vote is independent of both — and with
+    // reasoning on it costs ~$0.0003 per call. Gemini flagship (with a larger
+    // thinking budget) takes over when OpenRouter is down or unkeyed.
+    defaultChain: [
+      { provider: "OPENROUTER", model: "deepseek/deepseek-v4-flash" },
+      step("GEMINI"),
+      step("GROQ"),
+    ],
+    note: "Runs only on disagreement, so it is rare. Pick a reasoning-capable model — this is the step that works the maths out.",
   },
   {
     id: "tutor-chat",

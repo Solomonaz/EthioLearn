@@ -420,6 +420,18 @@ export function hasBlockingStructuralIssue(q: GeneratedQuestion): boolean {
   return structuralChecks(q).some((f) => STUDENT_BLOCKING_FLAGS.includes(f));
 }
 
+/**
+ * Whether a checked question may reach students with no human review: the
+ * blind verifier accepted it and the pipeline raised nothing. ANSWER_SKEW is
+ * the one flag ignored — it is a batch-level note about where correct answers
+ * sit, and MCQ options are shuffled when served. Every automatic path (student
+ * AI quizzes, teacher "brand-new" papers) must use this one rule.
+ */
+export function passesAutoServe(q: GeneratedQuestion, r: QualityResult | undefined): boolean {
+  if (!r?.verified || hasBlockingStructuralIssue(q)) return false;
+  return r.flags.every((f) => f === "ANSWER_SKEW");
+}
+
 // ─── 3. Combined AI Quality Checks (difficulty + grammar + factual) ──────────
 //
 // Replaces the former verifyAITextQuality + factCheckQuestions pair.
@@ -1039,6 +1051,174 @@ async function runVerifierChat(
   return "";
 }
 
+// ─── Factual tie-break ──────────────────────────────────
+//
+// The quality check runs on the LIGHT model, and it does the maths inside its
+// factual check. On multi-step HARD questions it gets that maths wrong: a
+// pyramid question was rejected because the checker paired the 2 cm face with
+// the 1 cm apothem — the question stated the correct pairing — while the
+// blind verifier, a stronger model, solved it and agreed with the key. In the
+// student flow that rejection silently deletes a correct question.
+//
+// So when the two disagree — verifier says the key is right, quality check
+// says it is factually wrong — a third model settles it, reasoning on. It runs
+// ONLY on that disagreement (0–2 questions a quiz), and it fails closed: a
+// question is kept only on an explicit CORRECT. No verdict keeps the flag.
+
+export type TiebreakVerdict = "CORRECT" | "INCORRECT" | "UNSURE";
+
+const TIEBREAK_JSON_SCHEMA = {
+  name: "factual_tiebreak",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      // Work first, verdict last — the verdict must follow from the working.
+      work: { type: "string" },
+      verdict: { type: "string", enum: ["CORRECT", "INCORRECT", "UNSURE"] },
+    },
+    required: ["work", "verdict"],
+    additionalProperties: false,
+  },
+};
+
+const TIEBREAK_GEMINI_SCHEMA: ResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    work: { type: SchemaType.STRING },
+    verdict: { type: SchemaType.STRING, format: "enum", enum: ["CORRECT", "INCORRECT", "UNSURE"] },
+  },
+  required: ["work", "verdict"],
+  propertyOrdering: ["work", "verdict"],
+} as ResponseSchema;
+
+function parseTiebreak(raw: string | null | undefined): TiebreakVerdict | null {
+  if (!raw) return null;
+  try {
+    const v = String((extractJson(raw) as { verdict?: unknown })?.verdict ?? "").toUpperCase();
+    return v === "CORRECT" || v === "INCORRECT" || v === "UNSURE" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildTiebreakPrompt(q: GeneratedQuestion, objection: string, subject: string, grade: number): string {
+  const options = q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join("\n");
+  return `You are settling a disagreement about a Grade ${grade} ${subject} exam question.
+
+An independent solver worked this question and agreed with the marked answer.
+A reviewer says the question is factually wrong. One of them has made a mistake.
+
+QUESTION [${q.type}]:
+${q.questionText}
+
+OPTIONS:
+${options}
+
+MARKED CORRECT: ${q.correctAnswer}
+
+REVIEWER'S OBJECTION:
+"""
+${objection}
+"""
+
+In "work", in this order:
+1. Solve the question yourself, step by step. Use every value the question
+   states exactly as stated — do not replace a given value with your own.
+2. Go through the objection line by line and name the first step, if any,
+   where it goes wrong.
+3. Decide.
+
+Then set "verdict":
+- CORRECT: the marked answer is right, exactly one option is right, and the
+  objection is mistaken.
+- INCORRECT: the objection is right — wrong answer key, false premise, or more
+  than one defensible option.
+- UNSURE: you cannot decide with confidence.
+
+Return JSON only: {"work": "...", "verdict": "CORRECT" | "INCORRECT" | "UNSURE"}`;
+}
+
+async function tiebreakFactual(
+  q: GeneratedQuestion,
+  objection: string,
+  subject: string,
+  grade: number
+): Promise<TiebreakVerdict | null> {
+  const prompt = buildTiebreakPrompt(q, objection, subject, grade);
+  const system = "You settle exam-question disputes by working the problem yourself. Respond with valid JSON only.";
+  try {
+    const { value } = await runTask(
+      "factual-tiebreak",
+      {
+        OPENROUTER: () =>
+          openRouterChat(prompt, {
+            system,
+            temperature: 0.1,
+            maxTokens: 8192,
+            feature: "factual-tiebreak",
+            jsonSchema: TIEBREAK_JSON_SCHEMA,
+            reasoning: "medium",
+          }),
+        GEMINI: () =>
+          geminiChat(prompt, {
+            temperature: 0.1,
+            // Thinking counts against maxOutputTokens (see lib/gemini.ts), so
+            // leave room for the answer on top of the thinking budget.
+            maxTokens: 8192,
+            thinkingBudget: 4096,
+            feature: "factual-tiebreak",
+            responseSchema: TIEBREAK_GEMINI_SCHEMA,
+          }),
+        GROQ: () =>
+          groqChat(prompt, {
+            temperature: 0.1,
+            maxTokens: 4096,
+            feature: "factual-tiebreak",
+            responseFormat: { type: "json_schema", json_schema: TIEBREAK_JSON_SCHEMA },
+          }),
+        NVIDIA: () => nvidiaChat(prompt, { system, temperature: 0.1, maxTokens: 4096, feature: "factual-tiebreak" }),
+      },
+      { accept: (raw) => parseTiebreak(raw) !== null }
+    );
+    return parseTiebreak(value);
+  } catch (err) {
+    console.warn(`[Quality] Factual tie-break unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Tie-break every question the verifier accepted but the quality check called
+ * factually wrong. Source-absence "factual" claims are excluded — those are
+ * scope claims and are judged against the source instead.
+ */
+async function settleFactualDisagreements(
+  questions: GeneratedQuestion[],
+  aiChecks: Map<number, AIQualityCheck>,
+  verify: VerifyResult[],
+  subject: string,
+  grade: number
+): Promise<Map<number, TiebreakVerdict>> {
+  const disputed = questions
+    .map((q, idx) => ({ q, idx, check: aiChecks.get(idx) }))
+    .filter(
+      ({ idx, check }) =>
+        !!check &&
+        !check.factualPassed &&
+        !isSourceAbsenceReason(check.factualReason) &&
+        verify[idx]?.verdict === "verified"
+    );
+  const out = new Map<number, TiebreakVerdict>();
+  await Promise.all(
+    disputed.map(async ({ q, idx, check }) => {
+      const verdict = await tiebreakFactual(q, check!.factualReason, subject, grade);
+      if (verdict) out.set(idx, verdict);
+    })
+  );
+  return out;
+}
+
 /** Does this raw reply actually contain the per-question checks array? */
 function hasUsableChecks(raw: string): boolean {
   try {
@@ -1294,6 +1474,9 @@ export async function runQualityPipeline(
     avoidProvider: generatorProvider,
     avoidModel: generatorModel,
   });
+  // Verifier accepted but the light quality check says "factually wrong":
+  // a third model settles it (see settleFactualDisagreements).
+  const tiebreaks = await settleFactualDisagreements(questions, aiChecksMap, verifyResults, subject, grade);
   const duplicateResult = detectDuplicates(questions, questionEmbeddings);
   const existingDupes = detectExistingDuplicates(questions, questionEmbeddings, existingEmbeddings, existingSlice);
   const relevanceMap = checkRelevance(questions, sourceEmbeddings, questionEmbeddings);
@@ -1426,9 +1609,14 @@ export async function runQualityPipeline(
           details["OUT_OF_SCOPE"] = reason;
           penalty += 0.3;
         }
+      } else if (tiebreaks.get(idx) === "CORRECT") {
+        console.info(
+          `[Quality] Factual flag on Q${idx + 1} overturned by tie-break — the verifier and the tie-break both accept the key: "${reason}"`
+        );
       } else {
+        const tb = tiebreaks.get(idx);
         flags.push("FACTUAL_ERROR");
-        details["FACTUAL_ERROR"] = reason;
+        details["FACTUAL_ERROR"] = tb ? `${reason} (tie-break: ${tb.toLowerCase()})` : reason;
         penalty += 0.45; // Severe — a wrong correct answer directly harms students
       }
     }

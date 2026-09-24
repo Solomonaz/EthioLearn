@@ -47,7 +47,7 @@ export { chunkContent, chunkChapters } from "./content-chunker";
 export type { ContentChunk } from "./content-chunker";
 export { tagChunksWithBloomLevel, tagQuestionBloomLevel } from "./bloom-tagger";
 export type { BloomLevel, BloomTagResult } from "./bloom-tagger";
-export { runQualityPipeline, verifyQuestions, hasBlockingStructuralIssue } from "./quality-pipeline";
+export { runQualityPipeline, verifyQuestions, hasBlockingStructuralIssue, passesAutoServe } from "./quality-pipeline";
 export type { QualityResult, QualityPipelineResult, QualityFlag, VerifyResult } from "./quality-pipeline";
 
 // ─── Per-task routing ───────────────────────────────────

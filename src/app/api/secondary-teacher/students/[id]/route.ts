@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { getMasteryLevel } from "@/lib/class-insights";
+import { getMasteryLevel, INSIGHT_WINDOW_DAYS } from "@/lib/class-insights";
 import { subjectInFilter } from "@/lib/subject";
 
 /**
@@ -17,8 +17,13 @@ import { subjectInFilter } from "@/lib/subject";
  * is derived from the teacher's own assignments rather than from the student.
  */
 
-/** How far back the activity and quiz history reaches. */
-const WINDOW_DAYS = 180;
+/**
+ * Accuracy and mastery look back the same window as the class list, so a
+ * student shows one figure wherever the teacher reads it (they used to be 90
+ * and 180 days). The list of work set and practice reaches further back.
+ */
+const WINDOW_DAYS = INSIGHT_WINDOW_DAYS;
+const HISTORY_DAYS = 180;
 
 /** Cap on answers scanned when building chapter mastery. */
 const MAX_ANSWERS = 4000;
@@ -88,6 +93,7 @@ export async function GET(
 
   const subjects = Array.from(new Set(myClasses.map((c) => c.subject)));
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const historySince = new Date(Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000);
 
   // ── Chapter mastery, limited to the subjects this teacher teaches ─────
   const answers = await db.quizAnswer.findMany({
@@ -252,7 +258,7 @@ export async function GET(
     where: {
       studentId: student.id,
       completedAt: { not: null },
-      startedAt: { gte: since },
+      startedAt: { gte: historySince },
       answers: {
         some: { question: { chapter: { textbook: { OR: subjectInFilter(subjects) } } } },
       },
@@ -294,12 +300,20 @@ export async function GET(
       accuracy: totalAnswered > 0 ? totalCorrect / totalAnswered : null,
       activitiesAssigned: activities.length,
       activitiesCompleted: doneActivities.length,
-      // Averaged over scored work only. Written work carries no score, so
-      // including it would pull the average down with zeroes.
+      // Averaged over scored work only: completed question papers AND marked
+      // written work with marks. Unmarked written work carries no score, so
+      // including it would pull the average down with zeroes. (Marked work
+      // used to be left out entirely, so 23/25 and 18/20 read as nothing.)
       activityAverage: (() => {
-        const scored = doneActivities.filter((a) => a.score !== null);
-        if (scored.length === 0) return null;
-        return scored.reduce((sum, a) => sum + (a.score ?? 0), 0) / scored.length / 100;
+        const scores = doneActivities.flatMap((a) => {
+          if (a.score !== null) return [a.score / 100];
+          if (a.state === "marked" && a.marks !== null && (a.maxMarks ?? 0) > 0) {
+            return [a.marks / a.maxMarks!];
+          }
+          return [];
+        });
+        if (scores.length === 0) return null;
+        return scores.reduce((sum, v) => sum + v, 0) / scores.length;
       })(),
     },
     chapters,

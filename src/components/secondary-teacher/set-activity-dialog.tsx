@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { displayChapterTitle, displaySubject } from "@/lib/display-text";
 import { getStudyScope } from "@/lib/grade-scope";
 import { consumeSse } from "@/lib/sse-client";
 import {
@@ -118,7 +119,13 @@ export function SetActivityDialog({
    */
   const [paperType, setPaperType] = useState<"QUESTIONS" | "WORKOUT">("QUESTIONS");
   const [maxMarks, setMaxMarks] = useState<number | "">("");
-  const [useAi, setUseAi] = useState(false);
+  /**
+   * Where a question paper's questions come from. No default: the teacher must
+   * choose, because the two differ in cost and freshness — "BANK" serves only
+   * stored questions (instant, no AI), "AI" writes a brand-new set.
+   */
+  const [source, setSource] = useState<"BANK" | "AI" | null>(null);
+  const useAi = source === "AI";
   const [progress, setProgress] = useState<GenerationProgressState | null>(null);
   const [dueAt, setDueAt] = useState("");
   const [title, setTitle] = useState("");
@@ -211,7 +218,7 @@ export function SetActivityDialog({
           : {}),
         difficulty: difficulty || undefined,
         dueAt: dueAt || null,
-        source: useAi ? "AI" : "BANK",
+        source: source ?? "BANK",
         title: title.trim() || undefined,
         instructions: instructions.trim() || undefined,
         // Omitted for the whole class — the server then targets the full
@@ -300,6 +307,7 @@ export function SetActivityDialog({
       difficulty,
       questionTypes,
       useAi,
+      source,
       dueAt,
       title,
       instructions,
@@ -317,12 +325,12 @@ export function SetActivityDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-xl sm:rounded-3xl sm:p-6">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-xl sm:rounded-3xl sm:p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-text-primary">Set an activity</h2>
             <p className="text-xs text-text-secondary">
-              {target.subject} · Grade {target.grade}
+              {displaySubject(target.subject)} · Grade {target.grade}
               {target.section ? ` ${target.section}` : ""}
             </p>
           </div>
@@ -413,7 +421,7 @@ export function SetActivityDialog({
               </div>
             ) : textbooks.length === 0 ? (
               <p className="text-xs text-amber-600">
-                No {target.subject} textbook is available for grade {target.grade} yet.
+                No {displaySubject(target.subject)} textbook is available for grade {target.grade} yet.
                 Ask your administrator to upload one.
               </p>
             ) : (
@@ -500,7 +508,7 @@ export function SetActivityDialog({
                         className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
                       />
                       <span className="min-w-0">
-                        {c.chapterNumber}. {c.title}
+                        {c.chapterNumber}. {displayChapterTitle(c.title)}
                       </span>
                     </label>
                   );
@@ -679,25 +687,54 @@ export function SetActivityDialog({
           {/* Where the questions come from. Workout problems are always
               written fresh, so there is no choice to offer. */}
           {paperType === "QUESTIONS" ? (
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border p-3">
-              <input
-                type="checkbox"
-                checked={useAi}
-                onChange={(e) => setUseAi(e.target.checked)}
-                disabled={submitting}
-                className="mt-0.5 h-4 w-4 accent-[color:var(--color-primary,#1B5E20)]"
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-text-primary">
-                  Generate fresh questions with AI
-                </span>
-                <span className="block text-xs text-text-muted">
-                  Writes a new set from the chapters you picked instead of reusing
-                  the question bank. Slower, and the new questions are saved for
-                  next time.
-                </span>
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold uppercase text-text-muted">
+                Questions from
               </span>
-            </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    {
+                      value: "BANK" as const,
+                      label: "Question bank",
+                      hint: "Questions already stored for these chapters. Instant; a thin bank gives a shorter paper.",
+                    },
+                    {
+                      value: "AI" as const,
+                      label: "Brand-new questions (AI)",
+                      hint: "A fresh set written from the chapters, with every quality check. About a minute.",
+                    },
+                  ]
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => setSource(opt.value)}
+                    aria-pressed={source === opt.value}
+                    className={cn(
+                      "rounded-xl border p-2.5 text-left transition",
+                      source === opt.value
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "block text-sm font-semibold",
+                        source === opt.value ? "text-primary" : "text-text-primary",
+                      )}
+                    >
+                      {opt.label}
+                    </span>
+                    <span className="block text-[11px] text-text-muted">{opt.hint}</span>
+                  </button>
+                ))}
+              </div>
+              {source === null && (
+                <p className="text-xs text-text-muted">Choose one to continue.</p>
+              )}
+            </div>
           ) : (
             <p className="rounded-xl border border-border bg-border/20 p-3 text-xs text-text-muted">
               Workout problems are written fresh by AI from the chapters you picked,
@@ -752,11 +789,16 @@ export function SetActivityDialog({
 
           {progress && <GenerationProgressCard progress={progress} />}
 
-          <div className="flex gap-2 pt-1">
+          <div className="sticky -bottom-5 -mx-5 flex gap-2 border-t border-border bg-surface px-5 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
             <Button
               type="submit"
               className="flex-1"
-              disabled={submitting || chapterIds.length === 0 || textbooks.length === 0}
+              disabled={
+                submitting ||
+                chapterIds.length === 0 ||
+                textbooks.length === 0 ||
+                (paperType === "QUESTIONS" && source === null)
+              }
             >
               {submitting ? (
                 <Spinner size="sm" />

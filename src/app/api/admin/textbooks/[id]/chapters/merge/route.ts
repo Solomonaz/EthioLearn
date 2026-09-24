@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { mergeChapterInto } from "@/lib/chapter-merge";
 
 export async function POST(
   request: NextRequest,
@@ -91,62 +92,12 @@ export async function POST(
     );
   }
 
-  // 4. Run merge in a transaction
-  const result = await db.$transaction(async (tx) => {
-    // 4a. Move all questions from source to target
-    await tx.question.updateMany({
-      where: { chapterId: sourceChapterId },
-      data: { chapterId: targetChapterId },
-    });
-
-    // 4b. Append source content to target content (if source has content)
-    let newContent = targetChapter.content ?? null;
-    if (sourceChapter.content) {
-      newContent =
-        newContent
-          ? `${newContent}\n${sourceChapter.content}`
-          : sourceChapter.content;
-    }
-
-    await tx.chapter.update({
-      where: { id: targetChapterId },
-      data: { content: newContent },
-    });
-
-    // 4c. Delete the source chapter
-    await tx.chapter.delete({ where: { id: sourceChapterId } });
-
-    // 4d. Renumber remaining chapters sequentially
-    const remainingChapters = await tx.chapter.findMany({
-      where: { textbookId },
-      orderBy: { chapterNumber: "asc" },
-      select: { id: true },
-    });
-
-    // Pass 1: set temp numbers to avoid unique constraint violations
-    for (let i = 0; i < remainingChapters.length; i++) {
-      await tx.chapter.update({
-        where: { id: remainingChapters[i].id },
-        data: { chapterNumber: 10000 + i },
-      });
-    }
-
-    // Pass 2: set actual sequential numbers
-    for (let i = 0; i < remainingChapters.length; i++) {
-      await tx.chapter.update({
-        where: { id: remainingChapters[i].id },
-        data: { chapterNumber: i + 1 },
-      });
-    }
-
-    // Fetch final state of the target chapter
-    const updatedTarget = await tx.chapter.findUnique({
-      where: { id: targetChapterId },
-      select: { id: true, title: true, chapterNumber: true },
-    });
-
-    return updatedTarget;
-  });
+  // 4. Merge in a transaction — questions, activities AND embedded chunks
+  //    move to the target (see lib/chapter-merge for what used to be lost).
+  const result = await db.$transaction(
+    (tx) => mergeChapterInto(tx, { textbookId, sourceChapterId, targetChapterId }),
+    { timeout: 30_000 },
+  );
 
   return NextResponse.json({
     success: true,

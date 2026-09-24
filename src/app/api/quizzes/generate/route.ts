@@ -8,7 +8,6 @@ import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { isInStudyScope } from "@/lib/grade-scope";
-import { replenishQuestionBank } from "@/lib/question-bank";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -149,27 +148,19 @@ export async function POST(request: Request) {
     // Unseen first, then what this student answered longest ago — the same
     // rule as the AI source (see lib/quiz-selection). Previously a random
     // draw, which re-served answered questions while unseen ones waited.
+    //
+    // NEVER generates. This is the free source: it serves only what the bank
+    // already holds, so a short bank means a shorter quiz, not an AI bill.
+    // (It used to top a short bank up with AI via replenishQuestionBank.)
     const pools = await bankPoolsFor(user.id, where);
-    const available = pools.unseen.length + pools.seen.length;
-
-    // If the bank is short, top it up with AI and reuse the result. The logic
-    // lives in lib/question-bank so teacher-set activities share it exactly —
-    // the verify and dedupe rules are calibrated and must not be duplicated.
-    if (available < count) {
-      const created = await replenishQuestionBank({
-        chapterId: typeof chapterId === "string" ? chapterId : "",
-        textbookId,
-        needed: count - available,
-        difficulty,
-        questionTypes,
-        mode,
-      });
-      pools.unseen.push(...(created as typeof pools.unseen));
-    }
 
     if (pools.unseen.length + pools.seen.length === 0) {
       return NextResponse.json(
-        { error: "No questions available for this selection" },
+        {
+          error:
+            "No questions in the bank for this selection yet. Try another chapter, difficulty or question type.",
+          code: "BANK_EMPTY",
+        },
         { status: 404 }
       );
     }
@@ -192,6 +183,12 @@ export async function POST(request: Request) {
       quizId: quiz.id,
       mode: quiz.mode,
       totalQuestions: selected.length,
+      requestedQuestions: count,
+      deliveredQuestions: selected.length,
+      shortfallReason:
+        selected.length < count
+          ? `The question bank has only ${selected.length} question${selected.length === 1 ? "" : "s"} for this selection.`
+          : undefined,
       questions: selected.map((q) => {
         const options = (q.options as unknown[]).map(normalizeOption);
         return {

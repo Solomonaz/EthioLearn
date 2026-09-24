@@ -63,9 +63,16 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
             </span>
             <LanguageSwitcher />
             <NotificationBell />
-            <Badge variant="success" className="hidden sm:inline-flex">
-              XP Level {Math.floor((session.user as any).xp ?? 0 / 100) + 1}
-            </Badge>
+            {/* Students only — XP is the student points economy, and a
+                teacher's header showed "XP Level 1". It also read a `xp`
+                field the session never carries (with `?? 0 / 100` binding
+                the division to the 0), so every student saw Level 1 too.
+                `xpLevel` is what the profile page shows. */}
+            {(session.user as { role?: string }).role === "STUDENT" && (
+              <Badge variant="success" className="hidden sm:inline-flex">
+                XP Level {(session.user as { xpLevel?: number }).xpLevel ?? 1}
+              </Badge>
+            )}
             <span className="hidden text-sm font-medium text-text-primary sm:block">
               {session.user?.name}
             </span>

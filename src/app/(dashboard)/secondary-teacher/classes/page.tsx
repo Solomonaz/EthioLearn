@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { ClassInsight } from "@/types/secondary-teacher";
-import { formatAccuracy, accuracyTone, WEAK_THRESHOLD } from "@/lib/class-insights";
+import {
+  formatAccuracy,
+  accuracyTone,
+  needsHelp,
+  MIN_ANSWERS_TO_JUDGE,
+} from "@/lib/class-insights";
+import { displayChapterTitle, displaySubject } from "@/lib/display-text";
 import {
   SetActivityDialog,
   type SetActivityTarget,
@@ -55,8 +61,13 @@ function ClassesView() {
       setClasses(list);
       setWindowDays(data.windowDays ?? 90);
       // Honour ?class= only when it names a pair this teacher actually holds.
+      // Otherwise open the class with the most going on — the first class
+      // alphabetically was often an empty one ("biology · 0 students").
       const wanted = list.find((c) => c.id === requestedId);
-      setSelectedId(wanted?.id ?? list[0]?.id ?? null);
+      const busiest = [...list].sort(
+        (a, b) => b.studentCount - a.studentCount || b.answered - a.answered,
+      )[0];
+      setSelectedId(wanted?.id ?? busiest?.id ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -73,14 +84,12 @@ function ClassesView() {
     [classes, selectedId],
   );
 
-  // Students who have actually answered and are below the threshold. Students
-  // with no activity are excluded — there is nothing to remediate yet, and
-  // sending them extra work for being absent would be the wrong signal.
+  // Students whose overall standing — quiz accuracy AND marked written work,
+  // see lib/class-insights — is below the threshold, on enough evidence to
+  // judge. Students with little or no activity are excluded: sending extra
+  // work on five answers, or for being absent, would be the wrong signal.
   const strugglers = useMemo(
-    () =>
-      (selected?.students ?? []).filter(
-        (s) => s.accuracy !== null && s.accuracy < WEAK_THRESHOLD,
-      ),
+    () => (selected?.students ?? []).filter((s) => needsHelp(s)),
     [selected],
   );
 
@@ -171,7 +180,7 @@ function ClassesView() {
             )}
           >
             <span className="block text-sm font-bold text-text-primary">
-              {c.subject}
+              {displaySubject(c.subject)}
             </span>
             <span className="block text-xs text-text-muted">
               Grade {c.grade}
@@ -192,7 +201,7 @@ function ClassesView() {
             </p>
             <p className="text-xs text-text-muted">
               Goes to {selected.studentCount === 1 ? "the 1 student" : `all ${selected.studentCount} students`}{" "}
-              in {selected.subject} grade {selected.grade}
+              in {displaySubject(selected.subject)} grade {selected.grade}
               {selected.section ? ` ${selected.section}` : ""}.
               {strugglers.length > 0
                 ? " You can narrow it to those who are behind in the next step."
@@ -241,7 +250,7 @@ function ClassesView() {
                       >
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-text-primary">
-                            {ch.chapterNumber}. {ch.title}
+                            {ch.chapterNumber}. {displayChapterTitle(ch.title)}
                           </p>
                           <p className="text-[11px] text-text-muted">
                             {ch.answered} answers
@@ -280,7 +289,7 @@ function ClassesView() {
                   <div className="flex items-center gap-2">
                     <Users className="h-5 w-5 text-primary" />
                     <h2 className="font-semibold text-text-primary">
-                      {selected.subject} · Grade {selected.grade}
+                      {displaySubject(selected.subject)} · Grade {selected.grade}
                       {selected.section ? ` Section ${selected.section}` : " (all sections)"}
                     </h2>
                   </div>
@@ -288,10 +297,12 @@ function ClassesView() {
                     <span
                       className={cn(
                         "rounded-full px-2.5 py-1 text-xs font-bold",
-                        accuracyTone(selected.accuracy),
+                        selected.answered >= MIN_ANSWERS_TO_JUDGE
+                          ? accuracyTone(selected.accuracy)
+                          : accuracyTone(null),
                       )}
                     >
-                      Class average {formatAccuracy(selected.accuracy)}
+                      Quiz average {formatAccuracy(selected.accuracy)}
                     </span>
                     {strugglers.length > 0 && (
                       <Button
@@ -325,47 +336,83 @@ function ClassesView() {
                       <thead>
                         <tr className="border-b border-border text-left text-xs uppercase text-text-muted">
                           <th className="pb-2 pr-3 font-semibold">Student</th>
-                          <th className="pb-2 pr-3 font-semibold">Section</th>
-                          <th className="pb-2 pr-3 text-right font-semibold">
-                            Answers
+                          {/* Only a whole-grade class has more than one section to tell apart. */}
+                          {!selected.section && (
+                            <th className="pb-2 pr-3 font-semibold">Section</th>
+                          )}
+                          <th
+                            className="pb-2 pr-3 text-right font-semibold"
+                            title={`Quiz accuracy is trusted from ${MIN_ANSWERS_TO_JUDGE} answers`}
+                          >
+                            Quizzes
                           </th>
-                          <th className="pb-2 text-right font-semibold">Accuracy</th>
+                          <th className="pb-2 pr-3 text-right font-semibold">Marked work</th>
+                          <th className="pb-2 pr-3 text-right font-semibold">Work done</th>
+                          <th className="pb-2 text-right font-semibold">Last active</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {selected.students.map((s) => (
-                          <tr key={s.id}>
-                            <td className="py-2 pr-3">
-                              <Link
-                                href={`/secondary-teacher/students/${s.id}`}
-                                className="font-medium text-text-primary hover:text-primary hover:underline"
-                              >
-                                {s.name}
-                              </Link>
-                              {s.accuracy !== null && s.accuracy < WEAK_THRESHOLD && (
-                                <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-                                  needs help
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2 pr-3 text-text-secondary">
-                              {s.section ?? "—"}
-                            </td>
-                            <td className="py-2 pr-3 text-right text-text-secondary">
-                              {s.answered}
-                            </td>
-                            <td className="py-2 text-right">
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-0.5 text-xs font-bold",
-                                  accuracyTone(s.accuracy),
+                        {selected.students.map((s) => {
+                          return (
+                            <tr key={s.id}>
+                              <td className="py-2 pr-3">
+                                <Link
+                                  href={`/secondary-teacher/students/${s.id}?class=${selected.id}`}
+                                  className="font-medium text-text-primary hover:text-primary hover:underline"
+                                >
+                                  {s.name}
+                                </Link>
+                                {needsHelp(s) && (
+                                  <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                                    needs help
+                                  </span>
                                 )}
-                              >
-                                {formatAccuracy(s.accuracy)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              {!selected.section && (
+                                <td className="py-2 pr-3 text-text-secondary">
+                                  {s.section ?? "—"}
+                                </td>
+                              )}
+                              <td className="py-2 pr-3 text-right">
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2 py-0.5 text-xs font-bold",
+                                    // Too few answers to judge: shown, but not coloured as a verdict.
+                                    s.answered >= MIN_ANSWERS_TO_JUDGE
+                                      ? accuracyTone(s.accuracy)
+                                      : accuracyTone(null),
+                                  )}
+                                >
+                                  {formatAccuracy(s.accuracy)}
+                                </span>
+                                <span className="block text-[10px] text-text-muted">
+                                  {s.answered} {s.answered === 1 ? "answer" : "answers"}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-3 text-right">
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2 py-0.5 text-xs font-bold",
+                                    accuracyTone(s.markedAverage),
+                                  )}
+                                >
+                                  {formatAccuracy(s.markedAverage)}
+                                </span>
+                                {s.markedCount > 0 && (
+                                  <span className="block text-[10px] text-text-muted">
+                                    {s.markedCount} marked
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2 pr-3 text-right text-text-secondary">
+                                {s.workAssigned > 0 ? `${s.workDone}/${s.workAssigned}` : "—"}
+                              </td>
+                              <td className="py-2 text-right text-xs text-text-secondary">
+                                {lastActive(s.lastActiveAt)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -377,4 +424,15 @@ function ClassesView() {
       )}
     </div>
   );
+}
+
+/** "Today", "3 days ago", "2 weeks ago" — or "Never" for a student who has not signed in. */
+function lastActive(iso: string | null): string {
+  if (!iso) return "Never";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) return `${Math.floor(days / 7)} weeks ago`;
+  return `${Math.floor(days / 30)} months ago`;
 }

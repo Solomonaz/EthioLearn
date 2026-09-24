@@ -52,6 +52,8 @@ export type UsageFeature =
   | "chapter-detection"
   | "answer-verification"
   | "quality-check"
+  /** Settles verifier-vs-quality-check disagreements on factual accuracy. */
+  | "factual-tiebreak"
   | "bloom-tagging"
   | "tutor-chat"
   /** Rewrites a tutor follow-up into a search query before retrieval. */

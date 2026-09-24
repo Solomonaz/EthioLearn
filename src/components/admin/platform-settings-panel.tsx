@@ -13,6 +13,7 @@ interface Settings {
   aiQuizGenEnabled: boolean;
   aiAdaptiveEnabled: boolean;
   aiMathToolsEnabled: boolean;
+  aiTeacherAssistantEnabled: boolean;
   pricingEnabled: boolean;
   rewardsEnabled: boolean;
   antiCheatEnabled: boolean;
@@ -201,6 +202,13 @@ export function PlatformSettingsPanel() {
             checked={settings.aiMathToolsEnabled}
             disabled={aiOff}
             onChange={(v) => update("aiMathToolsEnabled", v)}
+          />
+          <Row
+            label="Teachers' AI Assistant"
+            desc="Lesson plans, worksheets and notes for teachers, and AI-written workout problems. Separate from the student tutor."
+            checked={settings.aiTeacherAssistantEnabled}
+            disabled={aiOff}
+            onChange={(v) => update("aiTeacherAssistantEnabled", v)}
           />
         </div>
 

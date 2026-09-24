@@ -3,21 +3,21 @@ import { isAiFeatureEnabled } from "./platform-settings";
 import { selectGenerationContent } from "./generation-content";
 import {
   avoidList,
-  findNearDuplicates,
   generationRunIndex,
   recentChapterQuestions,
 } from "./question-dedupe";
+import { markChapterSaturated, roundShowsSaturation } from "./quiz-selection";
 
 /**
  * Question bank replenishment.
  *
- * When a chapter's bank cannot cover a requested quiz, generate the shortfall
- * with AI, verify it, dedupe it against what is already stored, and persist it
- * so later quizzes on that chapter serve instantly from Postgres (SRS §4.5.3).
+ * Generates new questions for a chapter, runs them through the full quality
+ * pipeline (the same one student AI quizzes and admin generation use), and
+ * persists the ones that pass so later requests serve them from Postgres.
  *
- * Lifted verbatim out of /api/quizzes/generate so teacher-set activities can
- * reuse it. Both callers must share this: two copies of the verify + dedupe
- * rules would drift, and the duplicate threshold is calibrated.
+ * Used by teacher activities when the teacher picks "Brand-new questions".
+ * The student "Question Bank" source no longer calls this — it is the free
+ * source and never generates.
  *
  * Never throws — a replenish failure degrades to "serve what the bank has",
  * exactly as the inline version did.
@@ -64,7 +64,11 @@ const DEFAULT_MAX_GENERATE = 15;
 /** Whether any AI provider is configured at all. */
 function hasProviderKey(): boolean {
   return Boolean(
-    process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.NVIDIA_API_KEY,
+    // OpenRouter included: it serves the default question generator.
+    process.env.OPENROUTER_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GROQ_API_KEY ||
+      process.env.NVIDIA_API_KEY,
   );
 }
 
@@ -124,14 +128,14 @@ export async function replenishQuestionBank(
 
     onProgress?.({ message: "Reading the chapter content...", percent: 10 });
 
-    // Ask for a small buffer over the shortfall, capped — verification rejects
+    // ~20% buffer over the shortfall, as the student flow uses — review drops
     // some, and over-generating burns budget for no gain.
-    const neededCount = Math.min(needed + 2, maxGenerate);
+    const neededCount = Math.min(needed + Math.max(1, Math.ceil(needed * 0.2)), maxGenerate);
 
     const {
       generateQuestionsBatched,
-      verifyQuestions,
-      hasBlockingStructuralIssue,
+      runQualityPipeline,
+      passesAutoServe,
       generationContentBudget,
     } = await import("@/lib/ai-provider");
 
@@ -167,49 +171,92 @@ export async function replenishQuestionBank(
       rotation: runIndex,
     });
 
-    onProgress?.({ message: "Drafting Bloom-aligned questions with AI...", percent: 35 });
+    // The SAME full pipeline as student AI quizzes and admin generation —
+    // blind verifier, quality checks (facts, distractors, scope, wording),
+    // factual tie-break, duplicate and relevance checks — and the same rule
+    // for what may reach students unreviewed (passesAutoServe). This path used
+    // to run only the verifier and a near-duplicate check, so a question with
+    // a giveaway distractor or an out-of-chapter formula went straight onto a
+    // teacher's paper.
+    type Gen = Awaited<ReturnType<typeof generateQuestionsBatched>>["questions"][number];
+    const accepted: { q: Gen; score: number }[] = [];
+    const droppedTexts: string[] = [];
+    const MAX_ROUNDS = 2; // first attempt + one refill
+    const genDifficulty =
+      difficulty === "ADAPTIVE" || !difficulty || difficulty === "MIXED" ? "MEDIUM" : (difficulty as never);
+    const genTypes =
+      Array.isArray(questionTypes) && questionTypes.length > 0 ? (questionTypes as never) : (["MCQ"] as never);
 
-    const { questions: rawGen, provider, model } = await generateQuestionsBatched({
-      avoidQuestions: avoidList(chapterBank.map((q) => q.questionText)),
-      content: selected.content,
-      chapterTitle: replenishTitle,
-      subject: textbookMeta.subject,
-      grade: textbookMeta.grade,
-      count: neededCount,
-      difficulty:
-        difficulty === "ADAPTIVE" || !difficulty || difficulty === "MIXED"
-          ? "MEDIUM"
-          : (difficulty as never),
-      questionTypes:
-        Array.isArray(questionTypes) && questionTypes.length > 0
-          ? (questionTypes as never)
-          : (["MCQ"] as never),
-      mode: mode === "TIMED" || mode === "GROUP" ? (mode as never) : ("SOLO" as never),
-    });
+    for (let round = 0; round < MAX_ROUNDS && accepted.length < needed; round++) {
+      const ask =
+        round === 0 ? neededCount : Math.min(needed - accepted.length + 2, maxGenerate);
+      onProgress?.({
+        message:
+          round === 0
+            ? "Drafting Bloom-aligned questions with AI..."
+            : "Replacing questions that failed the quality checks...",
+        percent: round === 0 ? 35 : 80,
+      });
 
-    onProgress?.({
-      message: "Cross-checking each question with a second AI solver...",
-      percent: 75,
-    });
+      const { questions: rawGen, provider, model } = await generateQuestionsBatched({
+        avoidQuestions: avoidList([
+          ...accepted.map((a) => a.q.questionText).reverse(),
+          ...droppedTexts.slice().reverse(),
+          ...chapterBank.map((q) => q.questionText),
+        ]),
+        content: selected.content,
+        chapterTitle: replenishTitle,
+        subject: textbookMeta.subject,
+        grade: textbookMeta.grade,
+        count: ask,
+        difficulty: genDifficulty,
+        questionTypes: genTypes,
+        mode: mode === "TIMED" || mode === "GROUP" ? (mode as never) : ("SOLO" as never),
+        variantSeed: runIndex + round * 7,
+        refill: round > 0,
+      });
 
-    const verdicts = await verifyQuestions(rawGen, textbookMeta.subject, textbookMeta.grade, {
-      avoidProvider: provider,
-      avoidModel: model,
-    });
-    const verifiedNew = rawGen.filter(
-      (q, idx) => verdicts[idx]?.verdict === "verified" && !hasBlockingStructuralIssue(q),
-    );
+      onProgress?.({
+        message: "Checking every question: blind re-solve, facts, difficulty and scope...",
+        percent: round === 0 ? 65 : 85,
+      });
 
-    if (verifiedNew.length === 0) return [];
+      const { results } = await runQualityPipeline(
+        rawGen,
+        selected.content,
+        textbookMeta.subject,
+        textbookMeta.grade,
+        provider,
+        // Accepted this run + the chapter's bank, so repeats of either are caught.
+        [
+          ...accepted.map((a) => a.q).reverse(),
+          ...chapterBank.map((b) => ({ questionText: b.questionText, correctAnswer: b.correctAnswer })),
+        ],
+        model,
+      );
 
-    // Cross-generation dedupe against what this chapter already holds —
-    // reworded repeats included, not only word-for-word copies.
-    const dupes = await findNearDuplicates(verifiedNew, chapterBank);
-    const toInsert = verifiedNew.filter((_, i) => !dupes.has(i));
-    if (dupes.size > 0) {
-      console.log(`[Question Bank] Dropped ${dupes.size} repeat(s) of existing or in-batch questions.`);
+      rawGen.forEach((q, i) => {
+        if (passesAutoServe(q, results[i])) {
+          if (accepted.length < needed) accepted.push({ q, score: results[i].qualityScore });
+        } else {
+          droppedTexts.push(q.questionText);
+        }
+      });
+      console.log(
+        `[Question Bank] Round ${round + 1}: ${rawGen.length} generated, ${accepted.length}/${needed} passed every check.`,
+      );
+
+      // Mostly repeats of the bank: this chapter has run out of new material.
+      const repeats = results.filter((r) => r.flags.includes("DUPLICATE_EXISTING")).length;
+      if (chapterId !== "all" && roundShowsSaturation(rawGen.length, repeats)) {
+        await markChapterSaturated(replenishChapterId);
+        console.log(`[Question Bank] Chapter saturated — ${repeats}/${rawGen.length} repeated the bank.`);
+        break;
+      }
     }
 
+    const toInsert = accepted.map((a) => a.q);
+    const scoreByText = new Map(accepted.map((a) => [a.q.questionText, a.score]));
     if (toInsert.length === 0) return [];
 
     onProgress?.({ message: "Saving the verified questions...", percent: 90 });
@@ -226,7 +273,8 @@ export async function replenishQuestionBank(
             correctAnswer: q.correctAnswer,
             explanation: q.explanation,
             bloomLevel: (q as { bloomLevel?: string | null }).bloomLevel ?? null,
-            qualityScore: 1.0,
+            // The pipeline's own score, not a blanket 1.0.
+            qualityScore: scoreByText.get(q.questionText) ?? 1.0,
             status: "PUBLISHED",
           },
           select: {

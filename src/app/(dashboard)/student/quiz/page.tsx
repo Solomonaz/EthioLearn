@@ -358,8 +358,9 @@ export default function QuizLauncherPage() {
       if (data.adaptiveInsights) {
         setAdaptiveInsights(data.adaptiveInsights);
       }
-      // `shortfallReason` is set when the independent solver rejected some
-      // questions, so the quiz is shorter than the student asked for.
+      // `shortfallReason` is set when the quiz is shorter than the student
+      // asked for: the verifier rejected some AI questions, or (bank source)
+      // the bank simply holds fewer — that source never generates.
       startQuiz(
         data.quizId,
         data.questions,

@@ -17,8 +17,10 @@ import { cn } from "@/lib/utils";
 import {
   formatAccuracy,
   accuracyTone,
+  MIN_ANSWERS_TO_JUDGE,
   type MasteryLevel,
 } from "@/lib/class-insights";
+import { displayChapterTitle, displaySubject } from "@/lib/display-text";
 
 /**
  * One student as their teacher sees them: mastery, everything the teacher set,
@@ -122,6 +124,14 @@ export default function TeacherStudentPage() {
   const [data, setData] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The class the teacher came from, so "Back" returns to it rather than to
+  // whichever class the list opens on. Read once on mount: useSearchParams
+  // would need a Suspense boundary for a single link.
+  const [backHref, setBackHref] = useState("/secondary-teacher/classes");
+  useEffect(() => {
+    const cls = new URLSearchParams(window.location.search).get("class");
+    if (cls) setBackHref(`/secondary-teacher/classes?class=${encodeURIComponent(cls)}`);
+  }, []);
 
   const load = useCallback(async () => {
     if (!studentId) return;
@@ -168,7 +178,7 @@ export default function TeacherStudentPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <Link
-        href="/secondary-teacher/classes"
+        href={backHref}
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
       >
         <ArrowLeft className="h-4 w-4" /> Back to my classes
@@ -179,7 +189,11 @@ export default function TeacherStudentPage() {
           <h1 className="text-2xl font-bold text-text-primary">{student.name}</h1>
           <p className="text-sm text-text-secondary">
             Grade {student.grade}
-            {student.section ? ` ${student.section}` : ""} · {subjects.join(", ")}
+            {student.section ? ` ${student.section}` : ""} ·{" "}
+            {subjects.map(displaySubject).join(", ")} · Last active{" "}
+            {student.lastActiveAt
+              ? new Date(student.lastActiveAt).toLocaleDateString()
+              : "never"}
           </p>
         </div>
         {student.streakDays > 0 && (
@@ -193,7 +207,9 @@ export default function TeacherStudentPage() {
         <Tile
           label={`Accuracy (last ${summary.windowDays} days)`}
           value={formatAccuracy(summary.accuracy)}
-          tone={accuracyTone(summary.accuracy)}
+          // Below the answer count that can be trusted, shown but not coloured
+          // as a verdict — the same rule as the class list.
+          tone={accuracyTone(summary.answered >= MIN_ANSWERS_TO_JUDGE ? summary.accuracy : null)}
           hint={`${summary.answered} questions answered`}
         />
         <Tile
@@ -232,10 +248,10 @@ export default function TeacherStudentPage() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-text-primary">
-                        {c.chapterNumber}. {c.title}
+                        {c.chapterNumber}. {displayChapterTitle(c.title)}
                       </p>
                       <p className="text-[11px] text-text-muted">
-                        {c.subject} · {c.answered} answered
+                        {displaySubject(c.subject)} · {c.answered} answered
                       </p>
                     </div>
                     <span
@@ -281,7 +297,8 @@ export default function TeacherStudentPage() {
                         <div className="min-w-0">
                           <Link
                             href={`/secondary-teacher/activities/${a.id}`}
-                            className="truncate text-sm font-medium text-text-primary hover:underline"
+                            title={a.title}
+                            className="block truncate text-sm font-medium text-text-primary hover:underline"
                           >
                             {a.title}
                           </Link>

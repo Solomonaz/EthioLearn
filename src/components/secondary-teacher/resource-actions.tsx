@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { GiveToClassDialog } from "./give-to-class-dialog";
 import { markdownToDocxBlob, safeFileBase } from "@/lib/export-doc";
+import { fenceAsHeading } from "@/lib/answer-key";
 
 /**
  * What a teacher can do with a piece of AI-generated material: keep it, take it
@@ -93,7 +94,7 @@ export function ResourceActions({
     if (exporting) return;
     setExporting(true);
     try {
-      const blob = await markdownToDocxBlob(title, markdown);
+      const blob = await markdownToDocxBlob(title, fenceAsHeading(markdown));
       saveBlob(blob, `${safeFileBase(title)}.docx`);
     } catch {
       toast.error("Could not build the Word file — try Markdown instead.");
@@ -106,7 +107,7 @@ export function ResourceActions({
     setMenuOpen(false);
     try {
       // The title is kept as an H1 so the file stands on its own.
-      const blob = new Blob([`# ${title}\n\n${markdown}\n`], {
+      const blob = new Blob([`# ${title}\n\n${fenceAsHeading(markdown)}\n`], {
         type: "text/markdown;charset=utf-8",
       });
       saveBlob(blob, `${safeFileBase(title)}.md`);
@@ -132,7 +133,7 @@ export function ResourceActions({
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(markdown);
+      await navigator.clipboard.writeText(fenceAsHeading(markdown));
       toast.success("Copied.");
     } catch {
       toast.error("Could not copy — select the text and copy manually.");

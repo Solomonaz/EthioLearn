@@ -23,6 +23,12 @@ export interface ClassStudent {
   answered: number;
   /** 0-1, or null when the student has not answered anything in the window. */
   accuracy: number | null;
+  /** Published work this teacher set the class in the window, and how much is done. */
+  workAssigned: number;
+  workDone: number;
+  /** Marked written work with a score, and its average (0-1, or null). */
+  markedCount: number;
+  markedAverage: number | null;
 }
 
 export interface ClassInsight {

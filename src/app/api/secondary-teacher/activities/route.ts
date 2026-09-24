@@ -322,7 +322,7 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
           { status: 400 },
         );
       }
-      if (!(await isAiFeatureEnabled("aiTutor"))) {
+      if (!(await isAiFeatureEnabled("aiTeacherAssistant"))) {
         return NextResponse.json(
           { error: "AI features are currently switched off for this platform." },
           { status: 503 },
@@ -387,6 +387,24 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
       } else if (looksLikeItContainsAnswers(documentBody)) {
         answerKeyNotice =
           "Part of the student view still looks like it contains answers. Please read it before sending.";
+      }
+    }
+
+    // Work handed over ready-made — "Give to class" from the assistant or My
+    // Materials — arrives whole, answer key included. It used to be stored
+    // as-is, so a worksheet reached students with its worked answers. Split
+    // it the same way as generated workout problems before anything is saved.
+    if (!answerKey && documentBody) {
+      const split = splitAnswerKey(documentBody);
+      if (split.detected) {
+        documentBody = split.body;
+        answerKey = split.answerKey;
+        answerKeyNotice = looksLikeItContainsAnswers(documentBody)
+          ? "The answer key was kept back from students, but part of the student view still looks like it contains answers. Please read it before sending."
+          : "The answer key was kept back from students — only you will see it. Check the draft before sending.";
+      } else if (looksLikeItContainsAnswers(documentBody)) {
+        answerKeyNotice =
+          "This looks like it may contain answers. Read the student view before you send it.";
       }
     }
 
@@ -495,6 +513,15 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
   if (difficulty) where.difficulty = difficulty;
   where.type = { in: questionTypes };
 
+  // The teacher always chooses — the dialog has no default. BANK serves only
+  // stored questions and never calls AI; AI writes a brand-new set through
+  // the same full quality pipeline as student and admin generation.
+  if (body.source !== "AI" && body.source !== "BANK") {
+    return NextResponse.json(
+      { error: "Choose where the questions come from: the question bank or brand-new AI questions." },
+      { status: 400 },
+    );
+  }
   const wantsAi = body.source === "AI";
   let pool: BankQuestion[] = [];
   let notice: string | null = null;
@@ -512,7 +539,7 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
     return chapters.map((_, i) => base + (i < extra ? 1 : 0));
   }
 
-  // "Generate with AI" writes a fresh set first, so the paper is new rather
+  // "Brand-new questions" writes a fresh set first, so the paper is new rather
   // than whatever the bank happened to hold. The generated rows are persisted
   // like any other, so the next teacher benefits too.
   if (wantsAi) {
@@ -549,6 +576,10 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
     if (pool.length === 0) {
       notice =
         "AI could not generate new questions right now, so this was built from the existing question bank.";
+    } else if (pool.length < questionCount) {
+      notice =
+        `${pool.length} brand-new question${pool.length === 1 ? "" : "s"} passed every quality check; ` +
+        `the rest of the paper comes from the question bank.`;
     }
   }
 
@@ -571,24 +602,8 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
     pool = pool.concat(banked.filter((q) => !seen.has(q.id)));
   }
 
-  // Still short and the teacher did not ask for AI: top up the bank the same
-  // way the student quiz path does.
-  if (!wantsAi && pool.length < questionCount) {
-    const share = shareAcrossChapters(questionCount - pool.length);
-    for (let i = 0; i < chapters.length; i++) {
-      if (share[i] < 1) continue;
-      const created = await replenishQuestionBank({
-        chapterId: chapters[i].id,
-        textbookId: chapters[i].textbookId,
-        needed: share[i],
-        difficulty: difficulty ?? undefined,
-        questionTypes,
-        mode: "SOLO",
-      });
-      const seen = new Set(pool.map((q) => q.id));
-      pool = pool.concat(created.filter((q) => !seen.has(q.id)));
-    }
-  }
+  // Question bank chosen: never generate. A thin bank gives a shorter paper
+  // and says so (notice below) — the teacher can re-set it with AI instead.
 
   if (pool.length === 0) {
     return NextResponse.json(
@@ -603,7 +618,9 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
   }
 
   if (pool.length < questionCount && !notice) {
-    notice = `Only ${pool.length} question${pool.length === 1 ? "" : "s"} were available, so the activity is shorter than you asked for.`;
+    notice =
+      `Only ${pool.length} question${pool.length === 1 ? "" : "s"} were available, so the activity is shorter than you asked for.` +
+      (wantsAi ? "" : ' Choose "Brand-new questions (AI)" to fill it.');
   }
 
   // Fisher-Yates, then take what we can — a short bank gives a shorter paper

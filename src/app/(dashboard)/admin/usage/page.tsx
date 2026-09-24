@@ -77,6 +77,7 @@ const FEATURE_LABELS: Record<string, string> = {
   "chapter-detection": "Chapter detection",
   "answer-verification": "Answer verification",
   "quality-check": "Quality checks",
+  "factual-tiebreak": "Factual tie-break",
   "bloom-tagging": "Bloom tagging",
   "tutor-chat": "AI tutor chat",
   "query-rewrite": "Tutor search rewrite",
