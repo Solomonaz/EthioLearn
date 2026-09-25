@@ -32,18 +32,50 @@ export function displaySubject(subject: string | null | undefined): string {
  * deliberate casing is shown as typed.
  */
 export function displayChapterTitle(title: string | null | undefined): string {
-  const t = (title ?? "").trim();
-  if (!t || /\p{Ll}/u.test(t)) return t;
+  return cleanChapterTitle(title);
+}
+
+const NUMBER_WORDS =
+  "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen";
+
+/**
+ * One consistent form for a chapter title, however it was detected:
+ *
+ *   "Unit One: Biology and Technology"  -> "Biology and Technology"
+ *   "Unit Three:Enzymes"                -> "Enzymes"
+ *   "Unit 5: The human body systems"    -> "The Human Body Systems"
+ *   "ATOMIC STRUCTURE AND PERIODIC ..." -> "Atomic Structure and Periodic ..."
+ *
+ * The "Unit N" prefix goes because the chapter number is already shown beside
+ * the title ("1. Unit One: …" said it twice), and AI detection and the
+ * rule-based scan wrote it differently ("Unit One" vs "Unit 5") in the same
+ * book. Title case throughout, small words lower, acronyms kept. Used both
+ * when chapters are saved and when they are shown.
+ */
+export function cleanChapterTitle(title: string | null | undefined): string {
+  let t = (title ?? "").trim().replace(/\s+/g, " ");
+  if (!t) return t;
+
+  const prefix = new RegExp(`^(unit|chapter|module)\\s+(\\d+|${NUMBER_WORDS})\\s*[:.\\-–—]\\s*`, "i");
+  const stripped = t.replace(prefix, "").trim();
+  if (stripped) t = stripped;
+
+  // "Three:Enzymes" -> "Three: Enzymes" (a colon inside the title keeps a space).
+  t = t.replace(/:(?=\p{L})/gu, ": ");
+
+  // All capitals: recase every word. Otherwise only lift lower-case initials,
+  // so deliberate casing (pH, mRNA) is left alone.
+  const allCaps = !/\p{Ll}/u.test(t);
   return t
-    .toLowerCase()
     .split(/(\s+)/)
     .map((word, i) => {
       if (/^\s+$/.test(word)) return word;
       const bare = word.replace(/[^\p{L}]/gu, "");
-      const acronym = ACRONYMS.get(bare);
-      if (acronym) return word.replace(bare, acronym);
-      if (i > 0 && SMALL_WORDS.has(bare)) return word;
-      return word.replace(/\p{L}/u, (c) => c.toUpperCase());
+      const acronym = ACRONYMS.get(bare.toLowerCase());
+      if (acronym && (allCaps || bare === bare.toLowerCase())) return word.replace(bare, acronym);
+      const w = allCaps ? word.toLowerCase() : word;
+      if (i > 0 && SMALL_WORDS.has(bare.toLowerCase())) return w;
+      return w.replace(/\p{L}/u, (c) => c.toUpperCase());
     })
     .join("");
 }

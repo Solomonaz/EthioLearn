@@ -4,6 +4,7 @@ import { validateCsrfOrigin } from "@/lib/csrf";
 import { extractTextFromFile } from "@/lib/extract-text";
 import { splitTextByChapters } from "@/lib/ai-provider";
 import { detectChaptersFullText } from "@/lib/chapter-detection";
+import { cleanChapterTitle } from "@/lib/display-text";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { canonicalSubject } from "@/lib/subject";
 
@@ -177,9 +178,14 @@ export async function POST(request: NextRequest) {
       // windows, implausibly large chapters) — shown to the admin before they
       // commit the split.
       warnings: [...(extraction.warnings ?? []), ...detectionWarnings],
+      // Titles come out of the generator in ONE form. The AI (reading the
+      // contents page) and the rule-based scan (reading body headings) wrote
+      // them differently — "Unit One: Animals" beside "Unit 5: The human body
+      // systems". The raw title is still what located each chapter in the
+      // text (splitTextByChapters, above); only the finished list is cleaned.
       chapters: chaptersWithContent.map((ch) => ({
         chapterNumber: ch.chapterNumber,
-        title: ch.title,
+        title: cleanChapterTitle(ch.title),
         contentPreview: ch.content.slice(0, 200),
         contentLength: ch.content.length,
         content: ch.content,

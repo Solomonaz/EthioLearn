@@ -165,6 +165,15 @@ export async function extractPdfTextWithLayout(
     const req = createRequire(import.meta.url);
     const pkg = req.resolve("pdfjs-dist/package.json");
     standardFontDataUrl = pkg.replace(/package\.json$/, "standard_fonts/");
+    // Point pdf.js at its worker explicitly as well, so extraction never
+    // depends on where a bundler happened to put this module (see
+    // serverExternalPackages in next.config.ts).
+    if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+      const { pathToFileURL } = await import("url");
+      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+        pkg.replace(/package\.json$/, "legacy/build/pdf.worker.mjs"),
+      ).href;
+    }
   } catch {
     // Resolution failure is not fatal — extraction still works, just noisier.
   }

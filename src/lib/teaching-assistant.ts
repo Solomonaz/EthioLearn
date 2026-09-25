@@ -32,8 +32,19 @@ const TASK_BRIEF: Record<AssistantTask, string> = {
     "Write a single-period lesson plan. Include: learning objectives, prior knowledge assumed, a timed sequence of activities, the worked examples the teacher should put on the board, at least two checks for understanding, and a short homework suggestion.",
   WORKSHEET:
     `Write a student worksheet. Number every item. Progress from straightforward to demanding. Then write a line containing exactly ${ANSWER_KEY_FENCE} and nothing else, and AFTER it give the answer key with the working shown, not just the final answers.`,
-  WORKOUT:
-    "Write a set of WORKOUT problems: calculations and derivations the student solves on paper, showing every step. Number every problem. State the data given in each one, and the units expected in the answer. Do NOT write multiple-choice options, do not hint at the answer in the wording, and do NOT show any solution, final value or working alongside a problem. Progress from straightforward to demanding. Then write a line containing exactly <<<ANSWER_KEY>>> and nothing else. AFTER that line, and only after it, give the full worked solution to every problem step by step - not just the final value - with a marking guide. Everything before that line is given to students; everything after it is seen only by the teacher, so no answer may appear before it.",
+  // "Workout" means problems worked on paper, not calculations only. Most
+  // biology chapters, and some chemistry ones, have nothing to calculate; asked
+  // for calculations anyway, the model invented physics dressed as biology
+  // (specific heat, Q10, ant walking speeds) for a descriptive chapter.
+  WORKOUT: [
+    "Write a set of WORKOUT problems: problems the student works through on paper, writing out their working or reasoning in full. A workout problem is NOT necessarily a calculation — match the kind of problem to what the chapter actually teaches:",
+    "- Where the textbook excerpts contain calculations (formulas, ratios, worked examples, quantitative methods), write calculation problems using those methods. State the data given and the units expected in the answer.",
+    "- Where the chapter is descriptive, write structured written problems instead: explain and justify, compare and contrast (e.g. in a table), apply a concept to a new scenario, interpret given data, a table or a described graph, sequence the stages of a process, draw and label a diagram, or predict an outcome and give the reason.",
+    "- A chapter with both gets a mix, in proportion to how much of each it contains. Never force numbers into a descriptive chapter: figures the chapter merely mentions (a litter size, a gestation period, an egg count) are facts to know, not material for an arithmetic problem.",
+    "Never bring in a formula, constant or method that is not in the excerpts — in particular never borrow one from another subject (no physics formulas in a biology set). Every problem must need real understanding of this subject; if a problem could be solved by someone who knows only arithmetic, rewrite it. Spread the problems across the chapter's sections and do not reuse the same setup twice.",
+    "Number every problem, and give marks for each part. Do NOT write multiple-choice options, do not hint at the answer in the wording (no \"e.g.\" lists of expected points), and do NOT show any answer or working alongside a problem. Progress from straightforward to demanding.",
+    `Then write a line containing exactly ${ANSWER_KEY_FENCE} and nothing else. AFTER that line, and only after it, give a full model answer to every problem — worked step by step for calculations, the expected key points for written answers — with a marking guide. Everything before that line is given to students; everything after it is seen only by the teacher, so no answer may appear before it.`,
+  ].join("\n"),
   NOTES:
     "Write concise board notes the teacher can copy onto a blackboard or project. Favour short lines, clear headings, and any formulas written out in full. Avoid long paragraphs.",
   EXPLANATION:
@@ -115,6 +126,7 @@ function buildSystem(task: AssistantTask): string {
     "• Write mathematics in LaTeX: $...$ inline, $$...$$ on its own line for display.",
     "• Use LaTeX ONLY for real mathematics. Plain numbers, percentages and units are plain text: write 18.0 g, 11.2%, 0.30 m/s — never wrap a bare quantity or a percentage in maths delimiters.",
     "• Be consistent: do not switch between LaTeX and plain text for the same kind of quantity.",
+    "• Write temperatures as plain text with the degree sign: 37.0 °C. Never put ^ or \\circ inside \\text{} — that does not render.",
     // Curriculum documents are reused for other teachers of the same subject
     // and grade (lib/teacher-library), so nothing in them may point at one
     // classroom. "Anything else" is never reused and may be personal (a letter

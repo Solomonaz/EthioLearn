@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { cleanChapterTitle } from "@/lib/display-text";
 
 type RouteParams = { params: Promise<{ id: string; chapterId: string }> };
 
@@ -84,7 +85,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const updated = await db.chapter.update({
       where: { id: chapterId },
-      data: { title: title.trim() },
+      data: { title: cleanChapterTitle(title) },
       select: { id: true, chapterNumber: true, title: true },
     });
 

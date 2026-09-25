@@ -59,7 +59,7 @@ export function subjectInFilter(subjects: string[]) {
  * aligns spellings, it does not police vocabulary.
  */
 export async function canonicalSubject(input: string): Promise<string> {
-  const trimmed = input.trim().replace(/\s+/g, " ");
+  const trimmed = tidySubjectName(input);
   if (!trimmed) return trimmed;
 
   const match = await db.subject.findFirst({
@@ -68,4 +68,16 @@ export async function canonicalSubject(input: string): Promise<string> {
   });
 
   return match?.name ?? trimmed;
+}
+
+/**
+ * A subject name as it should be stored: trimmed, single-spaced, and — when
+ * typed all in lower case — capitalised ("biology" -> "Biology", "social
+ * studies" -> "Social Studies"). Anything with capitals already ("ICT",
+ * "Civics and Ethical Education") is kept as typed.
+ */
+export function tidySubjectName(input: string): string {
+  const s = input.trim().replace(/\s+/g, " ");
+  if (!s || s !== s.toLowerCase()) return s;
+  return s.replace(/(^|\s)(\p{L})/gu, (_, sp: string, c: string) => sp + c.toUpperCase());
 }

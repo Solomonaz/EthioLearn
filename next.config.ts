@@ -48,6 +48,11 @@ const nextConfig: NextConfig = {
   // triggers repeated DB calls in layouts that call getCurrentUser().
   // Enable only when explicitly debugging side-effect purity.
   reactStrictMode: false,
+  // pdf.js loads its worker (pdf.worker.mjs) from beside its own module file.
+  // Bundled, it looked for the worker inside .next/dev/server/chunks, where it
+  // does not exist — so layout-aware textbook extraction failed and every
+  // upload fell back to flat text. Loaded from node_modules, it finds it.
+  serverExternalPackages: ["pdfjs-dist"],
   images: {
     remotePatterns: [
       // Telegram user profile photos

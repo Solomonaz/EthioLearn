@@ -515,6 +515,14 @@ export default function AdminTextbooksPage() {
     if (!aiTitle.trim()) { setAiError("Title is required."); return; }
     if (!aiSubject) { setAiError("Subject is required."); return; }
     if (!aiGrade) { setAiError("Grade is required (1-12)."); return; }
+    // The title usually names the grade ("Biology Grade 11"). If it disagrees
+    // with the grade picked, one of them is a slip — stop before the book is
+    // filed where nobody will look for it.
+    const titleGrade = aiTitle.match(/\bgrade\s*(\d{1,2})\b/i)?.[1];
+    if (titleGrade && Number(titleGrade) !== Number(aiGrade)) {
+      setAiError(`The title says Grade ${titleGrade} but Grade ${aiGrade} is selected. Fix whichever is wrong.`);
+      return;
+    }
     if (!aiFile) { setAiError("Please upload a PDF, DOCX, or EPUB file."); return; }
 
     setAiDetecting(true);
@@ -1225,15 +1233,19 @@ export default function AdminTextbooksPage() {
                         <label className="mb-2 block text-sm font-medium text-text-primary">
                           Grade *
                         </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={12}
-                          placeholder="1-12"
+                        {/* A list, not a free number box: typing "1" for "11"
+                            filed a Grade 11 book as Grade 1, where no Grade 11
+                            teacher or student could ever find it. */}
+                        <select
                           value={aiGrade}
                           onChange={(e) => setAiGrade(e.target.value)}
                           className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-                        />
+                        >
+                          <option value="">Select…</option>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                            <option key={g} value={String(g)}>Grade {g}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -1497,15 +1509,17 @@ export default function AdminTextbooksPage() {
                     <label className="mb-2 block text-sm font-medium text-text-primary">
                       Grade
                     </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={12}
-                      placeholder="1-12"
+                    {/* A list, not a free number box — see the AI upload form. */}
+                    <select
                       value={simpleGrade}
                       onChange={(e) => setSimpleGrade(e.target.value)}
                       className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-                    />
+                    >
+                      <option value="">Select…</option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                        <option key={g} value={String(g)}>Grade {g}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="w-full">

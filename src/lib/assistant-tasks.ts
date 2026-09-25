@@ -29,7 +29,7 @@ export const ASSISTANT_TASKS: { value: AssistantTask; label: string; hint: strin
   {
     value: "WORKOUT",
     label: "Workout problems",
-    hint: "Calculations to solve with full working shown",
+    hint: "Problems worked on paper with full working or reasoning",
   },
   {
     value: "NOTES",

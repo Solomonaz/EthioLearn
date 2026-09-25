@@ -113,7 +113,7 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
     source?: string;
     /** "DOCUMENT" gives the class written work; default is a question paper. */
     format?: string;
-    /** Generate a worksheet of calculations for the class to work through. */
+    /** Generate workout problems (calculations or written) for the class to work through. */
     workout?: boolean;
     /** Which question types to draw or generate. Defaults to MCQ. */
     questionTypes?: unknown;
@@ -197,8 +197,8 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
   }
 
   /**
-   * Workout problems are calculations a student solves on paper, showing
-   * their working. Nothing about that is machine-markable, so a workout
+   * Workout problems are solved on paper, showing working or reasoning —
+   * calculations where the chapter has them, written problems where not. Nothing about that is machine-markable, so a workout
    * activity is a DOCUMENT the teacher marks — not a question paper with an
    * unscoreable question type wedged into it.
    *
@@ -342,8 +342,10 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
       );
       const chaptersLabel = chapters.map((c) => c.title).join("; ");
       // Exact part of the request: the same chapters, count and difficulty.
+      // v2: the brief stopped forcing calculations on descriptive chapters, so
+      // sets written under the old brief must not be served again.
       const requestKey =
-        `WORKOUT|${[...chapterIds].sort().join(",")}|${problemCount}|${difficulty || "MIXED"}`;
+        `WORKOUT:v2|${[...chapterIds].sort().join(",")}|${problemCount}|${difficulty || "MIXED"}`;
 
       // ── Bank first (lib/teacher-library) ─────────────────────────────────
       // Another teacher of this subject and grade may already have had exactly

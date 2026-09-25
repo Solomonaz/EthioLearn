@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { subjectFilter, tidySubjectName } from "@/lib/subject";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -23,8 +24,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    // Case-insensitive: "biology" is stored as "Biology", and cannot be added
+    // beside an existing "Biology" — the database's unique check is
+    // case-sensitive, so it would have let both in.
+    const tidy = tidySubjectName(name);
+    const existing = await db.subject.findFirst({
+      where: { name: subjectFilter(tidy) },
+      select: { name: true },
+    });
+    if (existing) {
+      return NextResponse.json(
+        { error: `"${existing.name}" already exists.` },
+        { status: 400 },
+      );
+    }
+
     const subject = await db.subject.create({
-      data: { name: name.trim() },
+      data: { name: tidy },
     });
 
     return NextResponse.json({ subject });

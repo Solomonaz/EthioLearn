@@ -128,8 +128,8 @@ export function SetActivityDialog({
   const [difficulty, setDifficulty] = useState("");
   const [questionTypes, setQuestionTypes] = useState<string[]>(["MCQ"]);
   /**
-   * A question paper is auto-marked; workout problems are calculations the
-   * student works on paper and the teacher marks. They are different kinds of
+   * A question paper is auto-marked; workout problems are worked on paper
+   * (calculations or written reasoning) and the teacher marks them. They are different kinds of
    * thing, so this is a choice rather than another question-type chip.
    */
   const [paperType, setPaperType] = useState<"QUESTIONS" | "WORKOUT">("QUESTIONS");
@@ -618,7 +618,7 @@ export function SetActivityDialog({
                           value: "WORKOUT" as const,
                           icon: PenLine,
                           label: "Workout problems",
-                          hint: "Calculations worked on paper — you mark them.",
+                          hint: "Problems worked on paper — you mark them.",
                         },
                       ]
                     ).map((opt) => (

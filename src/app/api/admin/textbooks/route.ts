@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { Difficulty, QuestionType } from "@prisma/client";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { canonicalSubject } from "@/lib/subject";
+import { cleanChapterTitle } from "@/lib/display-text";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -140,7 +141,8 @@ export async function POST(request: NextRequest) {
       chapters: {
         create: chapters.map((chapter, index) => ({
           chapterNumber: chapter.chapterNumber ?? chapter.orderIndex ?? index + 1,
-          title: chapter.title,
+          // One consistent form, whether the AI or the scan found it.
+          title: cleanChapterTitle(chapter.title),
           content: chapter.content || undefined,
           questionCount: chapter.questions?.length ?? 0,
           questions: {
