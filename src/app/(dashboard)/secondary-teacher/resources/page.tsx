@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BookMarked, Sparkles, Star, Trash2 } from "lucide-react";
+import { ArrowRight, BookMarked, Merge, Sparkles, Star, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { TeacherDocument } from "@/components/secondary-teacher/teacher-document";
 import { ResourceActions } from "@/components/secondary-teacher/resource-actions";
+import {
+  MergeMaterialsDialog,
+  type MergedResult,
+} from "@/components/secondary-teacher/merge-materials-dialog";
 import { ASSISTANT_TASKS } from "@/lib/assistant-tasks";
 import { displayChapterTitle, displaySubject } from "@/lib/display-text";
 
@@ -52,6 +56,26 @@ export default function TeacherResourcesPage() {
   const [open, setOpen] = useState<OpenResource | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [merging, setMerging] = useState(false);
+
+  /** The merged document joins the list and opens, like any other item. */
+  function onMerged(m: MergedResult) {
+    if (!m.resourceId) return;
+    const row: ResourceRow = {
+      id: m.resourceId,
+      task: m.task,
+      title: m.title,
+      subject: m.subject,
+      grade: m.grade,
+      chapterTitle: m.chapterTitle,
+      kept: false,
+      createdAt: new Date().toISOString(),
+      source: "ASSISTANT",
+    };
+    setItems((prev) => [row, ...(prev ?? [])]);
+    setOpen({ ...row, body: m.markdown });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   const load = useCallback(async () => {
     setError(null);
@@ -124,14 +148,23 @@ export default function TeacherResourcesPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <div className="print-hide">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary">
-          <BookMarked className="h-6 w-6 text-primary" /> Materials
-        </h1>
-        <p className="text-sm text-text-secondary">
-          Everything you generate with the AI assistant is kept here.
-        </p>
+      <div className="print-hide flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary">
+            <BookMarked className="h-6 w-6 text-primary" /> Materials
+          </h1>
+          <p className="text-sm text-text-secondary">
+            Everything you generate with the AI assistant is kept here.
+          </p>
+        </div>
+        {(items?.length ?? 0) >= 2 && (
+          <Button type="button" variant="outline" onClick={() => setMerging(true)}>
+            <Merge className="mr-1.5 h-4 w-4" /> Merge materials
+          </Button>
+        )}
       </div>
+
+      {merging && <MergeMaterialsDialog onClose={() => setMerging(false)} onMerged={onMerged} />}
 
       {/* ── Open item ─────────────────────────────────────────────────── */}
       {open && (
@@ -151,6 +184,7 @@ export default function TeacherResourcesPage() {
                   title={open.title}
                   markdown={open.body}
                   task={open.task}
+                  subject={open.subject}
                   resourceId={open.id}
                   onSaved={
                     open.kept

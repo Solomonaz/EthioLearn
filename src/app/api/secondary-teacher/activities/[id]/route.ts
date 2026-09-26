@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { takeBackActivity } from "@/lib/activity-send";
 
 /**
  * One teacher-set activity.
  *
  * GET   — who has done it, and which questions the class actually failed.
  * PATCH — close it, rename it, or move the due date.
- *
- * There is no DELETE. Removing an activity students have already sat would
- * destroy their history; closing it is the reversible equivalent.
+ * DELETE — discard a draft, or take sent work back (lib/activity-send). Sent
+ *          work can only be taken back while no student has started it —
+ *          removing work students have done would destroy their history, so
+ *          from then on closing is the way to stop it.
  */
 
 async function getTeacher() {
@@ -413,4 +415,31 @@ export async function PATCH(
   });
 
   return NextResponse.json({ activity });
+}
+
+/**
+ * Discard a draft, or take sent work back from the class.
+ *
+ * `?toDraft=1` returns sent work to a draft instead of deleting it — the undo
+ * for "Send to class" on a reviewed draft.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  const user = await getTeacher();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
+  const { id } = await params;
+  const result = await takeBackActivity(user.id, id, {
+    toDraft: req.nextUrl.searchParams.get("toDraft") === "1",
+  });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+  return NextResponse.json({ ok: true, outcome: result.outcome });
 }

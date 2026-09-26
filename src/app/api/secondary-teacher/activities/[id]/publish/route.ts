@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { createNotification } from "@/lib/notifications";
+import { publishActivity } from "@/lib/activity-send";
 
 /**
  * Send a reviewed draft to the class.
@@ -86,77 +86,7 @@ export async function POST(
     );
   }
 
-  const now = new Date();
-  await db.classActivity.update({
-    where: { id: activity.id },
-    data: { status: "PUBLISHED", publishedAt: now },
-  });
+  const { publishedAt, notified } = await publishActivity(activity);
 
-  const targets = await db.classActivityTarget.findMany({
-    where: { activityId: activity.id },
-    select: { studentId: true },
-  });
-
-  // Best-effort: a notification failure must not undo a published activity.
-  // The work is visible either way — the notice is a convenience.
-  await Promise.allSettled(
-    targets.map((t) =>
-      createNotification(
-        t.studentId,
-        "homework",
-        activity.title,
-        `New ${activity.kind.toLowerCase()} from your ${activity.subject} teacher.`,
-        { activityId: activity.id },
-      ),
-    ),
-  );
-
-  return NextResponse.json({
-    ok: true,
-    publishedAt: now,
-    notified: targets.length,
-  });
-}
-
-/**
- * Throw a draft away.
- *
- * Only ever a DRAFT: published work belongs to the students who have started
- * it, and is closed rather than deleted.
- */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  if (!validateCsrfOrigin(req)) {
-    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
-  }
-
-  const user = await getCurrentUser();
-  if (!user || user.role !== "SECONDARY_TEACHER" || !user.schoolId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
-  const activity = await db.classActivity.findFirst({
-    where: { id, teacherId: user.id },
-    select: { id: true, status: true },
-  });
-  if (!activity) {
-    return NextResponse.json({ error: "Activity not found" }, { status: 404 });
-  }
-  if (activity.status !== "DRAFT") {
-    return NextResponse.json(
-      { error: "That activity has already been sent, so it cannot be discarded." },
-      { status: 409 },
-    );
-  }
-
-  // Targets and pinned questions cascade. The generated Question rows stay in
-  // the bank on purpose — they were verified and paid for, and the next
-  // teacher benefits even though this draft was rejected.
-  await db.classActivity.delete({ where: { id: activity.id } });
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, publishedAt, notified });
 }

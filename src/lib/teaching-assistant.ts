@@ -70,6 +70,14 @@ export interface AssistantRequest {
    * harder items"). A one-shot tool made teachers start over for every tweak.
    */
   revise?: { previous: string; instruction: string } | null;
+  /**
+   * Combine documents the teacher already has — usually one per chapter,
+   * since a single chapter per request grounds best — into one. In the order
+   * given. Replaces chapter grounding: the documents are the source.
+   */
+  merge?: MergeSource[] | null;
+  /** Output cap for this request; a merge needs far more than a fresh document. */
+  maxTokens?: number;
   actor?: UsageActor;
   /**
    * Called as the work passes a real stage. Provider fallback is reported
@@ -77,6 +85,14 @@ export interface AssistantRequest {
    * going, rather than watching a bar sit still.
    */
   onProgress?: (info: { message: string; percent: number }) => void;
+}
+
+export interface MergeSource {
+  title: string;
+  /** What students may see. */
+  body: string;
+  /** Teacher-only part (answer key, marking guide), already split off. */
+  answerKey: string | null;
 }
 
 export interface AssistantResult {
@@ -100,6 +116,22 @@ const MAX_TOKENS = 4000;
 const MAX_CONTENT_CHARS = 16000;
 /** Longest earlier result sent back for a revision. */
 const MAX_REVISE_CHARS = 16000;
+
+/**
+ * How documents are merged. Loss is the failure that matters: a teacher who
+ * merges three chapter worksheets and gets back two chapters' worth of
+ * problems has been quietly short-changed, so keeping everything comes first.
+ */
+const MERGE_BRIEF = [
+  "The teacher wrote the documents below separately — usually one per chapter, because that gives the best quality — and now wants them combined into ONE polished document.",
+  "- Keep every substantive item: every objective, activity, worked example, question, problem and answer. Do not drop, summarise away or replace content, and do not invent new questions or facts.",
+  "- Remove only what repeats: duplicated general instructions, repeated introductions and headers, and items that are near-identical.",
+  "- Give the whole one short H1 title naming everything it now covers (drawn from the documents' own titles, e.g. \"Grade 11 Chemistry Worksheet: Atomic Theory and Gas Laws\"). Organise it in the order the documents are given, usually one section per chapter, with consistent heading levels, formatting, notation and terminology.",
+  "- Number items continuously across the whole document (1 to N, not restarting in each section) and fix any cross-references to match.",
+  "- Keep each item's marks, and state one correct total where the documents gave totals.",
+  "- Lesson plans become one coherent plan: merged objectives, one timed sequence (split into sessions if it no longer fits one period), and combined checks for understanding and homework.",
+  `- Teacher-only material from every document goes after ONE line containing exactly ${ANSWER_KEY_FENCE} at the end, renumbered to match the merged numbering. Nothing teacher-only may appear before that line.`,
+].join("\n");
 
 function buildSystem(task: AssistantTask): string {
   return [
@@ -147,6 +179,25 @@ function buildPrompt(req: AssistantRequest): string {
   if (req.grade) context.push(`Grade: ${req.grade}`);
   if (req.chapterTitle) context.push(`Chapter: ${req.chapterTitle}`);
   if (context.length > 0) parts.push(context.join("\n"));
+
+  if (req.merge && req.merge.length > 0) {
+    // The kind's own brief still applies to the result (a merged worksheet
+    // keeps worksheet rules), but it is the merge that is being asked for.
+    if (req.task !== "FREEFORM") {
+      parts.push(`THE KIND OF DOCUMENT (its rules apply to the merged result)\n${TASK_BRIEF[req.task]}`);
+    }
+    parts.push(`TASK: MERGE\n${MERGE_BRIEF}`);
+    if (req.prompt.trim()) {
+      parts.push(`WHAT THE TEACHER ASKED FOR\n${req.prompt.trim()}`);
+    }
+    req.merge.forEach((doc, i) => {
+      parts.push(
+        `DOCUMENT ${i + 1} OF ${req.merge!.length}: ${doc.title}\n${doc.body}` +
+          (doc.answerKey ? `\n\nDOCUMENT ${i + 1} — TEACHER-ONLY PART\n${doc.answerKey}` : ""),
+      );
+    });
+    return parts.join("\n\n");
+  }
 
   parts.push(`TASK\n${TASK_BRIEF[req.task]}`);
 
@@ -219,8 +270,9 @@ export async function askTeachingAssistant(
   const prompt = buildPrompt(req);
   const opts = {
     system,
-    temperature: 0.6,
-    maxTokens: MAX_TOKENS,
+    // A merge reorganises what exists rather than writing — less variety wanted.
+    temperature: req.merge ? 0.3 : 0.6,
+    maxTokens: req.maxTokens ?? MAX_TOKENS,
     feature: "teacher-assistant" as const,
     actor: req.actor,
   };

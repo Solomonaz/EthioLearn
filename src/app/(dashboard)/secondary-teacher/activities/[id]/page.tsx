@@ -172,9 +172,11 @@ export default function ActivityDetailPage() {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not send this activity");
-      toast.success(
-        `Sent to ${data.notified} student${data.notified === 1 ? "" : "s"}.`,
-      );
+      // Undo puts it back to a draft — they reviewed it, so it is kept to fix.
+      toast.success(`Sent to ${data.notified} student${data.notified === 1 ? "" : "s"}.`, {
+        duration: 12000,
+        action: { label: "Undo", onClick: () => void takeBack(true) },
+      });
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Something went wrong");
@@ -194,14 +196,50 @@ export default function ActivityDetailPage() {
     }
     setBusy(true);
     try {
-      const res = await fetch(
-        `/api/secondary-teacher/activities/${activity.id}/publish`,
-        { method: "DELETE" },
-      );
+      const res = await fetch(`/api/secondary-teacher/activities/${activity.id}`, {
+        method: "DELETE",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not discard this draft");
       toast.success("Draft discarded.");
       router.push("/secondary-teacher/activities");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Take sent work back from the class — back to a draft (the Undo after
+   * sending), or deleted. Only while no student has started it; the server
+   * says so if someone has.
+   */
+  async function takeBack(toDraft: boolean) {
+    if (!activity) return;
+    if (
+      !toDraft &&
+      !window.confirm(
+        "Take this back? It disappears from your students' lists and is deleted. Nobody has started it yet.",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/secondary-teacher/activities/${activity.id}${toDraft ? "?toDraft=1" : ""}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not take that back");
+      if (toDraft) {
+        toast.success("Taken back — it is a draft again. Students no longer see it.");
+        await load();
+        setBusy(false);
+      } else {
+        toast.success("Taken back and deleted.");
+        router.push("/secondary-teacher/activities");
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Something went wrong");
       setBusy(false);
@@ -353,15 +391,25 @@ export default function ActivityDetailPage() {
             </Button>
           </div>
         ) : (
-          <Button type="button" variant="outline" onClick={toggleStatus} disabled={busy}>
-            {busy ? (
-              <Spinner size="sm" />
-            ) : activity.status === "PUBLISHED" ? (
-              "Close activity"
-            ) : (
-              "Reopen"
+          <div className="flex gap-2">
+            {/* Sent to the wrong class, or too early: while nobody has
+                started it, it can simply be taken back. After that it is
+                the students' work, and closing is the way to stop it. */}
+            {students.every((s) => s.state === "not_started") && (
+              <Button type="button" variant="outline" onClick={() => void takeBack(false)} disabled={busy}>
+                <Trash2 className="mr-1.5 h-4 w-4" /> Take back
+              </Button>
             )}
-          </Button>
+            <Button type="button" variant="outline" onClick={toggleStatus} disabled={busy}>
+              {busy ? (
+                <Spinner size="sm" />
+              ) : activity.status === "PUBLISHED" ? (
+                "Close activity"
+              ) : (
+                "Reopen"
+              )}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -469,18 +517,9 @@ export default function ActivityDetailPage() {
                       <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
                     </Button>
                   ))}
-                {/* A draft is sent with its own Send button; once sent, this
-                    reuses the same work for ANOTHER class. It used to say
-                    "Give to class" here and quietly make a duplicate. */}
-                <ResourceActions
-                  title={activity.title}
-                  markdown={activity.body}
-                  give={
-                    activity.status === "DRAFT"
-                      ? false
-                      : { label: "Give to another class", excludeClassId: activity.teachingAssignmentId }
-                  }
-                />
+                {/* Only actions on the document itself. Setting work for
+                    another class belongs to that class, not to this page. */}
+                <ResourceActions title={activity.title} markdown={activity.body} give={false} />
               </div>
             </div>
           </CardHeader>

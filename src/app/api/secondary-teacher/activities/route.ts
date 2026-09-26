@@ -12,6 +12,7 @@ import { askTeachingAssistant } from "@/lib/teaching-assistant";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { replenishQuestionBank, type BankQuestion } from "@/lib/question-bank";
 import { splitAnswerKey, looksLikeItContainsAnswers } from "@/lib/answer-key";
+import { publishActivity } from "@/lib/activity-send";
 import { selectGenerationContent } from "@/lib/generation-content";
 import {
   embedInstructions,
@@ -123,6 +124,10 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
     requiresSubmission?: boolean;
     /** What the work is marked out of. Null/absent = feedback only. */
     maxMarks?: number | null;
+    /** DOCUMENT only: send to the class now instead of creating a draft. */
+    send?: boolean;
+    /** DOCUMENT only: the subject of the material given; must match the class. */
+    documentSubject?: string | null;
   };
   try {
     body = await req.json();
@@ -470,6 +475,19 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
       }
     }
 
+    // Material belongs to a subject: Biology work is never set for a
+    // Chemistry class, whatever the client sends.
+    if (
+      typeof body.documentSubject === "string" &&
+      body.documentSubject.trim() &&
+      !subjectEquals(body.documentSubject, klass.subject)
+    ) {
+      return NextResponse.json(
+        { error: `This is ${body.documentSubject} material — it can only go to a ${body.documentSubject} class.` },
+        { status: 400 },
+      );
+    }
+
     if (documentBody.length < 10) {
       return NextResponse.json(
         { error: "There is no content to give to the class." },
@@ -552,10 +570,36 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
       },
     });
 
-    // No notification here. The activity is a DRAFT: nobody has been given
-    // anything yet, and telling a class about work they cannot open would be
-    // worse than telling them nothing. Notifications go out from the publish
-    // route, once a teacher has read it.
+    // "Give to class" from the assistant or Materials sends at once: the
+    // teacher has already read the document there, and can take it back while
+    // nobody has started it (lib/activity-send). Except when the student view
+    // still looks like it holds answers — that stays a draft to be checked,
+    // because a class cannot un-see an answer key.
+    if (body.send === true) {
+      if (looksLikeItContainsAnswers(documentBody)) {
+        return NextResponse.json(
+          {
+            activity,
+            draft: true,
+            notice:
+              "Not sent: part of it still looks like it contains answers. It was saved as a draft — check it, then send.",
+          },
+          { status: 201 },
+        );
+      }
+      const { notified } = await publishActivity({
+        id: activity.id,
+        kind: activity.kind,
+        title: activity.title,
+        subject: activity.subject,
+      });
+      return NextResponse.json({ activity, sent: true, notified }, { status: 201 });
+    }
+
+    // Otherwise no notification here. The activity is a DRAFT: nobody has been
+    // given anything yet, and telling a class about work they cannot open
+    // would be worse than telling them nothing. Notifications go out from the
+    // publish route, once a teacher has read it.
     return NextResponse.json(
       { activity, notice: answerKeyNotice, draft: true },
       { status: 201 },

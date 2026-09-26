@@ -41,6 +41,8 @@ const CONTENT_BUDGET = 16000;
 const RETRIEVED_CHUNKS = 10;
 /** Longest earlier result accepted for a revision. */
 const MAX_REVISE_CHARS = 20000;
+/** Chapters per request. More thins each one's share of the budget too far. */
+const MAX_CHAPTERS = 6;
 
 const VALID_TASKS = new Set<string>(ASSISTANT_TASKS.map((t) => t.value));
 
@@ -97,6 +99,8 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     task?: string;
     prompt?: string;
     chapterId?: string | null;
+    /** Several chapters of one textbook. Takes precedence over `chapterId`. */
+    chapterIds?: unknown;
     teachingAssignmentId?: string | null;
     revise?: { previous?: unknown; instruction?: unknown } | null;
     /** The stored result a revision replaces (see the end of this handler). */
@@ -136,38 +140,61 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     revise = { previous, instruction };
   }
 
+  // The chapters to ground in: several of one textbook, or the single
+  // `chapterId` older clients send.
+  const requestedIds = Array.isArray(body.chapterIds)
+    ? [...new Set(body.chapterIds.filter((x): x is string => typeof x === "string" && x.length > 0))]
+    : typeof body.chapterId === "string" && body.chapterId
+      ? [body.chapterId]
+      : [];
+  if (requestedIds.length > MAX_CHAPTERS) {
+    return NextResponse.json(
+      { error: `Pick up to ${MAX_CHAPTERS} chapters — or one at a time, then merge.` },
+      { status: 400 },
+    );
+  }
+
   // Something to write ABOUT. A lesson plan with no chapter and no
   // instructions has no topic, and the model would invent one.
-  const hasChapter = typeof body.chapterId === "string" && body.chapterId.length > 0;
-  if (!revise && !hasChapter && prompt.length < 3) {
+  if (!revise && requestedIds.length === 0 && prompt.length < 3) {
     return NextResponse.json(
       { error: "Pick a chapter, or describe the topic in your instructions." },
       { status: 400 },
     );
   }
 
-  // ── Optional grounding in one of the teacher's own chapters ───────────
+  // ── Optional grounding in the teacher's own chapters ──────────────────
   let subject: string | null = null;
   let grade: number | null = null;
   let chapterTitle: string | null = null;
   let chapterContent: string | null = null;
-  /** Full chapter text — only read into a prompt if the AI is actually called. */
-  let chapterText = "";
+  /** Full chapter texts — only read into a prompt if the AI is actually called. */
+  let sources: { id: string; title: string; text: string }[] = [];
 
-  const chapterId = typeof body.chapterId === "string" ? body.chapterId : "";
-  if (chapterId) {
-    report({ message: "Reading your chapter...", percent: 8 });
-    const chapter = await db.chapter.findUnique({
-      where: { id: chapterId },
+  if (requestedIds.length > 0) {
+    report({
+      message: requestedIds.length > 1 ? "Reading your chapters..." : "Reading your chapter...",
+      percent: 8,
+    });
+    const found = await db.chapter.findMany({
+      where: { id: { in: requestedIds } },
+      // Textbook order, whatever order they were ticked in.
+      orderBy: { chapterNumber: "asc" },
       select: {
+        id: true,
         title: true,
         content: true,
+        textbookId: true,
         textbook: { select: { subject: true, grade: true, content: true } },
       },
     });
-    if (!chapter) {
+    if (found.length !== requestedIds.length) {
       return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
     }
+    if (new Set(found.map((c) => c.textbookId)).size > 1) {
+      return NextResponse.json({ error: "Pick chapters from one textbook." }, { status: 400 });
+    }
+    const book = found[0].textbook;
 
     // The teacher must actually teach that subject. Without this, the chapter
     // id would be an unchecked handle onto any textbook on the platform.
@@ -175,7 +202,7 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     // A textbook with no subject matches nothing: falling through to an empty
     // string would have compared it against assignments that also store an
     // empty subject, which is an accident, not a grant of access.
-    const chapterSubject = chapter.textbook?.subject ?? "";
+    const chapterSubject = book?.subject ?? "";
     const teaches = chapterSubject
       ? await db.teachingAssignment.findFirst({
           where: { teacherId: user.id, subject: subjectFilter(chapterSubject) },
@@ -189,11 +216,12 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
       );
     }
 
-    subject = chapter.textbook?.subject ?? null;
-    grade = chapter.textbook?.grade ?? null;
-    chapterTitle = chapter.title;
-    chapterText = chapter.content || chapter.textbook?.content || "";
+    subject = book?.subject ?? null;
+    grade = book?.grade ?? null;
+    chapterTitle = found.map((c) => c.title).join("; ").slice(0, 200);
+    sources = found.map((c) => ({ id: c.id, title: c.title, text: c.content || book?.content || "" }));
   }
+  const chapterIds = sources.map((s) => s.id);
 
   // The class it is for, when no chapter says so: the subject and grade are
   // what the stored result is filed and shared under.
@@ -214,7 +242,12 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
   // and this teacher never knows it wasn't written just now. Revisions and
   // "Anything else" are always written fresh.
   const instructions = normaliseInstructions(prompt);
-  const requestKey = `${task}|${chapterId || "-"}`;
+  // One chapter keeps its original key, so earlier documents still match.
+  // Except WORKOUT (v2): its brief stopped forcing calculations on descriptive
+  // chapters, so sets written under the old brief must not be served again.
+  const requestKey =
+    `${task === "WORKOUT" ? "WORKOUT:v2" : task}|` +
+    (chapterIds.length > 0 ? [...chapterIds].sort().join(",") : "-");
   const reusable = !revise && isReusableTask(task) && Boolean(subject) && grade !== null;
   const embedding = reusable ? await embedInstructions(instructions, usageActor(user)) : null;
   if (reusable) {
@@ -240,8 +273,17 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     }
   }
 
-  if (chapterId) {
-    chapterContent = await groundingFor(chapterId, chapterText, prompt, usageActor(user));
+  if (sources.length === 1) {
+    chapterContent = await groundingFor(sources[0].id, sources[0].text, prompt, usageActor(user));
+  } else if (sources.length > 1) {
+    // The budget is shared, so each chapter gets a thinner slice — which is
+    // why one chapter at a time, then merge, gives better results.
+    const budget = Math.floor(CONTENT_BUDGET / sources.length);
+    const limit = Math.max(3, Math.ceil(RETRIEVED_CHUNKS / sources.length));
+    const parts = await Promise.all(
+      sources.map((s) => groundingFor(s.id, s.text, prompt, usageActor(user), budget, limit)),
+    );
+    chapterContent = sources.map((s, i) => `## ${s.title}\n${parts[i]}`).join("\n\n");
   }
 
   report({ message: "Preparing the request...", percent: 15 });
@@ -327,12 +369,14 @@ async function groundingFor(
   fullText: string,
   prompt: string,
   actor: ReturnType<typeof usageActor>,
+  budget = CONTENT_BUDGET,
+  limit = RETRIEVED_CHUNKS,
 ): Promise<string> {
   if (prompt.length >= 3) {
     try {
       const hits = await semanticSearch(prompt, {
         chapterId,
-        limit: RETRIEVED_CHUNKS,
+        limit,
         usage: { feature: "embedding-query", actor },
       });
       if (hits.length > 0) {
@@ -340,7 +384,7 @@ async function groundingFor(
         const out: string[] = [];
         let used = 0;
         for (const h of ordered) {
-          if (used + h.content.length > CONTENT_BUDGET) break;
+          if (used + h.content.length > budget) break;
           out.push(h.content);
           used += h.content.length;
         }
@@ -353,7 +397,7 @@ async function groundingFor(
   const selected = await selectGenerationContent({
     chapterId,
     fallbackContent: fullText,
-    budgetChars: CONTENT_BUDGET,
+    budgetChars: budget,
   });
   return selected.content;
 }

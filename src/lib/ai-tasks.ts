@@ -177,7 +177,13 @@ export const AI_TASKS: TaskMeta[] = [
     description: "Writes long-form answers and activity content for teachers.",
     supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER"],
     geminiSlot: "chat",
-    defaultChain: ["GEMINI", "GROQ", "NVIDIA"].map((p) => step(p as AiProvider)),
+    // GPT-6 Luna first, as for question generation: the teacher documents are
+    // the most expensive calls per request on Gemini 3.8-flash (~$0.008 each).
+    // Gemini stays as the fallback when OpenRouter is down or unkeyed.
+    defaultChain: [
+      { provider: "OPENROUTER", model: "openai/gpt-6-luna" },
+      ...["GEMINI", "GROQ", "NVIDIA"].map((p) => step(p as AiProvider)),
+    ],
   },
 ];
 

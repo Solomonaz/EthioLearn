@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { RotateCcw, Sparkles, Wand2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, Info, Merge, RotateCcw, Sparkles, Wand2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,11 @@ import { cn } from "@/lib/utils";
 import { ASSISTANT_TASKS, type AssistantTask } from "@/lib/assistant-tasks";
 import { ResourceActions } from "@/components/secondary-teacher/resource-actions";
 import { TeacherDocument } from "@/components/secondary-teacher/teacher-document";
+import { MergeMaterialsDialog } from "@/components/secondary-teacher/merge-materials-dialog";
 import { displayChapterTitle, displaySubject } from "@/lib/display-text";
+
+/** Same cap as the server. More thins each chapter's share of the grounding. */
+const MAX_CHAPTERS = 6;
 
 /**
  * The stages the assistant route really reports, at the percentages it sends.
@@ -78,26 +82,15 @@ interface AssistantResult {
 }
 
 /**
- * The last result survives leaving the page (per browser tab). It used to
- * vanish on navigation unless the teacher had pressed Save first.
+ * The page opens empty: every result is already kept in Materials, and
+ * restoring the last one made an old document greet the teacher on every
+ * visit. Clear what earlier versions of the page left behind.
  */
-const LAST_RESULT_KEY = "ta:last-result";
-
-function loadLastResult(): AssistantResult | null {
+function clearRememberedResult() {
   try {
-    const raw = sessionStorage.getItem(LAST_RESULT_KEY);
-    return raw ? (JSON.parse(raw) as AssistantResult) : null;
+    sessionStorage.removeItem("ta:last-result");
   } catch {
-    return null;
-  }
-}
-
-function storeLastResult(r: AssistantResult | null) {
-  try {
-    if (r) sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(r));
-    else sessionStorage.removeItem(LAST_RESULT_KEY);
-  } catch {
-    /* private mode or storage full — the result still shows, it just won't persist */
+    /* private mode — nothing was stored */
   }
 }
 
@@ -107,7 +100,9 @@ export default function TeachingAssistantPage() {
   const [textbooks, setTextbooks] = useState<Textbook[]>([]);
   const [textbookId, setTextbookId] = useState("");
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [chapterId, setChapterId] = useState("");
+  /** In textbook order. Empty means "No chapter (general)". */
+  const [chapterIds, setChapterIds] = useState<string[]>([]);
+  const [merging, setMerging] = useState(false);
 
   const [task, setTask] = useState<AssistantTask>("LESSON_PLAN");
   const [prompt, setPrompt] = useState("");
@@ -119,7 +114,7 @@ export default function TeachingAssistantPage() {
   const selectedClass = classes.find((c) => c.id === classId) ?? null;
 
   useEffect(() => {
-    setResult(loadLastResult());
+    clearRememberedResult();
   }, []);
 
   // The teacher's own classes — names only, so the lite form of the route.
@@ -171,7 +166,7 @@ export default function TeachingAssistantPage() {
   useEffect(() => {
     if (!textbookId) {
       setChapters([]);
-      setChapterId("");
+      setChapterIds([]);
       return;
     }
     let cancelled = false;
@@ -181,7 +176,7 @@ export default function TeachingAssistantPage() {
         if (cancelled) return;
         const list: Chapter[] = d.chapters ?? [];
         setChapters(list);
-        setChapterId(list[0]?.id ?? "");
+        setChapterIds(list[0] ? [list[0].id] : []);
       })
       .catch(() => !cancelled && setChapters([]));
     return () => {
@@ -194,7 +189,7 @@ export default function TeachingAssistantPage() {
       if (busy) return;
       // Something to write about: a chapter or a described topic. A lesson
       // plan with neither has no subject matter at all.
-      if (!revise && !chapterId && prompt.trim().length < 3) {
+      if (!revise && chapterIds.length === 0 && prompt.trim().length < 3) {
         toast.error(
           task === "FREEFORM"
             ? "Describe what you need."
@@ -212,7 +207,7 @@ export default function TeachingAssistantPage() {
           body: JSON.stringify({
             task: revise ? result?.task ?? task : task,
             prompt: prompt.trim(),
-            chapterId: revise ? null : chapterId || null,
+            chapterIds: revise ? [] : chapterIds,
             // Files the result under this class's subject and grade when no
             // chapter says so — what the bank matches requests on.
             teachingAssignmentId: classId || null,
@@ -241,10 +236,13 @@ export default function TeachingAssistantPage() {
               task,
               subject: selectedClass?.subject ?? null,
               grade: selectedClass?.grade ?? null,
-              chapterTitle: chapters.find((c) => c.id === chapterId)?.title ?? null,
+              chapterTitle:
+                chapters
+                  .filter((c) => chapterIds.includes(c.id))
+                  .map((c) => c.title)
+                  .join("; ") || null,
             };
         setResult(next);
-        storeLastResult(next);
         if (revise) setRevision("");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -253,7 +251,27 @@ export default function TeachingAssistantPage() {
         setProgress(null);
       }
     },
-    [busy, task, prompt, chapterId, classId, chapters, selectedClass, result],
+    [busy, task, prompt, chapterIds, classId, chapters, selectedClass, result],
+  );
+
+  /** A merge lands where a fresh result would, so it can be revised the same way. */
+  const onMerged = useCallback(
+    (m: {
+      title: string;
+      markdown: string;
+      resourceId: string | null;
+      task: string;
+      subject: string | null;
+      grade: number | null;
+      chapterTitle: string | null;
+    }) => {
+      const next: AssistantResult = {
+        ...m,
+        task: ASSISTANT_TASKS.some((t) => t.value === m.task) ? (m.task as AssistantTask) : "FREEFORM",
+      };
+      setResult(next);
+    },
+    [],
   );
 
   const submit = useCallback(
@@ -284,7 +302,7 @@ export default function TeachingAssistantPage() {
   // The same rule the server enforces: "Anything else" needs a description;
   // every other task needs a chapter or a described topic.
   const hasTopic =
-    task === "FREEFORM" ? prompt.trim().length >= 3 : Boolean(chapterId) || prompt.trim().length >= 3;
+    task === "FREEFORM" ? prompt.trim().length >= 3 : chapterIds.length > 0 || prompt.trim().length >= 3;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -378,28 +396,19 @@ export default function TeachingAssistantPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label
-                  htmlFor="ta-chapter"
+                <span
+                  id="ta-chapter-label"
                   className="text-xs font-semibold uppercase text-text-muted"
                 >
                   Chapter
-                </label>
-                <select
-                  id="ta-chapter"
-                  value={chapterId}
-                  onChange={(e) => setChapterId(e.target.value)}
+                </span>
+                <ChapterPicker
+                  chapters={chapters}
+                  value={chapterIds}
+                  onChange={setChapterIds}
                   disabled={busy || chapters.length === 0}
                   className={fieldClass}
-                >
-                  {/* Always clearable: grounding is optional, and the first
-                      chapter used to be forced on once a class was picked. */}
-                  <option value="">{chapters.length === 0 ? "—" : "No chapter (general)"}</option>
-                  {chapters.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.chapterNumber}. {displayChapterTitle(c.title)}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
             <p className="text-xs text-text-muted">
@@ -407,6 +416,16 @@ export default function TeachingAssistantPage() {
               closest to your instructions are used. Without one, describe the
               topic below.
             </p>
+            {chapterIds.length > 1 && (
+              <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  For the best quality, generate one chapter at a time, then use{" "}
+                  <strong>Merge materials</strong> to combine them. With {chapterIds.length} chapters
+                  in one request, each gets only a share of the textbook passages.
+                </span>
+              </p>
+            )}
 
             {/* Prompt */}
             <div className="space-y-1.5">
@@ -414,7 +433,7 @@ export default function TeachingAssistantPage() {
                 htmlFor="ta-prompt"
                 className="text-xs font-semibold uppercase text-text-muted"
               >
-                Your instructions{task === "FREEFORM" || !chapterId ? "" : " (optional)"}
+                Your instructions{task === "FREEFORM" || chapterIds.length === 0 ? "" : " (optional)"}
               </label>
               <textarea
                 id="ta-prompt"
@@ -438,6 +457,10 @@ export default function TeachingAssistantPage() {
                 <Wand2 className="mr-1.5 h-4 w-4" />
                 Generate
               </Button>
+              <Button type="button" variant="outline" onClick={() => setMerging(true)} disabled={busy}>
+                <Merge className="mr-1.5 h-4 w-4" />
+                Merge materials
+              </Button>
               {!hasTopic && !busy && (
                 <p className="text-xs text-text-muted">
                   {task === "FREEFORM"
@@ -453,7 +476,7 @@ export default function TeachingAssistantPage() {
       {busy && (
         <GenerationProgressCard
           progress={progress}
-          stages={chapterId ? STAGES_WITH_CHAPTER : STAGES_NO_CHAPTER}
+          stages={chapterIds.length > 0 ? STAGES_WITH_CHAPTER : STAGES_NO_CHAPTER}
           idleMessage="Writing with AI..."
           footnote="This can take up to a minute. Longer documents take the most time to write."
         />
@@ -511,6 +534,128 @@ export default function TeachingAssistantPage() {
             </form>
           </CardContent>
         </Card>
+      )}
+
+      {merging && <MergeMaterialsDialog onClose={() => setMerging(false)} onMerged={onMerged} />}
+    </div>
+  );
+}
+
+/**
+ * Chapter picker: several chapters may be ticked, "No chapter" clears them.
+ * A dropdown rather than a checkbox list, so the three pickers keep one row.
+ */
+function ChapterPicker({
+  chapters,
+  value,
+  onChange,
+  disabled,
+  className,
+}: {
+  chapters: Chapter[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+  disabled: boolean;
+  className: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const selected = chapters.filter((c) => value.includes(c.id));
+  const summary =
+    chapters.length === 0
+      ? "—"
+      : selected.length === 0
+        ? "No chapter (general)"
+        : selected.length === 1
+          ? `${selected[0].chapterNumber}. ${displayChapterTitle(selected[0].title)}`
+          : `${selected.length} chapters (${selected.map((c) => c.chapterNumber).join(", ")})`;
+
+  function toggle(id: string) {
+    if (value.includes(id)) {
+      onChange(value.filter((x) => x !== id));
+      return;
+    }
+    if (value.length >= MAX_CHAPTERS) {
+      toast.error(`Up to ${MAX_CHAPTERS} chapters — or one at a time, then merge.`);
+      return;
+    }
+    // Kept in the textbook's own order, whatever order they were ticked in.
+    onChange(chapters.filter((c) => c.id === id || value.includes(c.id)).map((c) => c.id));
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby="ta-chapter-label"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(className, "flex items-center justify-between gap-2 text-left disabled:opacity-60")}
+      >
+        <span className="truncate">{summary}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-multiselectable="true"
+          className="absolute right-0 z-20 mt-1 max-h-80 w-full min-w-[16rem] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              onChange([]);
+              setOpen(false);
+            }}
+            className={cn(
+              "w-full rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+              value.length === 0 ? "bg-primary/10 text-text-primary" : "hover:bg-border/40",
+            )}
+          >
+            No chapter (general)
+          </button>
+          {chapters.map((c) => {
+            const checked = value.includes(c.id);
+            return (
+              <label
+                key={c.id}
+                role="option"
+                aria-selected={checked}
+                className={cn(
+                  "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                  checked ? "bg-primary/10 text-text-primary" : "hover:bg-border/40",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(c.id)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
+                />
+                <span className="min-w-0">
+                  {c.chapterNumber}. {displayChapterTitle(c.title)}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       )}
     </div>
   );

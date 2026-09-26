@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, Download, Printer, Save, Send } from "lucide-react";
+import { Check, ChevronDown, Copy, Download, Printer, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
-import { GiveToClassDialog } from "./give-to-class-dialog";
+import { GiveToClassMenu } from "./give-to-class-menu";
 import { markdownToDocxBlob, safeFileBase } from "@/lib/export-doc";
 import { fenceAsHeading } from "@/lib/answer-key";
 
@@ -38,12 +38,11 @@ export function ResourceActions({
   /** Provided only when this is unsaved; omitting it hides Save. */
   onSaved?: () => void;
   /**
-   * The "Give to class" action. Omitted: shown as "Give to class". `false`
-   * hides it — for an answer key (which must never reach students) and for a
-   * draft (sent with its own Send button). On work already given, pass the
-   * class it went to, so it reads "Give to another class" and leaves it out.
+   * The "Give to class" action, shown unless `false`. Hidden on an activity
+   * page — for its answer key (which must never reach students) and for the
+   * work itself, where only actions on the document belong.
    */
-  give?: false | { label?: string; excludeClassId?: string | null };
+  give?: boolean;
   /**
    * The stored copy, when there is one. Every assistant result is stored
    * automatically, so Save then just marks it kept — POSTing would store a
@@ -53,7 +52,6 @@ export function ResourceActions({
 }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [giving, setGiving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -215,20 +213,9 @@ export function ResourceActions({
           <Copy className="mr-1.5 h-4 w-4" /> Copy
         </Button>
         {give !== false && (
-          <Button type="button" size="sm" onClick={() => setGiving(true)}>
-            <Send className="mr-1.5 h-4 w-4" /> {give?.label ?? "Give to class"}
-          </Button>
+          <GiveToClassMenu title={title} markdown={markdown} task={task} subject={subject} />
         )}
       </div>
-
-      {giving && (
-        <GiveToClassDialog
-          title={title}
-          markdown={markdown}
-          excludeClassId={give ? give.excludeClassId : null}
-          onClose={() => setGiving(false)}
-        />
-      )}
     </>
   );
 }
