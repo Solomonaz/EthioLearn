@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { mergeChapterInto } from "@/lib/chapter-merge";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 export async function POST(
   request: NextRequest,
@@ -58,11 +59,7 @@ export async function POST(
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

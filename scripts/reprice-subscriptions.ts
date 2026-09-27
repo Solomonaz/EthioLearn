@@ -42,11 +42,13 @@ async function main() {
     const studentCount = sub.schoolId
       ? await prisma.user.count({ where: { schoolId: sub.schoolId, role: "STUDENT" } })
       : 0;
+    const teacherCount = sub.schoolId
+      ? await prisma.user.count({
+          where: { schoolId: sub.schoolId, role: "SECONDARY_TEACHER", isActive: true },
+        })
+      : 0;
 
-    const priced = computePlanPrice(
-      { pricingModel: sub.plan.pricingModel, price: sub.plan.price, tiers: sub.plan.tiers },
-      studentCount
-    );
+    const priced = computePlanPrice(sub.plan, studentCount, teacherCount);
 
     const who = sub.school?.name ?? `student ${sub.studentId}`;
     if (priced.amount === null) {
@@ -63,7 +65,11 @@ async function main() {
     if (apply) {
       await prisma.subscription.update({
         where: { id: sub.id },
-        data: { amount: priced.amount, studentCountSnapshot: sub.schoolId ? studentCount : null },
+        data: {
+          amount: priced.amount,
+          studentCountSnapshot: sub.schoolId ? studentCount : null,
+          teacherCountSnapshot: sub.schoolId ? teacherCount : null,
+        },
       });
     }
   }

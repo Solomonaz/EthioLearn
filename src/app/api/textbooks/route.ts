@@ -73,6 +73,9 @@ export async function GET(request: Request) {
     where.OR = [{ schoolId: user.schoolId }, { schoolId: null }];
   }
 
+  // School requests awaiting (or refused) approval are invisible outside admin.
+  where.approvalStatus = "APPROVED";
+
   const textbooks = await db.textbook.findMany({
     where,
     include: {

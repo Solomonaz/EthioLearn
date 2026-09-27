@@ -29,6 +29,8 @@ interface Plan {
   price: number | null;
   currency: string;
   billingInterval: BillingInterval;
+  pricePerTeacher: number | null;
+  teacherAiMonthlyLimit: number | null;
   tiers: Tier[];
 }
 interface Subscription {
@@ -40,6 +42,7 @@ interface Subscription {
   amount: number | null;
   currency: string;
   studentCountSnapshot: number | null;
+  teacherCountSnapshot: number | null;
   notes: string | null;
   plan: Plan;
 }
@@ -62,6 +65,19 @@ function planPriceSummary(p: Plan): string {
   return `${formatMoney(p.price, p.currency)}${interval}`;
 }
 
+/** The plan's secondary-teacher terms in one line. */
+function teacherTermsSummary(p: Plan): string {
+  const seats =
+    p.pricePerTeacher != null
+      ? `${formatMoney(p.pricePerTeacher, p.currency)} per teacher`
+      : "Teachers not charged";
+  const ai =
+    p.teacherAiMonthlyLimit != null
+      ? `${p.teacherAiMonthlyLimit} AI credits per teacher per month`
+      : "platform-default teacher AI credits";
+  return `${seats} · ${ai}`;
+}
+
 export function SubscriptionPanel({
   audience,
   targetId,
@@ -74,6 +90,7 @@ export function SubscriptionPanel({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [current, setCurrent] = useState<Subscription | null>(null);
   const [studentCount, setStudentCount] = useState<number>(0);
+  const [teacherCount, setTeacherCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -96,6 +113,7 @@ export function SubscriptionPanel({
       setPlans(plansData.plans ?? []);
       setCurrent(subData.subscription ?? null);
       setStudentCount(subData.studentCount ?? 0);
+      setTeacherCount(subData.teacherCount ?? 0);
     } catch {
       toast.error("Failed to load subscription info.");
     } finally {
@@ -108,12 +126,7 @@ export function SubscriptionPanel({
   }, [load]);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
-  const preview = selectedPlan
-    ? computePlanPrice(
-        { pricingModel: selectedPlan.pricingModel, price: selectedPlan.price, tiers: selectedPlan.tiers },
-        studentCount
-      )
-    : null;
+  const preview = selectedPlan ? computePlanPrice(selectedPlan, studentCount, teacherCount) : null;
 
   async function handleAssign() {
     if (!selectedPlanId) {
@@ -209,7 +222,14 @@ export function SubscriptionPanel({
                   <span>Started {new Date(current.startDate).toLocaleDateString()}</span>
                   {current.endDate && <span>Ends {new Date(current.endDate).toLocaleDateString()}</span>}
                   {current.studentCountSnapshot !== null && (
-                    <span>Priced for {current.studentCountSnapshot} students</span>
+                    <span>
+                      Priced for {current.studentCountSnapshot} students
+                      {current.teacherCountSnapshot !== null &&
+                        ` and ${current.teacherCountSnapshot} teacher${current.teacherCountSnapshot === 1 ? "" : "s"}`}
+                    </span>
+                  )}
+                  {audience === "SCHOOL" && (
+                    <span className="sm:col-span-2">{teacherTermsSummary(current.plan)}</span>
                   )}
                 </div>
                 {current.amount === null && (
@@ -254,6 +274,7 @@ export function SubscriptionPanel({
                             {isCurrent && <Badge variant="success">Current</Badge>}
                           </div>
                           <p className="mt-1 text-sm text-text-primary">{planPriceSummary(p)}</p>
+                          <p className="mt-0.5 text-xs text-text-secondary">{teacherTermsSummary(p)}</p>
                           {p.pricingModel === "TIERED" && p.tiers.length > 0 && (
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {p.tiers.map((t, i) => (
@@ -286,7 +307,8 @@ export function SubscriptionPanel({
                 {audience === "SCHOOL" && (
                   <p className="text-xs text-text-secondary">
                     This school currently has <strong>{studentCount}</strong> student
-                    {studentCount === 1 ? "" : "s"} — school plans are priced on this count.
+                    {studentCount === 1 ? "" : "s"} and <strong>{teacherCount}</strong> active secondary
+                    teacher{teacherCount === 1 ? "" : "s"} — school plans are priced on these counts.
                   </p>
                 )}
 
@@ -323,6 +345,14 @@ export function SubscriptionPanel({
                             nearest one was applied — worth seeing before assigning. */}
                         {preview?.amount !== null && preview?.note && (
                           <p className="mt-1 text-xs text-text-secondary">{preview.note}</p>
+                        )}
+                        {preview?.teachers && (
+                          <p className="mt-1 text-xs text-text-secondary">
+                            Includes {preview.teachers.count} teacher
+                            {preview.teachers.count === 1 ? "" : "s"} ×{" "}
+                            {formatMoney(preview.teachers.rate, selectedPlan.currency)} ={" "}
+                            {formatMoney(preview.teachers.amount, selectedPlan.currency)}.
+                          </p>
                         )}
                       </div>
                     )}

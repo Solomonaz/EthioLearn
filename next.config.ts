@@ -52,7 +52,10 @@ const nextConfig: NextConfig = {
   // Bundled, it looked for the worker inside .next/dev/server/chunks, where it
   // does not exist — so layout-aware textbook extraction failed and every
   // upload fell back to flat text. Loaded from node_modules, it finds it.
-  serverExternalPackages: ["pdfjs-dist"],
+  // tesseract.js spawns its OCR worker from a path relative to its own
+  // package; bundled, that resolved to a bogus "C:/ROOT/node_modules/..." path
+  // and the worker crashed the process with an uncaught error mid-extraction.
+  serverExternalPackages: ["pdfjs-dist", "tesseract.js"],
   images: {
     remotePatterns: [
       // Telegram user profile photos

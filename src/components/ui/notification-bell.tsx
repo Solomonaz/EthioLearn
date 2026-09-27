@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,9 @@ interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  /** Computed to-do (e.g. a textbook request to review): unread until handled. */
+  actionable?: boolean;
+  data?: { href?: string } | null;
 }
 
 const typeIcons: Record<string, string> = {
@@ -20,6 +24,7 @@ const typeIcons: Record<string, string> = {
   reward: "\u{1F381}",
   battle_invite: "\u2694\uFE0F",
   system: "\u{1F4E2}",
+  textbook_request: "\u{1F4DA}",
 };
 
 function timeAgo(dateStr: string): string {
@@ -40,6 +45,7 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -76,6 +82,7 @@ export function NotificationBell() {
   }, [isOpen]);
 
   const markAsRead = async (notificationIds: string[]) => {
+    if (notificationIds.length === 0) return;
     try {
       await fetch("/api/notifications/read", {
         method: "POST",
@@ -100,8 +107,9 @@ export function NotificationBell() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ all: true }),
       });
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      setUnreadCount(0);
+      // Action items aren't "read" — they clear once the request is handled.
+      setNotifications((prev) => prev.map((n) => (n.actionable ? n : { ...n, isRead: true })));
+      setUnreadCount(notifications.filter((n) => n.actionable).length);
     } catch {
       // silently fail
     }
@@ -148,8 +156,13 @@ export function NotificationBell() {
                 <button
                   key={notification.id}
                   onClick={() => {
-                    if (!notification.isRead) {
+                    if (!notification.isRead && !notification.actionable) {
                       markAsRead([notification.id]);
+                    }
+                    const href = notification.data?.href;
+                    if (href) {
+                      setIsOpen(false);
+                      router.push(href);
                     }
                   }}
                   className={cn(
@@ -179,8 +192,13 @@ export function NotificationBell() {
                     <p className="mt-0.5 text-xs text-text-secondary line-clamp-2">
                       {notification.message}
                     </p>
-                    <p className="mt-1 text-[10px] text-text-secondary/70">
+                    <p className="mt-1 flex items-center gap-2 text-[10px] text-text-secondary/70">
                       {timeAgo(notification.createdAt)}
+                      {notification.actionable && (
+                        <span className="rounded-full bg-warning/15 px-1.5 py-px font-semibold text-warning">
+                          Needs review
+                        </span>
+                      )}
                     </p>
                   </div>
                 </button>

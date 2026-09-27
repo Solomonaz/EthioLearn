@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { extractTextFromFile } from "@/lib/extract-text";
-import { splitTextByChapters } from "@/lib/ai-provider";
-import { detectChaptersFullText } from "@/lib/chapter-detection";
-import { cleanChapterTitle } from "@/lib/display-text";
+import { extractAndDetectChapters } from "@/lib/textbook-ingest";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
-import { canonicalSubject } from "@/lib/subject";
+import { duplicateResponseBody, findDuplicateTextbooks } from "@/lib/textbook-access";
 
 // Simple in-memory rate limiter
 const rateLimitMap = new Map<string, number[]>();
@@ -32,6 +29,15 @@ export async function POST(request: NextRequest) {
 
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  // Schools don't run AI detection themselves — they submit a request that is
+  // held until a super admin approves it (POST /api/admin/textbooks/requests).
+  if (user.role !== "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "Submit a textbook request instead — uploads are reviewed before processing.", code: "APPROVAL_REQUIRED" },
+      { status: 403 },
+    );
   }
 
   // Global kill-switch: AI chapter detection can be turned off platform-wide.
@@ -89,6 +95,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Duplicate check comes before extraction and AI chapter detection, so a
+  // redundant upload is refused before it costs anything.
+  const duplicates = await findDuplicateTextbooks(user, grade, subject);
+  if (duplicates.length > 0 && !(formData.get("allowDuplicate") === "1" && user.role === "SUPER_ADMIN")) {
+    return NextResponse.json(duplicateResponseBody(user, duplicates), { status: 409 });
+  }
+
   // Validate file type
   const fileName = file.name.toLowerCase();
   if (
@@ -121,52 +134,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 1. Extract text from file
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const extraction = await extractTextFromFile(buffer, file.name);
-
-    // 2. Detect chapters via AI (Gemini → Groq fallback)
+    const buffer = Buffer.from(await file.arrayBuffer());
     const language = (formData.get("language") as string) || "en";
-    let detectedChapters: any[] = [];
-    let provider = "fallback";
+    const { extraction, chapters, warnings } = await extractAndDetectChapters(buffer, file.name, {
+      subject,
+      grade,
+      language,
+    });
 
-    let detectionWarnings: string[] = [];
-
-    try {
-      // Scans the WHOLE document — windowed AI passes plus a deterministic
-      // heading sweep, unioned (see lib/chapter-detection). The previous call
-      // saw only the first 50k characters, so on a long textbook every chapter
-      // past roughly page 25 went undetected.
-      const result = await detectChaptersFullText({
-        content: extraction.text,
-        subject: await canonicalSubject(subject),
-        grade,
-        language,
-      });
-      detectedChapters = result.chapters;
-      provider = result.provider;
-      detectionWarnings = result.warnings;
-      console.log(
-        `[Create With AI] Detection: ${result.chapters.length} chapters via ${provider} ` +
-        `(strategy: ${result.strategy}, ${result.windowsScanned} AI call(s)); ` +
-        `${result.recoveredByScan} recovered by scan.`
-      );
-    } catch (aiError) {
-      console.warn("[Create With AI] AI Chapter detection failed. Falling back to single chapter.", aiError);
-      detectedChapters = [{ chapterNumber: 1, title: "Full Textbook Content" }];
-      detectionWarnings = [
-        "Automatic chapter detection failed — the whole book was kept as a single chapter. Split it manually before generating questions.",
-      ];
-    }
-
-    // 3. Split text by chapter boundaries (if fallback, returns the whole text)
-    const chaptersWithContent = splitTextByChapters(
-      extraction.text,
-      detectedChapters
-    );
-
-    // 4. Return results for review (no DB creation yet)
+    // Return results for review (no DB creation yet)
     return NextResponse.json({
       extractedContent: {
         contentLength: extraction.text.length,
@@ -177,15 +153,10 @@ export async function POST(request: NextRequest) {
       // Extraction problems (OCR truncation) plus detection problems (failed
       // windows, implausibly large chapters) — shown to the admin before they
       // commit the split.
-      warnings: [...(extraction.warnings ?? []), ...detectionWarnings],
-      // Titles come out of the generator in ONE form. The AI (reading the
-      // contents page) and the rule-based scan (reading body headings) wrote
-      // them differently — "Unit One: Animals" beside "Unit 5: The human body
-      // systems". The raw title is still what located each chapter in the
-      // text (splitTextByChapters, above); only the finished list is cleaned.
-      chapters: chaptersWithContent.map((ch) => ({
+      warnings,
+      chapters: chapters.map((ch) => ({
         chapterNumber: ch.chapterNumber,
-        title: cleanChapterTitle(ch.title),
+        title: ch.title,
         contentPreview: ch.content.slice(0, 200),
         contentLength: ch.content.length,
         content: ch.content,

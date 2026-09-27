@@ -313,7 +313,8 @@ async function runGeneration(
           provider,
           // Accepted this run + the chapter's bank, so repeats of either are caught.
           [...accepted.map((a) => a.q).reverse(), ...bankForCheck],
-          model
+          model,
+          chapterId === "all" ? null : targetChapterId
         )
       ).results;
     } catch (err) {

@@ -8,6 +8,7 @@ import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { selectGenerationContent } from "@/lib/generation-content";
 import { avoidList, generationRunIndex } from "@/lib/question-dedupe";
 import { QUESTION_CONTENT_CHARS } from "@/lib/question-prompts";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 interface RouteParams {
   params: Promise<{ id: string; chapterId: string }>;
@@ -52,12 +53,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    textbook.schoolId &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -202,7 +198,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       textbook.grade,
       provider,
       existingQuestions,
-      model
+      model,
+      chapterId === "all" ? null : chapterId
     );
 
     // Map quality results back to questions

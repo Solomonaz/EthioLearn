@@ -42,6 +42,15 @@ enum ChunkingStatus {
   FAILED
 }
 
+/// A school's textbook upload waits for super-admin approval before any paid
+/// AI work (chapter detection, embeddings, question generation) touches it.
+/// Library and super-admin books are created APPROVED.
+enum TextbookApproval {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum QuestionType {
   MCQ
   TRUE_FALSE
@@ -371,6 +380,10 @@ model PlatformSettings {
   pricingEnabled    Boolean  @default(true) // paid plans & billing — off = free for all
   rewardsEnabled    Boolean  @default(true) // rewards catalogue & redemption — off = hide rewards
   antiCheatEnabled  Boolean  @default(true) // anti-cheat detection & penalties — off = no restrictions
+  /// Secondary teachers' monthly AI credits when their school's plan sets no
+  /// limit — and ALWAYS while pricing is off, so a free launch is still capped.
+  /// Null = no cap. See lib/teacher-ai-allowance for what each credit buys.
+  teacherAiDefaultMonthlyCredits Int? @default(300)
   updatedAt         DateTime @updatedAt
 
   @@map("platform_settings")
@@ -526,6 +539,21 @@ model Textbook {
   processingStatus ProcessingStatus @default(PENDING)
   chunkingStatus   ChunkingStatus   @default(PENDING)
   ocrFlaggedPages  Json? // array of { page, confidence } for pages below 80% OCR confidence
+
+  approvalStatus   TextbookApproval @default(APPROVED)
+  /// Why the school needs this book (shown to the reviewer).
+  requestNote      String?
+  /// Reviewer's reason on rejection, or an optional note on approval.
+  reviewNote       String?
+  reviewedAt       DateTime?
+  /// Reviewer's user id — a plain string because the env super admin has no users row.
+  reviewedById     String?
+  /// Uploaded file awaiting approval, stored under UPLOAD_ROOT/textbooks.
+  sourceFile       String?
+  sourceFileName   String?
+  sourceFileSize   Int?
+  /// Why post-approval extraction / chapter detection failed, for a retry.
+  processingError  String?
   chapterCount     Int              @default(0)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -538,6 +566,7 @@ model Textbook {
 
   chapters Chapter[]
 
+  @@index([approvalStatus])
   @@map("textbooks")
 }
 
@@ -1120,6 +1149,18 @@ model PricingPlan {
   // split is wired through getEntitlements() in Phase 2 when the games ship.
   allowGames       Boolean @default(true) // elementary game modes
 
+  // ── Secondary teachers (SCHOOL plans only; null on student plans) ──
+  // Every active secondary teacher adds `pricePerTeacher` to the term price.
+  // Null = teachers are not charged, which is how plans priced before this
+  // behaved.
+  pricePerTeacher       Float?
+  // AI CREDITS each secondary teacher may spend per calendar month (the
+  // assistant, AI-written activities, merges — weighted by cost, see
+  // lib/teacher-ai-allowance). Null = the platform default
+  // (PlatformSettings.teacherAiDefaultMonthlyCredits). Library hits that reuse
+  // an existing document never count.
+  teacherAiMonthlyLimit Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1173,6 +1214,7 @@ model Subscription {
   amount               Float?
   currency             String  @default("ETB")
   studentCountSnapshot Int? // school subs: enrolled students when priced
+  teacherCountSnapshot Int? // school subs: active secondary teachers when priced
   notes                String?
 
   createdById String?
@@ -1267,6 +1309,9 @@ model UsageEvent {
   // FK cascades, so deleting a user keeps the spend they caused on the books.
   studentId String?
   schoolId  String?
+  // Set for calls a secondary teacher made (assistant, AI activities, merges),
+  // so teacher cost is visible per teacher and not only as school overhead.
+  teacherId String?
 
   promptTokens   Int
   outputTokens   Int
@@ -1282,5 +1327,25 @@ model UsageEvent {
   @@index([feature])
   @@index([studentId])
   @@index([schoolId])
+  @@index([teacherId])
   @@map("usage_events")
+}
+
+/// One AI generation a secondary teacher ran; its `credits` are what their
+/// monthly allowance (`PricingPlan.teacherAiMonthlyLimit`) sums. Separate from
+/// UsageEvent because one generation makes many provider calls (embeddings,
+/// retries, per-chapter question batches); this is one row per thing the
+/// teacher asked for. Written only when the AI actually produced it.
+model TeacherAiUse {
+  id        String   @id @default(cuid())
+  teacherId String
+  schoolId  String
+  kind      String // "assistant" | "workout" | "questions" | "merge"
+  /// Weighted by what the generation costs (lib/teacher-ai-allowance) — a
+  /// 25-question paper is not the same spend as one assistant reply.
+  credits   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@index([teacherId, createdAt])
+  @@map("teacher_ai_uses")
 }

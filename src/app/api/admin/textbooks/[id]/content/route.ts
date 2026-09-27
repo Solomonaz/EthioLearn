@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { canManageTextbook, canViewTextbook } from "@/lib/textbook-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -19,20 +20,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // Verify textbook + school isolation
   const textbook = await db.textbook.findUnique({
     where: { id: textbookId },
-    select: { id: true, schoolId: true },
+    select: { id: true, schoolId: true, approvalStatus: true },
   });
 
   if (!textbook) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    textbook.schoolId &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Nothing paid runs on a school request until a super admin approves it.
+  if (textbook.approvalStatus !== "APPROVED") {
+    return NextResponse.json(
+      { error: "This textbook is awaiting approval.", code: "NOT_APPROVED" },
+      { status: 409 },
+    );
   }
 
   let body: { content?: string };
@@ -94,12 +98,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    textbook.schoolId &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canViewTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -24,7 +24,7 @@ export async function GET() {
   }
 
   const textbooks = await db.textbook.findMany({
-    where: { grade, processingStatus: "COMPLETED" },
+    where: { grade, processingStatus: "COMPLETED", approvalStatus: "APPROVED" },
     select: { subject: true, chapters: { select: { id: true } } },
   });
 

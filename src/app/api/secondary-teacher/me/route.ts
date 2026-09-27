@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { getTeacherAiStatus } from "@/lib/teacher-ai-allowance";
 
 /**
  * Secondary teacher profile — read + update the signed-in teacher's own
@@ -23,9 +24,10 @@ export async function GET() {
   const user = await getSecondaryTeacher();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
-  const assignmentCount = await db.teachingAssignment.count({
-    where: { teacherId: user.id },
-  });
+  const [assignmentCount, ai] = await Promise.all([
+    db.teachingAssignment.count({ where: { teacherId: user.id } }),
+    getTeacherAiStatus(user),
+  ]);
 
   return NextResponse.json({
     user: {
@@ -39,6 +41,8 @@ export async function GET() {
       createdAt: user.createdAt,
     },
     stats: { assignmentCount },
+    // The school plan's AI allowance, so the assistant can show what is left.
+    ai,
   });
 }
 

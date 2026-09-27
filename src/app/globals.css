@@ -38,6 +38,34 @@
   --color-primary-light: #66BB6A;
 }
 
+/* Chart tokens. Categorical slots 1-5 are a validated colour-blind-safe order
+   (fixed order, never cycled — a sixth series folds into "other"); each mode
+   has its own steps, validated against that mode's surface. */
+:root {
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-other: #b5b3ad;
+  --chart-accent: #2E7D32; /* single-series marks: the brand green */
+  --chart-accent-soft: rgba(46, 125, 50, 0.12);
+  --chart-grid: #eeede9;
+  --chart-axis: #9E9E9E;
+}
+.dark {
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-other: #5f5e5a;
+  --chart-accent: #66BB6A;
+  --chart-accent-soft: rgba(102, 187, 106, 0.14);
+  --chart-grid: #2c2c2a;
+  --chart-axis: #757575;
+}
+
 @layer base {
   body {
     @apply bg-background text-text-primary antialiased;

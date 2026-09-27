@@ -11,6 +11,8 @@ export interface PlatformSettings {
   pricingEnabled: boolean;
   rewardsEnabled: boolean;
   antiCheatEnabled: boolean;
+  /** Secondary teachers' monthly AI credits when no plan sets one; null = no cap. */
+  teacherAiDefaultMonthlyCredits: number | null;
 }
 
 // Individual AI features are gated by BOTH the master switch and their own flag.
@@ -38,6 +40,7 @@ const DEFAULTS: PlatformSettings = {
   pricingEnabled: true,
   rewardsEnabled: true,
   antiCheatEnabled: true,
+  teacherAiDefaultMonthlyCredits: 300,
 };
 
 /**
@@ -61,6 +64,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
         pricingEnabled: true,
         rewardsEnabled: true,
         antiCheatEnabled: true,
+        teacherAiDefaultMonthlyCredits: true,
       },
     });
     return row;

@@ -44,9 +44,23 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const data: Record<string, boolean> = {};
+  const data: Record<string, boolean | number | null> = {};
   for (const key of BOOLEAN_KEYS) {
     if (typeof body[key] === "boolean") data[key] = body[key] as boolean;
+  }
+  // Teachers' default monthly AI credits: a whole number, or null for no cap.
+  if ("teacherAiDefaultMonthlyCredits" in body) {
+    const v = body.teacherAiDefaultMonthlyCredits;
+    if (v === null) {
+      data.teacherAiDefaultMonthlyCredits = null;
+    } else if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100_000) {
+      data.teacherAiDefaultMonthlyCredits = v;
+    } else {
+      return NextResponse.json(
+        { error: "Default teacher AI credits must be a whole number from 0 to 100000, or empty for no cap." },
+        { status: 400 },
+      );
+    }
   }
 
   if (Object.keys(data).length === 0) {
@@ -67,6 +81,7 @@ export async function PATCH(request: Request) {
       pricingEnabled: true,
       rewardsEnabled: true,
       antiCheatEnabled: true,
+      teacherAiDefaultMonthlyCredits: true,
     },
   });
 

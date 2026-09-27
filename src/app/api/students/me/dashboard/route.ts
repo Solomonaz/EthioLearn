@@ -49,7 +49,10 @@ export async function GET() {
 
       // 4. Available subjects
       db.textbook.findMany({
-        where: studyScope.length > 0 ? { grade: { in: studyScope } } : {},
+        where: {
+          approvalStatus: "APPROVED",
+          ...(studyScope.length > 0 ? { grade: { in: studyScope } } : {}),
+        },
         select: {
           id: true,
           title: true,

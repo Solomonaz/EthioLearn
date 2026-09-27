@@ -47,6 +47,7 @@ export async function POST(request: Request) {
         subject: { equals: subject, mode: "insensitive" },
         grade,
         processingStatus: "COMPLETED",
+        approvalStatus: "APPROVED",
       },
       include: { chapters: { select: { id: true } } },
     });

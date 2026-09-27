@@ -111,11 +111,22 @@ export default function TeachingAssistantPage() {
   const [result, setResult] = useState<AssistantResult | null>(null);
   const [revision, setRevision] = useState("");
 
+  const [allowance, setAllowance] = useState<AiAllowance | null>(null);
+
   const selectedClass = classes.find((c) => c.id === classId) ?? null;
 
   useEffect(() => {
     clearRememberedResult();
   }, []);
+
+  // What the school's plan leaves this month. Re-read after each generation.
+  const refreshAllowance = useCallback(() => {
+    fetch("/api/secondary-teacher/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setAllowance(d?.ai ?? null))
+      .catch(() => setAllowance(null));
+  }, []);
+  useEffect(refreshAllowance, [refreshAllowance]);
 
   // The teacher's own classes — names only, so the lite form of the route.
   useEffect(() => {
@@ -249,9 +260,10 @@ export default function TeachingAssistantPage() {
       } finally {
         setBusy(false);
         setProgress(null);
+        refreshAllowance();
       }
     },
-    [busy, task, prompt, chapterIds, classId, chapters, selectedClass, result],
+    [busy, task, prompt, chapterIds, classId, chapters, selectedClass, result, refreshAllowance],
   );
 
   /** A merge lands where a fresh result would, so it can be revised the same way. */
@@ -270,8 +282,9 @@ export default function TeachingAssistantPage() {
         task: ASSISTANT_TASKS.some((t) => t.value === m.task) ? (m.task as AssistantTask) : "FREEFORM",
       };
       setResult(next);
+      refreshAllowance();
     },
-    [],
+    [refreshAllowance],
   );
 
   const submit = useCallback(
@@ -314,6 +327,7 @@ export default function TeachingAssistantPage() {
           Lesson plans, worksheets, board notes, exam blueprints — or just describe
           what you need.
         </p>
+        <AllowanceNote allowance={allowance} />
       </div>
 
       <Card className="print-hide">
@@ -658,5 +672,39 @@ function ChapterPicker({
         </div>
       )}
     </div>
+  );
+}
+
+interface AiAllowance {
+  schoolActive: boolean;
+  used: number;
+  limit: number | null;
+  resetsAt: string;
+}
+
+/** The teacher's monthly AI credits — silent when there is no cap to report. */
+function AllowanceNote({ allowance }: { allowance: AiAllowance | null }) {
+  if (!allowance) return null;
+  if (!allowance.schoolActive) {
+    return (
+      <p className="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+        Your school&apos;s subscription is not active, so AI writing is paused. Ask your
+        school admin to renew.
+      </p>
+    );
+  }
+  if (allowance.limit === null) return null;
+
+  const left = Math.max(0, allowance.limit - allowance.used);
+  const resets = new Date(allowance.resetsAt).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+  return (
+    <p className={cn("mt-1 text-xs", left === 0 ? "text-warning" : "text-text-muted")}>
+      {left} of {allowance.limit} AI credits left this month (resets {resets}). Each request uses
+      1; materials reused from the library are free.
+    </p>
   );
 }

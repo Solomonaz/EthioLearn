@@ -696,6 +696,40 @@ export async function semanticSearch(
   }
 }
 
+// ─── Stored Chunk Vectors ───────────────────────────────
+
+/**
+ * A chapter's already-stored chunk embeddings, in chapter order — only those
+ * made by the CURRENT Gemini model, so they share a space with a fresh
+ * `generateEmbeddings` call. Empty when the chapter has none (not processed,
+ * or embedded by an older model / a fallback provider).
+ *
+ * The quality pipeline scores relevance against these instead of re-embedding
+ * the chapter on every generation run: content rotation hands each run a
+ * different excerpt, so an in-memory text cache almost never hit, and the
+ * re-embedding cost ~20K tokens per run for vectors already in the database.
+ */
+export async function loadChunkEmbeddings(
+  chapterId: string
+): Promise<{ content: string; embedding: number[] }[]> {
+  try {
+    const rows = await db.$queryRawUnsafe<{ content: string; embedding: string }[]>(
+      `SELECT content, embedding::text AS embedding
+       FROM content_chunks
+       WHERE "chapterId" = $1
+         AND embedding IS NOT NULL
+         AND "embeddingModel" = $2
+       ORDER BY "chunkIndex" ASC`,
+      chapterId,
+      embeddingModel()
+    );
+    return rows.map((r) => ({ content: r.content, embedding: JSON.parse(r.embedding) as number[] }));
+  } catch (error) {
+    console.warn("[Embeddings] Could not load stored chunk embeddings:", error);
+    return [];
+  }
+}
+
 // ─── Cosine Similarity (in-memory, for quality checks) ─
 
 export function cosineSimilarity(a: number[], b: number[]): number {

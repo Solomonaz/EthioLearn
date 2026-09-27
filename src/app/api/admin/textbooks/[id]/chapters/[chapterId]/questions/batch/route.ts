@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 interface RouteParams {
   params: Promise<{ id: string; chapterId: string }>;
@@ -38,12 +39,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    textbook.schoolId &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

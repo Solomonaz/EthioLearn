@@ -7,7 +7,14 @@ import { isSecondaryGrade } from "@/lib/teacher-band";
 import { subjectEquals } from "@/lib/subject";
 import { sseResponse } from "@/lib/sse";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
-import { usageActor } from "@/lib/usage-logger";
+import { usageActor, withUsageActor } from "@/lib/usage-logger";
+import {
+  getTeacherAiStatus,
+  questionCredits,
+  recordTeacherAiUse,
+  teacherAiDenial,
+  TEACHER_AI_CREDITS,
+} from "@/lib/teacher-ai-allowance";
 import { askTeachingAssistant } from "@/lib/teaching-assistant";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { replenishQuestionBank, type BankQuestion } from "@/lib/question-bank";
@@ -340,6 +347,11 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
           { status: 503 },
         );
       }
+      // School must be paid up; the allowance is checked only if the library
+      // has nothing, since a library set costs nothing.
+      const aiStatus = await getTeacherAiStatus(user);
+      const inactive = teacherAiDenial(aiStatus, 0);
+      if (inactive) return NextResponse.json({ error: inactive.error }, { status: inactive.status });
 
       const problemCount = Math.min(Math.max(questionCount, 1), 30);
       const teacherAdds = normaliseInstructions(
@@ -373,6 +385,10 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
         emit?.({ message: "Formatting the problems...", percent: 88 });
         result = { title: served.title, markdown: served.body };
       } else {
+        const overAllowance = teacherAiDenial(aiStatus, TEACHER_AI_CREDITS.workout);
+        if (overAllowance) {
+          return NextResponse.json({ error: overAllowance.error }, { status: overAllowance.status });
+        }
         emit?.({ message: "Reading the chapters...", percent: 10 });
 
         // Ground the problems in the actual chapter text, the same budget the
@@ -421,6 +437,7 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
             { status: 502 },
           );
         }
+        await recordTeacherAiUse(user, "workout", TEACHER_AI_CREDITS.workout);
         result = written;
 
         // Stored with its answer key (teachers only) and added to the bank
@@ -649,10 +666,17 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
   // than whatever the bank happened to hold. The generated rows are persisted
   // like any other, so the next teacher benefits too.
   if (wantsAi) {
+    // Checked against the full request up front; charged below for what was
+    // actually delivered.
+    const denied = teacherAiDenial(await getTeacherAiStatus(user), questionCredits(questionCount));
+    if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status });
+
     const share = shareAcrossChapters(questionCount);
     for (let i = 0; i < chapters.length; i++) {
       if (share[i] < 1) continue;
-      const created = await replenishQuestionBank({
+      // Attributed to this teacher: on-demand generation, unlike the
+      // content-side generation that fills banks for everyone.
+      const created = await withUsageActor(usageActor(user), () => replenishQuestionBank({
         chapterId: chapters[i].id,
         textbookId: chapters[i].textbookId,
         needed: share[i],
@@ -675,9 +699,14 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
                 ),
               })
           : undefined,
-      });
+      }));
       const seen = new Set(pool.map((q) => q.id));
       pool = pool.concat(created.filter((q) => !seen.has(q.id)));
+    }
+    // One paper is one generation, however many chapters it spans, charged
+    // per question delivered. A run that produced nothing is not charged.
+    if (pool.length > 0) {
+      await recordTeacherAiUse(user, "questions", questionCredits(Math.min(pool.length, questionCount)));
     }
     if (pool.length === 0) {
       notice =

@@ -6,6 +6,7 @@ import { validateCsrfOrigin } from "@/lib/csrf";
 import { chunkContent } from "@/lib/content-chunker";
 import { generateEmbeddings, storeChunkEmbeddings, enablePgvector, isPgvectorAvailable } from "@/lib/embeddings";
 import { tagChunksWithBloomLevel } from "@/lib/bloom-tagger";
+import { canManageTextbook, canViewTextbook } from "@/lib/textbook-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -57,6 +58,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       grade: true,
       schoolId: true,
       chunkingStatus: true,
+      approvalStatus: true,
       updatedAt: true,
     } as any,
   })) as any;
@@ -65,13 +67,16 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    textbook.schoolId &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Nothing paid runs on a school request until a super admin approves it.
+  if (textbook.approvalStatus !== "APPROVED") {
+    return NextResponse.json(
+      { error: "This textbook is awaiting approval.", code: "NOT_APPROVED" },
+      { status: 409 },
+    );
   }
 
   // Don't re-process if a run is genuinely still in flight — but treat a run
@@ -343,12 +348,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    (textbook as any).schoolId &&
-    user.schoolId &&
-    (textbook as any).schoolId !== user.schoolId
-  ) {
+  if (!canViewTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

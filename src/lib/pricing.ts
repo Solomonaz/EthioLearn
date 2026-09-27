@@ -24,6 +24,18 @@ export interface PlanLike {
   pricingModel: PricingModel;
   price?: number | null;
   tiers?: TierLike[];
+  /** School plans: added to the term price for every teacher. Null = teachers not charged. */
+  pricePerTeacher?: number | null;
+}
+
+/** How the secondary teachers of a school were priced. */
+export interface TeacherCharge {
+  /** Active secondary teachers at the school. */
+  count: number;
+  /** The plan's price per teacher. */
+  rate: number;
+  /** count × rate. */
+  amount: number;
 }
 
 export interface PriceResult {
@@ -31,6 +43,11 @@ export interface PriceResult {
   amount: number | null;
   /** The tier that was applied (TIERED plans only). */
   tier: TierLike | null;
+  /**
+   * The teacher part of `amount` (school plans with a per-teacher price only).
+   * `amount` already includes it.
+   */
+  teachers?: TeacherCharge;
   /**
    * Human-readable note when the price needed explaining — either it could not
    * be determined, or no bracket contained the student count and the nearest
@@ -42,8 +59,36 @@ export interface PriceResult {
 /**
  * Compute the price for a plan. `studentCount` is only used by school pricing
  * models (PER_STUDENT, TIERED) and ignored for FLAT student plans.
+ * `teacherCount` adds the plan's per-teacher price for each secondary teacher
+ * (see `teacherCharge`).
  */
-export function computePlanPrice(plan: PlanLike, studentCount = 0): PriceResult {
+export function computePlanPrice(
+  plan: PlanLike,
+  studentCount = 0,
+  teacherCount = 0,
+): PriceResult {
+  const base = studentPrice(plan, studentCount);
+  if (base.amount === null || plan.pricingModel === "FLAT") return base;
+
+  const teachers = teacherCharge(plan, teacherCount);
+  if (!teachers) return base;
+  return { ...base, amount: base.amount + teachers.amount, teachers };
+}
+
+/**
+ * The teacher part of a school price: every teacher × the plan's per-teacher
+ * price. Null when the plan sets no per-teacher price (teachers not charged —
+ * how plans behaved before teachers were priced).
+ */
+export function teacherCharge(plan: PlanLike, teacherCount: number): TeacherCharge | null {
+  if (plan.pricePerTeacher === null || plan.pricePerTeacher === undefined) return null;
+  const count = Math.max(0, Math.floor(teacherCount || 0));
+  const rate = Math.max(0, plan.pricePerTeacher);
+  return { count, rate, amount: count * rate };
+}
+
+/** The price before teachers: the plan's own model applied to the student count. */
+function studentPrice(plan: PlanLike, studentCount: number): PriceResult {
   const count = Math.max(0, Math.floor(studentCount || 0));
 
   switch (plan.pricingModel) {
@@ -301,6 +346,8 @@ export interface PlanInputData {
   allowMathTools: boolean;
   quarterlyDiscountPct: number;
   yearlyDiscountPct: number;
+  pricePerTeacher: number | null;
+  teacherAiMonthlyLimit: number | null;
 }
 
 /**
@@ -358,6 +405,27 @@ export function parsePlanInput(
     ? body.features.map((f) => String(f).trim()).filter(Boolean)
     : [];
 
+  // Secondary teachers — school plans only. A blank price means teachers are
+  // not charged.
+  let pricePerTeacher: number | null = null;
+  let teacherAiMonthlyLimit: number | null = null;
+  if (audience === "SCHOOL") {
+    if (!isBlank(body.pricePerTeacher)) {
+      const rate = Number(body.pricePerTeacher);
+      if (!Number.isFinite(rate) || rate < 0) {
+        return { error: "The price per teacher must be 0 or more" };
+      }
+      pricePerTeacher = rate;
+    }
+    if (!isBlank(body.teacherAiMonthlyLimit)) {
+      const limit = Number(body.teacherAiMonthlyLimit);
+      if (!Number.isInteger(limit) || limit < 0) {
+        return { error: "The monthly AI credits per teacher must be a whole number (0 or more)" };
+      }
+      teacherAiMonthlyLimit = limit;
+    }
+  }
+
   let price: number | null = null;
   let tiers: TierLike[] | null = null;
 
@@ -412,7 +480,14 @@ export function parsePlanInput(
       allowMathTools,
       quarterlyDiscountPct,
       yearlyDiscountPct,
+      pricePerTeacher,
+      teacherAiMonthlyLimit,
     },
     tiers,
   };
+}
+
+/** An optional numeric form field left empty (null, undefined or ""). */
+function isBlank(v: unknown): boolean {
+  return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
 }

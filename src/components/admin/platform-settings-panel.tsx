@@ -17,9 +17,10 @@ interface Settings {
   pricingEnabled: boolean;
   rewardsEnabled: boolean;
   antiCheatEnabled: boolean;
+  teacherAiDefaultMonthlyCredits: number | null;
 }
 
-type Key = keyof Settings;
+type Key = Exclude<keyof Settings, "teacherAiDefaultMonthlyCredits">;
 
 function Toggle({
   checked,
@@ -80,6 +81,74 @@ function Row({
 }
 
 /**
+ * The default monthly AI credits for secondary teachers. Saved on an explicit
+ * button press rather than per keystroke, so typing "300" never briefly caps
+ * every teacher at 3.
+ */
+function TeacherCreditsRow({
+  value,
+  disabled,
+  onSave,
+}: {
+  value: number | null;
+  disabled?: boolean;
+  onSave: (v: number | null) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(value === null ? "" : String(value));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setDraft(value === null ? "" : String(value)), [value]);
+
+  const trimmed = draft.trim();
+  const parsed = trimmed === "" ? null : Number(trimmed);
+  const valid = parsed === null || (Number.isInteger(parsed) && parsed >= 0 && parsed <= 100_000);
+  const dirty = parsed !== value;
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-sm font-medium", disabled ? "text-text-muted" : "text-text-primary")}>
+          Default teacher AI credits / month
+        </p>
+        <p className="mt-0.5 text-xs text-text-secondary">
+          Used when a school&apos;s plan sets no limit, and always while pricing is off. An
+          assistant reply is 1 credit, a workout set or merge 2, an AI-written paper 1 per
+          question. Blank = no cap.
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          max={100000}
+          inputMode="numeric"
+          aria-label="Default teacher AI credits per month"
+          value={draft}
+          disabled={disabled || saving}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="No cap"
+          className={cn(
+            "h-9 w-24 rounded-lg border bg-surface px-2 text-right text-sm text-text-primary",
+            valid ? "border-border" : "border-error",
+          )}
+        />
+        <button
+          type="button"
+          disabled={disabled || saving || !dirty || !valid}
+          onClick={async () => {
+            setSaving(true);
+            await onSave(parsed);
+            setSaving(false);
+          }}
+          className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Global platform kill-switches (SUPER_ADMIN only). Renders nothing for other
  * roles — the API returns 403 and we hide the panel.
  */
@@ -128,6 +197,25 @@ export function PlatformSettingsPanel() {
       toast.error("Couldn't update the setting.");
     } finally {
       setSavingKey((prev) => (prev === key ? null : prev));
+    }
+  }
+
+  async function saveTeacherCredits(value: number | null): Promise<boolean> {
+    try {
+      const res = await fetch("/api/admin/platform-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teacherAiDefaultMonthlyCredits: value }),
+      });
+      const d = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(d?.error);
+      const confirmed = d?.settings?.teacherAiDefaultMonthlyCredits ?? null;
+      setSettings((prev) => (prev ? { ...prev, teacherAiDefaultMonthlyCredits: confirmed } : prev));
+      toast.success("Teacher AI credits updated.");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "Couldn't update the setting.");
+      return false;
     }
   }
 
@@ -209,6 +297,11 @@ export function PlatformSettingsPanel() {
             checked={settings.aiTeacherAssistantEnabled}
             disabled={aiOff}
             onChange={(v) => update("aiTeacherAssistantEnabled", v)}
+          />
+          <TeacherCreditsRow
+            value={settings.teacherAiDefaultMonthlyCredits}
+            disabled={aiOff || !settings.aiTeacherAssistantEnabled}
+            onSave={saveTeacherCredits}
           />
         </div>
 

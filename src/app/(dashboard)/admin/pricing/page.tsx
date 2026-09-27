@@ -23,6 +23,7 @@ import {
   formatMoney,
   billingIntervalLabel,
   studentIntervalPrice,
+  teacherCharge,
   validateTiers,
   type BillingInterval,
 } from "@/lib/pricing";
@@ -54,6 +55,8 @@ interface Plan {
   allowMathTools: boolean;
   quarterlyDiscountPct: number;
   yearlyDiscountPct: number;
+  pricePerTeacher: number | null;
+  teacherAiMonthlyLimit: number | null;
   tiers: Tier[];
   _count?: { subscriptions: number };
 }
@@ -88,6 +91,9 @@ interface EditorState {
   allowMathTools: boolean;
   quarterlyDiscountPct: string;
   yearlyDiscountPct: string;
+  // Secondary teachers (school plans). "" = teachers not charged / no cap.
+  pricePerTeacher: string;
+  teacherAiMonthlyLimit: string;
   tiers: TierRow[];
 }
 
@@ -111,6 +117,8 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
     allowMathTools: true,
     quarterlyDiscountPct: "0",
     yearlyDiscountPct: "0",
+    pricePerTeacher: "",
+    teacherAiMonthlyLimit: "",
     tiers: [{ minStudents: "1", maxStudents: "", price: "" }],
   };
 }
@@ -135,6 +143,8 @@ function editorFromPlan(plan: Plan): EditorState {
     allowMathTools: plan.allowMathTools ?? true,
     quarterlyDiscountPct: String(plan.quarterlyDiscountPct ?? 0),
     yearlyDiscountPct: String(plan.yearlyDiscountPct ?? 0),
+    pricePerTeacher: plan.pricePerTeacher != null ? String(plan.pricePerTeacher) : "",
+    teacherAiMonthlyLimit: plan.teacherAiMonthlyLimit != null ? String(plan.teacherAiMonthlyLimit) : "",
     tiers:
       plan.tiers.length > 0
         ? plan.tiers.map((t) => ({
@@ -204,6 +214,11 @@ export default function AdminPricingPage() {
         .map((f) => f.trim())
         .filter(Boolean),
     };
+    if (editor.audience === "SCHOOL") {
+      // Blank stays blank — the API reads "" as "teachers not charged" / "no cap".
+      body.pricePerTeacher = editor.pricePerTeacher.trim();
+      body.teacherAiMonthlyLimit = editor.teacherAiMonthlyLimit.trim();
+    }
 
     if (editor.pricingModel === "TIERED") {
       const tiers = editor.tiers.map((t) => ({
@@ -403,6 +418,9 @@ function PlanSection({
                     <p className="mt-0.5 text-sm text-text-secondary">{plan.description}</p>
                   )}
                   <p className="mt-1 text-sm text-text-primary">{priceSummary(plan)}</p>
+                  {plan.audience === "SCHOOL" && (
+                    <p className="mt-0.5 text-xs text-text-secondary">{teacherSummary(plan)}</p>
+                  )}
                   {plan.audience === "STUDENT" &&
                     (plan.quarterlyDiscountPct > 0 || plan.yearlyDiscountPct > 0) && (
                       <p className="mt-0.5 text-xs text-text-secondary">
@@ -503,6 +521,18 @@ function priceSummary(plan: Plan): string {
     return `Tiered by student count${interval}`;
   }
   return `${formatMoney(plan.price, plan.currency)}${interval}`;
+}
+
+function teacherSummary(plan: Plan): string {
+  const seats =
+    plan.pricePerTeacher != null
+      ? `Teachers: ${formatMoney(plan.pricePerTeacher, plan.currency)} each`
+      : "Teachers: not charged";
+  const ai =
+    plan.teacherAiMonthlyLimit != null
+      ? `${plan.teacherAiMonthlyLimit} AI credits per teacher per month`
+      : "platform-default teacher AI credits";
+  return `${seats} · ${ai}`;
 }
 
 // ── Plan editor form ───────────────────────────────────────
@@ -693,6 +723,8 @@ function PlanEditor({
           </div>
         )}
 
+        {isSchool && <TeacherTerms editor={editor} set={set} saving={saving} />}
+
         <Field label="Features (comma-separated, optional)">
           <Input value={editor.features} onChange={(e) => set({ features: e.target.value })} disabled={saving} placeholder="Unlimited quizzes, AI tutor, Priority support" />
         </Field>
@@ -782,6 +814,63 @@ function PlanEditor({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// School-plan secondary-teacher terms: a price per teacher + AI allowance.
+function TeacherTerms({
+  editor,
+  set,
+  saving,
+}: {
+  editor: EditorState;
+  set: (patch: Partial<EditorState>) => void;
+  saving: boolean;
+}) {
+  const cur = editor.currency || "ETB";
+  const rate = Number(editor.pricePerTeacher);
+  // Worked example so the price is concrete: a school with 20 teachers.
+  const example =
+    editor.pricePerTeacher.trim() && Number.isFinite(rate) && rate >= 0
+      ? teacherCharge({ pricingModel: "PER_STUDENT", pricePerTeacher: rate }, 20)
+      : null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-background/40 p-3">
+      <p className="text-xs font-semibold uppercase text-text-muted">Secondary teachers</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label={`Price per teacher (${cur})`}>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            value={editor.pricePerTeacher}
+            onChange={(e) => set({ pricePerTeacher: e.target.value })}
+            disabled={saving}
+            placeholder="Blank = teachers free"
+          />
+        </Field>
+        <Field label="AI credits / teacher / month">
+          <Input
+            type="number"
+            min={0}
+            value={editor.teacherAiMonthlyLimit}
+            onChange={(e) => set({ teacherAiMonthlyLimit: e.target.value })}
+            disabled={saving}
+            placeholder="Blank = platform default"
+          />
+        </Field>
+      </div>
+      <p className="text-xs text-text-muted">
+        {example
+          ? `Example: a school with 20 teachers pays ${formatMoney(example.amount, cur)} for teachers, ` +
+            "on top of the student price."
+          : "Leave the price blank to not charge for teachers."}{" "}
+        Credits are weighted by cost: an assistant reply is 1, a workout set or merge 2, and an
+        AI-written paper 1 per question. Blank uses the platform default (Admin → Settings);
+        documents reused from the shared library never count.
+      </p>
+    </div>
   );
 }
 

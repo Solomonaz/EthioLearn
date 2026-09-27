@@ -5,14 +5,12 @@ import { useTranslations } from "next-intl";
 import { useAdminBasePath } from "@/hooks/use-admin-base-path";
 import {
   HelpCircle,
-  Pencil,
-  Trash2,
   Plus,
   Search,
-  ChevronLeft,
-  ChevronRight,
   X,
   XCircle,
+  RotateCw,
+  SlidersHorizontal,
   Download,
   Sparkles,
   Check,
@@ -29,11 +27,18 @@ import Papa from "papaparse";
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/ui/math-text";
 import { normalizeMathText } from "@/lib/math-notation";
+import {
+  DIFFICULTY_STYLE,
+  Pagination,
+  QuestionListSkeleton,
+  QuestionRow,
+  StatsStrip,
+  type Difficulty,
+  type QuestionStats,
+  type QuestionType,
+} from "@/components/admin/question-bank-ui";
 
 // ─── Types ────────────────────────────────────────────────
-
-type Difficulty = "EASY" | "MEDIUM" | "HARD";
-type QuestionType = "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MATCH_PAIRS" | "ORDERING";
 
 interface TextbookChapter {
   id: string;
@@ -51,6 +56,10 @@ interface TextbookOption {
   hasContent: boolean;
   contentLength: number;
   chunkingStatus: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  /** National-library book (no owning school). */
+  isLibrary: boolean;
+  /** Whether this admin may add/edit questions in it. */
+  canManage: boolean;
   chapters: TextbookChapter[];
 }
 
@@ -63,8 +72,10 @@ interface QuestionItem {
   correctAnswer: string;
   explanation: string | null;
   videoUrl: string | null;
-  usageCount: number;
-  avgAccuracy: number | null;
+  /** Real quiz answers recorded against this question. */
+  answerCount: number;
+  accuracy: number | null;
+  canManage: boolean;
   language: string;
   createdAt: string;
   chapterId: string;
@@ -86,26 +97,25 @@ interface FetchResult {
   total: number;
   page: number;
   totalPages: number;
-  textbooks: TextbookOption[];
+  stats: QuestionStats;
+  /** Omitted when requested with textbooks=0. */
+  textbooks?: TextbookOption[];
 }
 
 // ─── Constants ────────────────────────────────────────────
 
-const DIFFICULTY_OPTIONS: { value: Difficulty | "ALL"; label: string }[] = [
-  { value: "ALL", label: "All" },
-  { value: "EASY", label: "Easy" },
-  { value: "MEDIUM", label: "Medium" },
-  { value: "HARD", label: "Hard" },
+const DIFFICULTY_OPTIONS: (Difficulty | "ALL")[] = ["ALL", "EASY", "MEDIUM", "HARD"];
+
+type SortKey = "newest" | "oldest" | "mostUsed" | "leastUsed";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "mostUsed", label: "Most answered" },
+  { value: "leastUsed", label: "Least answered" },
 ];
 
-const DIFFICULTY_BADGE_VARIANT: Record<
-  Difficulty,
-  "difficulty-easy" | "difficulty-medium" | "difficulty-hard"
-> = {
-  EASY: "difficulty-easy",
-  MEDIUM: "difficulty-medium",
-  HARD: "difficulty-hard",
-};
+const PAGE_SIZE = 20;
 
 const TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
   { value: "MCQ", label: "Multiple Choice" },
@@ -114,6 +124,9 @@ const TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
   { value: "MATCH_PAIRS", label: "Match Pairs" },
   { value: "ORDERING", label: "Ordering" },
 ];
+
+const FILTER_SELECT_CLASS =
+  "h-9 min-w-0 rounded-lg border border-border bg-surface px-2.5 text-sm text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50";
 
 const SELECT_CLASS =
   "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary";
@@ -162,15 +175,20 @@ export default function AdminQuestionsPage() {
   const [filterTextbookId, setFilterTextbookId] = useState("");
   const [filterChapterId, setFilterChapterId] = useState("");
   const [filterDifficulty, setFilterDifficulty] = useState<Difficulty | "ALL">("ALL");
+  const [filterType, setFilterType] = useState<QuestionType | "">("");
+  const [unusedOnly, setUnusedOnly] = useState(false);
+  const [sort, setSort] = useState<SortKey>("newest");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ── Data state ───────────────────────────────────────────
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [textbooks, setTextbooks] = useState<TextbookOption[]>([]);
+  const [stats, setStats] = useState<QuestionStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -233,6 +251,12 @@ export default function AdminQuestionsPage() {
   const [aiError, setAiError] = useState<string | null>(null);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Textbooks (with chapter chunk counts) only need loading once — later
+  // page/filter fetches skip them unless the admin hits Refresh.
+  const textbooksLoaded = useRef(false);
+  // Drops responses from superseded requests when filters change quickly.
+  const requestSeq = useRef(0);
   const draftHydrated = useRef(false);
 
   // If AI question generation is turned off platform-wide, never sit on the AI tab.
@@ -284,6 +308,12 @@ export default function AdminQuestionsPage() {
   const filterChapters =
     textbooks.find((t) => t.id === filterTextbookId)?.chapters ?? [];
 
+  // Library books are read-only to school admins, so every "add questions"
+  // picker (single, CSV, AI) only offers books this admin may change.
+  const manageableTextbooks = textbooks.filter((tb) => tb.canManage);
+  const libraryTextbooks = textbooks.filter((tb) => tb.isLibrary);
+  const schoolTextbooks = textbooks.filter((tb) => !tb.isLibrary);
+
   // ── Derived: chapters for form dropdown ─────────────────
   const formChapters =
     textbooks.find((t) => t.id === formTextbookId)?.chapters ?? [];
@@ -294,6 +324,7 @@ export default function AdminQuestionsPage() {
   // ─── Fetch questions ─────────────────────────────────────
 
   const fetchQuestions = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setFetchError(null);
     try {
@@ -301,23 +332,38 @@ export default function AdminQuestionsPage() {
       if (filterTextbookId) params.set("textbookId", filterTextbookId);
       if (filterChapterId) params.set("chapterId", filterChapterId);
       if (filterDifficulty !== "ALL") params.set("difficulty", filterDifficulty);
+      if (filterType) params.set("type", filterType);
+      if (unusedOnly) params.set("unused", "1");
       if (search) params.set("search", search);
+      params.set("sort", sort);
       params.set("page", String(page));
-      params.set("limit", "20");
+      params.set("limit", String(PAGE_SIZE));
+      if (textbooksLoaded.current) params.set("textbooks", "0");
 
       const res = await fetch(`/api/admin/questions?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load questions");
       const data: FetchResult = await res.json();
+      if (seq !== requestSeq.current) return;
       setQuestions(data.questions ?? []);
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages ?? 1);
-      setTextbooks(data.textbooks ?? []);
+      setStats(data.stats ?? null);
+      if (data.textbooks) {
+        setTextbooks(data.textbooks);
+        textbooksLoaded.current = true;
+      }
     } catch (e) {
+      if (seq !== requestSeq.current) return;
       setFetchError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
-  }, [filterTextbookId, filterChapterId, filterDifficulty, search, page]);
+  }, [filterTextbookId, filterChapterId, filterDifficulty, filterType, unusedOnly, search, sort, page]);
+
+  function refreshAll() {
+    textbooksLoaded.current = false;
+    fetchQuestions();
+  }
 
   useEffect(() => {
     fetchQuestions();
@@ -328,6 +374,19 @@ export default function AdminQuestionsPage() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
+  }, []);
+
+  // "/" jumps to search, like most dashboards.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey) return;
+      const el = e.target as HTMLElement;
+      if (el.closest("input, textarea, select, [contenteditable=true]")) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Debounce search input
@@ -356,6 +415,26 @@ export default function AdminQuestionsPage() {
   function handleFilterDifficultyChange(d: Difficulty | "ALL") {
     setFilterDifficulty(d);
     setPage(1);
+  }
+
+  const hasActiveFilters =
+    !!filterTextbookId || !!filterChapterId || filterDifficulty !== "ALL" || !!filterType || unusedOnly || !!search;
+
+  function clearFilters() {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    setFilterTextbookId("");
+    setFilterChapterId("");
+    setFilterDifficulty("ALL");
+    setFilterType("");
+    setUnusedOnly(false);
+    setSearchInput("");
+    setSearch("");
+    setPage(1);
+  }
+
+  function goToPage(p: number) {
+    setPage(p);
+    setExpandedId(null);
   }
 
   // ─── Form helpers ─────────────────────────────────────────
@@ -497,10 +576,10 @@ export default function AdminQuestionsPage() {
     try {
       const res = await fetch(`/api/admin/questions/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      setQuestions((prev) => prev.filter((q) => q.id !== id));
-      setTotal((prev) => prev - 1);
       if (editingQuestion?.id === id) clearForm();
       toast.success("Question deleted.");
+      // Refetch so the page backfills and the stats stay honest.
+      await fetchQuestions();
     } catch {
       toast.error("Failed to delete question.");
     } finally {
@@ -668,283 +747,315 @@ export default function AdminQuestionsPage() {
 
   const panelOpen = addOpen || !!editingQuestion;
 
+  const showSkeleton = loading && !fetchError;
+  const diffCount = (d: Difficulty | "ALL") =>
+    stats ? (d === "ALL" ? stats.total : stats.byDifficulty[d]) : null;
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
-      {/* Page header — title + collapsible "Add Question" toggle */}
-      <div className="flex items-start justify-between gap-3">
+    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
+      {/* Page header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">{t("questionsTitle")}</h1>
-          <p className="text-sm text-text-secondary">
-            {t("analyticsSubtitle")}
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-text-primary">
+            <HelpCircle className="h-6 w-6 text-primary" />
+            {t("questionsTitle")}
+          </h1>
+          <p className="mt-0.5 text-sm text-text-secondary">
+            Browse, review and manage the quiz question bank across every textbook.
           </p>
         </div>
-        <Button
-          onClick={() => (panelOpen ? closeAddPanel() : openAddPanel())}
-          variant={panelOpen ? "outline" : "primary"}
-          className="shrink-0 gap-2"
-        >
-          {panelOpen ? (
-            <>
-              <X className="h-4 w-4" /> Close
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4" /> Add Question
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshAll}
+            disabled={loading}
+            className="gap-1.5"
+            title="Refresh"
+          >
+            <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+          <Button
+            onClick={() => (panelOpen ? closeAddPanel() : openAddPanel())}
+            variant={panelOpen ? "outline" : "primary"}
+            size="sm"
+            className="shrink-0 gap-1.5"
+          >
+            {panelOpen ? (
+              <>
+                <X className="h-4 w-4" /> Close
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" /> Add Question
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5">
         {/* ════════════════════════════════════════
-            LEFT PANEL — Filters + Question List
+            STATS + FILTERS + QUESTION LIST
         ════════════════════════════════════════ */}
         <div className="order-2 flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <HelpCircle className="h-5 w-5 text-primary" />
-                  <h2 className="font-semibold text-text-primary">
-                    Questions
-                    {!loading && (
-                      <span className="ml-2 text-sm font-normal text-text-secondary">
-                        ({total})
-                      </span>
-                    )}
-                  </h2>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchQuestions}
-                  disabled={loading}
-                >
-                  {loading ? <Spinner size="sm" /> : "Refresh"}
-                </Button>
-              </div>
-            </CardHeader>
+          <StatsStrip stats={stats} />
 
-            {/* Filters */}
-            <div className="border-b border-border px-4 pb-4 pt-0 space-y-3">
-              {/* Textbook + Chapter row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLASS}>Textbook</label>
-                  <select
-                    value={filterTextbookId}
-                    onChange={(e) => handleFilterTextbookChange(e.target.value)}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="">All textbooks</option>
-                    {textbooks.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title} (Gr {t.grade})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>Chapter</label>
-                  <select
-                    value={filterChapterId}
-                    onChange={(e) => handleFilterChapterChange(e.target.value)}
-                    disabled={!filterTextbookId}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="">All chapters</option>
-                    {filterChapters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        Ch {c.chapterNumber}: {c.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Difficulty pills + Search */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1">
-                  {DIFFICULTY_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => handleFilterDifficultyChange(opt.value as Difficulty | "ALL")}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        filterDifficulty === opt.value
-                          ? "bg-primary text-white"
-                          : "bg-border/50 text-text-secondary hover:bg-border hover:text-text-primary"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative flex-1 min-w-[140px]">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+          <Card className="overflow-hidden">
+            {/* Toolbar */}
+            <div className="space-y-3 border-b border-border p-4">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
                   <input
+                    ref={searchInputRef}
                     type="text"
-                    placeholder="Search questions…"
+                    placeholder="Search question text…"
                     value={searchInput}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-surface py-2 pl-8 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary"
+                    className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-16 text-sm text-text-primary outline-none transition-colors placeholder:text-text-muted focus:border-primary focus:bg-surface focus:ring-1 focus:ring-primary"
                   />
-                  {searchInput && (
+                  {searchInput ? (
                     <button
                       type="button"
                       onClick={() => {
+                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setSearchInput("");
                         setSearch("");
                         setPage(1);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted hover:text-text-primary"
+                      aria-label="Clear search"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-4 w-4" />
                     </button>
+                  ) : (
+                    <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-surface px-1.5 text-[11px] text-text-muted sm:block">
+                      /
+                    </kbd>
                   )}
                 </div>
+                <select
+                  value={sort}
+                  onChange={(e) => {
+                    setSort(e.target.value as SortKey);
+                    goToPage(1);
+                  }}
+                  className={cn(FILTER_SELECT_CLASS, "h-10 sm:w-44")}
+                  aria-label="Sort"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                <SlidersHorizontal className="hidden h-4 w-4 shrink-0 text-text-muted sm:block" />
+                <select
+                  value={filterTextbookId}
+                  onChange={(e) => handleFilterTextbookChange(e.target.value)}
+                  className={cn(FILTER_SELECT_CLASS, "col-span-2 sm:w-64")}
+                  aria-label="Textbook"
+                >
+                  <option value="">All textbooks</option>
+                  {libraryTextbooks.length > 0 && schoolTextbooks.length > 0 ? (
+                    <>
+                      <optgroup label="National library">
+                        {libraryTextbooks.map((tb) => (
+                          <option key={tb.id} value={tb.id}>
+                            {tb.title} (Gr {tb.grade})
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="School uploads">
+                        {schoolTextbooks.map((tb) => (
+                          <option key={tb.id} value={tb.id}>
+                            {tb.title} (Gr {tb.grade})
+                          </option>
+                        ))}
+                      </optgroup>
+                    </>
+                  ) : (
+                    textbooks.map((tb) => (
+                      <option key={tb.id} value={tb.id}>
+                        {tb.title} (Gr {tb.grade})
+                      </option>
+                    ))
+                  )}
+                </select>
+                <select
+                  value={filterChapterId}
+                  onChange={(e) => handleFilterChapterChange(e.target.value)}
+                  disabled={!filterTextbookId}
+                  className={cn(FILTER_SELECT_CLASS, "col-span-2 sm:w-64")}
+                  aria-label="Chapter"
+                  title={filterTextbookId ? undefined : "Pick a textbook first"}
+                >
+                  <option value="">All chapters</option>
+                  {filterChapters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Ch {c.chapterNumber}: {c.title}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterType}
+                  onChange={(e) => {
+                    setFilterType(e.target.value as QuestionType | "");
+                    goToPage(1);
+                  }}
+                  className={FILTER_SELECT_CLASS}
+                  aria-label="Question type"
+                >
+                  <option value="">All types</option>
+                  {TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnusedOnly((v) => !v);
+                    goToPage(1);
+                  }}
+                  aria-pressed={unusedOnly}
+                  className={cn(
+                    "h-9 rounded-lg border px-3 text-sm font-medium transition-colors",
+                    unusedOnly
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-text-secondary hover:border-primary/40 hover:text-text-primary",
+                  )}
+                >
+                  Never answered
+                </button>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="col-span-2 text-left text-sm font-medium text-primary hover:underline sm:ml-auto"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
+              {/* Difficulty tabs with live counts */}
+              <div className="flex gap-1 overflow-x-auto rounded-lg bg-background p-1">
+                {DIFFICULTY_OPTIONS.map((d) => {
+                  const active = filterDifficulty === d;
+                  const count = diffCount(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleFilterDifficultyChange(d)}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-surface text-text-primary shadow-sm"
+                          : "text-text-secondary hover:text-text-primary",
+                      )}
+                    >
+                      {d !== "ALL" && (
+                        <span className={cn("h-2 w-2 rounded-full", DIFFICULTY_STYLE[d].dot)} />
+                      )}
+                      {d === "ALL" ? "All" : DIFFICULTY_STYLE[d].label}
+                      {count == null ? (
+                        <span className="h-4 w-6 animate-pulse rounded bg-border/60" />
+                      ) : (
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 text-xs tabular-nums",
+                            active ? "bg-primary/10 text-primary" : "bg-border/50 text-text-muted",
+                          )}
+                        >
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Question list */}
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Spinner size="md" className="text-primary" />
-                </div>
+            <div>
+              {showSkeleton ? (
+                <QuestionListSkeleton rows={questions.length > 0 ? Math.min(questions.length, 8) : 8} />
               ) : fetchError ? (
-                <div className="flex flex-col items-center gap-3 py-10">
-                  <XCircle className="h-8 w-8 text-error" />
+                <div className="flex flex-col items-center gap-3 py-14">
+                  <XCircle className="h-9 w-9 text-error" />
                   <p className="text-sm text-text-secondary">{fetchError}</p>
                   <Button variant="outline" size="sm" onClick={fetchQuestions}>
                     Try Again
                   </Button>
                 </div>
               ) : questions.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-12">
-                  <HelpCircle className="h-10 w-10 text-text-muted" />
-                  <p className="text-sm text-text-secondary">No questions found.</p>
-                  <p className="text-xs text-text-muted">
-                    Click <span className="font-medium text-text-secondary">Add Question</span> above to create one.
+                <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+                  <div className="mb-1 rounded-full bg-primary/10 p-3">
+                    <Search className="h-6 w-6 text-primary" />
+                  </div>
+                  <p className="font-medium text-text-primary">No questions match</p>
+                  <p className="max-w-sm text-sm text-text-secondary">
+                    {hasActiveFilters
+                      ? "Try widening your filters or searching for something else."
+                      : "The bank is empty. Add a question, import a CSV, or generate a batch with AI."}
                   </p>
+                  <div className="mt-2 flex gap-2">
+                    {hasActiveFilters && (
+                      <Button variant="outline" size="sm" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={openAddPanel} className="gap-1.5">
+                      <Plus className="h-4 w-4" /> Add Question
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {questions.map((q) => {
-                    const isConfirming = confirmDeleteId === q.id;
-                    const isDeleting = deletingId === q.id;
-                    const isEditing = editingQuestion?.id === q.id;
-
-                    return (
-                      <div
-                        key={q.id}
-                        className={`flex items-start justify-between gap-3 px-4 py-3 transition-colors ${
-                          isEditing ? "bg-primary/5" : "hover:bg-border/20"
-                        }`}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-sm text-text-primary">
-                            <MathText text={q.questionText} />
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-secondary">
-                            <Badge variant={DIFFICULTY_BADGE_VARIANT[q.difficulty]}>
-                              {q.difficulty}
-                            </Badge>
-                            <span className="text-text-muted">
-                              Used {q.usageCount}×
-                            </span>
-                            <span className="truncate text-text-muted">
-                              {q.chapter.textbook.title} › Ch {q.chapter.chapterNumber}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-1">
-                          {isConfirming ? (
-                            <>
-                              <span className="text-xs text-text-secondary">Delete?</span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setConfirmDeleteId(null)}
-                              >
-                                No
-                              </Button>
-                              <Button
-                                size="sm"
-                                isLoading={isDeleting}
-                                className="bg-red-600 text-white hover:bg-red-700"
-                                onClick={() => handleDelete(q.id)}
-                              >
-                                Yes
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                className={`rounded-lg p-1.5 transition-colors ${
-                                  isEditing
-                                    ? "bg-primary/10 text-primary"
-                                    : "text-text-muted hover:bg-primary/10 hover:text-primary"
-                                }`}
-                                title="Edit question"
-                                onClick={() => (isEditing ? clearForm() : startEdit(q))}
-                              >
-                                {isEditing ? (
-                                  <X className="h-4 w-4" />
-                                ) : (
-                                  <Pencil className="h-4 w-4" />
-                                )}
-                              </button>
-                              <button
-                                className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                title="Delete question"
-                                disabled={isDeleting}
-                                onClick={() => setConfirmDeleteId(q.id)}
-                              >
-                                {isDeleting ? (
-                                  <Spinner size="sm" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {questions.map((q) => (
+                    <QuestionRow
+                      key={q.id}
+                      q={q}
+                      expanded={expandedId === q.id}
+                      isEditing={editingQuestion?.id === q.id}
+                      isConfirming={confirmDeleteId === q.id}
+                      isDeleting={deletingId === q.id}
+                      onToggle={() => setExpandedId((cur) => (cur === q.id ? null : q.id))}
+                      onEdit={() => {
+                        if (!q.canManage) return;
+                        if (editingQuestion?.id === q.id) {
+                          clearForm();
+                        } else {
+                          startEdit(q);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                      }}
+                      onAskDelete={() => setConfirmDeleteId(q.id)}
+                      onCancelDelete={() => setConfirmDeleteId(null)}
+                      onDelete={() => handleDelete(q.id)}
+                    />
+                  ))}
                 </div>
               )}
-            </CardContent>
+            </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <p className="text-xs text-text-secondary">
-                  Page {page} of {totalPages}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1 || loading}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages || loading}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+            {!fetchError && total > 0 && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                pageSize={PAGE_SIZE}
+                disabled={loading}
+                onPage={goToPage}
+              />
             )}
           </Card>
         </div>
@@ -975,6 +1086,15 @@ export default function AdminQuestionsPage() {
             </CardHeader>
 
             <CardContent>
+              {textbooks.length > 0 && manageableTextbooks.length === 0 && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-info/30 bg-info/5 px-3 py-2.5 text-sm text-text-secondary">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+                  <span>
+                    National library questions are managed by the platform and shared with every school.
+                    To add your own questions, first upload a textbook your school uses that isn&apos;t in the library.
+                  </span>
+                </div>
+              )}
               {/* Tab switcher */}
               <div className="mb-4 flex rounded-lg border border-border bg-background p-1">
                 <button
@@ -1036,7 +1156,7 @@ export default function AdminQuestionsPage() {
                       disabled={!!editingQuestion}
                     >
                       <option value="">Select textbook…</option>
-                      {textbooks.map((t) => (
+                      {manageableTextbooks.map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.title} (Gr {t.grade})
                         </option>
@@ -1254,7 +1374,7 @@ export default function AdminQuestionsPage() {
                       }}
                     >
                       <option value="">Select textbook…</option>
-                      {textbooks.map((tb) => (
+                      {manageableTextbooks.map((tb) => (
                         <option key={tb.id} value={tb.id}>
                           {tb.title} (Grade {tb.grade})
                         </option>
@@ -1393,7 +1513,7 @@ export default function AdminQuestionsPage() {
                         className={SELECT_CLASS}
                       >
                         <option value="">Select textbook…</option>
-                        {textbooks.map((tb) => (
+                        {manageableTextbooks.map((tb) => (
                           <option key={tb.id} value={tb.id}>
                             {tb.title} — {tb.subject}, Gr {tb.grade}
                           </option>

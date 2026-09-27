@@ -233,6 +233,7 @@ export async function replenishQuestionBank(
           ...chapterBank.map((b) => ({ questionText: b.questionText, correctAnswer: b.correctAnswer })),
         ],
         model,
+        replenishChapterId,
       );
 
       rawGen.forEach((q, i) => {

@@ -710,7 +710,7 @@ export function SetActivityDialog({
                             onSelect={() => setSource("AI")}
                             icon={Sparkles}
                             label="Brand-new questions"
-                            hint="A fresh set written from the chapters, with every quality check."
+                            hint="A fresh set written from the chapters, with every quality check. Uses 1 AI credit per question."
                             tag="AI · ~1 min"
                           />
                         </div>

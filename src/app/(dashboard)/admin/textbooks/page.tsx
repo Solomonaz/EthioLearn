@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert, ArrowUp, ArrowDown, Merge, ChevronRight, ScanEye } from "lucide-react";
+import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert, ArrowUp, ArrowDown, Merge, ChevronRight, ScanEye, Library, School, Clock, Download, Send, RotateCw, Ban } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,41 @@ interface TextbookListItem {
   contentLength: number;
   _count: { chapters: number };
   chapters: { id: string; title: string; chapterNumber: number; _count: { questions: number }; ocrConfidence: number | null }[];
+  /** National-library book (no owning school) — shared by every school. */
+  isLibrary: boolean;
+  schoolName: string | null;
+  /** Whether this admin may edit / process / delete it. */
+  canManage: boolean;
+  approvalStatus: "PENDING" | "APPROVED" | "REJECTED";
+  requestNote: string | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  requestedBy: string | null;
+  hasSourceFile: boolean;
+  sourceFileName: string | null;
+  sourceFileSize: number | null;
+  processingError: string | null;
+  updatedAt: string;
 }
+
+/** Mirrors the review route: a background ingest this old died with the server. */
+const INGEST_STALE_MS = 30 * 60 * 1000;
+function ingestStuck(tb: TextbookListItem): boolean {
+  return (
+    tb.approvalStatus === "APPROVED" &&
+    tb.processingStatus === "PROCESSING" &&
+    tb._count.chapters === 0 &&
+    tb.hasSourceFile &&
+    Date.now() - new Date(tb.updatedAt).getTime() > INGEST_STALE_MS
+  );
+}
+
+function formatBytes(n: number | null): string {
+  if (!n) return "";
+  return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+type SourceFilter = "all" | "library" | "school";
 
 interface AIGeneratedQuestion {
   questionText: string;
@@ -118,6 +152,11 @@ function totalQuestions(textbook: TextbookListItem): number {
   return textbook.chapters.reduce((sum, ch) => sum + ch._count.questions, 0);
 }
 
+// Mirrors subjectKey in lib/subject (server-only module, it imports the db).
+function subjectKey(s: string | null | undefined): string {
+  return (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 // ─── Main Component ───────────────────────────────────────
 
 export default function AdminTextbooksPage() {
@@ -126,6 +165,13 @@ export default function AdminTextbooksPage() {
   const [subjectsList, setSubjectsList] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  // The right-hand panel differs by role; don't render it until we know which.
+  const [viewerLoaded, setViewerLoaded] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  // Super admin only: upload even though the grade + subject already exists.
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [jsonMeta, setJsonMeta] = useState<{ grade: number; subject: string } | null>(null);
 
   const ent = useEntitlements();
   const aiUploadEnabled = ent.aiFeatures.aiQuizGen;
@@ -197,8 +243,8 @@ export default function AdminTextbooksPage() {
 
   // ── Fetch textbooks ──────────────────────────────────────
 
-  const fetchTextbooks = useCallback(async () => {
-    setLoading(true);
+  const fetchTextbooks = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setFetchError(null);
     try {
       const [res, subRes] = await Promise.all([
@@ -208,7 +254,9 @@ export default function AdminTextbooksPage() {
       if (!res.ok) throw new Error("Failed to load textbooks");
       const data = await res.json();
       setTextbooks(data.textbooks ?? []);
-      
+      setIsSuperAdmin(!!data.viewer?.isSuperAdmin);
+      setViewerLoaded(true);
+
       if (subRes.ok) {
         const subData = await subRes.json();
         setSubjectsList(subData.subjects ?? []);
@@ -223,6 +271,18 @@ export default function AdminTextbooksPage() {
   useEffect(() => {
     fetchTextbooks();
   }, [fetchTextbooks]);
+
+  // An approved request is ingested in the background — poll until it lands.
+  const ingesting = textbooks.some(
+    (tb) => tb.approvalStatus === "APPROVED" && tb.processingStatus === "PROCESSING" && tb._count.chapters === 0,
+  );
+  useEffect(() => {
+    if (!ingesting) return;
+    const t = setInterval(() => fetchTextbooks({ silent: true }), 5000);
+    return () => clearInterval(t);
+  }, [ingesting, fetchTextbooks]);
+
+  const pendingRequests = textbooks.filter((tb) => tb.approvalStatus === "PENDING");
 
   // ── Process Content (chunking + embeddings) ─────────────
 
@@ -362,6 +422,7 @@ export default function AdminTextbooksPage() {
           subject: simpleSubject,
           grade: parseInt(simpleGrade, 10),
           chapters,
+          allowDuplicate: allowDuplicate || undefined,
         }),
       });
 
@@ -457,6 +518,7 @@ export default function AdminTextbooksPage() {
       }
     }
 
+    setJsonMeta({ grade: data.grade, subject: data.subject });
     setJsonValidation({
       valid: true,
       message: `Valid JSON — ${data.chapters.length} chapter${data.chapters.length !== 1 ? "s" : ""}, ${totalQ} question${totalQ !== 1 ? "s" : ""}.`,
@@ -484,7 +546,7 @@ export default function AdminTextbooksPage() {
       const res = await fetch("/api/admin/textbooks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify({ ...(parsed as object), allowDuplicate: allowDuplicate || undefined }),
       });
 
       if (!res.ok) {
@@ -537,6 +599,7 @@ export default function AdminTextbooksPage() {
       if (aiPublisher.trim()) formData.append("publisher", aiPublisher.trim());
       if (aiAcademicYear.trim()) formData.append("academicYear", aiAcademicYear.trim());
       formData.append("file", aiFile);
+      if (allowDuplicate) formData.append("allowDuplicate", "1");
 
       const res = await fetch("/api/admin/textbooks/create-with-ai", {
         method: "POST",
@@ -598,6 +661,7 @@ export default function AdminTextbooksPage() {
           publisher: aiPublisher.trim() || undefined,
           academicYear: aiAcademicYear.trim() || undefined,
           content: aiExtractedInfo?.fullText || undefined,
+          allowDuplicate: allowDuplicate || undefined,
           chapters: selected.map((ch) => ({
             title: ch.title,
             chapterNumber: ch.chapterNumber,
@@ -662,9 +726,47 @@ export default function AdminTextbooksPage() {
     setAiDetectedChapters((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // ─── Library / duplicate derived data ────────────────────
+
+  const libraryCount = textbooks.filter((tb) => tb.isLibrary).length;
+  const schoolCount = textbooks.length - libraryCount;
+  const visibleTextbooks = textbooks.filter((tb) =>
+    sourceFilter === "library" ? tb.isLibrary : sourceFilter === "school" ? !tb.isLibrary : true,
+  );
+
+  // Same rule the server enforces (lib/textbook-access findDuplicateTextbooks):
+  // grade + subject already in the library, or already uploaded by this school.
+  function duplicatesFor(grade: string | number, subject: string): TextbookListItem[] {
+    if (!grade || !subject) return [];
+    return textbooks
+      .filter(
+        (tb) =>
+          tb.approvalStatus !== "REJECTED" &&
+          tb.grade === Number(grade) &&
+          subjectKey(tb.subject) === subjectKey(subject) &&
+          (tb.isLibrary || (!isSuperAdmin && tb.canManage)),
+      )
+      .sort((a, b) => Number(b.isLibrary) - Number(a.isLibrary));
+  }
+  const aiDuplicates = duplicatesFor(aiGrade, aiSubject);
+  const simpleDuplicates = duplicatesFor(simpleGrade, simpleSubject);
+  const jsonDuplicates = jsonMeta ? duplicatesFor(jsonMeta.grade, jsonMeta.subject) : [];
+  const overrideOk = isSuperAdmin && allowDuplicate;
+  const aiBlocked = aiDuplicates.length > 0 && !overrideOk;
+  const simpleBlocked = simpleDuplicates.length > 0 && !overrideOk;
+  const jsonBlocked = jsonDuplicates.length > 0 && !overrideOk;
+
+  function jumpToTextbook(id: string) {
+    setSourceFilter("all");
+    setExpandedTextbookId(id);
+    setTimeout(() => {
+      document.getElementById(`textbook-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  }
+
   // ─── OCR Queue derived data ──────────────────────────────
 
-  const ocrQueue = textbooks.flatMap((tb) =>
+  const ocrQueue = textbooks.filter((tb) => tb.canManage).flatMap((tb) =>
     tb.chapters
       .filter((ch) => ch.ocrConfidence !== null && ch.ocrConfidence < 80)
       .map((ch) => ({
@@ -686,7 +788,9 @@ export default function AdminTextbooksPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">{t("textbooksTitle")}</h1>
           <p className="text-sm text-text-secondary">
-            {t("analyticsSubtitle")}
+            {isSuperAdmin
+              ? "Books without a school form the national library — every school's students get them."
+              : "Your students get every national library book automatically, plus anything your school uploads."}
           </p>
         </div>
         {!loading && ocrQueue.length > 0 && (
@@ -703,6 +807,30 @@ export default function AdminTextbooksPage() {
           </button>
         )}
       </div>
+
+      {!loading && !isSuperAdmin && libraryCount > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-info/30 bg-info/5 px-4 py-3">
+          <Library className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+          <div className="text-sm">
+            <p className="font-medium text-text-primary">
+              {libraryCount} national library book{libraryCount !== 1 ? "s" : ""} already available to your students
+            </p>
+            <p className="text-text-secondary">
+              No need to upload these. To add a book your school uses that isn&apos;t in the library, send a
+              request — the platform team reviews it before it&apos;s processed.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isSuperAdmin && pendingRequests.length > 0 && (
+        <ApprovalQueue
+          requests={pendingRequests}
+          textbooks={textbooks}
+          onChanged={() => fetchTextbooks({ silent: true })}
+          onView={jumpToTextbook}
+        />
+      )}
 
       {/* ── OCR Review Queue ── */}
       {showOcrQueue && ocrQueue.length > 0 && (
@@ -795,13 +923,39 @@ export default function AdminTextbooksPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={fetchTextbooks}
+                  onClick={() => fetchTextbooks()}
                   disabled={loading}
                 >
                   {loading ? <Spinner size="sm" /> : "Refresh"}
                 </Button>
               </div>
             </CardHeader>
+
+            {!loading && textbooks.length > 0 && (
+              <div className="px-6 pt-4">
+                <div className="flex gap-1 rounded-lg bg-background p-1">
+                  {([
+                    ["all", "All", textbooks.length],
+                    ["library", "National library", libraryCount],
+                    ["school", isSuperAdmin ? "School uploads" : "Your school", schoolCount],
+                  ] as const).map(([key, label, count]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSourceFilter(key)}
+                      className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                        sourceFilter === key
+                          ? "bg-surface text-text-primary shadow-sm"
+                          : "text-text-secondary hover:text-text-primary"
+                      }`}
+                    >
+                      {label}
+                      <span className="rounded-full bg-border/50 px-1.5 tabular-nums text-text-muted">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <CardContent className="p-0">
               {loading ? (
@@ -812,7 +966,7 @@ export default function AdminTextbooksPage() {
                 <div className="flex flex-col items-center gap-3 py-10">
                   <XCircle className="h-8 w-8 text-error" />
                   <p className="text-sm text-text-secondary">{fetchError}</p>
-                  <Button variant="outline" size="sm" onClick={fetchTextbooks}>
+                  <Button variant="outline" size="sm" onClick={() => fetchTextbooks()}>
                     Try Again
                   </Button>
                 </div>
@@ -824,9 +978,18 @@ export default function AdminTextbooksPage() {
                     Use the AI Upload tab on the right to add one.
                   </p>
                 </div>
+              ) : visibleTextbooks.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <BookOpen className="h-8 w-8 text-text-muted" />
+                  <p className="text-sm text-text-secondary">
+                    {sourceFilter === "school"
+                      ? "No school uploads — your students are using the national library."
+                      : "No textbooks here."}
+                  </p>
+                </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {textbooks.map((textbook) => {
+                  {visibleTextbooks.map((textbook) => {
                     const status = STATUS_CONFIG[textbook.processingStatus] ?? STATUS_CONFIG.PENDING;
                     const chunkStatus = CHUNKING_STATUS_CONFIG[textbook.chunkingStatus];
                     const qCount = totalQuestions(textbook);
@@ -851,7 +1014,35 @@ export default function AdminTextbooksPage() {
                               <p className="truncate text-sm font-medium text-text-primary">
                                 {textbook.title}
                               </p>
-                              <Badge variant={status.variant}>{status.label}</Badge>
+                              {textbook.isLibrary ? (
+                                <Badge variant="info" className="gap-1">
+                                  <Library className="h-3 w-3" />
+                                  National library
+                                </Badge>
+                              ) : isSuperAdmin ? (
+                                <Badge variant="default" className="gap-1">
+                                  <School className="h-3 w-3" />
+                                  {textbook.schoolName ?? "School"}
+                                </Badge>
+                              ) : null}
+                              {textbook.approvalStatus === "PENDING" ? (
+                                <Badge variant="warning" className="gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  Awaiting approval
+                                </Badge>
+                              ) : textbook.approvalStatus === "REJECTED" ? (
+                                <Badge variant="error" className="gap-1">
+                                  <Ban className="h-3 w-3" />
+                                  Not approved
+                                </Badge>
+                              ) : textbook.processingStatus === "PROCESSING" && textbook._count.chapters === 0 ? (
+                                <Badge variant="info" className="gap-1">
+                                  <Spinner size="sm" />
+                                  Detecting chapters…
+                                </Badge>
+                              ) : (
+                                <Badge variant={status.variant}>{status.label}</Badge>
+                              )}
                               {chunkStatus && (
                                 <Badge variant={chunkStatus.variant}>{chunkStatus.label}</Badge>
                               )}
@@ -872,9 +1063,10 @@ export default function AdminTextbooksPage() {
                             </div>
                           </div>
 
+                          {textbook.canManage ? (
                           <div className="flex shrink-0 items-center gap-2">
                             {/* Process Content Button */}
-                            {textbook.hasContent && !isConfirming && (
+                            {textbook.hasContent && textbook.approvalStatus === "APPROVED" && !isConfirming && (
                               <button
                                 className="rounded-lg p-2 text-text-muted transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                                 title="Process content: chunk text and generate vector embeddings"
@@ -923,7 +1115,42 @@ export default function AdminTextbooksPage() {
                               </button>
                             )}
                           </div>
+                          ) : (
+                            <span className="shrink-0 text-xs text-text-muted" title="Managed by the platform, shared with every school">
+                              Read-only
+                            </span>
+                          )}
                         </div>
+
+                        {/* Request status details */}
+                        {textbook.approvalStatus === "PENDING" && (
+                          <p className="text-xs text-text-secondary">
+                            {isSuperAdmin
+                              ? "Waiting for your review — see Approval requests above."
+                              : "The platform team will review this request. Nothing is processed until it's approved."}
+                          </p>
+                        )}
+                        {textbook.approvalStatus === "REJECTED" && (
+                          <div className="rounded-md border border-error/30 bg-error/5 px-3 py-2 text-xs text-text-secondary">
+                            <span className="font-medium text-error">Reason: </span>
+                            {textbook.reviewNote ?? "No reason given."}
+                            {textbook.canManage && !isSuperAdmin && (
+                              <span className="text-text-muted"> You can delete this request.</span>
+                            )}
+                          </div>
+                        )}
+                        {(ingestStuck(textbook) ||
+                          (textbook.approvalStatus === "APPROVED" && textbook.processingStatus === "FAILED" && textbook.processingError)) && (
+                          <div className="flex items-start justify-between gap-3 rounded-md border border-error/30 bg-error/5 px-3 py-2 text-xs text-text-secondary">
+                            <span>
+                              <span className="font-medium text-error">Chapter detection failed: </span>
+                              {textbook.processingError ?? "It stopped without finishing (the server may have restarted)."}
+                            </span>
+                            {isSuperAdmin && textbook.hasSourceFile && (
+                              <RetryIngestButton id={textbook.id} onDone={() => fetchTextbooks({ silent: true })} />
+                            )}
+                          </div>
+                        )}
 
                         {/* OCR Confidence Warnings */}
                         {ocrFlaggedChapters.length > 0 && (
@@ -960,7 +1187,7 @@ export default function AdminTextbooksPage() {
                               ) : (
                                 <ChevronRight className="h-3.5 w-3.5" />
                               )}
-                              Manage Chapters ({textbook.chapters.length})
+                              {textbook.canManage ? "Manage" : "View"} Chapters ({textbook.chapters.length})
                             </button>
 
                             {expandedTextbookId === textbook.id && (
@@ -1064,7 +1291,7 @@ export default function AdminTextbooksPage() {
                                           </div>
 
                                           {/* Actions (hidden when in merge-target-picking mode) */}
-                                          {!isChoosingMergeTarget && (
+                                          {!isChoosingMergeTarget && textbook.canManage && (
                                             <div className="flex shrink-0 items-center gap-1">
                                               <button
                                                 disabled={isFirst || isReordering}
@@ -1136,8 +1363,19 @@ export default function AdminTextbooksPage() {
           </Card>
         </div>
 
-        {/* ── Right Panel: Add Textbook ── */}
+        {/* ── Right Panel: Add Textbook (super admin) / Request (school) ── */}
         <div className="flex flex-col gap-4">
+          {!viewerLoaded ? null : !isSuperAdmin ? (
+            <TextbookRequestForm
+              subjects={subjectsList}
+              duplicatesFor={duplicatesFor}
+              onView={jumpToTextbook}
+              onSubmitted={() => {
+                setSourceFilter("school");
+                fetchTextbooks({ silent: true });
+              }}
+            />
+          ) : (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -1265,6 +1503,14 @@ export default function AdminTextbooksPage() {
                     </div>
                   </div>
 
+                  <DuplicateNotice
+                    matches={aiDuplicates}
+                    isSuperAdmin={isSuperAdmin}
+                    allowDuplicate={allowDuplicate}
+                    onAllowDuplicate={setAllowDuplicate}
+                    onView={jumpToTextbook}
+                  />
+
                   {/* File upload */}
                   {aiDetectedChapters.length === 0 && (
                     <div className="space-y-3">
@@ -1318,7 +1564,7 @@ export default function AdminTextbooksPage() {
                         type="button"
                         className="w-full"
                         isLoading={aiDetecting}
-                        disabled={aiDetecting || !aiFile || !aiTitle.trim() || !aiSubject || !aiGrade}
+                        disabled={aiDetecting || aiBlocked || !aiFile || !aiTitle.trim() || !aiSubject || !aiGrade}
                         onClick={handleAiDetectChapters}
                       >
                         <Sparkles className="mr-2 h-4 w-4" />
@@ -1457,7 +1703,7 @@ export default function AdminTextbooksPage() {
                           type="button"
                           className="flex-1"
                           isLoading={aiCreating}
-                          disabled={aiCreating || aiDetectedChapters.filter((c) => c._selected).length === 0}
+                          disabled={aiCreating || aiBlocked || aiDetectedChapters.filter((c) => c._selected).length === 0}
                           onClick={handleAiCreateTextbook}
                         >
                           <Check className="mr-2 h-4 w-4" />
@@ -1539,6 +1785,14 @@ export default function AdminTextbooksPage() {
                     </p>
                   </div>
 
+                  <DuplicateNotice
+                    matches={simpleDuplicates}
+                    isSuperAdmin={isSuperAdmin}
+                    allowDuplicate={allowDuplicate}
+                    onAllowDuplicate={setAllowDuplicate}
+                    onView={jumpToTextbook}
+                  />
+
                   {simpleError && (
                     <div className="flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-error">
                       <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1550,6 +1804,7 @@ export default function AdminTextbooksPage() {
                     type="submit"
                     className="w-full"
                     isLoading={simpleSubmitting}
+                    disabled={simpleSubmitting || simpleBlocked}
                   >
                     Create Textbook
                   </Button>
@@ -1587,6 +1842,7 @@ export default function AdminTextbooksPage() {
                       onChange={(e) => {
                         setJsonText(e.target.value);
                         setJsonValidation(null);
+                        setJsonMeta(null);
                         setJsonError(null);
                       }}
                       placeholder="Paste JSON here…"
@@ -1613,6 +1869,16 @@ export default function AdminTextbooksPage() {
                     </div>
                   )}
 
+                  {jsonValidation?.valid && (
+                    <DuplicateNotice
+                      matches={jsonDuplicates}
+                      isSuperAdmin={isSuperAdmin}
+                      allowDuplicate={allowDuplicate}
+                      onAllowDuplicate={setAllowDuplicate}
+                      onView={jumpToTextbook}
+                    />
+                  )}
+
                   {jsonError && (
                     <div className="flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-error">
                       <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1633,7 +1899,7 @@ export default function AdminTextbooksPage() {
                       type="submit"
                       className="flex-1"
                       isLoading={jsonSubmitting}
-                      disabled={jsonSubmitting}
+                      disabled={jsonSubmitting || jsonBlocked}
                     >
                       Import Textbook
                     </Button>
@@ -1642,8 +1908,465 @@ export default function AdminTextbooksPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Textbook request form (school admins) ────────────────
+
+const FIELD_CLASS =
+  "w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary";
+
+function TextbookRequestForm({
+  subjects,
+  duplicatesFor,
+  onView,
+  onSubmitted,
+}: {
+  subjects: { id: string; name: string }[];
+  duplicatesFor: (grade: string, subject: string) => TextbookListItem[];
+  onView: (id: string) => void;
+  onSubmitted: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [subject, setSubject] = useState("");
+  const [grade, setGrade] = useState("");
+  const [publisher, setPublisher] = useState("");
+  const [academicYear, setAcademicYear] = useState("");
+  const [reason, setReason] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [fileKey, setFileKey] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const duplicates = duplicatesFor(grade, subject);
+  const blocked = duplicates.length > 0;
+  const ready = !!title.trim() && !!subject && !!grade && reason.trim().length >= 10 && !!file;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ready || blocked || !file) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("title", title.trim());
+      fd.append("subject", subject);
+      fd.append("grade", grade);
+      if (publisher.trim()) fd.append("publisher", publisher.trim());
+      if (academicYear.trim()) fd.append("academicYear", academicYear.trim());
+      fd.append("reason", reason.trim());
+      fd.append("file", file);
+      const res = await fetch("/api/admin/textbooks/requests", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not submit the request");
+      toast.success("Request sent. You'll get a notification when it's reviewed.");
+      setTitle("");
+      setSubject("");
+      setGrade("");
+      setPublisher("");
+      setAcademicYear("");
+      setReason("");
+      setFile(null);
+      setFileKey((k) => k + 1);
+      onSubmitted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit the request");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Send className="h-5 w-5 text-primary" />
+          <h2 className="font-semibold text-text-primary">Request a Textbook</h2>
+        </div>
+        <p className="mt-1 text-sm text-text-secondary">
+          For a book your school uses that isn&apos;t in the national library. The platform team reviews each
+          request; once approved, chapters are detected automatically and you&apos;re notified.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="space-y-3">
+          <Input
+            label="Title *"
+            placeholder="e.g. Cambridge IGCSE Chemistry Coursebook"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-text-primary">Subject *</label>
+              <select value={subject} onChange={(e) => setSubject(e.target.value)} className={FIELD_CLASS}>
+                <option value="">Select…</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-text-primary">Grade *</label>
+              <select value={grade} onChange={(e) => setGrade(e.target.value)} className={FIELD_CLASS}>
+                <option value="">Select…</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                  <option key={g} value={String(g)}>
+                    Grade {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <DuplicateNotice
+            matches={duplicates}
+            isSuperAdmin={false}
+            allowDuplicate={false}
+            onAllowDuplicate={() => {}}
+            onView={onView}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Publisher" placeholder="e.g. Cambridge" value={publisher} onChange={(e) => setPublisher(e.target.value)} />
+            <Input label="Academic Year" placeholder="e.g. 2025/2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Why does your school need it? *
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="e.g. Our Grade 11 stream follows the IGCSE curriculum, which uses this book instead of the MoE one."
+              className={`${FIELD_CLASS} text-sm placeholder:text-text-muted`}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Book file *<span className="ml-1 font-normal text-text-muted">(PDF, DOCX, DOC or EPUB, max 50 MB)</span>
+            </label>
+            <input
+              key={fileKey}
+              type="file"
+              accept=".pdf,.docx,.doc,.epub,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/epub+zip"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full cursor-pointer text-sm text-text-secondary file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary/20"
+            />
+            {file && (
+              <p className="mt-1 text-xs text-text-muted">
+                {file.name} · {formatBytes(file.size)}
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg bg-error/10 px-4 py-3 text-sm text-error">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <Button type="submit" className="w-full gap-2" isLoading={submitting} disabled={submitting || !ready || blocked}>
+            <Send className="h-4 w-4" />
+            Submit for Approval
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Approval queue (super admin) ─────────────────────────
+
+function ApprovalQueue({
+  requests,
+  textbooks,
+  onChanged,
+  onView,
+}: {
+  requests: TextbookListItem[];
+  textbooks: TextbookListItem[];
+  onChanged: () => void;
+  onView: (id: string) => void;
+}) {
+  return (
+    <Card className="border-warning/40">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Clock className="h-5 w-5 text-warning" />
+          <h2 className="font-semibold text-text-primary">Approval requests</h2>
+          <span className="rounded-full bg-warning/15 px-2 text-xs font-semibold text-warning">{requests.length}</span>
+        </div>
+        <p className="mt-1 text-sm text-text-secondary">
+          Schools&apos; uploads wait here. Nothing is processed — no AI chapter detection, embeddings or question
+          generation — until you approve.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {requests.map((r) => (
+          <ApprovalRequestRow
+            key={r.id}
+            request={r}
+            libraryMatch={textbooks.find(
+              (tb) => tb.isLibrary && tb.id !== r.id && tb.grade === r.grade && subjectKey(tb.subject) === subjectKey(r.subject),
+            )}
+            onChanged={onChanged}
+            onView={onView}
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ApprovalRequestRow({
+  request: r,
+  libraryMatch,
+  onChanged,
+  onView,
+}: {
+  request: TextbookListItem;
+  libraryMatch?: TextbookListItem;
+  onChanged: () => void;
+  onView: (id: string) => void;
+}) {
+  const [toLibrary, setToLibrary] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+
+  async function review(decision: "approve" | "reject") {
+    setBusy(decision);
+    try {
+      const res = await fetch(`/api/admin/textbooks/${r.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(decision === "approve" ? { decision, toLibrary } : { decision, note: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Review failed");
+      toast.success(
+        decision === "approve"
+          ? data.processing
+            ? `Approved "${r.title}" — detecting chapters in the background.`
+            : `Approved "${r.title}".`
+          : `Rejected "${r.title}". The school has been notified.`,
+      );
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Review failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-text-primary">{r.title}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-text-secondary">
+            <span className="inline-flex items-center gap-1">
+              <School className="h-3 w-3" />
+              {r.schoolName ?? "Unknown school"}
+            </span>
+            <span>·</span>
+            <span>
+              Grade {r.grade} {r.subject}
+            </span>
+            {r.requestedBy && (
+              <>
+                <span>·</span>
+                <span>by {r.requestedBy}</span>
+              </>
+            )}
+            <span>·</span>
+            <span>{new Date(r.createdAt).toLocaleDateString()}</span>
+          </p>
+        </div>
+        {r.hasSourceFile && (
+          <a
+            href={`/api/admin/textbooks/${r.id}/source`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-text-primary hover:border-primary/40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {r.sourceFileName ?? "File"}
+            {r.sourceFileSize ? <span className="text-text-muted">({formatBytes(r.sourceFileSize)})</span> : null}
+          </a>
+        )}
+      </div>
+
+      {r.requestNote && (
+        <p className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-secondary">
+          <span className="font-medium text-text-primary">Why they need it: </span>
+          {r.requestNote}
+        </p>
+      )}
+
+      {libraryMatch && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+          <Library className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            The library already has{" "}
+            <button type="button" onClick={() => onView(libraryMatch.id)} className="font-medium underline">
+              {libraryMatch.title}
+            </button>{" "}
+            for Grade {libraryMatch.grade} {libraryMatch.subject} — approve only if this is genuinely a different book.
+          </span>
+        </p>
+      )}
+
+      {rejecting ? (
+        <div className="mt-3 space-y-2">
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            autoFocus
+            maxLength={1000}
+            placeholder="Reason shown to the school, e.g. “Use the Grade 11 Chemistry book in the national library.”"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setRejecting(false)} disabled={!!busy}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-600 text-white hover:bg-red-700"
+              isLoading={busy === "reject"}
+              disabled={!!busy || !reason.trim()}
+              onClick={() => review("reject")}
+            >
+              Reject request
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              checked={toLibrary}
+              onChange={(e) => setToLibrary(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            Add to the national library (every school gets it)
+          </label>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setRejecting(true)} disabled={!!busy}>
+              Reject
+            </Button>
+            <Button size="sm" className="gap-1.5" isLoading={busy === "approve"} disabled={!!busy} onClick={() => review("approve")}>
+              <Check className="h-4 w-4" />
+              Approve
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RetryIngestButton({ id, onDone }: { id: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const res = await fetch(`/api/admin/textbooks/${id}/review`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "retry" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error ?? "Retry failed");
+          toast.success("Retrying chapter detection…");
+          onDone();
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Retry failed");
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline disabled:opacity-50"
+    >
+      <RotateCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+      Retry
+    </button>
+  );
+}
+
+// ─── Duplicate upload notice ──────────────────────────────
+
+function DuplicateNotice({
+  matches,
+  isSuperAdmin,
+  allowDuplicate,
+  onAllowDuplicate,
+  onView,
+}: {
+  matches: TextbookListItem[];
+  isSuperAdmin: boolean;
+  allowDuplicate: boolean;
+  onAllowDuplicate: (v: boolean) => void;
+  onView: (id: string) => void;
+}) {
+  if (matches.length === 0) return null;
+  const first = matches[0];
+  const qCount = totalQuestions(first);
+
+  return (
+    <div className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+      <div className="flex items-start gap-2">
+        {first.isLibrary ? (
+          <Library className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        ) : (
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-text-primary">
+            {first.isLibrary ? "Already in the national library" : "Your school already uploaded this"}
+          </p>
+          <p className="text-text-secondary">
+            <button type="button" onClick={() => onView(first.id)} className="font-medium text-primary hover:underline">
+              {first.title}
+            </button>{" "}
+            — Grade {first.grade} {first.subject}, {first._count.chapters} chapter
+            {first._count.chapters !== 1 ? "s" : ""}, {qCount} question{qCount !== 1 ? "s" : ""}.{" "}
+            {isSuperAdmin
+              ? "Uploading again duplicates processing cost and splits the question bank."
+              : first.isLibrary
+                ? "Your students already have it — no upload needed. If your school uses a different book for this subject, contact the platform admin."
+                : "Delete the existing one first if you want to replace it."}
+          </p>
+        </div>
+      </div>
+      {isSuperAdmin && (
+        <label className="flex cursor-pointer items-center gap-2 pl-6 text-text-secondary">
+          <input
+            type="checkbox"
+            checked={allowDuplicate}
+            onChange={(e) => onAllowDuplicate(e.target.checked)}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+          />
+          Upload another copy anyway (e.g. a new edition)
+        </label>
+      )}
     </div>
   );
 }

@@ -5,6 +5,13 @@ import { Difficulty, QuestionType } from "@prisma/client";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { canonicalSubject } from "@/lib/subject";
 import { cleanChapterTitle } from "@/lib/display-text";
+import {
+  canManageTextbook,
+  duplicateResponseBody,
+  findDuplicateTextbooks,
+  isLibraryBook,
+  visibleTextbookWhere,
+} from "@/lib/textbook-access";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -17,10 +24,9 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const schoolId = user.schoolId;
-
+  // School admins see the national library alongside their own uploads.
   const textbooks = (await db.textbook.findMany({
-    where: schoolId ? { schoolId } : {},
+    where: visibleTextbookWhere(user),
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -31,6 +37,18 @@ export async function GET() {
       chunkingStatus: true,
       createdAt: true,
       content: true,
+      schoolId: true,
+      school: { select: { name: true } },
+      approvalStatus: true,
+      requestNote: true,
+      reviewNote: true,
+      reviewedAt: true,
+      sourceFile: true,
+      sourceFileName: true,
+      sourceFileSize: true,
+      processingError: true,
+      updatedAt: true,
+      uploadedBy: { select: { name: true } },
       _count: {
         select: { chapters: true },
       },
@@ -50,13 +68,22 @@ export async function GET() {
   })) as any;
 
   // Map to include hasContent flag without sending full content to client
-  const mapped = (textbooks as any[]).map(({ content, ...rest }: any) => ({
+  const mapped = (textbooks as any[]).map(({ content, school, sourceFile, uploadedBy, ...rest }: any) => ({
     ...rest,
+    hasSourceFile: !!sourceFile,
+    requestedBy: uploadedBy?.name ?? null,
     hasContent: !!content && content.length > 100,
     contentLength: content?.length ?? 0,
+    isLibrary: isLibraryBook(rest.schoolId),
+    schoolName: school?.name ?? null,
+    canManage: canManageTextbook(user, rest.schoolId),
   }));
 
-  return NextResponse.json({ textbooks: mapped });
+  return NextResponse.json({
+    textbooks: mapped,
+    viewer: { isSuperAdmin: user.role === "SUPER_ADMIN" },
+    pendingCount: mapped.filter((t: any) => t.approvalStatus === "PENDING").length,
+  });
 }
 
 interface QuestionInput {
@@ -84,6 +111,8 @@ interface CreateTextbookBody {
   academicYear?: string;
   content?: string;
   chapters?: ChapterInput[];
+  /** Super admin only: upload even though the grade + subject already exists. */
+  allowDuplicate?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -99,6 +128,14 @@ export async function POST(request: NextRequest) {
 
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  // Schools add books through the approval queue (./requests), never directly.
+  if (user.role !== "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "Submit a textbook request instead — uploads are reviewed before processing.", code: "APPROVAL_REQUIRED" },
+      { status: 403 },
+    );
   }
 
   let body: CreateTextbookBody;
@@ -118,6 +155,12 @@ export async function POST(request: NextRequest) {
   }
   if (grade === undefined || grade === null || typeof grade !== "number") {
     return NextResponse.json({ error: "Grade is required" }, { status: 400 });
+  }
+
+  // Don't let a school pay to re-upload a book its students already have.
+  const duplicates = await findDuplicateTextbooks(user, grade, subject);
+  if (duplicates.length > 0 && !(body.allowDuplicate && user.role === "SUPER_ADMIN")) {
+    return NextResponse.json(duplicateResponseBody(user, duplicates), { status: 409 });
   }
 
   const validDifficulties = ["EASY", "MEDIUM", "HARD"];

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { cleanChapterTitle } from "@/lib/display-text";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 type RouteParams = { params: Promise<{ id: string; chapterId: string }> };
 
@@ -18,11 +19,7 @@ async function getAuthorizedTextbook(
 
   if (!textbook) return { textbook: null, error: "Textbook not found", status: 404 };
 
-  if (
-    userRole === "SCHOOL_ADMIN" &&
-    userSchoolId &&
-    textbook.schoolId !== userSchoolId
-  ) {
+  if (!canManageTextbook({ role: userRole, schoolId: userSchoolId }, textbook.schoolId)) {
     return { textbook: null, error: "Forbidden", status: 403 };
   }
 

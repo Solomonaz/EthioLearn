@@ -5,6 +5,12 @@ import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { usageActor } from "@/lib/usage-logger";
+import {
+  getTeacherAiStatus,
+  recordTeacherAiUse,
+  teacherAiDenial,
+  TEACHER_AI_CREDITS,
+} from "@/lib/teacher-ai-allowance";
 import { askTeachingAssistant } from "@/lib/teaching-assistant";
 import { splitAnswerKey } from "@/lib/answer-key";
 import { ASSISTANT_TASKS, type AssistantTask } from "@/lib/assistant-tasks";
@@ -72,6 +78,10 @@ async function merge(req: NextRequest, onProgress?: ProgressFn) {
       { status: 503 },
     );
   }
+
+  // A merge is always written fresh, so it counts from the start.
+  const denied = teacherAiDenial(await getTeacherAiStatus(user), TEACHER_AI_CREDITS.merge);
+  if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status });
 
   let body: { resourceIds?: unknown; instructions?: unknown };
   try {
@@ -173,6 +183,7 @@ async function merge(req: NextRequest, onProgress?: ProgressFn) {
       { status: 502 },
     );
   }
+  await recordTeacherAiUse(user, "merge", TEACHER_AI_CREDITS.merge);
 
   const resourceId = await storeResource({
     teacherId: user.id,

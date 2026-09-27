@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { Difficulty, QuestionType } from "@prisma/client";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 async function getQuestionForUser(id: string, userId: string, userRole: string, userSchoolId: string | null | undefined) {
   const question = await db.question.findUnique({
@@ -19,12 +20,8 @@ async function getQuestionForUser(id: string, userId: string, userRole: string, 
 
   if (!question) return null;
 
-  // SCHOOL_ADMIN can only access questions from their school
-  if (
-    userRole === "SCHOOL_ADMIN" &&
-    userSchoolId &&
-    question.chapter.textbook.schoolId !== userSchoolId
-  ) {
+  // Library questions are read-only to schools.
+  if (!canManageTextbook({ role: userRole, schoolId: userSchoolId }, question.chapter.textbook.schoolId)) {
     return null;
   }
 

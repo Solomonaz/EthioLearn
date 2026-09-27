@@ -5,6 +5,12 @@ import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { usageActor } from "@/lib/usage-logger";
+import {
+  getTeacherAiStatus,
+  recordTeacherAiUse,
+  teacherAiDenial,
+  TEACHER_AI_CREDITS,
+} from "@/lib/teacher-ai-allowance";
 import { askTeachingAssistant } from "@/lib/teaching-assistant";
 import { ASSISTANT_TASKS, type AssistantTask } from "@/lib/assistant-tasks";
 import { subjectFilter } from "@/lib/subject";
@@ -94,6 +100,12 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
       { status: 503 },
     );
   }
+
+  // The school must be paid up; the monthly allowance is checked later, once
+  // the free library has had its chance.
+  const aiStatus = await getTeacherAiStatus(user);
+  const inactive = teacherAiDenial(aiStatus, 0);
+  if (inactive) return NextResponse.json({ error: inactive.error }, { status: inactive.status });
 
   let body: {
     task?: string;
@@ -273,6 +285,12 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
     }
   }
 
+  // Nothing in the library — this one is written, and counts.
+  const overAllowance = teacherAiDenial(aiStatus, TEACHER_AI_CREDITS.assistant);
+  if (overAllowance) {
+    return NextResponse.json({ error: overAllowance.error }, { status: overAllowance.status });
+  }
+
   if (sources.length === 1) {
     chapterContent = await groundingFor(sources[0].id, sources[0].text, prompt, usageActor(user));
   } else if (sources.length > 1) {
@@ -311,6 +329,7 @@ async function generate(req: NextRequest, onProgress?: ProgressFn) {
       { status: 502 },
     );
   }
+  await recordTeacherAiUse(user, "assistant", TEACHER_AI_CREDITS.assistant);
 
   // Every result is stored (lib/teacher-library). A revision replaces the
   // document it revised — and takes it out of the bank, since it is now

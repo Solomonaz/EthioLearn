@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { extractTextFromFile } from "@/lib/extract-text";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -23,20 +24,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // Verify textbook + school isolation
   const textbook = await db.textbook.findUnique({
     where: { id: textbookId },
-    select: { id: true, schoolId: true, title: true },
+    select: { id: true, schoolId: true, title: true, approvalStatus: true },
   });
 
   if (!textbook) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    textbook.schoolId &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Nothing paid runs on a school request until a super admin approves it.
+  if (textbook.approvalStatus !== "APPROVED") {
+    return NextResponse.json(
+      { error: "This textbook is awaiting approval.", code: "NOT_APPROVED" },
+      { status: 409 },
+    );
   }
 
   // Parse multipart form data

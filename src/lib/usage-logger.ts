@@ -85,6 +85,8 @@ export type UsageFeature =
 export interface UsageActor {
   studentId?: string | null;
   schoolId?: string | null;
+  /** Secondary teachers only — their cost is priced per teacher. */
+  teacherId?: string | null;
 }
 
 /**
@@ -100,6 +102,7 @@ export function usageActor(
   return {
     studentId: user.role === "STUDENT" ? user.id : null,
     schoolId: user.schoolId ?? null,
+    teacherId: user.role === "SECONDARY_TEACHER" ? user.id : null,
   };
 }
 
@@ -223,7 +226,8 @@ export function logUsage(args: {
       `thinking=${usage.thinkingTokens} total=${usage.totalTokens} ` +
       `costUSD=${cost === null ? "unpriced" : cost.toFixed(6)}` +
       (actor?.studentId ? ` student=${actor.studentId}` : "") +
-      (actor?.schoolId ? ` school=${actor.schoolId}` : "")
+      (actor?.schoolId ? ` school=${actor.schoolId}` : "") +
+      (actor?.teacherId ? ` teacher=${actor.teacherId}` : "")
   );
 
   // Durable, cross-route/cross-instance record. Fire-and-forget: usage
@@ -248,11 +252,12 @@ async function persistUsageEvent(args: {
       INSERT INTO usage_events
         (id, "createdAt", feature, provider, model,
          "promptTokens", "outputTokens", "thinkingTokens", "totalTokens",
-         "costUsd", unpriced, "studentId", "schoolId")
+         "costUsd", unpriced, "studentId", "schoolId", "teacherId")
       VALUES
         (${randomUUID()}, NOW(), ${feature}, ${provider}, ${model},
          ${usage.promptTokens}, ${usage.outputTokens}, ${usage.thinkingTokens}, ${usage.totalTokens},
-         ${cost}, ${cost === null}, ${actor?.studentId ?? null}, ${actor?.schoolId ?? null})
+         ${cost}, ${cost === null}, ${actor?.studentId ?? null}, ${actor?.schoolId ?? null},
+         ${actor?.teacherId ?? null})
     `;
   } catch (err) {
     // Never surface a logging failure to the caller.

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { deleteTextbookFile } from "@/lib/textbook-ingest";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 export async function DELETE(
   _request: NextRequest,
@@ -25,7 +27,7 @@ export async function DELETE(
 
   const textbook = await db.textbook.findUnique({
     where: { id },
-    select: { id: true, schoolId: true },
+    select: { id: true, schoolId: true, sourceFile: true },
   });
 
   if (!textbook) {
@@ -33,17 +35,14 @@ export async function DELETE(
   }
 
   // School admins may only delete textbooks belonging to their school
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    user.schoolId &&
-    textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // Chapter → Question cascade is set via onDelete: Cascade in schema,
   // so deleting the textbook cascades to chapters and their questions.
   await db.textbook.delete({ where: { id } });
+  await deleteTextbookFile(textbook.sourceFile);
 
   return NextResponse.json({ success: true });
 }

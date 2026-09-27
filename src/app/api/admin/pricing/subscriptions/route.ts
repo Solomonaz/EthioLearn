@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { computePlanPrice } from "@/lib/pricing";
+import { countSchoolSeats } from "@/lib/school-seats";
 
 const STATUSES = ["TRIAL", "ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"] as const;
 type SubStatus = (typeof STATUSES)[number];
@@ -43,14 +44,15 @@ export async function GET(req: NextRequest) {
   const current =
     subscriptions.find((s) => LIVE_STATUSES.includes(s.status as SubStatus)) ?? subscriptions[0] ?? null;
 
-  // For schools, report the current enrolled-student count so the UI can preview
-  // tiered / per-student pricing before assigning.
+  // For schools, report the current student and teacher counts so the UI can
+  // preview the price before assigning.
   let studentCount: number | undefined;
+  let teacherCount: number | undefined;
   if (schoolId) {
-    studentCount = await db.user.count({ where: { schoolId, role: "STUDENT" } });
+    ({ students: studentCount, teachers: teacherCount } = await countSchoolSeats(schoolId));
   }
 
-  return NextResponse.json({ subscription: current, history: subscriptions, studentCount });
+  return NextResponse.json({ subscription: current, history: subscriptions, studentCount, teacherCount });
 }
 
 // ─── POST: assign a plan to a school or student (super-admin only) ──
@@ -122,13 +124,13 @@ export async function POST(req: NextRequest) {
 
   // Compute the price snapshot.
   let studentCountSnapshot: number | null = null;
+  let teacherCountSnapshot: number | null = null;
   if (plan.audience === "SCHOOL") {
-    studentCountSnapshot = await db.user.count({ where: { schoolId: schoolId!, role: "STUDENT" } });
+    const seats = await countSchoolSeats(schoolId!);
+    studentCountSnapshot = seats.students;
+    teacherCountSnapshot = seats.teachers;
   }
-  const priced = computePlanPrice(
-    { pricingModel: plan.pricingModel, price: plan.price, tiers: plan.tiers },
-    studentCountSnapshot ?? 0
-  );
+  const priced = computePlanPrice(plan, studentCountSnapshot ?? 0, teacherCountSnapshot ?? 0);
 
   // Never store a subscription that has no price — it renders as "—/month" and
   // silently bills nothing. Fix the plan's brackets first.
@@ -169,6 +171,7 @@ export async function POST(req: NextRequest) {
         amount: priced.amount,
         currency: plan.currency,
         studentCountSnapshot,
+        teacherCountSnapshot,
         notes,
         createdById,
       },

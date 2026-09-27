@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { Difficulty, QuestionType } from "@prisma/client";
 import Papa from "papaparse";
+import { canManageTextbook } from "@/lib/textbook-access";
 
 interface CSVRow {
   questionText?: string;
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (!chapter) {
     return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
   }
-  if (user.role === "SCHOOL_ADMIN" && user.schoolId && chapter.textbook.schoolId !== user.schoolId) {
+  if (!canManageTextbook(user, chapter.textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

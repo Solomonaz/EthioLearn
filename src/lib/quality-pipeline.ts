@@ -12,7 +12,7 @@
  */
 
 import { SchemaType, type ResponseSchema } from "@google/generative-ai";
-import { generateEmbeddings, cosineSimilarity } from "./embeddings";
+import { generateEmbeddings, cosineSimilarity, loadChunkEmbeddings } from "./embeddings";
 import { ollamaChat } from "./ollama";
 import { groqChat } from "./groq";
 import { nvidiaChat } from "./nvidia";
@@ -1380,23 +1380,26 @@ export async function verifyQuestions(
 const EMBED_CACHE = new Map<string, number[]>();
 const EMBED_CACHE_MAX = 500;
 
-async function embedWithCache(texts: string[]): Promise<number[][]> {
+/**
+ * `gemini` is false when a fallback provider served the call — those vectors
+ * cannot be compared with anything Gemini made, including stored chunks.
+ */
+async function embedWithCache(texts: string[]): Promise<{ vectors: number[][]; gemini: boolean }> {
   const missing = [...new Set(texts.filter((t) => !EMBED_CACHE.has(t)))];
   if (missing.length > 0) {
     const fresh = await generateEmbeddings(missing, "RETRIEVAL_DOCUMENT", { feature: "embedding-dedup" });
     if (fresh.some((r) => r.provider !== "gemini")) {
       // Mixing spaces would make every similarity meaningless — embed all of
       // it together with whatever provider is serving now.
-      return (await generateEmbeddings(texts, "RETRIEVAL_DOCUMENT", { feature: "embedding-dedup" })).map(
-        (r) => r.embedding
-      );
+      const all = await generateEmbeddings(texts, "RETRIEVAL_DOCUMENT", { feature: "embedding-dedup" });
+      return { vectors: all.map((r) => r.embedding), gemini: all.every((r) => r.provider === "gemini") };
     }
     for (const r of fresh) EMBED_CACHE.set(r.text, r.embedding);
     while (EMBED_CACHE.size > EMBED_CACHE_MAX) {
       EMBED_CACHE.delete(EMBED_CACHE.keys().next().value as string);
     }
   }
-  return texts.map((t) => EMBED_CACHE.get(t)!);
+  return { vectors: texts.map((t) => EMBED_CACHE.get(t)!), gemini: true };
 }
 
 /**
@@ -1418,13 +1421,22 @@ export async function runQualityPipeline(
    */
   existingQuestions: (string | QuestionLike)[] = [],
   /** The generator's model, so the verifier only avoids that exact model. */
-  generatorModel?: string | null
+  generatorModel?: string | null,
+  /**
+   * The chapter the questions came from. When given, relevance and scope are
+   * scored against its stored chunk vectors instead of re-embedding
+   * `sourceContent` — rotation makes that text differ every run, so it was
+   * ~20K tokens of fresh embeddings per run for vectors already stored.
+   */
+  sourceChapterId?: string | null
 ): Promise<QualityPipelineResult> {
-  // Pre-compute all embeddings in a single batch (source windows + all
-  // questions). The source is split into windows so relevance is scored against
-  // the WHOLE document, not just its opening 5k characters. Sharing one batched
-  // call keeps duplicate detection and relevance scoring on a single API round.
-  const sourceWindows = splitSourceForRelevance(sourceContent);
+  // Stored chunks are ~3.5K chars, the same scale as the 4K windows below, so
+  // RELEVANCE_THRESHOLD means the same thing against either.
+  const storedChunks = sourceChapterId ? await loadChunkEmbeddings(sourceChapterId) : [];
+  // Otherwise pre-compute all embeddings in a single batch (source windows +
+  // all questions). The source is split into windows so relevance is scored
+  // against the WHOLE document, not just its opening 5k characters.
+  let sourceWindows = storedChunks.length > 0 ? [] : splitSourceForRelevance(sourceContent);
   // Cap the saved bank so a large chapter cannot make this call unbounded.
   // Newest first: a repeat of something generated recently is the likely case.
   // Plain strings are accepted for callers that only have the text; passing
@@ -1442,13 +1454,24 @@ export async function runQualityPipeline(
   let existingEmbeddings: number[][] = [];
 
   try {
-    const embeddingResults = await embedWithCache(allTexts);
+    const { vectors: embeddingResults, gemini } = await embedWithCache(allTexts);
     sourceEmbeddings = embeddingResults.slice(0, sourceWindows.length);
     questionEmbeddings = embeddingResults.slice(
       sourceWindows.length,
       sourceWindows.length + questions.length
     );
     existingEmbeddings = embeddingResults.slice(sourceWindows.length + questions.length);
+    if (storedChunks.length > 0) {
+      if (gemini) {
+        sourceWindows = storedChunks.map((c) => c.content);
+        sourceEmbeddings = storedChunks.map((c) => c.embedding);
+      } else {
+        // A fallback provider's question vectors cannot be scored against
+        // stored Gemini chunks — embed the windows in its space instead.
+        sourceWindows = splitSourceForRelevance(sourceContent);
+        sourceEmbeddings = (await embedWithCache(sourceWindows)).vectors;
+      }
+    }
   } catch (error) {
     console.warn("[Quality Pipeline] Embedding generation failed, skipping similarity checks:", error);
   }

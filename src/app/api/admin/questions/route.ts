@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { Difficulty, QuestionType } from "@prisma/client";
+import { Difficulty, Prisma, QuestionType } from "@prisma/client";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { canManageTextbook, visibleTextbookWhere } from "@/lib/textbook-access";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -19,27 +20,53 @@ export async function GET(request: NextRequest) {
   const textbookId = searchParams.get("textbookId") ?? undefined;
   const chapterId = searchParams.get("chapterId") ?? undefined;
   const difficulty = searchParams.get("difficulty") ?? undefined;
+  const type = searchParams.get("type") ?? undefined;
   const search = searchParams.get("search") ?? undefined;
+  const sort = searchParams.get("sort") ?? "newest";
+  const unusedOnly = searchParams.get("unused") === "1";
+  // The dashboard asks for textbooks once and skips them on every later page /
+  // filter change, so paging doesn't re-walk every textbook's chapters.
+  const withTextbooks = searchParams.get("textbooks") !== "0";
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
 
   const validDifficulties: string[] = ["EASY", "MEDIUM", "HARD"];
+  const validTypes: string[] = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
 
-  const where = {
+  // Everything except difficulty — the stats strip and the difficulty pill
+  // counts describe this scope, so picking a pill doesn't zero the others.
+  const scopeWhere: Prisma.QuestionWhereInput = {
     chapter: {
-      textbook: { schoolId: user.schoolId ?? undefined },
+      textbook: visibleTextbookWhere(user),
       ...(chapterId ? { id: chapterId } : {}),
       ...(textbookId ? { textbookId } : {}),
     },
-    ...(difficulty && validDifficulties.includes(difficulty)
-      ? { difficulty: difficulty as Difficulty }
-      : {}),
+    ...(type && validTypes.includes(type) ? { type: type as QuestionType } : {}),
     ...(search
       ? { questionText: { contains: search, mode: "insensitive" as const } }
       : {}),
+    ...(unusedOnly ? { quizAnswers: { none: {} } } : {}),
   };
 
-  const [questions, total] = await Promise.all([
+  const where: Prisma.QuestionWhereInput = {
+    ...scopeWhere,
+    ...(difficulty && validDifficulties.includes(difficulty)
+      ? { difficulty: difficulty as Difficulty }
+      : {}),
+  };
+
+  // Usage comes from real quiz answers — Question.usageCount / avgAccuracy are
+  // never written, so they'd read 0 / null forever.
+  const orderBy: Prisma.QuestionOrderByWithRelationInput[] =
+    sort === "oldest"
+      ? [{ createdAt: "asc" }]
+      : sort === "mostUsed"
+        ? [{ quizAnswers: { _count: "desc" } }, { createdAt: "desc" }]
+        : sort === "leastUsed"
+          ? [{ quizAnswers: { _count: "asc" } }, { createdAt: "desc" }]
+          : [{ createdAt: "desc" }];
+
+  const [questionsRaw, total, byDifficulty, unused, answered, correct] = await Promise.all([
     db.question.findMany({
       where,
       include: {
@@ -54,17 +81,67 @@ export async function GET(request: NextRequest) {
                 title: true,
                 subject: true,
                 grade: true,
+                schoolId: true,
               },
             },
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
     db.question.count({ where }),
+    db.question.groupBy({ by: ["difficulty"], where: scopeWhere, _count: { _all: true } }),
+    db.question.count({ where: { ...scopeWhere, quizAnswers: { none: {} } } }),
+    db.quizAnswer.count({ where: { question: scopeWhere } }),
+    db.quizAnswer.count({ where: { question: scopeWhere, isCorrect: true } }),
   ]);
+
+  // Per-question answer counts + accuracy for just this page.
+  const answerRows = questionsRaw.length
+    ? await db.quizAnswer.groupBy({
+        by: ["questionId", "isCorrect"],
+        where: { questionId: { in: questionsRaw.map((q) => q.id) } },
+        _count: { _all: true },
+      })
+    : [];
+  const usage = new Map<string, { answers: number; correct: number }>();
+  for (const row of answerRows) {
+    const u = usage.get(row.questionId) ?? { answers: 0, correct: 0 };
+    u.answers += row._count._all;
+    if (row.isCorrect) u.correct += row._count._all;
+    usage.set(row.questionId, u);
+  }
+  const questions = questionsRaw.map((q) => {
+    const u = usage.get(q.id);
+    return {
+      ...q,
+      canManage: canManageTextbook(user, q.chapter.textbook.schoolId),
+      answerCount: u?.answers ?? 0,
+      accuracy: u && u.answers > 0 ? u.correct / u.answers : null,
+    };
+  });
+
+  const difficultyCounts = { EASY: 0, MEDIUM: 0, HARD: 0 };
+  for (const row of byDifficulty) difficultyCounts[row.difficulty] = row._count._all;
+  const stats = {
+    total: difficultyCounts.EASY + difficultyCounts.MEDIUM + difficultyCounts.HARD,
+    byDifficulty: difficultyCounts,
+    unused,
+    answered,
+    avgAccuracy: answered > 0 ? correct / answered : null,
+  };
+
+  if (!withTextbooks) {
+    return NextResponse.json({
+      questions,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      stats,
+    });
+  }
 
   // Fetch textbooks for filter dropdowns.
   //
@@ -73,7 +150,7 @@ export async function GET(request: NextRequest) {
   // pipeline, so generation falls back to the chapter's opening slice instead
   // of sampling across the whole chapter (see lib/generation-content).
   const textbooksRaw = await db.textbook.findMany({
-    where: user.schoolId ? { schoolId: user.schoolId } : {},
+    where: visibleTextbookWhere(user),
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -81,6 +158,7 @@ export async function GET(request: NextRequest) {
       subject: true,
       grade: true,
       chunkingStatus: true,
+      schoolId: true,
       chapters: {
         select: {
           id: true,
@@ -95,6 +173,8 @@ export async function GET(request: NextRequest) {
 
   const textbooks = textbooksRaw.map((t) => ({
     ...t,
+    isLibrary: !t.schoolId,
+    canManage: canManageTextbook(user, t.schoolId),
     chapters: t.chapters.map(({ _count, ...ch }) => ({
       ...ch,
       chunkCount: _count.chunks,
@@ -106,6 +186,7 @@ export async function GET(request: NextRequest) {
     total,
     page,
     totalPages: Math.ceil(total / limit),
+    stats,
     textbooks,
   });
 }
@@ -183,11 +264,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
   }
 
-  if (
-    user.role === "SCHOOL_ADMIN" &&
-    user.schoolId &&
-    chapter.textbook.schoolId !== user.schoolId
-  ) {
+  if (!canManageTextbook(user, chapter.textbook.schoolId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
