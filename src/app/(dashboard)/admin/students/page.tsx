@@ -21,6 +21,8 @@ import {
   X,
   FileText,
   UserPlus,
+  GraduationCap,
+  School,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { MAX_SECTION_LENGTH } from "@/lib/section";
+import { PRIMARY_MAX_GRADE, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,6 +55,8 @@ interface Student {
 
 interface Stats {
   totalStudents: number;
+  elementaryStudents: number;
+  secondaryStudents: number;
   activeThisWeek: number;
   avgPoints: number;
 }
@@ -65,6 +70,19 @@ interface StudentsResponse {
 }
 
 type StatusFilter = "all" | "active" | "inactive" | "suspended";
+
+type LevelFilter = "" | "elementary" | "secondary";
+
+/** Grades offered by the grade filter for the chosen school level. */
+function gradesForLevel(level: LevelFilter): number[] {
+  const [from, to] =
+    level === "elementary"
+      ? [1, PRIMARY_MAX_GRADE]
+      : level === "secondary"
+      ? [SECONDARY_MIN_GRADE, SECONDARY_MAX_GRADE]
+      : [1, SECONDARY_MAX_GRADE];
+  return Array.from({ length: to - from + 1 }, (_, i) => i + from);
+}
 
 interface ImportResult {
   imported: number;
@@ -496,6 +514,7 @@ function AdminStudentsContent() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   const currentSearch = searchParams.get("search") ?? "";
+  const currentLevel = (searchParams.get("level") ?? "") as LevelFilter;
   const currentGrade = searchParams.get("grade") ?? "";
   const currentSection = searchParams.get("section") ?? "";
   const currentSort = searchParams.get("sort") ?? "points";
@@ -538,6 +557,7 @@ function AdminStudentsContent() {
 
     const params = new URLSearchParams();
     if (currentSearch) params.set("search", currentSearch);
+    if (currentLevel) params.set("level", currentLevel);
     if (currentGrade) params.set("grade", currentGrade);
     if (currentSection) params.set("section", currentSection);
     if (currentSort) params.set("sort", currentSort);
@@ -556,7 +576,7 @@ function AdminStudentsContent() {
         setError(err instanceof Error ? err.message : "Something went wrong");
       })
       .finally(() => setLoading(false));
-  }, [currentSearch, currentGrade, currentSection, currentSort, currentPage, reloadCount]);
+  }, [currentSearch, currentLevel, currentGrade, currentSection, currentSort, currentPage, reloadCount]);
 
   const filteredStudents = data
     ? statusFilter === "all"
@@ -616,6 +636,20 @@ function AdminStudentsContent() {
             <span className="text-text-secondary">{t("totalStudentsPill")}</span>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm shadow-sm">
+            <School className="h-4 w-4 text-amber-600" />
+            <span className="font-semibold text-text-primary">
+              {data.stats.elementaryStudents.toLocaleString()}
+            </span>
+            <span className="text-text-secondary">{t("levelElementaryShort")}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm shadow-sm">
+            <GraduationCap className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-text-primary">
+              {data.stats.secondaryStudents.toLocaleString()}
+            </span>
+            <span className="text-text-secondary">{t("levelSecondaryShort")}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm shadow-sm">
             <Activity className="h-4 w-4 text-success" />
             <span className="font-semibold text-text-primary">
               {data.stats.activeThisWeek.toLocaleString()}
@@ -646,6 +680,23 @@ function AdminStudentsContent() {
           />
         </div>
 
+        {/* Level filter — elementary (1-8) vs secondary (9-12) */}
+        <select
+          value={currentLevel}
+          onChange={(e) => {
+            const level = e.target.value as LevelFilter;
+            // Drop a grade that falls outside the newly chosen level.
+            const keepGrade =
+              currentGrade && gradesForLevel(level).includes(Number(currentGrade));
+            pushUrl({ level, grade: keepGrade ? currentGrade : undefined });
+          }}
+          className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="">{t("allLevels")}</option>
+          <option value="elementary">{t("levelElementary")}</option>
+          <option value="secondary">{t("levelSecondary")}</option>
+        </select>
+
         {/* Grade filter */}
         <select
           value={currentGrade}
@@ -653,7 +704,7 @@ function AdminStudentsContent() {
           className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option value="">{t("allGrades")}</option>
-          {[9, 10, 11, 12].map((g) => (
+          {gradesForLevel(currentLevel).map((g) => (
             <option key={g} value={g}>
               {t("gradeLabel", { grade: g })}
             </option>
@@ -713,7 +764,7 @@ function AdminStudentsContent() {
               {t("noStudentsFound")}
             </p>
             <p className="text-sm text-text-secondary">
-              {currentSearch || currentGrade || currentSection || statusFilter !== "all"
+              {currentSearch || currentLevel || currentGrade || currentSection || statusFilter !== "all"
                 ? t("noStudentsFiltered")
                 : t("noStudentsEnrolled")}
             </p>

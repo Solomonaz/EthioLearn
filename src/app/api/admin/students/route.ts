@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
+import { PRIMARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
 
 // Normalize an Ethiopian phone number to +251XXXXXXXXX, or null if invalid.
 function normalizePhone(raw: string): string | null {
@@ -112,6 +113,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const search = searchParams.get("search")?.trim() || "";
   const grade = searchParams.get("grade") || "";
+  // School level: "elementary" (grades 1-8) or "secondary" (9-12). An explicit
+  // grade is narrower, so it wins when both are sent.
+  const level = searchParams.get("level") || "";
   const section = normalizeSection(searchParams.get("section")) ?? "";
   const sort = searchParams.get("sort") || "points";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -130,7 +134,13 @@ export async function GET(req: NextRequest) {
           ],
         }
       : {}),
-    ...(grade ? { grade: parseInt(grade, 10) } : {}),
+    ...(grade
+      ? { grade: parseInt(grade, 10) }
+      : level === "elementary"
+      ? { grade: { lte: PRIMARY_MAX_GRADE } }
+      : level === "secondary"
+      ? { grade: { gte: SECONDARY_MIN_GRADE } }
+      : {}),
     ...(section ? { section } : {}),
   };
 
@@ -173,12 +183,12 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  const totalStudents = await db.user.count({
-    where: {
-      role: "STUDENT" as const,
-      ...(schoolId ? { schoolId } : {}),
-    },
-  });
+  const scopeWhere = { role: "STUDENT" as const, ...(schoolId ? { schoolId } : {}) };
+  const [totalStudents, elementaryStudents, secondaryStudents] = await Promise.all([
+    db.user.count({ where: scopeWhere }),
+    db.user.count({ where: { ...scopeWhere, grade: { lte: PRIMARY_MAX_GRADE } } }),
+    db.user.count({ where: { ...scopeWhere, grade: { gte: SECONDARY_MIN_GRADE } } }),
+  ]);
 
   const avgPoints = Math.round(avgPointsResult._avg.totalPoints ?? 0);
   const totalPages = Math.ceil(total / limit);
@@ -207,6 +217,8 @@ export async function GET(req: NextRequest) {
     totalPages,
     stats: {
       totalStudents,
+      elementaryStudents,
+      secondaryStudents,
       activeThisWeek,
       avgPoints,
     },

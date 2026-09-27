@@ -12,13 +12,15 @@ import {
 /**
  * PATCH /api/admin/teachers/[id]
  *
- * Update one SECONDARY teacher's account. SUPER_ADMIN and SCHOOL_ADMIN only,
- * and a school admin may only touch a teacher inside their own school.
+ * Update one teacher's account. SUPER_ADMIN and SCHOOL_ADMIN only, and a
+ * school admin may only touch a teacher inside their own school.
  *
  * Editable: name, phone number, the classes they hold, and active/suspended
  * state. It can never change a ROLE, so this endpoint cannot be used to promote
- * anyone — and it refuses any target that is not a SECONDARY_TEACHER, so
- * neither an admin account nor a grades 1-8 teacher can be reached through it.
+ * anyone. Targets are SECONDARY_TEACHER accounts; a SUPER_ADMIN may also reach
+ * a grades 1-8 TEACHER, but only to activate or deactivate them — their classes
+ * live in the frozen grades 1-8 surface and are not edited from here. Admin
+ * accounts are never reachable.
  *
  * Classes are DIFFED rather than replaced. Deleting and recreating every row on
  * each save would churn ids and, because ClassActivity.teachingAssignmentId is
@@ -69,12 +71,23 @@ export async function PATCH(
 
   // Same 404 for "does not exist", "not a secondary teacher" and "not yours",
   // so a school admin cannot probe for accounts outside their scope.
+  const isElementary = target?.role === "TEACHER" && user.role === "SUPER_ADMIN";
   const outOfScope =
     !target ||
-    target.role !== "SECONDARY_TEACHER" ||
+    (target.role !== "SECONDARY_TEACHER" && !isElementary) ||
     (user.role === "SCHOOL_ADMIN" && target.schoolId !== user.schoolId);
   if (outOfScope) {
     return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
+  }
+
+  if (
+    isElementary &&
+    (body.name !== undefined || body.phone !== undefined || body.assignments !== undefined)
+  ) {
+    return NextResponse.json(
+      { error: "Grades 1-8 teachers can only be activated or deactivated here." },
+      { status: 400 },
+    );
   }
 
   const data: Record<string, unknown> = {};
@@ -197,8 +210,10 @@ export async function PATCH(
         orderBy: [{ grade: "asc" }, { subject: "asc" }, { section: "asc" }],
         select: { id: true, subject: true, grade: true, section: true },
       },
+      _count: { select: { hostedGameRooms: true } },
     },
   });
 
-  return NextResponse.json({ teacher });
+  const { _count, ...rest } = teacher;
+  return NextResponse.json({ teacher: { ...rest, gamesHosted: _count.hostedGameRooms } });
 }

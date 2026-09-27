@@ -10,12 +10,16 @@ import {
 } from "@/lib/teacher-classes";
 
 /**
- * Secondary teacher provisioning (grades 9-12) — SUPER_ADMIN and SCHOOL_ADMIN.
+ * Teacher provisioning and listing — SUPER_ADMIN and SCHOOL_ADMIN.
  *
- * This endpoint is SECONDARY-ONLY, on purpose. Elementary and secondary are
- * separate institutions with separate admins: a secondary school's admin must
- * never see or create a grades 1-8 teacher. The grades 1-8 platform keeps its
- * own existing flow and is not touched from here.
+ * POST creates SECONDARY teachers only (grades 9-12). Grades 1-8 teachers keep
+ * their existing self-registration flow and are never created here.
+ *
+ * GET lists secondary teachers. A SUPER_ADMIN may also list grades 1-8
+ * (`TEACHER`) accounts via `?band=elementary|all`, so the platform owner can
+ * track both. A SCHOOL_ADMIN stays secondary-only: elementary and secondary are
+ * separate institutions, and a secondary school's admin must never see a
+ * grades 1-8 teacher.
  *
  * Teachers are created by an admin rather than self-registering, so `schoolId`
  * is authoritative instead of self-claimed — every school-scoped cohort query
@@ -145,7 +149,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ teacher }, { status: 201 });
 }
 
-// ─── GET: list secondary teachers in scope ───────────────────────────────
+// ─── GET: list teachers in scope ─────────────────────────────────────────
+
+type Band = "elementary" | "secondary" | "all";
+
+const BAND_ROLES = {
+  elementary: ["TEACHER"],
+  secondary: ["SECONDARY_TEACHER"],
+  all: ["TEACHER", "SECONDARY_TEACHER"],
+} as const;
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -173,12 +185,21 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
 
+  // Only a super admin can widen the band; everyone else is pinned to
+  // secondary, whatever the query string says.
+  const isSuperAdmin = user.role === "SUPER_ADMIN";
+  const requested = searchParams.get("band");
+  const band: Band =
+    isSuperAdmin && (requested === "elementary" || requested === "all")
+      ? requested
+      : "secondary";
+
+  // A school admin sees only their own school; a super admin sees everyone.
+  const scope = user.schoolId ? { schoolId: user.schoolId } : {};
+
   const where = {
-    // Secondary only — grades 1-8 teachers belong to a different institution
-    // and are never listed here.
-    role: "SECONDARY_TEACHER" as const,
-    // A school admin sees only their own school; a super admin sees everyone.
-    ...(user.schoolId ? { schoolId: user.schoolId } : {}),
+    role: { in: [...BAND_ROLES[band]] },
+    ...scope,
     ...(search
       ? {
           OR: [
@@ -209,13 +230,36 @@ export async function GET(req: NextRequest) {
           orderBy: [{ grade: "asc" }, { subject: "asc" }, { section: "asc" }],
           select: { id: true, subject: true, grade: true, section: true },
         },
+        // Classroom games are the grades 1-8 teacher's main activity.
+        _count: { select: { hostedGameRooms: true } },
       },
     }),
     db.user.count({ where }),
   ]);
 
+  // Per-band totals for the super admin's filter tabs.
+  const counts = isSuperAdmin
+    ? await db.user
+        .groupBy({
+          by: ["role"],
+          where: { role: { in: [...BAND_ROLES.all] }, ...scope },
+          _count: { _all: true },
+        })
+        .then((rows) => {
+          const of = (r: string) => rows.find((x) => x.role === r)?._count._all ?? 0;
+          const elementary = of("TEACHER");
+          const secondary = of("SECONDARY_TEACHER");
+          return { elementary, secondary, all: elementary + secondary };
+        })
+    : null;
+
   return NextResponse.json({
-    teachers,
+    teachers: teachers.map(({ _count, ...t }) => ({
+      ...t,
+      gamesHosted: _count.hostedGameRooms,
+    })),
+    band,
+    counts,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
   });
 }

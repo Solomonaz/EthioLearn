@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
+  Gamepad2,
   GraduationCap,
   Pencil,
   Plus,
@@ -18,18 +19,20 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
+import { PRIMARY_MAX_GRADE, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
 import { MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
 import { EditTeacherDialog } from "@/components/secondary-teacher/edit-teacher-dialog";
 
 /**
- * Secondary teacher management (grades 9-12) — shared by the super admin
- * (/admin/teachers) and, via a re-export, the school admin
- * (/school-admin/teachers). The API scopes by the caller's own school.
+ * Teacher management — shared by the super admin (/admin/teachers) and, via a
+ * re-export, the school admin (/school-admin/teachers). The API scopes by the
+ * caller's own school.
  *
- * SECONDARY ONLY. Elementary and secondary are separate institutions with
- * separate admins, so a secondary school's admin never sees or creates a
- * grades 1-8 teacher. That platform keeps its own existing flow.
+ * Provisioning is SECONDARY ONLY (grades 9-12); grades 1-8 teachers keep their
+ * own self-registration flow. The super admin can additionally list and
+ * (de)activate grades 1-8 teachers through the level tabs. A school admin
+ * stays secondary-only: elementary and secondary are separate institutions,
+ * so a secondary school's admin never sees a grades 1-8 teacher.
  *
  * A class here is a (subject, grade, section) triple, not a grade: a grade can
  * run twenty sections and no one teacher takes them all.
@@ -44,6 +47,8 @@ interface Assignment {
 
 interface Teacher {
   id: string;
+  role: "TEACHER" | "SECONDARY_TEACHER";
+  gamesHosted: number;
   name: string;
   phoneNumber: string | null;
   email: string | null;
@@ -53,6 +58,22 @@ interface Teacher {
   school: { id: string; name: string } | null;
   teachingAssignments: Assignment[];
 }
+
+type Band = "all" | "elementary" | "secondary";
+
+const BAND_TABS: { value: Band; label: string; title: string }[] = [
+  { value: "all", label: "All", title: "All teachers" },
+  {
+    value: "elementary",
+    label: `Elementary (1–${PRIMARY_MAX_GRADE})`,
+    title: "Elementary teachers",
+  },
+  {
+    value: "secondary",
+    label: `Secondary (${SECONDARY_MIN_GRADE}–${SECONDARY_MAX_GRADE})`,
+    title: "Secondary teachers",
+  },
+];
 
 interface SchoolOption {
   id: string;
@@ -78,6 +99,9 @@ export default function AdminTeachersPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  // Only a super admin can switch level; the API pins everyone else to secondary.
+  const [band, setBand] = useState<Band>("all");
+  const [counts, setCounts] = useState<Record<Band, number> | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [schools, setSchools] = useState<SchoolOption[]>([]);
 
@@ -99,6 +123,7 @@ export default function AdminTeachersPage() {
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
+      if (isSuperAdmin) params.set("band", band);
       params.set("limit", "100");
 
       const res = await fetch(`/api/admin/teachers?${params.toString()}`);
@@ -108,12 +133,13 @@ export default function AdminTeachersPage() {
       }
       const data = await res.json();
       setTeachers(data.teachers ?? []);
+      setCounts(data.counts ?? null);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, band, isSuperAdmin]);
 
   useEffect(() => {
     const id = setTimeout(fetchTeachers, 250);
@@ -267,8 +293,19 @@ export default function AdminTeachersPage() {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Teachers</h1>
         <p className="text-sm text-text-secondary">
-          Secondary teachers, grades {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}. They
-          sign in with the phone number you register here — no self sign-up.
+          {isSuperAdmin ? (
+            <>
+              Elementary (grades 1–{PRIMARY_MAX_GRADE}) and secondary (grades{" "}
+              {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}) teachers. Secondary teachers
+              sign in with the phone number you register here; elementary teachers
+              sign up themselves.
+            </>
+          ) : (
+            <>
+              Secondary teachers, grades {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}. They
+              sign in with the phone number you register here — no self sign-up.
+            </>
+          )}
         </p>
       </div>
 
@@ -287,7 +324,9 @@ export default function AdminTeachersPage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Plus className="h-5 w-5 text-primary" />
-                <h2 className="font-semibold text-text-primary">Add a teacher</h2>
+                <h2 className="font-semibold text-text-primary">
+                  {isSuperAdmin ? "Add a secondary teacher" : "Add a teacher"}
+                </h2>
               </div>
             </CardHeader>
             <CardContent>
@@ -466,9 +505,34 @@ export default function AdminTeachersPage() {
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
                 <h2 className="font-semibold text-text-primary">
-                  All teachers <span className="text-text-muted">({teachers.length})</span>
+                  {isSuperAdmin
+                    ? BAND_TABS.find((b) => b.value === band)?.title
+                    : "All teachers"}{" "}
+                  <span className="text-text-muted">({teachers.length})</span>
                 </h2>
               </div>
+              {isSuperAdmin && (
+                <div role="tablist" aria-label="Teacher level" className="mt-3 flex flex-wrap gap-2">
+                  {BAND_TABS.map((tab) => (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={band === tab.value}
+                      onClick={() => setBand(tab.value)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                        band === tab.value
+                          ? "border-primary bg-primary text-white"
+                          : "border-border text-text-secondary hover:border-primary/50",
+                      )}
+                    >
+                      {tab.label}
+                      {counts && <span className="ml-1.5 opacity-75">{counts[tab.value]}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="relative mt-3">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
                 <Input
@@ -504,6 +568,18 @@ export default function AdminTeachersPage() {
                           <span className="font-semibold text-text-primary">
                             {teacher.name}
                           </span>
+                          {isSuperAdmin && (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                teacher.role === "TEACHER"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-primary/10 text-primary",
+                              )}
+                            >
+                              {teacher.role === "TEACHER" ? "Elementary" : "Secondary"}
+                            </span>
+                          )}
                           {!teacher.isActive && (
                             <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
                               Deactivated
@@ -513,7 +589,18 @@ export default function AdminTeachersPage() {
                         <p className="mt-0.5 text-xs text-text-muted">
                           {teacher.phoneNumber ?? "No phone"}
                           {teacher.school ? ` · ${teacher.school.name}` : " · Unassigned"}
+                          {" · "}
+                          {teacher.lastActiveAt
+                            ? `Last active ${new Date(teacher.lastActiveAt).toLocaleDateString()}`
+                            : "Never signed in"}
                         </p>
+                        {teacher.role === "TEACHER" && (
+                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-text-secondary">
+                            <Gamepad2 className="h-3.5 w-3.5" />
+                            {teacher.gamesHosted} classroom game
+                            {teacher.gamesHosted === 1 ? "" : "s"} hosted
+                          </p>
+                        )}
                         {teacher.teachingAssignments.length > 0 ? (
                           <ul className="mt-1.5 flex flex-wrap gap-1.5">
                             {teacher.teachingAssignments.map((a) => (
@@ -538,14 +625,18 @@ export default function AdminTeachersPage() {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setEditing(teacher)}
-                          disabled={busyId === teacher.id}
-                        >
-                          <Pencil className="mr-1.5 h-4 w-4" /> Edit
-                        </Button>
+                        {/* Grades 1-8 classes live in their own surface; only
+                            (de)activation is offered for them here. */}
+                        {teacher.role === "SECONDARY_TEACHER" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setEditing(teacher)}
+                            disabled={busyId === teacher.id}
+                          >
+                            <Pencil className="mr-1.5 h-4 w-4" /> Edit
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           variant="secondary"
