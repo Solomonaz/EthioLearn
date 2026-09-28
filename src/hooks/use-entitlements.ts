@@ -19,6 +19,8 @@ export interface EntitlementsInfo {
   rewardsEnabled: boolean;
   /** Effective per-AI-feature switches (master AND per-feature). */
   aiFeatures: { aiTutor: boolean; aiQuizGen: boolean; aiAdaptive: boolean; aiMathTools: boolean };
+  /** The user's school level; null when they have no school. */
+  schoolLevel: "ELEMENTARY" | "SECONDARY" | null;
   loading: boolean;
 }
 
@@ -37,6 +39,7 @@ const DEFAULT: EntitlementsInfo = {
   pricingEnabled: true,
   rewardsEnabled: true,
   aiFeatures: { aiTutor: true, aiQuizGen: true, aiAdaptive: true, aiMathTools: true },
+  schoolLevel: null,
   loading: true,
 };
 
@@ -72,6 +75,7 @@ export function useEntitlements(): EntitlementsInfo {
               aiAdaptive: d.aiFeatures?.aiAdaptive !== false,
               aiMathTools: d.aiFeatures?.aiMathTools !== false,
             },
+            schoolLevel: d.schoolLevel ?? null,
             loading: false,
           });
         } else {

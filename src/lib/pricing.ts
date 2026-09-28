@@ -6,7 +6,7 @@
  */
 
 export type PlanAudience = "SCHOOL" | "STUDENT";
-export type PricingModel = "FLAT" | "PER_STUDENT" | "TIERED";
+export type PricingModel = "FLAT" | "PER_STUDENT" | "TIERED" | "PER_TEACHER";
 export type BillingInterval =
   | "MONTHLY"
   | "QUARTERLY"
@@ -28,9 +28,9 @@ export interface PlanLike {
   pricePerTeacher?: number | null;
 }
 
-/** How the secondary teachers of a school were priced. */
+/** How the teachers of a school were priced. */
 export interface TeacherCharge {
-  /** Active secondary teachers at the school. */
+  /** Active teachers at the school (of the school's own level). */
   count: number;
   /** The plan's price per teacher. */
   rate: number;
@@ -57,16 +57,25 @@ export interface PriceResult {
 }
 
 /**
- * Compute the price for a plan. `studentCount` is only used by school pricing
- * models (PER_STUDENT, TIERED) and ignored for FLAT student plans.
- * `teacherCount` adds the plan's per-teacher price for each secondary teacher
- * (see `teacherCharge`).
+ * Compute the price for a plan. `studentCount` is only used by the
+ * student-based school models (PER_STUDENT, TIERED) and ignored for FLAT
+ * student plans. `teacherCount` adds the plan's per-teacher price for each
+ * teacher (see `teacherCharge`). PER_TEACHER plans — how elementary schools,
+ * which have no students, are priced — charge `price` per teacher and nothing
+ * else.
  */
 export function computePlanPrice(
   plan: PlanLike,
   studentCount = 0,
   teacherCount = 0,
 ): PriceResult {
+  if (plan.pricingModel === "PER_TEACHER") {
+    const count = Math.max(0, Math.floor(teacherCount || 0));
+    const rate = Math.max(0, plan.price ?? 0);
+    const teachers = { count, rate, amount: count * rate };
+    return { amount: teachers.amount, tier: null, teachers };
+  }
+
   const base = studentPrice(plan, studentCount);
   if (base.amount === null || plan.pricingModel === "FLAT") return base;
 
@@ -324,7 +333,7 @@ export function formatMoney(amount: number | null | undefined, currency = "ETB")
 // ─── Plan input validation (shared by create + update routes) ──
 
 export const PLAN_AUDIENCES = ["SCHOOL", "STUDENT"] as const;
-export const PRICING_MODELS = ["FLAT", "PER_STUDENT", "TIERED"] as const;
+export const PRICING_MODELS = ["FLAT", "PER_STUDENT", "TIERED", "PER_TEACHER"] as const;
 export const BILLING_INTERVALS = ["MONTHLY", "QUARTERLY", "SEMESTER", "YEARLY", "ONE_TIME"] as const;
 
 export interface PlanInputData {
@@ -352,7 +361,8 @@ export interface PlanInputData {
 
 /**
  * Validate and normalise a plan-creation/update payload. Enforces the
- * audience→model rules (student = FLAT, school = PER_STUDENT | TIERED) and
+ * audience→model rules (student = FLAT, school = PER_STUDENT | TIERED |
+ * PER_TEACHER) and
  * returns either `{ error }` or the clean `{ data, tiers }` ready for Prisma.
  */
 export function parsePlanInput(
@@ -371,8 +381,8 @@ export function parsePlanInput(
   // Enforce which models are valid for each audience.
   if (audience === "STUDENT") {
     pricingModel = "FLAT"; // Student plans are always a flat price.
-  } else if (!["PER_STUDENT", "TIERED"].includes(pricingModel)) {
-    return { error: "School plans must use PER_STUDENT or TIERED pricing" };
+  } else if (!["PER_STUDENT", "TIERED", "PER_TEACHER"].includes(pricingModel)) {
+    return { error: "School plans must use PER_STUDENT, TIERED or PER_TEACHER pricing" };
   }
 
   // Student plans are priced MONTHLY at the base — longer cycles are derived from
@@ -410,7 +420,9 @@ export function parsePlanInput(
   let pricePerTeacher: number | null = null;
   let teacherAiMonthlyLimit: number | null = null;
   if (audience === "SCHOOL") {
-    if (!isBlank(body.pricePerTeacher)) {
+    // A PER_TEACHER plan's `price` already IS the per-teacher rate; a second
+    // per-teacher charge on top would bill every teacher twice.
+    if (pricingModel !== "PER_TEACHER" && !isBlank(body.pricePerTeacher)) {
       const rate = Number(body.pricePerTeacher);
       if (!Number.isFinite(rate) || rate < 0) {
         return { error: "The price per teacher must be 0 or more" };
@@ -444,14 +456,16 @@ export function parsePlanInput(
     const tierError = validateTiers(tiers);
     if (tierError) return { error: tierError };
   } else {
-    // FLAT or PER_STUDENT — a single price value is required.
+    // FLAT, PER_STUDENT or PER_TEACHER — a single price value is required.
     const p = Number(body.price);
     if (!Number.isFinite(p) || p < 0) {
       return {
         error:
           pricingModel === "PER_STUDENT"
             ? "A price per student (0 or more) is required"
-            : "A price (0 or more) is required",
+            : pricingModel === "PER_TEACHER"
+              ? "A price per teacher (0 or more) is required"
+              : "A price (0 or more) is required",
       };
     }
     price = p;

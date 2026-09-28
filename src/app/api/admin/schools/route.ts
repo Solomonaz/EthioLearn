@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { name, region, city, type } = await req.json();
+    const { name, region, city, type, level } = await req.json();
 
     if (!name || typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100) {
       return NextResponse.json(
@@ -73,12 +73,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Elementary and secondary schools are separate institutions. The level
+    // decides which teachers the school can create and whether it enrols
+    // students, so it is chosen once here and never edited.
+    const schoolLevel = level || "SECONDARY";
+    if (!["ELEMENTARY", "SECONDARY"].includes(schoolLevel)) {
+      return NextResponse.json(
+        { error: "Level must be ELEMENTARY or SECONDARY" },
+        { status: 400 }
+      );
+    }
+
     const school = await db.school.create({
       data: {
         name: name.trim(),
         region: region.trim(),
         city: city.trim(),
         type: schoolType,
+        level: schoolLevel,
       },
     });
 

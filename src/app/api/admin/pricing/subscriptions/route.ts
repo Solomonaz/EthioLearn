@@ -48,11 +48,20 @@ export async function GET(req: NextRequest) {
   // preview the price before assigning.
   let studentCount: number | undefined;
   let teacherCount: number | undefined;
+  let schoolLevel: "ELEMENTARY" | "SECONDARY" | undefined;
   if (schoolId) {
     ({ students: studentCount, teachers: teacherCount } = await countSchoolSeats(schoolId));
+    const school = await db.school.findUnique({ where: { id: schoolId }, select: { level: true } });
+    schoolLevel = school?.level;
   }
 
-  return NextResponse.json({ subscription: current, history: subscriptions, studentCount, teacherCount });
+  return NextResponse.json({
+    subscription: current,
+    history: subscriptions,
+    studentCount,
+    teacherCount,
+    schoolLevel,
+  });
 }
 
 // ─── POST: assign a plan to a school or student (super-admin only) ──
@@ -96,8 +105,16 @@ export async function POST(req: NextRequest) {
     if (!schoolId) {
       return NextResponse.json({ error: "This is a school plan — schoolId is required" }, { status: 400 });
     }
-    const school = await db.school.findUnique({ where: { id: schoolId }, select: { id: true } });
+    const school = await db.school.findUnique({ where: { id: schoolId }, select: { level: true } });
     if (!school) return NextResponse.json({ error: "School not found" }, { status: 404 });
+    // An elementary school has no students, so a student-priced plan would
+    // bill it nothing (or its lowest bracket). It is priced per teacher.
+    if (school.level === "ELEMENTARY" && plan.pricingModel !== "PER_TEACHER") {
+      return NextResponse.json(
+        { error: "Elementary schools are priced per teacher — pick a per-teacher plan." },
+        { status: 400 }
+      );
+    }
   } else {
     if (!studentId) {
       return NextResponse.json({ error: "This is a student plan — studentId is required" }, { status: 400 });

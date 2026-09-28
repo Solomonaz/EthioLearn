@@ -7,7 +7,9 @@ import {
   classKey,
   normalizePhone,
   parseClasses,
+  type ParsedClass,
 } from "@/lib/teacher-classes";
+import { teacherRoleForLevel } from "@/lib/teacher-band";
 
 /**
  * PATCH /api/admin/teachers/[id]
@@ -17,10 +19,10 @@ import {
  *
  * Editable: name, phone number, the classes they hold, and active/suspended
  * state. It can never change a ROLE, so this endpoint cannot be used to promote
- * anyone. Targets are SECONDARY_TEACHER accounts; a SUPER_ADMIN may also reach
- * a grades 1-8 TEACHER, but only to activate or deactivate them — their classes
- * live in the frozen grades 1-8 surface and are not edited from here. Admin
- * accounts are never reachable.
+ * anyone. Targets are teachers of either band; a school admin reaches only the
+ * band that matches their school's level. Grades 1-8 classes are validated as
+ * elementary classes (grade 1-8, no section). Admin accounts are never
+ * reachable.
  *
  * Classes are DIFFED rather than replaced. Deleting and recreating every row on
  * each save would churn ids and, because ClassActivity.teachingAssignmentId is
@@ -69,26 +71,19 @@ export async function PATCH(
     select: { id: true, role: true, schoolId: true },
   });
 
-  // Same 404 for "does not exist", "not a secondary teacher" and "not yours",
-  // so a school admin cannot probe for accounts outside their scope.
-  const isElementary = target?.role === "TEACHER" && user.role === "SUPER_ADMIN";
+  // Same 404 for "does not exist", "not a teacher" and "not yours", so a
+  // school admin cannot probe for accounts outside their scope. A school admin
+  // is also held to their own school's band.
   const outOfScope =
     !target ||
-    (target.role !== "SECONDARY_TEACHER" && !isElementary) ||
-    (user.role === "SCHOOL_ADMIN" && target.schoolId !== user.schoolId);
+    (target.role !== "SECONDARY_TEACHER" && target.role !== "TEACHER") ||
+    (user.role === "SCHOOL_ADMIN" &&
+      (target.schoolId !== user.schoolId ||
+        target.role !== teacherRoleForLevel(user.school?.level)));
   if (outOfScope) {
     return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
   }
-
-  if (
-    isElementary &&
-    (body.name !== undefined || body.phone !== undefined || body.assignments !== undefined)
-  ) {
-    return NextResponse.json(
-      { error: "Grades 1-8 teachers can only be activated or deactivated here." },
-      { status: 400 },
-    );
-  }
+  const band = target.role === "TEACHER" ? "elementary" : "secondary";
 
   const data: Record<string, unknown> = {};
 
@@ -146,11 +141,13 @@ export async function PATCH(
   }
 
   // ── Classes, diffed against what is stored ────────────────────────────
-  let classPlan: { toCreate: { subject: string; grade: number; section: string }[]; toDeleteIds: string[] } | null =
-    null;
+  let classPlan: {
+    toCreate: ParsedClass[];
+    toDeleteIds: string[];
+  } | null = null;
 
   if (body.assignments !== undefined) {
-    const parsed = parseClasses(body.assignments);
+    const parsed = parseClasses(body.assignments, band);
     if ("error" in parsed) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
@@ -210,10 +207,10 @@ export async function PATCH(
         orderBy: [{ grade: "asc" }, { subject: "asc" }, { section: "asc" }],
         select: { id: true, subject: true, grade: true, section: true },
       },
-      _count: { select: { hostedGameRooms: true } },
+      _count: { select: { gameContents: true } },
     },
   });
 
   const { _count, ...rest } = teacher;
-  return NextResponse.json({ teacher: { ...rest, gamesHosted: _count.hostedGameRooms } });
+  return NextResponse.json({ teacher: { ...rest, gameSets: _count.gameContents } });
 }

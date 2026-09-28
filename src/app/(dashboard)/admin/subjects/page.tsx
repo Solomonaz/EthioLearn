@@ -2,12 +2,23 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { useSession } from "next-auth/react";
 import { BookOpen, Plus, Trash2, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
+
+type Level = "ELEMENTARY" | "SECONDARY";
+
+/**
+ * Managed subject lists — shared by the super admin (/admin/subjects) and, via
+ * a re-export, school admins. Elementary and secondary keep separate lists: a
+ * school admin sees and edits only their own school's level (the API decides),
+ * the super admin switches between the two.
+ */
 
 interface Subject {
   id: string;
@@ -17,6 +28,11 @@ interface Subject {
 
 export default function AdminSubjectsPage() {
   const t = useTranslations("admin");
+  const { data: session } = useSession();
+  const isSuperAdmin =
+    (session?.user as { role?: string } | undefined)?.role === "SUPER_ADMIN";
+  // The super admin's chosen list; for a school admin the API reports theirs.
+  const [level, setLevel] = useState<Level>("SECONDARY");
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -29,16 +45,17 @@ export default function AdminSubjectsPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch("/api/subjects");
+      const res = await fetch(isSuperAdmin ? `/api/subjects?level=${level}` : "/api/subjects");
       if (!res.ok) throw new Error("Failed to load subjects");
       const data = await res.json();
       setSubjects(data.subjects ?? []);
+      if (!isSuperAdmin && data.level) setLevel(data.level);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSuperAdmin, level]);
 
   useEffect(() => {
     fetchSubjects();
@@ -53,7 +70,7 @@ export default function AdminSubjectsPage() {
       const res = await fetch("/api/admin/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({ name: newName.trim(), ...(isSuperAdmin ? { level } : {}) }),
       });
 
       if (!res.ok) {
@@ -93,8 +110,31 @@ export default function AdminSubjectsPage() {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">{t("subjectsTitle")}</h1>
         <p className="text-sm text-text-secondary">
-          {t("analyticsSubtitle")}
+          {level === "ELEMENTARY"
+            ? "Subjects taught in grades 1–8. Teacher forms pick from this list."
+            : "Subjects taught in grades 9–12. Teacher, textbook and quiz forms pick from this list."}
         </p>
+        {isSuperAdmin && (
+          <div role="tablist" aria-label="Subject list" className="mt-3 flex flex-wrap gap-2">
+            {(["SECONDARY", "ELEMENTARY"] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                role="tab"
+                aria-selected={level === l}
+                onClick={() => setLevel(l)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  level === l
+                    ? "border-primary bg-primary text-white"
+                    : "border-border text-text-secondary hover:border-primary/50",
+                )}
+              >
+                {l === "ELEMENTARY" ? "Elementary (1–8)" : "Secondary (9–12)"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -114,7 +154,7 @@ export default function AdminSubjectsPage() {
                     Subject Name
                   </label>
                   <Input
-                    placeholder="e.g. Computer Science"
+                    placeholder={level === "ELEMENTARY" ? "e.g. Environmental Science" : "e.g. Computer Science"}
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                     disabled={submitting}

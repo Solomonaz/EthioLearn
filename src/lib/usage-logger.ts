@@ -85,7 +85,7 @@ export type UsageFeature =
 export interface UsageActor {
   studentId?: string | null;
   schoolId?: string | null;
-  /** Secondary teachers only — their cost is priced per teacher. */
+  /** Either teacher band — both are priced per teacher. */
   teacherId?: string | null;
 }
 
@@ -102,7 +102,7 @@ export function usageActor(
   return {
     studentId: user.role === "STUDENT" ? user.id : null,
     schoolId: user.schoolId ?? null,
-    teacherId: user.role === "SECONDARY_TEACHER" ? user.id : null,
+    teacherId: user.role === "SECONDARY_TEACHER" || user.role === "TEACHER" ? user.id : null,
   };
 }
 

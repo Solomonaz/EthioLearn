@@ -24,6 +24,10 @@ import { StatCard } from "@/components/shared/stat-card";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  ElementarySchoolDashboard,
+  type ElementaryDashboardData,
+} from "@/components/admin/elementary-school-dashboard";
 
 interface DashboardData {
   stats: {
@@ -56,7 +60,7 @@ interface DashboardData {
 
 export default function SchoolAdminDashboardPage() {
   const t = useTranslations("admin");
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardData | ElementaryDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,7 +98,12 @@ export default function SchoolAdminDashboardPage() {
     );
   }
 
-  const { stats, recentQuizzes, topStudents } = data;
+  // An elementary school has teachers only; its dashboard is about them.
+  if ("level" in data && data.level === "ELEMENTARY") {
+    return <ElementarySchoolDashboard data={data} />;
+  }
+
+  const { stats, recentQuizzes, topStudents } = data as DashboardData;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">

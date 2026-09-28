@@ -46,6 +46,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
+  // Elementary schools have no students on the school side — their teachers
+  // run single-screen classroom games with no pupil accounts.
+  if (user.school?.level === "ELEMENTARY") {
+    return NextResponse.json(
+      { error: "Elementary schools do not register students." },
+      { status: 403 },
+    );
+  }
+
   let body: { csvData?: string };
   try {
     body = await req.json();

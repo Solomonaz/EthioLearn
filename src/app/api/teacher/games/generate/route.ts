@@ -6,6 +6,12 @@ import { generateQuestions } from "@/lib/ai-provider";
 import { getRequester } from "../_shared";
 import { getCurrentUser } from "@/lib/get-session";
 import { usageActor, withUsageActor } from "@/lib/usage-logger";
+import {
+  getTeacherAiStatus,
+  questionCredits,
+  recordTeacherAiUse,
+  teacherAiDenial,
+} from "@/lib/teacher-ai-allowance";
 
 /**
  * POST /api/teacher/games/generate — best-effort AI question generation for
@@ -14,7 +20,9 @@ import { usageActor, withUsageActor } from "@/lib/usage-logger";
  * ready to play; the teacher can save them via POST /api/teacher/games.
  *
  * Gated by the platform-wide aiQuizGen switch; degrades with a clear error when
- * AI is off or no provider key is configured.
+ * AI is off or no provider key is configured. A teacher's generations also need
+ * their school's live subscription and draw on the same monthly credit budget
+ * as secondary teachers (one credit per question delivered).
  */
 export async function POST(request: NextRequest) {
   const req = await getRequester();
@@ -49,9 +57,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Enter a topic" }, { status: 400 });
   }
 
+  // The env super admin tests without a school or a budget; every real
+  // teacher is held to their school's subscription and monthly credits.
+  const user = await getCurrentUser();
+  const teacher = user && user.role === "TEACHER" ? user : null;
+  if (teacher) {
+    const denial = teacherAiDenial(await getTeacherAiStatus(teacher), questionCredits(count));
+    if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status });
+  }
+
   try {
     // Bill the tokens to the teacher's school in Admin -> Usage.
-    const actor = usageActor(await getCurrentUser());
+    const actor = usageActor(user);
     const { questions } = await withUsageActor(actor, () => generateQuestions({
       content: `Create simple multiple-choice questions for grade ${grade} pupils about "${topic}" in the subject ${subject}. Keep the language and numbers age-appropriate for young learners.`,
       chapterTitle: topic,
@@ -76,6 +93,9 @@ export async function POST(request: NextRequest) {
     if (rows.length === 0) {
       return NextResponse.json({ error: "No questions generated" }, { status: 502 });
     }
+
+    // Charge for what was delivered, not for what was asked.
+    if (teacher) await recordTeacherAiUse(teacher, "questions", questionCredits(rows.length));
 
     return NextResponse.json({ questions: rows });
   } catch (err) {

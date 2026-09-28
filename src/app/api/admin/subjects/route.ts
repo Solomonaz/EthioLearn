@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { subjectFilter, tidySubjectName } from "@/lib/subject";
+import { parseSchoolLevel, subjectFilter, subjectLevelFor, tidySubjectName } from "@/lib/subject";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -19,17 +19,23 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { name } = await req.json();
+    const { name, level: rawLevel } = await req.json();
+    // A school admin always adds to their own school's list; only the super
+    // admin chooses (defaulting to secondary, as before levels existed).
+    const level =
+      user.role === "SUPER_ADMIN"
+        ? (parseSchoolLevel(rawLevel) ?? "SECONDARY")
+        : subjectLevelFor(user);
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
     // Case-insensitive: "biology" is stored as "Biology", and cannot be added
-    // beside an existing "Biology" — the database's unique check is
-    // case-sensitive, so it would have let both in.
+    // beside an existing "Biology" in the same list — the database's unique
+    // check is case-sensitive, so it would have let both in.
     const tidy = tidySubjectName(name);
     const existing = await db.subject.findFirst({
-      where: { name: subjectFilter(tidy) },
+      where: { name: subjectFilter(tidy), level },
       select: { name: true },
     });
     if (existing) {
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const subject = await db.subject.create({
-      data: { name: tidy },
+      data: { name: tidy, level },
     });
 
     return NextResponse.json({ subject });

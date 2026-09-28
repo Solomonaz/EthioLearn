@@ -31,6 +31,7 @@ interface SchoolItem {
   region: string;
   city: string;
   type: "PUBLIC" | "PRIVATE";
+  level: "ELEMENTARY" | "SECONDARY";
   _count?: {
     users: number;
   };
@@ -50,6 +51,9 @@ export default function AdminSchoolsPage() {
   const [newRegion, setNewRegion] = useState("");
   const [newCity, setNewCity] = useState("");
   const [newType, setNewType] = useState<"PUBLIC" | "PRIVATE">("PUBLIC");
+  // Fixed at creation: it decides which teachers the school adds and whether
+  // it enrols students (elementary schools have none).
+  const [newLevel, setNewLevel] = useState<"ELEMENTARY" | "SECONDARY">("SECONDARY");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -86,6 +90,7 @@ export default function AdminSchoolsPage() {
           region: newRegion.trim(),
           city: newCity.trim(),
           type: newType,
+          level: newLevel,
         }),
       });
 
@@ -99,6 +104,7 @@ export default function AdminSchoolsPage() {
       setNewRegion("");
       setNewCity("");
       setNewType("PUBLIC");
+      setNewLevel("SECONDARY");
       setShowForm(false);
       await fetchSchools();
     } catch (e) {
@@ -273,6 +279,27 @@ export default function AdminSchoolsPage() {
                     <option value="PRIVATE">Private</option>
                   </select>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase text-text-muted">
+                    Level
+                  </label>
+                  <select
+                    value={newLevel}
+                    onChange={(e) =>
+                      setNewLevel(e.target.value as "ELEMENTARY" | "SECONDARY")
+                    }
+                    disabled={submitting}
+                    className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="SECONDARY">Secondary (grades 9–12)</option>
+                    <option value="ELEMENTARY">Elementary (grades 1–8)</option>
+                  </select>
+                  <p className="text-xs text-text-muted">
+                    {newLevel === "ELEMENTARY"
+                      ? "Teachers only — no student accounts. Cannot be changed later."
+                      : "Teachers and students. Cannot be changed later."}
+                  </p>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button type="submit" isLoading={submitting}>
@@ -346,7 +373,7 @@ export default function AdminSchoolsPage() {
                         Type
                       </th>
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">
-                        Students
+                        Users
                       </th>
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">
                         Admins
@@ -366,6 +393,7 @@ export default function AdminSchoolsPage() {
                           <span className="font-medium text-text-primary">
                             {school.name}
                           </span>
+                          <LevelTag level={school.level} />
                         </td>
                         <td className="px-4 py-4 text-text-secondary">
                           {school.region}
@@ -430,6 +458,7 @@ export default function AdminSchoolsPage() {
                       <div>
                         <p className="font-semibold text-text-primary">
                           {school.name}
+                          <LevelTag level={school.level} />
                         </p>
                         <p className="text-xs text-text-secondary">
                           {school.region}, {school.city}
@@ -445,7 +474,7 @@ export default function AdminSchoolsPage() {
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex gap-3 text-xs text-text-secondary">
-                        <span>{school._count?.users ?? 0} students</span>
+                        <span>{school._count?.users ?? 0} users</span>
                         <span>{school.admins?.length ?? 0} admins</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -475,5 +504,18 @@ export default function AdminSchoolsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function LevelTag({ level }: { level: "ELEMENTARY" | "SECONDARY" }) {
+  return (
+    <span
+      className={
+        "ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+        (level === "ELEMENTARY" ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-primary")
+      }
+    >
+      {level === "ELEMENTARY" ? "Elementary" : "Secondary"}
+    </span>
   );
 }

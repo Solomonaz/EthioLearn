@@ -17,7 +17,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { phoneNumber, name, role, grade, section, schoolId } = body;
+    // `role` and `schoolId` are deliberately not trusted from the body. Self
+    // sign-up only ever creates an independent student: teachers of both bands
+    // are created by their school's admin, and school membership is assigned by
+    // an admin, never self-claimed.
+    const { phoneNumber, name, role = "STUDENT", grade, section } = body;
 
     // Validate required fields
     if (!phoneNumber || !name || !role) {
@@ -34,11 +38,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const validRoles = ["STUDENT", "TEACHER"];
-    if (!validRoles.includes(role)) {
+    if (role !== "STUDENT") {
       return NextResponse.json(
-        { error: "Invalid role" },
-        { status: 400 }
+        { error: "Teacher accounts are created by your school's administrator." },
+        { status: 403 }
       );
     }
 
@@ -59,10 +62,9 @@ export async function POST(request: Request) {
       data: {
         phoneNumber,
         name,
-        role,
-        grade: role === "STUDENT" && grade ? parseInt(grade) : null,
+        role: "STUDENT",
+        grade: grade ? parseInt(grade) : null,
         section: section || null,
-        schoolId: schoolId || null,
       },
       select: {
         id: true,

@@ -21,7 +21,7 @@
  * existing game-set validator already enforces.
  */
 
-import type { UserRole } from "@prisma/client";
+import type { SchoolLevel, UserRole } from "@prisma/client";
 
 /** Highest grade the grades 1-8 teacher surface covers. */
 export const PRIMARY_MAX_GRADE = 8;
@@ -42,6 +42,30 @@ export function isSecondaryGrade(grade: unknown): grade is number {
     (grade as number) >= SECONDARY_MIN_GRADE &&
     (grade as number) <= SECONDARY_MAX_GRADE
   );
+}
+
+/**
+ * The teacher role a school creates. The school's level decides it, never the
+ * client: an elementary school's admin can only ever make grades 1-8 teachers.
+ * No school (a super admin provisioning an unassigned teacher) keeps the
+ * secondary default.
+ */
+export function teacherRoleForLevel(
+  level: SchoolLevel | null | undefined,
+): "TEACHER" | "SECONDARY_TEACHER" {
+  return level === "ELEMENTARY" ? "TEACHER" : "SECONDARY_TEACHER";
+}
+
+/**
+ * A class that names both a subject and a grade. Every secondary class does;
+ * a grades 1-8 row may leave either blank ("teaches all of grade 3", "teaches
+ * Mathematics"). Secondary code filters through this so a partial row can
+ * never reach a cohort query.
+ */
+export function isFullClass<T extends { subject: string | null; grade: number | null }>(
+  c: T,
+): c is T & { subject: string; grade: number } {
+  return c.subject !== null && c.grade !== null;
 }
 
 /** Either teacher role — useful where a surface is shared by both bands. */

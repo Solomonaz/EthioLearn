@@ -41,5 +41,8 @@ export async function GET() {
     pricingEnabled: settings.pricingEnabled,
     rewardsEnabled: settings.rewardsEnabled,
     aiFeatures,
+    // The signed-in user's school level, so the school-admin sidebar can drop
+    // the student-facing sections at an elementary school.
+    schoolLevel: user.school?.level ?? null,
   });
 }

@@ -520,11 +520,7 @@
     "gradePersonalise": "This helps us personalise quizzes and content to your curriculum.",
     "saving": "Saving…",
     "continueToDashboard": "Continue to Dashboard",
-    "accountTypeQuestion": "How will you use EthioLearn?",
-    "accountStudent": "Student",
-    "accountTeacher": "Teacher",
-    "accountStudentHint": "Take quizzes, play, and track progress",
-    "accountTeacherHint": "Create class games and activities"
+    "teacherSignupNote": "Teachers: your school administrator creates your account. Just sign in with your phone number."
   },
   "student": {
     "welcome": "Welcome back",

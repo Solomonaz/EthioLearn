@@ -28,27 +28,30 @@ import { EditTeacherDialog } from "@/components/secondary-teacher/edit-teacher-d
  * re-export, the school admin (/school-admin/teachers). The API scopes by the
  * caller's own school.
  *
- * Provisioning is SECONDARY ONLY (grades 9-12); grades 1-8 teachers keep their
- * own self-registration flow. The super admin can additionally list and
- * (de)activate grades 1-8 teachers through the level tabs. A school admin
- * stays secondary-only: elementary and secondary are separate institutions,
- * so a secondary school's admin never sees a grades 1-8 teacher.
+ * The school's LEVEL decides which teachers it creates: an elementary school
+ * adds grades 1-8 teachers, a secondary school grades 9-12 teachers. A school
+ * admin only ever sees their own band; the super admin switches between them
+ * with the level tabs. Nobody self-registers as a teacher.
  *
- * A class here is a (subject, grade, section) triple, not a grade: a grade can
- * run twenty sections and no one teacher takes them all.
+ * A secondary class is a (subject, grade, section) triple, not a grade: a grade
+ * can run twenty sections and no one teacher takes them all. An elementary
+ * class is subject + grade only — those schools have no student roster for a
+ * section to select from.
  */
 
 interface Assignment {
   id?: string;
-  subject: string;
-  grade: number;
+  /** Always set for secondary; blank on an elementary "whole grade" entry. */
+  subject: string | null;
+  /** Always set for secondary; blank on an elementary "one subject" entry. */
+  grade: number | null;
   section: string | null;
 }
 
 interface Teacher {
   id: string;
   role: "TEACHER" | "SECONDARY_TEACHER";
-  gamesHosted: number;
+  gameSets: number;
   name: string;
   phoneNumber: string | null;
   email: string | null;
@@ -75,18 +78,24 @@ const BAND_TABS: { value: Band; label: string; title: string }[] = [
   },
 ];
 
+type SchoolLevel = "ELEMENTARY" | "SECONDARY";
+
 interface SchoolOption {
   id: string;
   name: string;
+  level: SchoolLevel;
 }
 
-const GRADES = Array.from(
+const SECONDARY_GRADES = Array.from(
   { length: SECONDARY_MAX_GRADE - SECONDARY_MIN_GRADE + 1 },
   (_, i) => i + SECONDARY_MIN_GRADE,
 );
+const ELEMENTARY_GRADES = Array.from({ length: PRIMARY_MAX_GRADE }, (_, i) => i + 1);
 
 function classLabel(a: Assignment): string {
-  return `${a.subject} · G${a.grade}${a.section ? ` ${a.section}` : " (all sections)"}`;
+  const subject = a.subject ?? "All subjects";
+  const grade = a.grade !== null ? `G${a.grade}` : "all grades";
+  return `${subject} · ${grade}${a.section ? ` ${a.section}` : ""}`;
 }
 
 export default function AdminTeachersPage() {
@@ -104,13 +113,16 @@ export default function AdminTeachersPage() {
   const [counts, setCounts] = useState<Record<Band, number> | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [schools, setSchools] = useState<SchoolOption[]>([]);
+  // A school admin's own school level, reported by the list endpoint.
+  const [ownLevel, setOwnLevel] = useState<SchoolLevel | null>(null);
 
   // ── New teacher form ────────────────────────────────────────────────────
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [schoolId, setSchoolId] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
-  const [draftGrade, setDraftGrade] = useState<number>(SECONDARY_MIN_GRADE);
+  // Null = "All grades" (elementary only).
+  const [draftGrade, setDraftGrade] = useState<number | null>(SECONDARY_MIN_GRADE);
   const [draftSection, setDraftSection] = useState("");
   const [classes, setClasses] = useState<Assignment[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -134,6 +146,7 @@ export default function AdminTeachersPage() {
       const data = await res.json();
       setTeachers(data.teachers ?? []);
       setCounts(data.counts ?? null);
+      if (data.schoolLevel) setOwnLevel(data.schoolLevel);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -146,54 +159,79 @@ export default function AdminTeachersPage() {
     return () => clearTimeout(id);
   }, [fetchTeachers]);
 
-  // Subjects come from the managed list, not free text — a teacher's subject
-  // has to match the textbook's subject string exactly for their cohort views
-  // to resolve, and typed-in spellings silently break that.
-  useEffect(() => {
-    fetch("/api/subjects")
-      .then((r) => (r.ok ? r.json() : { subjects: [] }))
-      .then((d) => {
-        const names = (d.subjects ?? []).map((s: { name: string }) => s.name);
-        setSubjects(names);
-        setDraftSubject((cur) => cur || names[0] || "");
-      })
-      .catch(() => setSubjects([]));
-  }, []);
-
   useEffect(() => {
     if (!isSuperAdmin) return;
     fetch("/api/admin/schools")
       .then((r) => (r.ok ? r.json() : { schools: [] }))
       .then((d) =>
         setSchools(
-          (d.schools ?? []).map((s: { id: string; name: string }) => ({
+          (d.schools ?? []).map((s: SchoolOption) => ({
             id: s.id,
             name: s.name,
+            level: s.level,
           })),
         ),
       )
       .catch(() => setSchools([]));
   }, [isSuperAdmin]);
 
+  // The band of the teacher the form will create: the school admin's own
+  // level, or the level of the school the super admin picked. An unassigned
+  // teacher is secondary, matching the server.
+  const formElementary = isSuperAdmin
+    ? schools.find((s) => s.id === schoolId)?.level === "ELEMENTARY"
+    : ownLevel === "ELEMENTARY";
+  const gradeOptions = formElementary ? ELEMENTARY_GRADES : SECONDARY_GRADES;
+
+  // Subjects come from the managed list for the form's level, not free text —
+  // a teacher's subject has to match the textbook's subject string exactly for
+  // their cohort views to resolve, and typed-in spellings silently break that.
+  // A school admin always gets their own level's list (the API decides).
+  useEffect(() => {
+    const url = isSuperAdmin
+      ? `/api/subjects?level=${formElementary ? "ELEMENTARY" : "SECONDARY"}`
+      : "/api/subjects";
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : { subjects: [] }))
+      .then((d) => {
+        const names = (d.subjects ?? []).map((s: { name: string }) => s.name);
+        setSubjects(names);
+        // Elementary entries start on "All subjects"; secondary needs one.
+        setDraftSubject(formElementary ? "" : names[0] || "");
+      })
+      .catch(() => setSubjects([]));
+  }, [isSuperAdmin, formElementary]);
+
+  // Switching band clears classes that belong to the other one.
+  useEffect(() => {
+    setDraftGrade(formElementary ? null : SECONDARY_MIN_GRADE);
+    setClasses([]);
+    setDraftSection("");
+  }, [formElementary]);
+
+  // Elementary: a subject, a grade, or both. Secondary: all three.
   const canAddClass = useMemo(
-    () => subjects.length > 0 && normalizeSection(draftSection) !== null,
-    [subjects.length, draftSection],
+    () =>
+      formElementary
+        ? draftSubject.trim() !== "" || draftGrade !== null
+        : subjects.length > 0 && normalizeSection(draftSection) !== null,
+    [subjects.length, draftSection, formElementary, draftSubject, draftGrade],
   );
 
   function addClass() {
-    const subject = draftSubject.trim();
-    const section = normalizeSection(draftSection);
-    if (!subject) {
-      toast.error("Pick a subject first.");
+    const subject = draftSubject.trim() || null;
+    const section = formElementary ? null : normalizeSection(draftSection);
+    if (formElementary ? !subject && draftGrade === null : !subject) {
+      toast.error(formElementary ? "Pick a subject, a grade, or both." : "Pick a subject first.");
       return;
     }
-    if (!section) {
+    if (!formElementary && !section) {
       toast.error("Enter the section, for example A.");
       return;
     }
     const exists = classes.some(
       (c) =>
-        c.subject.toLowerCase() === subject.toLowerCase() &&
+        (c.subject ?? "").toLowerCase() === (subject ?? "").toLowerCase() &&
         c.grade === draftGrade &&
         c.section === section,
     );
@@ -221,7 +259,8 @@ export default function AdminTeachersPage() {
     e.preventDefault();
     if (submitting) return;
 
-    if (classes.length === 0) {
+    // Elementary classes are optional: the games do not depend on them.
+    if (!formElementary && classes.length === 0) {
       toast.error("Add at least one class — subject, grade and section.");
       return;
     }
@@ -296,14 +335,16 @@ export default function AdminTeachersPage() {
           {isSuperAdmin ? (
             <>
               Elementary (grades 1–{PRIMARY_MAX_GRADE}) and secondary (grades{" "}
-              {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}) teachers. Secondary teachers
-              sign in with the phone number you register here; elementary teachers
-              sign up themselves.
+              {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}) teachers. The school you pick
+              decides which kind you add. They sign in with the phone number you
+              register here — no self sign-up.
             </>
           ) : (
             <>
-              Secondary teachers, grades {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}. They
-              sign in with the phone number you register here — no self sign-up.
+              {ownLevel === "ELEMENTARY"
+                ? `Teachers, grades 1–${PRIMARY_MAX_GRADE}.`
+                : `Secondary teachers, grades ${SECONDARY_MIN_GRADE}–${SECONDARY_MAX_GRADE}.`}{" "}
+              They sign in with the phone number you register here — no self sign-up.
             </>
           )}
         </p>
@@ -312,6 +353,7 @@ export default function AdminTeachersPage() {
       {editing && (
         <EditTeacherDialog
           teacher={editing}
+          elementary={editing.role === "TEACHER"}
           onClose={() => setEditing(null)}
           onSaved={fetchTeachers}
         />
@@ -325,7 +367,11 @@ export default function AdminTeachersPage() {
               <div className="flex items-center gap-2">
                 <Plus className="h-5 w-5 text-primary" />
                 <h2 className="font-semibold text-text-primary">
-                  {isSuperAdmin ? "Add a secondary teacher" : "Add a teacher"}
+                  {isSuperAdmin
+                    ? formElementary
+                      ? "Add an elementary teacher"
+                      : "Add a secondary teacher"
+                    : "Add a teacher"}
                 </h2>
               </div>
             </CardHeader>
@@ -393,12 +439,13 @@ export default function AdminTeachersPage() {
                       <option value="">Unassigned</option>
                       {schools.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name}
+                          {s.name} · {s.level === "ELEMENTARY" ? "Elementary" : "Secondary"}
                         </option>
                       ))}
                     </select>
                     <p className="text-xs text-text-muted">
-                      An unassigned teacher cannot open their dashboard.
+                      An elementary school adds a grades 1–{PRIMARY_MAX_GRADE} teacher. An
+                      unassigned teacher cannot open their dashboard.
                     </p>
                   </div>
                 )}
@@ -406,12 +453,12 @@ export default function AdminTeachersPage() {
                 {/* Classes: subject + grade + section */}
                 <div className="space-y-2 rounded-xl border border-border p-3">
                   <span className="text-xs font-semibold uppercase text-text-muted">
-                    Classes
+                    {formElementary ? "What they teach (optional)" : "Classes"}
                   </span>
                   <p className="text-xs text-text-muted">
-                    One row per class. A grade runs several sections, so pick the
-                    section this teacher actually takes — Physics grade 11 A is a
-                    different class from Physics grade 11 B.
+                    {formElementary
+                      ? "Pick a subject, a grade, or both — e.g. all of grade 3, or Mathematics across grades. The teacher can also add these later from their profile."
+                      : "One row per class. A grade runs several sections, so pick the section this teacher actually takes — Physics grade 11 A is a different class from Physics grade 11 B."}
                   </p>
 
                   <div className="flex flex-wrap gap-2">
@@ -419,10 +466,13 @@ export default function AdminTeachersPage() {
                       aria-label="Subject"
                       value={draftSubject}
                       onChange={(e) => setDraftSubject(e.target.value)}
-                      disabled={submitting || subjects.length === 0}
+                      disabled={submitting || (!formElementary && subjects.length === 0)}
                       className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
                     >
-                      {subjects.length === 0 && <option value="">No subjects yet</option>}
+                      {formElementary && <option value="">All subjects</option>}
+                      {!formElementary && subjects.length === 0 && (
+                        <option value="">No subjects yet</option>
+                      )}
                       {subjects.map((s) => (
                         <option key={s} value={s}>
                           {s}
@@ -431,26 +481,31 @@ export default function AdminTeachersPage() {
                     </select>
                     <select
                       aria-label="Grade"
-                      value={draftGrade}
-                      onChange={(e) => setDraftGrade(Number(e.target.value))}
+                      value={draftGrade ?? ""}
+                      onChange={(e) =>
+                        setDraftGrade(e.target.value === "" ? null : Number(e.target.value))
+                      }
                       disabled={submitting}
-                      className="w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
+                      className="w-32 rounded-xl border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
                     >
-                      {GRADES.map((g) => (
+                      {formElementary && <option value="">All grades</option>}
+                      {gradeOptions.map((g) => (
                         <option key={g} value={g}>
                           Grade {g}
                         </option>
                       ))}
                     </select>
-                    <Input
-                      aria-label="Section"
-                      placeholder="Section"
-                      value={draftSection}
-                      onChange={(e) => setDraftSection(e.target.value)}
-                      disabled={submitting}
-                      maxLength={MAX_SECTION_LENGTH}
-                      className="w-24"
-                    />
+                    {!formElementary && (
+                      <Input
+                        aria-label="Section"
+                        placeholder="Section"
+                        value={draftSection}
+                        onChange={(e) => setDraftSection(e.target.value)}
+                        disabled={submitting}
+                        maxLength={MAX_SECTION_LENGTH}
+                        className="w-24"
+                      />
+                    )}
                     <Button
                       type="button"
                       variant="secondary"
@@ -463,8 +518,9 @@ export default function AdminTeachersPage() {
 
                   {subjects.length === 0 && (
                     <p className="text-xs text-amber-600">
-                      Add subjects first — a teacher&apos;s subject must match the
-                      textbook subject exactly.
+                      {formElementary
+                        ? "No elementary subjects yet — add them under Subjects to pick one here."
+                        : "Add subjects first — a teacher's subject must match the textbook subject exactly."}
                     </p>
                   )}
 
@@ -472,14 +528,14 @@ export default function AdminTeachersPage() {
                     <ul className="flex flex-wrap gap-2 pt-1">
                       {classes.map((c, i) => (
                         <li
-                          key={`${c.subject}-${c.grade}-${c.section}`}
+                          key={`${c.subject}-${c.grade}-${c.section ?? ""}`}
                           className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
                         >
-                          {c.subject} · G{c.grade} {c.section}
+                          {classLabel(c)}
                           <button
                             type="button"
                             onClick={() => removeClass(i)}
-                            aria-label={`Remove ${c.subject} grade ${c.grade} section ${c.section}`}
+                            aria-label={`Remove ${classLabel(c)}`}
                             className="text-primary/70 hover:text-primary"
                           >
                             <XCircle className="h-3.5 w-3.5" />
@@ -597,8 +653,8 @@ export default function AdminTeachersPage() {
                         {teacher.role === "TEACHER" && (
                           <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-text-secondary">
                             <Gamepad2 className="h-3.5 w-3.5" />
-                            {teacher.gamesHosted} classroom game
-                            {teacher.gamesHosted === 1 ? "" : "s"} hosted
+                            {teacher.gameSets} game set
+                            {teacher.gameSets === 1 ? "" : "s"} built
                           </p>
                         )}
                         {teacher.teachingAssignments.length > 0 ? (
@@ -618,25 +674,23 @@ export default function AdminTeachersPage() {
                             ))}
                           </ul>
                         ) : (
-                          <p className="mt-1.5 text-[11px] text-amber-600">
-                            No classes assigned yet
-                          </p>
+                          teacher.role === "SECONDARY_TEACHER" && (
+                            <p className="mt-1.5 text-[11px] text-amber-600">
+                              No classes assigned yet
+                            </p>
+                          )
                         )}
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
-                        {/* Grades 1-8 classes live in their own surface; only
-                            (de)activation is offered for them here. */}
-                        {teacher.role === "SECONDARY_TEACHER" && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setEditing(teacher)}
-                            disabled={busyId === teacher.id}
-                          >
-                            <Pencil className="mr-1.5 h-4 w-4" /> Edit
-                          </Button>
-                        )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setEditing(teacher)}
+                          disabled={busyId === teacher.id}
+                        >
+                          <Pencil className="mr-1.5 h-4 w-4" /> Edit
+                        </Button>
                         <Button
                           type="button"
                           variant="secondary"

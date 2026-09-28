@@ -67,6 +67,8 @@ const TEACHER_COLORS: Record<string, string> = {
   randomPicker: "#10B981",
 };
 
+const ELEMENTARY_SCHOOL_ADMIN_KEYS = new Set(["dashboard", "teachers", "subjects", "subscription"]);
+
 export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const t = useTranslations("nav");
@@ -133,7 +135,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "analytics",  href: "/school-admin/analytics",    icon: BarChart2 },
     { labelKey: "subscription", href: "/school-admin/subscription", icon: CreditCard },
     { labelKey: "settings",   href: "/school-admin/settings",     icon: Settings },
-  ];
+  ].filter(
+    // An elementary school has no students on the school side, so its admin
+    // manages teachers, its subject list and the subscription only.
+    (item) => ent.schoolLevel !== "ELEMENTARY" || ELEMENTARY_SCHOOL_ADMIN_KEYS.has(item.labelKey),
+  );
 
   const teacherNavItems: NavItem[] = [
     { labelKey: "dashboard",     href: "/teacher",              icon: Home, exact: true },

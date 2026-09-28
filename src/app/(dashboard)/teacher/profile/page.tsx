@@ -37,8 +37,10 @@ interface TeacherProfile {
 
 interface Assignment {
   id: string;
-  subject: string;
-  grade: number;
+  /** Blank when the school recorded a whole grade ("all of grade 3"). */
+  subject: string | null;
+  /** Blank when the school recorded a subject across grades. */
+  grade: number | null;
 }
 
 // Grades 1-8 only. This is the elementary teacher's own profile, and the API
@@ -121,7 +123,8 @@ export default function TeacherProfilePage() {
       }
       setAssignments((prev) =>
         [...prev, data.assignment].sort(
-          (a, b) => a.grade - b.grade || a.subject.localeCompare(b.subject),
+          (a, b) =>
+            (a.grade ?? 0) - (b.grade ?? 0) || (a.subject ?? "").localeCompare(b.subject ?? ""),
         ),
       );
       setNewSubject("");
@@ -331,15 +334,19 @@ export default function TeacherProfilePage() {
                 key={a.id}
                 className="inline-flex items-center gap-2 rounded-full bg-primary/10 py-1.5 pl-3.5 pr-1.5 text-sm font-semibold text-primary"
               >
-                <span>{a.subject}</span>
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs">
-                  {t("gradeOption", { grade: a.grade })}
-                </span>
+                {a.subject && <span>{a.subject}</span>}
+                {a.grade !== null && (
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs">
+                    {t("gradeOption", { grade: a.grade })}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => removeAssignment(a.id)}
                   disabled={removingId === a.id}
-                  aria-label={`${a.subject} · ${t("gradeOption", { grade: a.grade })}`}
+                  aria-label={[a.subject, a.grade !== null ? t("gradeOption", { grade: a.grade }) : null]
+                    .filter(Boolean)
+                    .join(" · ")}
                   className="flex h-6 w-6 items-center justify-center rounded-full text-primary/70 transition hover:bg-primary/20 hover:text-primary disabled:opacity-50"
                 >
                   {removingId === a.id ? (

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { isFullClass, isSecondaryGrade } from "@/lib/teacher-band";
 import { subjectEquals } from "@/lib/subject";
 import { sseResponse } from "@/lib/sse";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
@@ -154,7 +154,7 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
     where: { id: teachingAssignmentId, teacherId: user.id },
     select: { id: true, subject: true, grade: true, section: true },
   });
-  if (!klass) {
+  if (!klass || !isFullClass(klass)) {
     return NextResponse.json({ error: "Class not found" }, { status: 404 });
   }
   if (!isSecondaryGrade(klass.grade)) {

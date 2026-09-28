@@ -28,6 +28,15 @@ enum SchoolType {
   PRIVATE
 }
 
+/// Elementary (grades 1-8) and secondary (grades 9-12) schools are separate
+/// institutions. The level decides which teacher role the school admin creates
+/// (TEACHER vs SECONDARY_TEACHER) and whether the school may enrol students —
+/// elementary schools have none. Fixed at creation.
+enum SchoolLevel {
+  ELEMENTARY
+  SECONDARY
+}
+
 enum ProcessingStatus {
   PENDING
   PROCESSING
@@ -158,6 +167,7 @@ enum PricingModel {
   FLAT // fixed price (student plans)
   PER_STUDENT // school plans: price = rate × enrolled students
   TIERED // school plans: price from the bracket matching student count
+  PER_TEACHER // school plans: price = rate × active teachers (elementary schools have no students)
 }
 
 enum BillingInterval {
@@ -269,8 +279,11 @@ model TeachingAssignment {
   id        String   @id @default(cuid())
   teacherId String
   teacher   User     @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
-  subject   String // free-text (suggested from the Subject list), matching GameContent/Textbook
-  grade     Int
+  // free-text (suggested from the Subject list), matching GameContent/Textbook.
+  // Subject and grade are always set on secondary rows. A grades 1-8 row may
+  // leave either blank: "teaches all of grade 3" or "teaches Mathematics".
+  subject   String?
+  grade     Int?
   // The one section of that grade this row covers, normalised to upper case
   // (e.g. "A"). A grade can run 20 sections and no teacher takes them all, so
   // the section — not the grade — is the real unit of a secondary class.
@@ -462,11 +475,15 @@ model AiTaskRoute {
 // ─── Subjects ───────────────────────────────────────────────
 
 model Subject {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String      @id @default(cuid())
+  name      String
+  /// Elementary (grades 1-8) and secondary schools teach different subjects,
+  /// so each level keeps its own list; the same name may appear in both.
+  level     SchoolLevel @default(SECONDARY)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
+  @@unique([name, level])
   @@map("subjects")
 }
 
@@ -510,6 +527,7 @@ model School {
   region           String
   city             String
   type             SchoolType @default(PUBLIC)
+  level            SchoolLevel @default(SECONDARY)
   subscriptionTier String?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt

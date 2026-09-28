@@ -520,11 +520,7 @@
     "gradePersonalise": "ይህ ፈተናዎችን እና ይዘቶችን ለካሪኩለምዎ ለማላጀት ይረዳናል።",
     "saving": "እየተቀመጠ ነው…",
     "continueToDashboard": "ወደ ዳሽቦርድ ቀጥሉ",
-    "accountTypeQuestion": "EthioLearn እንዴት ይጠቀማሉ?",
-    "accountStudent": "ተማሪ",
-    "accountTeacher": "መምህር",
-    "accountStudentHint": "ፈተና ይውሰዱ፣ ይጫወቱ እና እድገትዎን ይከታተሉ",
-    "accountTeacherHint": "የክፍል ጨዋታዎችና እንቅስቃሴዎች ይፍጠሩ"
+    "teacherSignupNote": "መምህራን፦ መለያዎን የትምህርት ቤትዎ አስተዳዳሪ ይፈጥራል። በስልክ ቁጥርዎ ብቻ ይግቡ።"
   },
   "student": {
     "welcome": "እንኳን ደህና መጡ",

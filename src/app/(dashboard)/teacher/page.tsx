@@ -96,7 +96,9 @@ function TeacherDashboardInner() {
   const name = session?.user?.name ?? "";
 
   const [games, setGames] = useState<SetSummary[] | null>(null);
-  const [assignments, setAssignments] = useState<{ subject: string; grade: number }[]>([]);
+  // Either may be blank: a school admin can record "all of grade 3" or
+  // "Mathematics" without the other.
+  const [assignments, setAssignments] = useState<{ subject: string | null; grade: number | null }[]>([]);
 
   const load = () =>
     fetch("/api/teacher/games")
@@ -116,11 +118,14 @@ function TeacherDashboardInner() {
   // Distinct subjects / grades from the teacher's assignments (source of truth
   // when set; otherwise we fall back to what's inferred from created game sets).
   const teachSubjects = useMemo(
-    () => [...new Set(assignments.map((a) => a.subject.trim()).filter(Boolean))],
+    () => [...new Set(assignments.map((a) => (a.subject ?? "").trim()).filter(Boolean))],
     [assignments],
   );
   const teachGrades = useMemo(
-    () => [...new Set(assignments.map((a) => a.grade))].sort((a, b) => a - b),
+    () =>
+      [...new Set(assignments.map((a) => a.grade))]
+        .filter((g): g is number => g !== null)
+        .sort((a, b) => a - b),
     [assignments],
   );
 

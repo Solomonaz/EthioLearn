@@ -8,18 +8,20 @@ import {
   normalizePhone,
   parseClasses,
 } from "@/lib/teacher-classes";
+import { teacherRoleForLevel } from "@/lib/teacher-band";
 
 /**
  * Teacher provisioning and listing — SUPER_ADMIN and SCHOOL_ADMIN.
  *
- * POST creates SECONDARY teachers only (grades 9-12). Grades 1-8 teachers keep
- * their existing self-registration flow and are never created here.
+ * POST creates the teacher role that matches the SCHOOL'S LEVEL: a grades 1-8
+ * `TEACHER` at an elementary school, a grades 9-12 `SECONDARY_TEACHER` at a
+ * secondary one (or when a super admin leaves the teacher unassigned). The
+ * client never picks the role. There is no teacher self-registration.
  *
- * GET lists secondary teachers. A SUPER_ADMIN may also list grades 1-8
- * (`TEACHER`) accounts via `?band=elementary|all`, so the platform owner can
- * track both. A SCHOOL_ADMIN stays secondary-only: elementary and secondary are
- * separate institutions, and a secondary school's admin must never see a
- * grades 1-8 teacher.
+ * GET lists the teachers of the caller's own level. A SUPER_ADMIN may widen it
+ * with `?band=elementary|secondary|all`. A SCHOOL_ADMIN is pinned to their
+ * school's level: elementary and secondary are separate institutions, and
+ * neither school's admin may see the other band's teachers.
  *
  * Teachers are created by an admin rather than self-registering, so `schoolId`
  * is authoritative instead of self-claimed — every school-scoped cohort query
@@ -31,7 +33,7 @@ import {
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "SCHOOL_ADMIN"];
 
-// ─── POST: create one secondary teacher ──────────────────────────────────
+// ─── POST: create one teacher ─────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -77,30 +79,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const parsed = parseClasses(body.assignments);
+  // ── School scope ──────────────────────────────────────────────────────
+  // A school admin always provisions into their own school; the body cannot
+  // override it. A super admin may name any school, or leave it unassigned.
+  const schoolId: string | null =
+    user.role === "SCHOOL_ADMIN"
+      ? user.schoolId
+      : typeof body.schoolId === "string" && body.schoolId
+        ? body.schoolId
+        : null;
+  let level: "ELEMENTARY" | "SECONDARY" | null = null;
+  if (schoolId) {
+    const school = await db.school.findUnique({
+      where: { id: schoolId },
+      select: { level: true },
+    });
+    if (!school) {
+      return NextResponse.json({ error: "School not found." }, { status: 404 });
+    }
+    level = school.level;
+  }
+  const role = teacherRoleForLevel(level);
+  const band = role === "TEACHER" ? "elementary" : "secondary";
+
+  const parsed = parseClasses(body.assignments, band);
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
   const classes = await canonicalizeClasses(parsed.classes);
-
-  // ── School scope ──────────────────────────────────────────────────────
-  // A school admin always provisions into their own school; the body cannot
-  // override it. A super admin may name any school, or leave it unassigned.
-  let schoolId: string | null;
-  if (user.role === "SCHOOL_ADMIN") {
-    schoolId = user.schoolId;
-  } else {
-    schoolId = typeof body.schoolId === "string" && body.schoolId ? body.schoolId : null;
-    if (schoolId) {
-      const school = await db.school.findUnique({
-        where: { id: schoolId },
-        select: { id: true },
-      });
-      if (!school) {
-        return NextResponse.json({ error: "School not found." }, { status: 404 });
-      }
-    }
-  }
 
   const existing = await db.user.findUnique({
     where: { phoneNumber },
@@ -119,7 +125,7 @@ export async function POST(req: NextRequest) {
     data: {
       name,
       phoneNumber,
-      role: "SECONDARY_TEACHER",
+      role,
       schoolId,
       teachingAssignments: classes.length
         ? {
@@ -185,13 +191,17 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
 
-  // Only a super admin can widen the band; everyone else is pinned to
-  // secondary, whatever the query string says.
+  // Only a super admin can choose the band; a school admin is pinned to their
+  // own school's level, whatever the query string says.
   const isSuperAdmin = user.role === "SUPER_ADMIN";
   const requested = searchParams.get("band");
-  const band: Band =
-    isSuperAdmin && (requested === "elementary" || requested === "all")
+  const schoolLevel = user.school?.level ?? null;
+  const band: Band = isSuperAdmin
+    ? requested === "elementary" || requested === "all"
       ? requested
+      : "secondary"
+    : schoolLevel === "ELEMENTARY"
+      ? "elementary"
       : "secondary";
 
   // A school admin sees only their own school; a super admin sees everyone.
@@ -230,8 +240,9 @@ export async function GET(req: NextRequest) {
           orderBy: [{ grade: "asc" }, { subject: "asc" }, { section: "asc" }],
           select: { id: true, subject: true, grade: true, section: true },
         },
-        // Classroom games are the grades 1-8 teacher's main activity.
-        _count: { select: { hostedGameRooms: true } },
+        // Game sets are the trace a grades 1-8 teacher leaves: classroom
+        // games run on one shared screen and are not logged per play.
+        _count: { select: { gameContents: true } },
       },
     }),
     db.user.count({ where }),
@@ -256,10 +267,13 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     teachers: teachers.map(({ _count, ...t }) => ({
       ...t,
-      gamesHosted: _count.hostedGameRooms,
+      gameSets: _count.gameContents,
     })),
     band,
     counts,
+    // The caller's own school level, so the page can show the matching form
+    // (a school admin); null for a super admin.
+    schoolLevel: isSuperAdmin ? null : schoolLevel,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
   });
 }

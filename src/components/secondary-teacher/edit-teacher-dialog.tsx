@@ -6,26 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
-import { SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
+import { PRIMARY_MAX_GRADE, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
 import { MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
 
 /**
- * Edit a secondary teacher: their name, the phone number they sign in with,
- * and the classes they hold.
+ * Edit a teacher: their name, the phone number they sign in with, and the
+ * classes they hold. Grades 1-8 teachers (`elementary`) hold entries with no
+ * section, each naming a subject, a grade, or both — and may hold none.
  *
  * Band and school are deliberately absent. Moving a teacher between grades 1-8
  * and 9-12, or between schools, changes which surface they land on and which
  * students they can read — that is a re-provision, not a field edit.
  */
 
-const GRADES = Array.from(
+const SECONDARY_GRADES = Array.from(
   { length: SECONDARY_MAX_GRADE - SECONDARY_MIN_GRADE + 1 },
   (_, i) => i + SECONDARY_MIN_GRADE,
 );
+const ELEMENTARY_GRADES = Array.from({ length: PRIMARY_MAX_GRADE }, (_, i) => i + 1);
 
 export interface EditableClass {
-  subject: string;
-  grade: number;
+  /** Blank only on an elementary "whole grade" entry. */
+  subject: string | null;
+  /** Blank only on an elementary "one subject" entry. */
+  grade: number | null;
   section: string | null;
 }
 
@@ -38,13 +42,17 @@ export interface EditableTeacher {
 
 export function EditTeacherDialog({
   teacher,
+  elementary = false,
   onClose,
   onSaved,
 }: {
   teacher: EditableTeacher;
+  /** A grades 1-8 teacher: grades 1-8, no sections, classes optional. */
+  elementary?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const grades = elementary ? ELEMENTARY_GRADES : SECONDARY_GRADES;
   const [name, setName] = useState(teacher.name);
   // Stored as +251XXXXXXXXX; the field shows the local part, like the add form.
   const [phone, setPhone] = useState(
@@ -56,37 +64,40 @@ export function EditTeacherDialog({
 
   const [subjects, setSubjects] = useState<string[]>([]);
   const [draftSubject, setDraftSubject] = useState("");
-  const [draftGrade, setDraftGrade] = useState<number>(SECONDARY_MIN_GRADE);
+  // Elementary entries start on "All subjects" / "All grades" (blank).
+  const [draftGrade, setDraftGrade] = useState<number | null>(elementary ? null : grades[0]);
   const [draftSection, setDraftSection] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch("/api/subjects")
+    // The teacher's own level's list. A school admin gets their school's list
+    // whatever is asked; the level only steers the super admin.
+    fetch(`/api/subjects?level=${elementary ? "ELEMENTARY" : "SECONDARY"}`)
       .then((r) => (r.ok ? r.json() : { subjects: [] }))
       .then((d) => {
         const names = (d.subjects ?? []).map((s: { name: string }) => s.name);
         setSubjects(names);
-        setDraftSubject((cur) => cur || names[0] || "");
+        if (!elementary) setDraftSubject((cur) => cur || names[0] || "");
       })
       .catch(() => setSubjects([]));
-  }, []);
+  }, [elementary]);
 
   function addClass() {
-    const subject = draftSubject.trim();
-    const section = normalizeSection(draftSection);
-    if (!subject) {
-      toast.error("Pick a subject first.");
+    const subject = draftSubject.trim() || null;
+    const section = elementary ? null : normalizeSection(draftSection);
+    if (elementary ? !subject && draftGrade === null : !subject) {
+      toast.error(elementary ? "Pick a subject, a grade, or both." : "Pick a subject first.");
       return;
     }
-    if (!section) {
+    if (!elementary && !section) {
       toast.error("Enter the section, for example A.");
       return;
     }
     const exists = classes.some(
       (c) =>
-        c.subject.toLowerCase() === subject.toLowerCase() &&
+        (c.subject ?? "").toLowerCase() === (subject ?? "").toLowerCase() &&
         c.grade === draftGrade &&
-        (c.section ?? "") === section,
+        (c.section ?? "") === (section ?? ""),
     );
     if (exists) {
       toast.error("That class is already on the list.");
@@ -105,7 +116,7 @@ export function EditTeacherDialog({
       e.preventDefault();
       if (saving) return;
 
-      if (classes.length === 0) {
+      if (!elementary && classes.length === 0) {
         toast.error("A teacher needs at least one class.");
         return;
       }
@@ -140,7 +151,7 @@ export function EditTeacherDialog({
         setSaving(false);
       }
     },
-    [saving, classes, phone, name, teacher.id, onSaved, onClose],
+    [saving, classes, phone, name, teacher.id, onSaved, onClose, elementary],
   );
 
   const fieldClass =
@@ -233,13 +244,14 @@ export function EditTeacherDialog({
                     key={`${c.subject}-${c.grade}-${c.section ?? ""}`}
                     className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
                   >
-                    {c.subject} · G{c.grade}
-                    {c.section ? ` ${c.section}` : " (all sections)"}
+                    {c.subject ?? "All subjects"} ·{" "}
+                    {c.grade !== null ? `G${c.grade}` : "all grades"}
+                    {c.section ? ` ${c.section}` : ""}
                     <button
                       type="button"
                       onClick={() => removeClass(i)}
                       disabled={saving}
-                      aria-label={`Remove ${c.subject} grade ${c.grade}`}
+                      aria-label={`Remove ${c.subject ?? "all subjects"}, ${c.grade !== null ? `grade ${c.grade}` : "all grades"}`}
                       className="text-primary/70 hover:text-primary disabled:opacity-40"
                     >
                       <XCircle className="h-3.5 w-3.5" />
@@ -248,9 +260,11 @@ export function EditTeacherDialog({
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-amber-600">
-                No classes — add at least one before saving.
-              </p>
+              !elementary && (
+                <p className="text-xs text-amber-600">
+                  No classes — add at least one before saving.
+                </p>
+              )
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -258,10 +272,11 @@ export function EditTeacherDialog({
                 aria-label="Subject"
                 value={draftSubject}
                 onChange={(e) => setDraftSubject(e.target.value)}
-                disabled={saving || subjects.length === 0}
+                disabled={saving || (!elementary && subjects.length === 0)}
                 className={`min-w-0 flex-1 ${fieldClass}`}
               >
-                {subjects.length === 0 && <option value="">No subjects yet</option>}
+                {elementary && <option value="">All subjects</option>}
+                {!elementary && subjects.length === 0 && <option value="">No subjects yet</option>}
                 {subjects.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -270,31 +285,36 @@ export function EditTeacherDialog({
               </select>
               <select
                 aria-label="Grade"
-                value={draftGrade}
-                onChange={(e) => setDraftGrade(Number(e.target.value))}
+                value={draftGrade ?? ""}
+                onChange={(e) =>
+                  setDraftGrade(e.target.value === "" ? null : Number(e.target.value))
+                }
                 disabled={saving}
-                className={`w-28 ${fieldClass}`}
+                className={`w-32 ${fieldClass}`}
               >
-                {GRADES.map((g) => (
+                {elementary && <option value="">All grades</option>}
+                {grades.map((g) => (
                   <option key={g} value={g}>
                     Grade {g}
                   </option>
                 ))}
               </select>
-              <Input
-                aria-label="Section"
-                placeholder="Section"
-                value={draftSection}
-                onChange={(e) => setDraftSection(e.target.value)}
-                disabled={saving}
-                maxLength={MAX_SECTION_LENGTH}
-                className="w-24"
-              />
+              {!elementary && (
+                <Input
+                  aria-label="Section"
+                  placeholder="Section"
+                  value={draftSection}
+                  onChange={(e) => setDraftSection(e.target.value)}
+                  disabled={saving}
+                  maxLength={MAX_SECTION_LENGTH}
+                  className="w-24"
+                />
+              )}
               <Button
                 type="button"
                 variant="secondary"
                 onClick={addClass}
-                disabled={saving || subjects.length === 0}
+                disabled={saving || (!elementary && subjects.length === 0)}
               >
                 <Plus className="h-4 w-4" />
               </Button>

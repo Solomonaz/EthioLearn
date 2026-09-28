@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { isFullClass, isSecondaryGrade } from "@/lib/teacher-band";
 import { subjectFilter } from "@/lib/subject";
 import { INSIGHT_WINDOW_DAYS } from "@/lib/class-insights";
 
@@ -86,7 +86,7 @@ export async function GET(req: Request) {
   // Defence in depth: the write path already restricts this role to grades
   // 9-12, so anything outside that band is stale data and is ignored rather
   // than silently widening what this teacher can read.
-  const inBand = assignments.filter((a) => isSecondaryGrade(a.grade));
+  const inBand = assignments.filter(isFullClass).filter((a) => isSecondaryGrade(a.grade));
 
   if (inBand.length === 0) {
     return NextResponse.json({

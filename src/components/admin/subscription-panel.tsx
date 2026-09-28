@@ -61,16 +61,19 @@ const selectClass =
 function planPriceSummary(p: Plan): string {
   const interval = billingIntervalLabel(p.billingInterval);
   if (p.pricingModel === "PER_STUDENT") return `${formatMoney(p.price, p.currency)} per student${interval}`;
+  if (p.pricingModel === "PER_TEACHER") return `${formatMoney(p.price, p.currency)} per teacher${interval}`;
   if (p.pricingModel === "TIERED") return `Tiered by student count${interval}`;
   return `${formatMoney(p.price, p.currency)}${interval}`;
 }
 
-/** The plan's secondary-teacher terms in one line. */
+/** The plan's teacher terms in one line. */
 function teacherTermsSummary(p: Plan): string {
   const seats =
-    p.pricePerTeacher != null
-      ? `${formatMoney(p.pricePerTeacher, p.currency)} per teacher`
-      : "Teachers not charged";
+    p.pricingModel === "PER_TEACHER"
+      ? "Priced per active teacher"
+      : p.pricePerTeacher != null
+        ? `${formatMoney(p.pricePerTeacher, p.currency)} per teacher`
+        : "Teachers not charged";
   const ai =
     p.teacherAiMonthlyLimit != null
       ? `${p.teacherAiMonthlyLimit} AI credits per teacher per month`
@@ -91,6 +94,8 @@ export function SubscriptionPanel({
   const [current, setCurrent] = useState<Subscription | null>(null);
   const [studentCount, setStudentCount] = useState<number>(0);
   const [teacherCount, setTeacherCount] = useState<number>(0);
+  // An elementary school has no students and is priced per teacher only.
+  const [schoolLevel, setSchoolLevel] = useState<"ELEMENTARY" | "SECONDARY" | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -110,7 +115,12 @@ export function SubscriptionPanel({
       ]);
       const plansData = plansRes.ok ? await plansRes.json() : { plans: [] };
       const subData = subRes.ok ? await subRes.json() : { subscription: null };
-      setPlans(plansData.plans ?? []);
+      const level = subData.schoolLevel ?? null;
+      const allPlans: Plan[] = plansData.plans ?? [];
+      setPlans(
+        level === "ELEMENTARY" ? allPlans.filter((p) => p.pricingModel === "PER_TEACHER") : allPlans,
+      );
+      setSchoolLevel(level);
       setCurrent(subData.subscription ?? null);
       setStudentCount(subData.studentCount ?? 0);
       setTeacherCount(subData.teacherCount ?? 0);
@@ -221,13 +231,19 @@ export function SubscriptionPanel({
                 <div className="mt-2 grid gap-1 text-xs text-text-secondary sm:grid-cols-2">
                   <span>Started {new Date(current.startDate).toLocaleDateString()}</span>
                   {current.endDate && <span>Ends {new Date(current.endDate).toLocaleDateString()}</span>}
-                  {current.studentCountSnapshot !== null && (
-                    <span>
-                      Priced for {current.studentCountSnapshot} students
-                      {current.teacherCountSnapshot !== null &&
-                        ` and ${current.teacherCountSnapshot} teacher${current.teacherCountSnapshot === 1 ? "" : "s"}`}
-                    </span>
-                  )}
+                  {current.studentCountSnapshot !== null &&
+                    (schoolLevel === "ELEMENTARY" ? (
+                      <span>
+                        Priced for {current.teacherCountSnapshot ?? 0} teacher
+                        {current.teacherCountSnapshot === 1 ? "" : "s"}
+                      </span>
+                    ) : (
+                      <span>
+                        Priced for {current.studentCountSnapshot} students
+                        {current.teacherCountSnapshot !== null &&
+                          ` and ${current.teacherCountSnapshot} teacher${current.teacherCountSnapshot === 1 ? "" : "s"}`}
+                      </span>
+                    ))}
                   {audience === "SCHOOL" && (
                     <span className="sm:col-span-2">{teacherTermsSummary(current.plan)}</span>
                   )}
@@ -304,18 +320,29 @@ export function SubscriptionPanel({
                   {current ? "Change plan" : "Assign a plan"}
                 </p>
 
-                {audience === "SCHOOL" && (
-                  <p className="text-xs text-text-secondary">
-                    This school currently has <strong>{studentCount}</strong> student
-                    {studentCount === 1 ? "" : "s"} and <strong>{teacherCount}</strong> active secondary
-                    teacher{teacherCount === 1 ? "" : "s"} — school plans are priced on these counts.
-                  </p>
-                )}
+                {audience === "SCHOOL" &&
+                  (schoolLevel === "ELEMENTARY" ? (
+                    <p className="text-xs text-text-secondary">
+                      This elementary school has <strong>{teacherCount}</strong> active teacher
+                      {teacherCount === 1 ? "" : "s"} and no students — only per-teacher plans apply.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-text-secondary">
+                      This school currently has <strong>{studentCount}</strong> student
+                      {studentCount === 1 ? "" : "s"} and <strong>{teacherCount}</strong> active secondary
+                      teacher{teacherCount === 1 ? "" : "s"} — school plans are priced on these counts.
+                    </p>
+                  ))}
 
                 {plans.length === 0 ? (
                   <p className="text-sm text-text-secondary">
-                    No active {audience === "SCHOOL" ? "school" : "student"} plans exist yet. Create one on the
-                    Pricing page first.
+                    No active{" "}
+                    {audience === "STUDENT"
+                      ? "student"
+                      : schoolLevel === "ELEMENTARY"
+                        ? "per-teacher school"
+                        : "school"}{" "}
+                    plans exist yet. Create one on the Pricing page first.
                   </p>
                 ) : (
                   <>

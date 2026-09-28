@@ -1,3 +1,4 @@
+import type { SchoolLevel } from "@prisma/client";
 import { db } from "./db";
 
 /**
@@ -20,6 +21,22 @@ import { db } from "./db";
  * can. Constraining the pickers to the managed list is what prevents that, and
  * `canonicalSubject` is the server-side half of it.
  */
+
+/**
+ * Which subject list a user works from. Grades 1-8 teachers and elementary
+ * school admins use the elementary list; everyone else the secondary one.
+ */
+export function subjectLevelFor(
+  user: { role: string; school?: { level: SchoolLevel } | null } | null | undefined,
+): SchoolLevel {
+  if (user?.role === "TEACHER" || user?.school?.level === "ELEMENTARY") return "ELEMENTARY";
+  return "SECONDARY";
+}
+
+/** Parse a `level` query/body value; null when absent or invalid. */
+export function parseSchoolLevel(v: unknown): SchoolLevel | null {
+  return v === "ELEMENTARY" || v === "SECONDARY" ? v : null;
+}
 
 /** Comparison key: trimmed, inner whitespace collapsed, lower-cased. */
 export function subjectKey(subject: string | null | undefined): string {

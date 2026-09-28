@@ -40,6 +40,7 @@ interface SchoolDetail {
   region: string;
   city: string;
   type: "PUBLIC" | "PRIVATE";
+  level: "ELEMENTARY" | "SECONDARY";
   createdAt: string;
   admins: SchoolAdmin[];
   _count?: {
@@ -367,6 +368,16 @@ export default function SchoolDetailPage() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase text-text-muted">
+                  Level
+                </p>
+                <p className="mt-1 text-sm text-text-primary">
+                  {school.level === "ELEMENTARY"
+                    ? "Elementary (grades 1–8) · teachers only"
+                    : "Secondary (grades 9–12)"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-text-muted">
                   Created
                 </p>
                 <p className="mt-1 text-sm text-text-primary">
@@ -389,7 +400,7 @@ export default function SchoolDetailPage() {
               <p className="text-2xl font-bold text-text-primary">
                 {school._count?.users ?? 0}
               </p>
-              <p className="text-xs text-text-secondary">Students</p>
+              <p className="text-xs text-text-secondary">Users</p>
             </div>
           </CardContent>
         </Card>

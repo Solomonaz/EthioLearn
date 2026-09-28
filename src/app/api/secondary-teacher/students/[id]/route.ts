@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { getMasteryLevel, INSIGHT_WINDOW_DAYS } from "@/lib/class-insights";
 import { subjectInFilter } from "@/lib/subject";
+import { isFullClass } from "@/lib/teacher-band";
 
 /**
  * One student, as their teacher sees them.
@@ -85,7 +86,7 @@ export async function GET(
       OR: [{ section: student.section }, { section: null }],
     },
     select: { id: true, subject: true, grade: true, section: true },
-  });
+  }).then((rows) => rows.filter(isFullClass));
 
   if (myClasses.length === 0) {
     return NextResponse.json({ error: "Student not found" }, { status: 404 });

@@ -1,5 +1,5 @@
 /**
- * Secondary teachers' AI access, tied to their school's plan.
+ * Teachers' AI access (both bands), tied to their school's plan.
  *
  * Two rules:
  *   1. The school must have a live subscription (skipped while pricing is
@@ -119,7 +119,7 @@ export function teacherAiDenial(
       status: 402,
       error:
         "Your school's EthioLearn subscription is not active, so AI writing is paused. " +
-        "Your classes, activities and saved materials still work — ask your school admin to renew.",
+        "Everything else you use in class still works — ask your school admin to renew.",
     };
   }
   if (credits > 0 && status.limit !== null && status.used + credits > status.limit) {
