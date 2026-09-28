@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { logout } from "@/lib/logout";
 import { toast } from "sonner";
 import {
   User as UserIcon,
@@ -434,7 +435,7 @@ export default function TeacherProfilePage() {
       {/* ── Sign out ───────────────────────────────────────── */}
       <div className="flex justify-end">
         <button
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={logout}
           className="inline-flex items-center gap-2 rounded-full border border-error/30 px-5 py-2.5 text-sm font-bold text-error transition hover:bg-error/10"
         >
           <LogOut className="h-4 w-4" /> {c("signOut")}

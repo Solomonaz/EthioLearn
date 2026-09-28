@@ -29,7 +29,8 @@ import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { logout } from "@/lib/logout";
 import { useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
@@ -679,7 +680,7 @@ function StudentSettingsInner() {
               variant="outline"
               size="sm"
               className="border-red-200 text-error hover:bg-red-50"
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={logout}
             >
               <LogOut className="mr-1 h-4 w-4" />
               Sign Out

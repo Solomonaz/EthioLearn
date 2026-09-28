@@ -10,7 +10,7 @@ export default async function StudentLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?callbackUrl=/student");
+    redirect("/login?callbackUrl=/student&rejected=1");
   }
 
   if (user.role === "SUPER_ADMIN") {

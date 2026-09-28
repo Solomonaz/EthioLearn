@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { logout } from "@/lib/logout";
 import { Menu, X, LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
               size="sm"
             />
             <button
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={logout}
               className="rounded-lg p-2 text-text-secondary hover:bg-border/50"
               aria-label="Sign out"
             >

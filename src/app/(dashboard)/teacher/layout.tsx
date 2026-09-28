@@ -14,7 +14,7 @@ export default async function TeacherLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?callbackUrl=/teacher");
+    redirect("/login?callbackUrl=/teacher&rejected=1");
   }
 
   if (user.role === "SUPER_ADMIN") {

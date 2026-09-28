@@ -44,10 +44,30 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     });
   };
 
+  // A page restored from the back/forward cache (Back/Forward after logout)
+  // runs no server check at all — Safari restores even no-store pages. Ask the
+  // server whether the session still exists, and leave if it does not.
+  useEffect(() => {
+    const onPageShow = async (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      try {
+        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        const data = await res.json();
+        if (!data?.user) window.location.replace("/login");
+      } catch {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
-      router.replace("/login");
+      // Hard navigation (not router.replace) so the client router cache of
+      // dashboard pages is discarded along with the session.
+      window.location.replace("/login");
       return;
     }
     const user = session?.user as { profileIncomplete?: boolean } | undefined;

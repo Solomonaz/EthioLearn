@@ -45,15 +45,18 @@ function LoginForm() {
   const initialError   = tgErrorMsg ||
     (AUTH_ERROR_MESSAGES[errorCode] ?? (errorCode ? AUTH_ERROR_MESSAGES.Default : ""));
 
+  // Set by a dashboard layout that just turned this session away (deactivated
+  // or deleted account) — see proxy.ts.
+  const rejected = searchParams.get("rejected") === "1";
+
   useEffect(() => {
-    // With a callbackUrl present, a dashboard layout just turned this session
-    // away (deactivated or deleted account). Auto-redirecting back would loop,
-    // so show the form and let them sign in again.
-    if (status === "authenticated" && !callbackUrl) {
+    // Auto-redirecting a rejected session back would loop, so show the form
+    // and let them sign in again. Anyone else who is signed in leaves.
+    if (status === "authenticated" && !rejected) {
       const role = (session?.user as any)?.role;
       router.replace(homeRouteForRole(role));
     }
-  }, [status, session, router, callbackUrl]);
+  }, [status, session, router, rejected]);
 
   const [step, setStep]               = useState<"input" | "otp">("input");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -115,12 +118,15 @@ function LoginForm() {
             callbackUrl === home ||
             callbackUrl.startsWith(home + "/") ||
             callbackUrl.startsWith(home + "?");
+          // `replace`, not `push`: the login page must not stay in history,
+          // or Back from the dashboard lands on a login form for a signed-in
+          // user.
           if (isSafeRelative && isOwnSurface) {
-            router.push(callbackUrl);
+            router.replace(callbackUrl);
             return;
           }
         }
-        router.push(home);
+        router.replace(home);
       }
     } catch {
       setError("Network error. Please check your connection and try again.");

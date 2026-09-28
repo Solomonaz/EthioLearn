@@ -10,7 +10,7 @@ export default async function SchoolAdminLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?callbackUrl=/school-admin");
+    redirect("/login?callbackUrl=/school-admin&rejected=1");
   }
 
   // Only SCHOOL_ADMIN can access /school-admin routes

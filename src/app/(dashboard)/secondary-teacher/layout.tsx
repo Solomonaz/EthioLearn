@@ -20,7 +20,7 @@ export default async function SecondaryTeacherLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?callbackUrl=/secondary-teacher");
+    redirect("/login?callbackUrl=/secondary-teacher&rejected=1");
   }
 
   if (user.role === "SUPER_ADMIN") {

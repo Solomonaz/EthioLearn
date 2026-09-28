@@ -14,6 +14,13 @@ import { homeRouteForRole } from "@/lib/teacher-band";
 
 const AUTH_PATHS = ["/login", "/register"];
 
+/**
+ * Public pages a signed-in user never sees: they go straight to their
+ * dashboard. Includes the landing page, so Back from a dashboard to "/" lands
+ * back on the dashboard instead of a page offering "Sign in".
+ */
+const SIGNED_OUT_ONLY_PATHS = ["/", ...AUTH_PATHS];
+
 /** Every surface that requires a session. Each is also some role's home. */
 const PROTECTED_PATHS = [
   "/student",
@@ -32,6 +39,19 @@ function isUnder(pathname: string, base: string): boolean {
   return pathname === base || pathname.startsWith(base + "/");
 }
 
+/**
+ * Forbid the browser from keeping a copy of a session-dependent page. Without
+ * this, Back/Forward after logout can restore a dashboard from the
+ * back/forward cache without ever asking the server, and the login page can
+ * reappear for a user who is already signed in.
+ */
+function noStore(res: NextResponse): NextResponse {
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.headers.set("Pragma", "no-cache");
+  res.headers.set("Expires", "0");
+  return res;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -43,18 +63,23 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = !!token;
   const home = homeRouteForRole(token?.role as string | undefined);
 
-  // A `callbackUrl` on the login page means a server component just refused
-  // this session — the account was deactivated or removed while its JWT was
-  // still valid. Bouncing such a user back to their dashboard would loop:
-  // proxy trusts the token, the layout checks the database and disagrees.
-  // Let the login page render instead, so they can sign in again.
-  const rejectedBySurface = request.nextUrl.searchParams.has("callbackUrl");
+  // `rejected=1` on the login page means a dashboard layout just refused this
+  // session — the account was deactivated or removed while its JWT was still
+  // valid. Bouncing such a user back to their dashboard would loop: proxy
+  // trusts the token, the layout checks the database and disagrees. Let the
+  // login page render instead, so they can sign in again.
+  //
+  // Deliberately NOT keyed on `callbackUrl`: the ordinary signed-out redirect
+  // below adds one too, and that history entry must still send a signed-in
+  // user (arriving via Back/Forward) to their dashboard, not a login form.
+  const rejectedBySurface = request.nextUrl.searchParams.get("rejected") === "1";
 
-  // Signed-in users on the login/register pages → their own dashboard.
+  // Signed-in users on the landing, login or register page → their own
+  // dashboard. "/" is matched exactly — isUnder("/") would match every path.
   if (
     isAuthenticated &&
     !rejectedBySurface &&
-    AUTH_PATHS.some((p) => isUnder(pathname, p))
+    SIGNED_OUT_ONLY_PATHS.some((p) => (p === "/" ? pathname === "/" : isUnder(pathname, p)))
   ) {
     return NextResponse.redirect(new URL(home, request.url));
   }
@@ -75,11 +100,14 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  // Everything this proxy matches is a protected surface, an auth page or the
+  // landing page — all depend on the session, so none may be cached.
+  return noStore(NextResponse.next());
 }
 
 export const config = {
   matcher: [
+    "/",
     "/student/:path*",
     "/admin/:path*",
     "/school-admin/:path*",
