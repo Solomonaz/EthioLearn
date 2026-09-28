@@ -1,328 +1,293 @@
 import Link from "next/link";
+import { Fraunces } from "next/font/google";
 import { getTranslations } from "next-intl/server";
 import {
-  Wand2,
-  Bot,
-  Swords,
-  Target,
-  Trophy,
-  Gift,
-  Sparkles,
-  Check,
+  Apple,
   ArrowRight,
-  Zap,
+  BarChart3,
+  BookOpen,
+  Boxes,
+  ClipboardList,
+  CreditCard,
+  Gamepad2,
+  Gift,
+  Library,
+  LineChart,
+  MessageSquare,
+  Play,
+  Sparkles,
+  Swords,
+  TrendingUp,
+  Trophy,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
-import { LanguageSwitcher } from "@/components/ui/language-switcher";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Logo } from "@/components/ui/logo";
-import { AiQuizDemo } from "@/components/home/ai-quiz-demo";
-import { CountUp } from "@/components/home/count-up";
+import { HeroPreview } from "@/components/home/hero-preview";
+import { AppPreview } from "@/components/home/app-preview";
+import { LandingNav } from "@/components/home/landing-nav";
+import { QuizSimulation } from "@/components/home/quiz-simulation";
+
+// Display face for headings only; body text stays on the app's sans stack.
+const display = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+type Feature = { icon: LucideIcon; title: string; desc: string };
+type Audience = { id: string; label: string; lead: string; features: Feature[] };
 
 export default async function HomePage() {
   const t = await getTranslations("home");
   const tc = await getTranslations("common");
 
-  const features = [
-    { icon: Wand2, title: t("feature1Title"), desc: t("feature1Desc") },
-    { icon: Bot, title: t("feature2Title"), desc: t("feature2Desc") },
-    { icon: Swords, title: t("feature3Title"), desc: t("feature3Desc") },
-    { icon: Target, title: t("feature4Title"), desc: t("feature4Desc") },
-    { icon: Trophy, title: t("feature5Title"), desc: t("feature5Desc") },
-    { icon: Gift, title: t("feature6Title"), desc: t("feature6Desc") },
-  ];
-
-  const steps = [
-    { step: "1", title: t("step1Title"), desc: t("step1Desc") },
-    { step: "2", title: t("step2Title"), desc: t("step2Desc") },
-    { step: "3", title: t("step3Title"), desc: t("step3Desc") },
+  const audiences: Audience[] = [
+    {
+      id: "students",
+      label: t("studentsLabel"),
+      lead: t("studentsLead"),
+      features: [
+        { icon: BookOpen, title: t("s1Title"), desc: t("s1Desc") },
+        { icon: MessageSquare, title: t("s2Title"), desc: t("s2Desc") },
+        { icon: Swords, title: t("s3Title"), desc: t("s3Desc") },
+        { icon: LineChart, title: t("s4Title"), desc: t("s4Desc") },
+        { icon: Trophy, title: t("s5Title"), desc: t("s5Desc") },
+      ],
+    },
+    {
+      id: "teachers",
+      label: t("teachersLabel"),
+      lead: t("teachersLead"),
+      features: [
+        { icon: Gamepad2, title: t("t1Title"), desc: t("t1Desc") },
+        { icon: ClipboardList, title: t("t2Title"), desc: t("t2Desc") },
+        { icon: TrendingUp, title: t("t3Title"), desc: t("t3Desc") },
+        { icon: Sparkles, title: t("t4Title"), desc: t("t4Desc") },
+        { icon: Boxes, title: t("t5Title"), desc: t("t5Desc") },
+      ],
+    },
+    {
+      id: "schools",
+      label: t("schoolsLabel"),
+      lead: t("schoolsLead"),
+      features: [
+        { icon: Users, title: t("c1Title"), desc: t("c1Desc") },
+        { icon: Library, title: t("c2Title"), desc: t("c2Desc") },
+        { icon: BarChart3, title: t("c3Title"), desc: t("c3Desc") },
+        { icon: Gift, title: t("c4Title"), desc: t("c4Desc") },
+        { icon: CreditCard, title: t("c5Title"), desc: t("c5Desc") },
+      ],
+    },
   ];
 
   const subjects = [
-    t("biology"), t("mathematics"), t("physics"), t("chemistry"),
+    t("mathematics"), t("physics"), t("chemistry"), t("biology"),
     t("english"), t("amharic"), t("history"), t("geography"),
   ];
 
-  const spotlightPoints = [t("spotlightPoint1"), t("spotlightPoint2"), t("spotlightPoint3")];
-
-  // Sample "generated" question stems for the AI-engine spotlight visual.
-  const generated = [
-    "Define the role of chlorophyll in photosynthesis.",
-    "Balance: C₃H₈ + O₂ → CO₂ + H₂O.",
-    "Explain Newton's second law with an example.",
-    "What causes the seasons in Ethiopia?",
-    "Solve for x: 2x + 5 = 17.",
-  ];
-
   return (
-    <div className="relative min-h-screen bg-white text-slate-900 dark:bg-[#060a07] dark:text-white">
-      {/* Ambient background — aurora glows + tech grid (viewport-fixed) */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="lp-aurora-1 absolute -top-48 left-[15%] h-[560px] w-[560px] rounded-full bg-emerald-500/10 blur-[130px] dark:bg-emerald-500/20" />
-        <div className="lp-aurora-2 absolute -top-24 right-[12%] h-[460px] w-[460px] rounded-full bg-[#FDD835]/10 blur-[130px]" />
-        <div className="absolute bottom-0 left-1/2 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-emerald-600/5 blur-[150px] dark:bg-emerald-600/10" />
-        <div className="lp-grid absolute inset-x-0 top-0 hidden h-[720px] dark:block" />
-      </div>
-
-      {/* ── Navbar ── */}
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-[#060a07]/70">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link href="/" aria-label={tc("appName")}>
-            <span className="dark:hidden"><Logo size="md" /></span>
-            <span className="hidden dark:block"><Logo size="md" onDark /></span>
-          </Link>
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 dark:text-white/70 md:flex">
-            <a href="#features" className="transition-colors hover:text-slate-900 dark:hover:text-white">{t("navFeatures")}</a>
-            <a href="#how" className="transition-colors hover:text-slate-900 dark:hover:text-white">{t("navHow")}</a>
-            <a href="#subjects" className="transition-colors hover:text-slate-900 dark:hover:text-white">{t("navSubjects")}</a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <LanguageSwitcher />
-            <Link href="/login" className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-white/80 dark:hover:text-white sm:block">
-              {tc("signIn")}
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_22px_-6px_rgba(16,185,129,0.5)] transition hover:shadow-[0_0_30px_-4px_rgba(16,185,129,0.8)]"
-            >
-              {tc("getStarted")}
-            </Link>
-          </div>
-        </div>
-      </header>
+    <div className={`lp ${display.variable} min-h-screen`}>
+      <LandingNav
+        links={[
+          ...audiences.map((a) => ({ href: `#${a.id}`, label: a.label })),
+          { href: "#subjects", label: t("navSubjects") },
+          { href: "#app", label: t("navApp") },
+        ]}
+        signIn={tc("signIn")}
+        getStarted={tc("getStarted")}
+        appName={tc("appName")}
+        menuLabel={t("navMenu")}
+      />
 
       {/* ── Hero ── */}
-      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-20 pt-16 sm:pt-24">
-        <div className="grid items-center gap-14 lg:grid-cols-2">
-          {/* Copy */}
-          <div className="text-center lg:text-left">
-            <div className="lp-fade-up inline-flex items-center gap-2 rounded-full border border-emerald-600/30 bg-emerald-600/10 px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
-              <span className="relative flex h-2 w-2">
-                <span className="lp-blink absolute inline-flex h-full w-full rounded-full bg-emerald-500 dark:bg-emerald-400" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-              </span>
-              <Sparkles className="h-3.5 w-3.5" />
-              {t("aiBadge")}
-            </div>
-
-            <h1 className="lp-fade-up mt-5 text-4xl font-black leading-[1.05] tracking-tight sm:text-6xl">
-              {t("heroTitle")}{" "}
-              <span className="bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-transparent dark:from-[#6ee7b7] dark:via-[#a3e635] dark:to-[#fde047]">
-                {t("heroTitleAccent")}
-              </span>
-            </h1>
-
-            <p className="lp-fade-up mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-white/70 lg:mx-0">
-              {t("heroDesc")}
-            </p>
-
-            <div className="lp-fade-up mt-9 flex flex-col items-center gap-3 sm:flex-row lg:justify-start sm:justify-center">
-              <Link
-                href="/register"
-                className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-7 py-3.5 text-base font-bold text-white shadow-[0_0_34px_-8px_rgba(16,185,129,0.55)] transition hover:shadow-[0_0_46px_-6px_rgba(16,185,129,0.85)] sm:w-auto"
-              >
-                {t("startFree")}
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <a
-                href="#features"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-7 py-3.5 text-base font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/15 dark:bg-white/[0.03] dark:text-white/90 dark:backdrop-blur dark:hover:bg-white/[0.08] sm:w-auto"
-              >
-                {t("exploreFeatures")}
-              </a>
-            </div>
-
-            <div className="lp-fade-up mt-6 flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-white/50 lg:justify-start">
-              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              {t("trustLine")}
-            </div>
-          </div>
-
-          {/* Animated AI demo + floating chips */}
-          <div className="flex justify-center lg:justify-end">
-            <div className="lp-float relative">
-              <div className="hidden sm:block">
-                <div className="lp-float absolute -left-6 top-10 z-20 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-xl dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:backdrop-blur">
-                  <Zap className="h-3.5 w-3.5 text-[#F9A825] dark:text-[#FDD835]" /> +50 XP
-                </div>
-                <div className="lp-float-slow absolute -bottom-5 -left-8 z-20 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-xl dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:backdrop-blur">
-                  <Trophy className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" /> Battle won
-                </div>
-              </div>
-              <AiQuizDemo />
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="mt-20 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 dark:border-white/10 dark:bg-white/[0.03] sm:grid-cols-4">
-          {[
-            { node: <CountUp to={10000} suffix="+" />, label: t("statQuestions") },
-            { node: <CountUp to={10} suffix="+" />, label: t("statSubjects") },
-            { node: <>24/7</>, label: t("statTutor") },
-            { node: <>7–12</>, label: t("statGrades") },
-          ].map((s, i) => (
-            <div key={i} className="bg-white px-6 py-7 text-center dark:bg-[#060a07]/40">
-              <div className="text-3xl font-black text-emerald-600 dark:text-emerald-300 sm:text-4xl">{s.node}</div>
-              <div className="mt-1.5 text-sm text-slate-500 dark:text-white/55">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Features ── */}
-      <section id="features" className="relative z-10 border-t border-slate-100 py-20 dark:border-white/5">
-        <div className="mx-auto max-w-6xl px-4">
-          <h2 className="text-center text-3xl font-black tracking-tight sm:text-4xl">
-            {t("featuresTitle")}
-          </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-slate-500 dark:text-white/60">{t("featuresSubtitle")}</p>
-
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none dark:hover:bg-white/[0.06]"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600/10 ring-1 ring-emerald-600/20 transition-shadow group-hover:shadow-[0_0_26px_-6px_rgba(16,185,129,0.45)] dark:bg-emerald-400/12 dark:ring-emerald-400/20">
-                  <f.icon className="h-6 w-6 text-emerald-600 dark:text-emerald-300" />
-                </div>
-                <h3 className="mb-2 text-lg font-bold text-slate-900 dark:text-white">{f.title}</h3>
-                <p className="text-sm leading-relaxed text-slate-500 dark:text-white/60">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── AI engine spotlight ── */}
-      <section className="relative z-10 py-10">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="grid items-center gap-10 rounded-3xl border border-slate-200 bg-gradient-to-br from-emerald-500/[0.08] to-[#FDD835]/[0.06] p-8 dark:border-white/10 dark:from-emerald-500/[0.12] dark:via-white/[0.02] sm:p-12 lg:grid-cols-2">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-600/30 bg-emerald-600/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
-                <Sparkles className="h-3.5 w-3.5" />
-                {t("spotlightBadge")}
-              </div>
-              <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                {t("spotlightTitle")}
-              </h2>
-              <p className="mt-4 text-slate-600 dark:text-white/70">{t("spotlightDesc")}</p>
-              <ul className="mt-6 space-y-3">
-                {spotlightPoints.map((p) => (
-                  <li key={p} className="flex items-center gap-3 text-slate-700 dark:text-white/85">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600/15 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-300">
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Static "generated" output card */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-black/30 dark:shadow-none dark:backdrop-blur">
-              <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.04]">
-                <Wand2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-                <span className="text-sm text-slate-700 dark:text-white/80">Generate a quiz from any chapter</span>
-              </div>
-              <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-                <Sparkles className="h-3 w-3" /> Generated · 5 questions
-              </div>
-              <ul className="space-y-2">
-                {generated.map((q, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/80"
-                  >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-600/15 text-[10px] font-bold text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-300">
-                      {i + 1}
-                    </span>
-                    {q}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── How it works ── */}
-      <section id="how" className="relative z-10 border-t border-slate-100 py-20 dark:border-white/5">
-        <div className="mx-auto max-w-6xl px-4">
-          <h2 className="text-center text-3xl font-black tracking-tight sm:text-4xl">{t("howTitle")}</h2>
-          <p className="mx-auto mt-3 max-w-xl text-center text-slate-500 dark:text-white/60">{t("howSubtitle")}</p>
-
-          <div className="relative mt-14 grid gap-10 sm:grid-cols-3">
-            {/* connecting line */}
-            <div className="absolute left-[16%] right-[16%] top-6 hidden h-px bg-gradient-to-r from-emerald-400/0 via-emerald-500/40 to-[#FDD835]/40 sm:block" />
-            {steps.map((s) => (
-              <div key={s.step} className="relative text-center">
-                <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 text-xl font-black text-white shadow-[0_0_26px_-8px_rgba(16,185,129,0.7)] ring-4 ring-white dark:ring-[#060a07]">
-                  {s.step}
-                </div>
-                <h3 className="mb-2 text-lg font-bold text-slate-900 dark:text-white">{s.title}</h3>
-                <p className="mx-auto max-w-xs text-sm text-slate-500 dark:text-white/60">{s.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Subjects marquee ── */}
-      <section id="subjects" className="relative z-10 overflow-hidden py-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <h2 className="mb-10 text-center text-2xl font-black tracking-tight sm:text-3xl">
-            {t("subjectsTitle")}
-          </h2>
-        </div>
-        <div
-          className="relative flex overflow-hidden"
-          style={{
-            maskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)",
-            WebkitMaskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)",
-          }}
-        >
-          <div className="lp-marquee flex w-max shrink-0 items-center gap-4 pr-4">
-            {[...subjects, ...subjects].map((s, i) => (
-              <span
-                key={i}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/85"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-                {s}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Final CTA ── */}
-      <section className="relative z-10 px-4 py-20">
-        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-emerald-600/20 bg-gradient-to-br from-emerald-500/15 via-emerald-600/[0.06] to-[#FDD835]/10 p-10 text-center dark:border-emerald-400/20 dark:from-emerald-500/20 dark:via-emerald-600/[0.08] sm:p-16">
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-emerald-400/20 blur-[100px]" />
-          <div className="relative">
-            <h2 className="text-3xl font-black tracking-tight sm:text-5xl">{t("ctaTitle")}</h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600 dark:text-white/70">{t("ctaSubtitle")}</p>
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+        <div>
+          <p className="lp-rise text-xs font-semibold uppercase tracking-[0.14em] text-[var(--lp-green-ink)]">
+            {t("eyebrow")}
+          </p>
+          <h1 className="lp-display lp-rise lp-rise-2 mt-5 text-[2.6rem] font-semibold leading-[1.04] sm:text-6xl">
+            {t("heroTitle")} <span className="lp-mark">{t("heroTitleMark")}</span>
+          </h1>
+          <p className="lp-rise lp-rise-3 mt-6 max-w-xl text-lg leading-relaxed text-[var(--lp-muted)]">
+            {t("heroDesc")}
+          </p>
+          <div className="lp-rise lp-rise-3 mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link
               href="/register"
-              className="group mt-9 inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-lg font-bold text-white shadow-[0_0_40px_-10px_rgba(27,94,32,0.5)] transition hover:bg-primary-dark dark:bg-white dark:text-[#0a3d1a] dark:shadow-[0_0_40px_-8px_rgba(255,255,255,0.5)] dark:hover:bg-white/90"
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-[var(--lp-green)] px-7 py-3.5 text-base font-semibold text-white transition-colors hover:bg-[#0d3b12]"
             >
-              {t("ctaButton")}
-              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
+              {tc("getStarted")}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <p className="mt-4 text-sm text-slate-500 dark:text-white/50">{t("ctaMicro")}</p>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center rounded-full border border-[var(--lp-rule)] bg-[var(--lp-surface)] px-7 py-3.5 text-base font-semibold transition-colors hover:border-[var(--lp-faint)]"
+            >
+              {tc("signIn")}
+            </Link>
           </div>
+          <p className="mt-6 text-sm text-[var(--lp-faint)]">{t("heroNote")}</p>
+        </div>
+
+        <div className="flex justify-center lg:justify-end">
+          <HeroPreview />
+        </div>
+      </section>
+
+      {/* ── How a quiz is made (animated) ── */}
+      <section id="how" className="scroll-mt-20 border-t border-[var(--lp-rule)]">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--lp-green-ink)]">
+              {t("simEyebrow")}
+            </p>
+            <h2 className="lp-display mt-3 text-3xl font-semibold sm:text-4xl">{t("simTitle")}</h2>
+            <p className="mt-3 text-[var(--lp-muted)]">{t("simDesc")}</p>
+          </div>
+          <div className="mt-12">
+            <QuizSimulation
+              steps={[1, 2, 3, 4].map((n) => ({
+                title: t(`simStep${n}Title`),
+                desc: t(`simStep${n}Desc`),
+              }))}
+              caption={t("simCaption")}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Who it's for ── */}
+      <section className="border-t border-[var(--lp-rule)] bg-[var(--lp-surface)]">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <div className="max-w-2xl">
+            <h2 className="lp-display text-3xl font-semibold sm:text-4xl">{t("audienceTitle")}</h2>
+            <p className="mt-3 text-[var(--lp-muted)]">{t("audienceSubtitle")}</p>
+          </div>
+
+          <div className="mt-14 grid gap-12 md:grid-cols-3 md:gap-0 md:divide-x md:divide-[var(--lp-rule)]">
+            {audiences.map((a, i) => (
+              <div key={a.id} id={a.id} className="scroll-mt-24 md:px-8 md:first:pl-0 md:last:pr-0">
+                <div className="flex items-baseline gap-3 border-b border-[var(--lp-rule)] pb-4">
+                  <span className="lp-display text-sm font-semibold text-[var(--lp-faint)]">
+                    0{i + 1}
+                  </span>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--lp-green-ink)]">
+                    {a.label}
+                  </h3>
+                </div>
+                <p className="lp-display mt-5 text-2xl font-medium leading-snug">{a.lead}</p>
+                <ul className="mt-7 space-y-5">
+                  {a.features.map((f) => (
+                    <li key={f.title} className="flex gap-3.5">
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--lp-green-soft)] text-[var(--lp-green-ink)]">
+                        <f.icon className="h-4 w-4" aria-hidden />
+                      </span>
+                      <div>
+                        <p className="text-[15px] font-semibold">{f.title}</p>
+                        <p className="mt-0.5 text-sm leading-relaxed text-[var(--lp-muted)]">{f.desc}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Curriculum ── */}
+      <section id="subjects" className="scroll-mt-20 border-t border-[var(--lp-rule)]">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 md:grid-cols-[auto_1fr] md:gap-16">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--lp-faint)]">
+              {t("gradesLabel")}
+            </p>
+            <p className="lp-display mt-1 text-7xl font-semibold leading-none text-[var(--lp-green-ink)] sm:text-8xl">
+              1–12
+            </p>
+          </div>
+          <div>
+            <h2 className="lp-display text-3xl font-semibold sm:text-4xl">{t("subjectsTitle")}</h2>
+            <p className="mt-3 max-w-xl text-[var(--lp-muted)]">{t("subjectsDesc")}</p>
+            <ul className="mt-7 flex flex-wrap gap-2">
+              {subjects.map((s) => (
+                <li
+                  key={s}
+                  className="rounded-full border border-[var(--lp-rule)] bg-[var(--lp-surface)] px-4 py-1.5 text-sm font-medium"
+                >
+                  {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Mobile app (coming soon) ── */}
+      <section id="app" className="scroll-mt-20 border-t border-[var(--lp-rule)] bg-[var(--lp-surface)]">
+        <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 py-20 sm:px-6 md:grid-cols-[1fr_auto] md:gap-20">
+          <div className="max-w-xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--lp-rule)] px-3 py-1 text-xs font-semibold text-[var(--lp-green-ink)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--lp-yellow)]" />
+              {t("appEyebrow")}
+            </span>
+            <h2 className="lp-display mt-5 text-3xl font-semibold sm:text-5xl">{t("appTitle")}</h2>
+            <p className="mt-4 text-lg leading-relaxed text-[var(--lp-muted)]">{t("appDesc")}</p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              {[
+                { icon: Play, store: t("appPlay") },
+                { icon: Apple, store: t("appStore") },
+              ].map(({ icon: Icon, store }) => (
+                <div
+                  key={store}
+                  aria-disabled="true"
+                  className="flex cursor-default items-center gap-3 rounded-xl border border-dashed border-[var(--lp-faint)] px-4 py-2.5 text-[var(--lp-muted)]"
+                >
+                  <Icon className="h-6 w-6" aria-hidden />
+                  <div className="leading-tight">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em]">{t("appSoon")}</p>
+                    <p className="text-sm font-semibold text-[var(--lp-ink)]">{store}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-6 text-sm text-[var(--lp-faint)]">{t("appNote")}</p>
+          </div>
+
+          <AppPreview />
+        </div>
+      </section>
+
+      {/* ── Call to action ── */}
+      <section className="px-4 py-20 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 rounded-3xl bg-[var(--lp-band)] px-8 py-12 text-[var(--lp-band-ink)] sm:px-12 md:flex-row md:items-center">
+          <div className="max-w-xl">
+            <h2 className="lp-display text-3xl font-semibold sm:text-4xl">{t("ctaTitle")}</h2>
+            <p className="mt-3 text-[var(--lp-band-ink)]/75">{t("ctaSubtitle")}</p>
+          </div>
+          <Link
+            href="/register"
+            className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--lp-yellow)] px-7 py-3.5 text-base font-semibold text-[#13201a] transition-colors hover:bg-[#f9c80e]"
+          >
+            {t("ctaButton")}
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </Link>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="relative z-10 border-t border-slate-200 py-10 dark:border-white/10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center">
-          <span className="dark:hidden"><Logo size="sm" /></span>
-          <span className="hidden dark:block"><Logo size="sm" onDark /></span>
-          <p className="max-w-md text-sm text-slate-500 dark:text-white/50">{t("footerTagline")}</p>
-          <p className="text-xs text-slate-400 dark:text-white/35">{t("footerCopyright")}</p>
+      <footer className="border-t border-[var(--lp-rule)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-[var(--lp-faint)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="dark:hidden"><Logo size="sm" /></span>
+            <span className="hidden dark:block"><Logo size="sm" onDark /></span>
+            <span className="hidden sm:inline">·</span>
+            <span>{t("footerTagline")}</span>
+          </div>
+          <p>{t("footerCopyright")}</p>
         </div>
       </footer>
     </div>
