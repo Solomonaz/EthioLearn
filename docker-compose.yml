@@ -1,0 +1,71 @@
+# ── Abugida on one server ───────────────────────────────────────────────────
+# db     Postgres 16 + pgvector (private network only, never exposed)
+# app    Next.js + Socket.io (server.ts), uploads on a persistent volume
+# caddy  HTTPS (automatic certificates) in front of the app
+#
+# Everything reads the .env file next to this one. See deploy/DEPLOY.md.
+#
+# Run ONE app instance: rate limits and live battle rooms are kept in memory,
+# and uploads live on this server's disk.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: abugida
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: abugida
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Runs once, on the first start of an empty database: enables pgvector.
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abugida -d abugida"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_GOOGLE_ENABLED: ${NEXT_PUBLIC_GOOGLE_ENABLED:-false}
+        NEXT_PUBLIC_FACEBOOK_ENABLED: ${NEXT_PUBLIC_FACEBOOK_ENABLED:-false}
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+        NEXT_PUBLIC_TELEGRAM_BOT_ID: ${NEXT_PUBLIC_TELEGRAM_BOT_ID:-}
+    image: abugida-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      UPLOAD_ROOT: /data/uploads
+      DATABASE_URL: postgresql://abugida:${POSTGRES_PASSWORD}@db:5432/abugida
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  db_data:
+  uploads:
+  caddy_data:
+  caddy_config:

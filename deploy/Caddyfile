@@ -1,0 +1,16 @@
+# HTTPS for Abugida. Caddy gets and renews the certificate automatically once
+# DNS for $DOMAIN points at this server and ports 80/443 are open.
+# WebSockets (Socket.io battles) pass through reverse_proxy with no extra setup.
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3001
+}
+
+# ── Moving to a new domain later (e.g. abugida.et) ──────────────────────────
+# 1. Set DOMAIN=abugida.et in .env (and NEXTAUTH_URL=https://abugida.et).
+# 2. Uncomment this block with the OLD address, so old links keep working:
+#
+# abugida.aderasend.com {
+# 	redir https://abugida.et{uri} permanent
+# }

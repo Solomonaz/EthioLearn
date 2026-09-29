@@ -1,0 +1,19 @@
+node_modules
+.next
+.git
+.claude
+uploads
+coverage
+*.log
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets never go into the image; docker-compose passes them at run time.
+.env
+.env.*
+!.env.example
+
+# Local-only files
+*.docx
+*.bak
+tsc_*.txt
