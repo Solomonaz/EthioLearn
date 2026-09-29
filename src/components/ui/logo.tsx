@@ -1,52 +1,82 @@
-import { GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  HEAD,
+  LEFT_LEG,
+  LEG_WIDTH,
+  PAGE_LEFT,
+  PAGE_RIGHT,
+  RIGHT_LEG,
+  SYMBOL_VIEWBOX,
+  WORDMARK_PATH,
+  WORDMARK_VIEWBOX,
+} from "./logo-paths";
 
 type LogoProps = {
-  /** Hide the "Abugida" wordmark and render only the icon mark. */
+  /** Hide the "Abugida" wordmark and render only the symbol. */
   iconOnly?: boolean;
-  /** Visual size of the mark + wordmark. */
+  /** Visual size of the symbol + wordmark. */
   size?: "sm" | "md" | "lg";
-  /** Recolour the wordmark + accent ring for a dark background. */
+  /** Use the light-on-dark colours regardless of theme (dark page sections). */
   onDark?: boolean;
   className?: string;
 };
 
 const SIZES = {
-  sm: { box: "h-8 w-8 rounded-lg", icon: "h-4 w-4", dot: "h-2 w-2", word: "text-lg" },
-  md: { box: "h-9 w-9 rounded-xl", icon: "h-5 w-5", dot: "h-2.5 w-2.5", word: "text-2xl" },
-  lg: { box: "h-12 w-12 rounded-2xl", icon: "h-7 w-7", dot: "h-3 w-3", word: "text-3xl" },
+  sm: { symbol: "h-9 w-9", word: "h-[18px]" },
+  md: { symbol: "h-11 w-11", word: "h-[21px]" },
+  lg: { symbol: "h-14 w-14", word: "h-7" },
 } as const;
 
 /**
- * Abugida brand mark: a graduation-cap badge in Ethiopian green with a
- * yellow "spark" accent, next to the wordmark. Abugida (አቡጊዳ) is the order of
- * the Ethiopic script — where traditional schooling began. The wordmark stays
- * Latin ("Abugida") in every locale — a brand name, not translated copy.
+ * Abugida brand mark: an "A" arch sheltering a reader (yellow head) over an
+ * open book — Abugida (አቡጊዳ) is the order of the Ethiopic script, where
+ * traditional schooling began. The wordmark stays Latin in every locale: a
+ * brand name, not translated copy.
+ *
+ * Drawn inline (not an <img>) so it follows the theme: dark mode and the
+ * `onDark` sections swap to the lighter greens, and the thin cut around the
+ * book always matches the background it sits on. Vector masters for print
+ * and partners are in public/brand/.
  */
 export function Logo({ iconOnly = false, size = "md", onDark = false, className }: LogoProps) {
   const s = SIZES[size];
+
+  // Light colours by default; the lighter set on dark backgrounds.
+  const legBack = onDark ? "stroke-[#43A047]" : "stroke-[#1B5E20] dark:stroke-[#43A047]";
+  const legFront = onDark ? "stroke-[#66BB6A]" : "stroke-[#2E7D32] dark:stroke-[#66BB6A]";
+  const pageL = onDark ? "fill-[#A5D6A7]" : "fill-[#66BB6A] dark:fill-[#A5D6A7]";
+  const pageR = onDark ? "fill-[#81C784]" : "fill-[#43A047] dark:fill-[#81C784]";
+  // The cut around the book and head takes the colour of whatever is behind.
+  const gap = onDark ? "stroke-[#070b08]" : "stroke-surface";
+
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)} aria-label="Abugida">
-      <span
-        className={cn(
-          "relative inline-flex shrink-0 items-center justify-center bg-gradient-to-br from-primary to-[#2E7D32] shadow-sm",
-          s.box
-        )}
-      >
-        <GraduationCap className={cn("text-white", s.icon)} strokeWidth={2.5} aria-hidden="true" />
-        <span
+    <span className={cn("inline-flex items-center gap-2", className)} aria-label="Abugida" role="img">
+      <svg viewBox={SYMBOL_VIEWBOX} className={cn("shrink-0", s.symbol)} aria-hidden="true">
+        <line {...LEFT_LEG} className={legBack} strokeWidth={LEG_WIDTH} strokeLinecap="round" />
+        <line {...RIGHT_LEG} className={legFront} strokeWidth={LEG_WIDTH} strokeLinecap="round" />
+        <g className={gap} strokeWidth={16} strokeLinejoin="round" style={{ paintOrder: "stroke" }}>
+          <path d={PAGE_LEFT} className={pageL} />
+          <path d={PAGE_RIGHT} className={pageR} />
+        </g>
+        <circle
+          {...HEAD}
+          className={cn("fill-[#FDD835]", gap)}
+          strokeWidth={10}
+          style={{ paintOrder: "stroke" }}
+        />
+      </svg>
+      {!iconOnly && (
+        <svg
+          viewBox={WORDMARK_VIEWBOX}
           className={cn(
-            "absolute -right-0.5 -top-0.5 rounded-full bg-[#FDD835] ring-2",
-            onDark ? "ring-[#070b08]" : "ring-surface",
-            s.dot
+            "w-auto shrink-0",
+            s.word,
+            onDark ? "fill-white" : "fill-[#1B5E20] dark:fill-white",
           )}
           aria-hidden="true"
-        />
-      </span>
-      {!iconOnly && (
-        <span className={cn("font-black tracking-tight", s.word)}>
-          <span className={onDark ? "text-primary-light" : "text-primary"}>Abugida</span>
-        </span>
+        >
+          <path d={WORDMARK_PATH} />
+        </svg>
       )}
     </span>
   );

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       email,
       "Set your Abugida password",
       `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#1a6b2e;margin-bottom:8px">Abugida</h2>
+        <img src="${base}/brand/logo-email.png" alt="Abugida" width="200" style="display:block;margin-bottom:16px;border:0" />
         <p style="color:#374151">Hello ${escapeHtml(user.name)},</p>
         <p style="color:#374151">Use the button below to set a new password. The link works once and expires in 1 hour.</p>
         <p style="margin:24px 0"><a href="${link}" style="background:#1a6b2e;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">Set my password</a></p>

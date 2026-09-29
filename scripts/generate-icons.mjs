@@ -1,14 +1,13 @@
+// Regenerates the PNG app icons from the vector master (public/brand/app-icon.svg).
+// Run after changing the logo: npm run generate-icons
 import sharp from 'sharp';
-import { mkdirSync } from 'fs';
+import { readFileSync } from 'fs';
 
-mkdirSync('public/icons', { recursive: true });
+const svg = readFileSync('public/brand/app-icon.svg');
+const render = (size, file) =>
+  sharp(svg, { density: 300 }).resize(size, size).png().toFile(`public/icons/${file}`);
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="80" fill="#1B5E20"/>
-  <text x="256" y="220" font-family="system-ui,sans-serif" font-size="200" font-weight="900" fill="white" text-anchor="middle" dominant-baseline="middle">A</text>
-  <text x="256" y="390" font-family="system-ui,sans-serif" font-size="64" font-weight="600" fill="#FDD835" text-anchor="middle">Abugida</text>
-</svg>`;
-
-await sharp(Buffer.from(svg)).resize(192, 192).png().toFile('public/icons/icon-192.png');
-await sharp(Buffer.from(svg)).resize(512, 512).png().toFile('public/icons/icon-512.png');
+await render(512, 'icon-512.png');
+await render(192, 'icon-192.png');
+await render(180, 'apple-touch-icon.png');
 console.log('Icons generated!');
