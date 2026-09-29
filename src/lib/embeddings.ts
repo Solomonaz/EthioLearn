@@ -53,7 +53,7 @@ export class EmbeddingUnavailableError extends Error {
 }
 
 // ─── Ollama config ───────────────────────────────────────
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL?.trim() || "http://localhost:11434";
 const OLLAMA_EMBEDDING_MODEL_FALLBACK = "bge-m3";
 function ollamaEmbeddingModel(): string {
   return modelIdFor("OLLAMA", "embedding") ?? OLLAMA_EMBEDDING_MODEL_FALLBACK;
@@ -209,7 +209,7 @@ function ngramFingerprint(text: string, dims: number): number[] {
 // Local dev:  set OLLAMA_ENABLED=true to use local bge-m3 embeddings.
 // Override:   set EMBEDDING_PROVIDER=gemini|ollama|auto (default: auto)
 // "ollama" forces it on; "auto" defers to the shared guard in lib/ollama.
-const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER ?? "auto";
+const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER?.trim() || "auto";
 const ollamaEnabled =
   EMBEDDING_PROVIDER === "ollama" ||
   (EMBEDDING_PROVIDER === "auto" && isOllamaEnabled());

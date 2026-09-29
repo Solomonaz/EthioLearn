@@ -171,7 +171,9 @@ export function geminiFastModel(): string {
  * guards correctness. Set GEMINI_THINKING_BUDGET to raise it if a task ever
  * genuinely needs deliberation.
  */
-const THINKING_BUDGET = Number(process.env.GEMINI_THINKING_BUDGET ?? 512);
+// `||`, not `??`: an empty GEMINI_THINKING_BUDGET="" (as in .env.example) must mean
+// "use the default", not Number("") = 0, which silently switches thinking off.
+const THINKING_BUDGET = Number(process.env.GEMINI_THINKING_BUDGET?.trim() || 512);
 
 /**
  * Merge the thinking cap into a generationConfig.

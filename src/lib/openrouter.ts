@@ -52,7 +52,7 @@ function baseUrl(): string {
  * model's own default). See the note at the top of this file.
  */
 function reasoningParam(): Record<string, unknown> | undefined {
-  const mode = (process.env.OPENROUTER_REASONING ?? "off").trim().toLowerCase();
+  const mode = (process.env.OPENROUTER_REASONING?.trim() || "off").toLowerCase();
   if (mode === "default") return undefined;
   if (mode === "low" || mode === "medium" || mode === "high") return { effort: mode };
   return { enabled: false };

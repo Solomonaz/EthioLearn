@@ -14,7 +14,7 @@ import { shuffleArray } from "./utils";
 import { modelIdFor } from "./ai-settings";
 
 const DEFAULT_BASE_URL = "http://localhost:11434";
-const BASE_URL = process.env.OLLAMA_BASE_URL ?? DEFAULT_BASE_URL;
+const BASE_URL = process.env.OLLAMA_BASE_URL?.trim() || DEFAULT_BASE_URL;
 const OLLAMA_CHAT_MODEL_FALLBACK = "mistral";
 export function ollamaChatModel(): string {
   return modelIdFor("OLLAMA", "chat") ?? OLLAMA_CHAT_MODEL_FALLBACK;
