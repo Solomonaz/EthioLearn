@@ -192,7 +192,7 @@ export function GrapherApp({
   const openWindow = () => {
     window.open(
       "/grapher",
-      "ethiolearn-grapher",
+      "abugida-grapher",
       "width=1100,height=760,menubar=no,toolbar=no,location=no,status=no",
     );
   };

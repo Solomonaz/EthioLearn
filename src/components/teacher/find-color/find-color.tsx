@@ -49,8 +49,8 @@ interface Entry {
   at: number;
 }
 
-const LB_KEY = "ethiolearn.findcolor.leaderboard";
-const NAME_KEY = "ethiolearn.findcolor.name";
+const LB_KEY = "abugida.findcolor.leaderboard";
+const NAME_KEY = "abugida.findcolor.name";
 
 const START_TIME = 15; // seconds on the clock at kickoff
 const TIME_CAP = 20; // clock never climbs past this

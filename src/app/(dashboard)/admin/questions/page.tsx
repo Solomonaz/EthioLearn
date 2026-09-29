@@ -161,7 +161,7 @@ function aiNeedsReview(q: { qualityVerified?: boolean; qualityFlags?: string[] }
 
 // Draft key so a page reload (Fast Refresh, session refresh, accidental nav)
 // doesn't lose a batch of AI-generated questions the admin is still reviewing.
-const AI_DRAFT_KEY = "ethiolearn:admin:ai-draft:v1";
+const AI_DRAFT_KEY = "abugida:admin:ai-draft:v1";
 
 // ─── Main Component ───────────────────────────────────────
 

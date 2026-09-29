@@ -2,7 +2,7 @@
  * Per-feature token-usage logging.
  *
  * The provider billing consoles (e.g. Gemini API Spend) break spend down by
- * MODEL, but EthioLearn runs many features through only two Gemini models —
+ * MODEL, but Abugida runs many features through only two Gemini models —
  * question generation, chapter detection, the answer verifier, video scripts
  * and every vision task all share the flagship model — so a per-model number
  * cannot say which FEATURE drove the cost. This records the token counts each

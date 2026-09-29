@@ -86,7 +86,7 @@ interface Chat {
   msgs: { q: string; a: string }[];
 }
 
-const CHATS_KEY = "ethiolearn-geo-chats";
+const CHATS_KEY = "abugida-geo-chats";
 const freshId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 function loadChats(): Chat[] {
   try {

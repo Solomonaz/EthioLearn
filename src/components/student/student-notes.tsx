@@ -47,7 +47,7 @@ import { pageLabel, usePublishedNotesContext } from "@/lib/notes-context";
 
 const COLORS = ["#1f2937", "#dc2626", "#2563eb", "#16a34a", "#d97706", "#7c3aed"];
 const SYMBOLS = ["π", "√", "²", "³", "°", "±", "×", "÷", "≤", "≥", "≠", "≈", "∞", "θ", "Δ", "α", "β", "λ", "µ", "→", "∑", "∫"];
-const UI_KEY = "ethiolearn:student-notes:v1";
+const UI_KEY = "abugida:student-notes:v1";
 const PANEL_W = 380;
 const PANEL_W_LARGE = 680;
 const CANVAS_W = 640;

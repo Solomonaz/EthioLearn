@@ -1,7 +1,7 @@
 import { Check, Swords } from "lucide-react";
 
 /**
- * Static collage of real EthioLearn screens for the landing hero: a chapter
+ * Static collage of real Abugida screens for the landing hero: a chapter
  * quiz, the grapher, and a live battle. Pure markup + SVG — no data, no JS.
  * Sample content stays in English, the medium of instruction.
  */

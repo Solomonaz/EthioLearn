@@ -1,7 +1,7 @@
 /**
  * Teacher bands.
  *
- * EthioLearn has two teacher surfaces, and they are deliberately separate
+ * Abugida has two teacher surfaces, and they are deliberately separate
  * roles rather than one role with a band derived from `TeachingAssignment`:
  *
  *   • TEACHER           → grades 1-8  → /teacher           (classroom games)

@@ -54,7 +54,7 @@ const SFX_VOLUME: Record<SfxKey, number> = {
 const MUSIC_VOLUME = 0.25; // low baseline loop (20–30%)
 const POOL_SIZE = 3; // concurrent copies allowed per effect
 const THROTTLE_MS = 45; // min gap between two triggers of the SAME effect
-const MUTE_KEY = "ethiolearn.audio.muted";
+const MUTE_KEY = "abugida.audio.muted";
 
 class SoundManager {
   private initialized = false;

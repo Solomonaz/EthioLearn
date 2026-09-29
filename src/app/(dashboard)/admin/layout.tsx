@@ -9,7 +9,7 @@ export default async function AdminLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/admin_ethiolearn");
+    redirect("/admin_abugida");
   }
 
   // SCHOOL_ADMIN has its own dashboard at /school-admin

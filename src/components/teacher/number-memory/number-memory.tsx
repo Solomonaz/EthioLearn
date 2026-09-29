@@ -33,8 +33,8 @@ interface Entry {
   at: number;
 }
 
-const LB_KEY = "ethiolearn.numbermemory.leaderboard";
-const NAME_KEY = "ethiolearn.numbermemory.name";
+const LB_KEY = "abugida.numbermemory.leaderboard";
+const NAME_KEY = "abugida.numbermemory.name";
 const MAX_LEVEL = 10;
 
 function levelConfig(level: number): { cols: number; count: number; seconds: number } {

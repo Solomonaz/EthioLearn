@@ -246,7 +246,7 @@ async function extractFromEpub(buffer: Buffer): Promise<ExtractionResult> {
 
     // epub2 requires a file path — write buffer to a temp file
     const tmpDir = os.tmpdir();
-    const tmpFile = path.join(tmpDir, `ethiolearn_epub_${Date.now()}.epub`);
+    const tmpFile = path.join(tmpDir, `abugida_epub_${Date.now()}.epub`);
     fs.writeFileSync(tmpFile, buffer);
 
     try {

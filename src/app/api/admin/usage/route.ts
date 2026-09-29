@@ -9,7 +9,7 @@ import { displayCurrency } from "@/lib/model-pricing";
  * `usage_events` table.
  *
  * The provider billing console (e.g. Gemini API Spend) breaks spend down by
- * MODEL only, and EthioLearn runs many features through two shared Gemini
+ * MODEL only, and Abugida runs many features through two shared Gemini
  * models — so this attributes both the tokens and the money to the FEATURE that
  * spent them. Every provider call writes one row (see usage-logger), so the
  * numbers survive restarts and cover calls made by any route or instance —

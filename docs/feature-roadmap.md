@@ -1,4 +1,4 @@
-# EthioLearn — Elementary Games Roadmap
+# Abugida — Elementary Games Roadmap
 
 > Working reference for the **grades 1–6 games** build.
 > Scoped to the elementary side on 2026-08-13. The secondary "smart writing" system

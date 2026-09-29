@@ -33,7 +33,7 @@ import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 
 type Dir = "up" | "down" | "left" | "right";
 const N = 4;
-const RECORD_KEY = "ethiolearn.routing.record";
+const RECORD_KEY = "abugida.routing.record";
 
 const CHARACTERS = [
   { key: "robot", mover: "🤖", goal: "⭐" },

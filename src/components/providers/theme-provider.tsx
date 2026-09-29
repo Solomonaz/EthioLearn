@@ -26,7 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Read saved theme from localStorage
-    const saved = localStorage.getItem("ethiolearn-theme") as Theme | null;
+    const saved = localStorage.getItem("abugida-theme") as Theme | null;
     if (saved) {
       setThemeState(saved);
     }
@@ -69,7 +69,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (t: Theme) => {
     setThemeState(t);
-    localStorage.setItem("ethiolearn-theme", t);
+    localStorage.setItem("abugida-theme", t);
   };
 
   return (

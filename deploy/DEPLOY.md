@@ -149,7 +149,7 @@ Open **https://abugida.aderasend.com**. The first visit can take a few seconds w
 
 ## 8. First sign-in and setup
 
-1. Go to `https://abugida.aderasend.com/admin_ethiolearn` and sign in with `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`.
+1. Go to `https://abugida.aderasend.com/admin_abugida` and sign in with `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`.
 2. **Settings:** decide whether pricing is on. When it's on, teachers need their school on a plan before AI works; turn it off for a free pilot.
 3. **Subjects:** add the secondary and elementary subject lists.
 4. **Textbooks:** upload the national textbooks. Upload scanned PDFs at quiet times, since OCR uses the CPU.

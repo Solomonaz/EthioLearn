@@ -33,7 +33,7 @@ const PROTECTED_PATHS = [
 /**
  * Prefix match on a path boundary. Plain `startsWith` is not safe here:
  * "/teacher" is a prefix of "/secondary-teacher" only by accident, and
- * "/admin" is a prefix of "/admin_ethiolearn" — neither should match.
+ * "/admin" is a prefix of "/admin_abugida" — neither should match.
  */
 function isUnder(pathname: string, base: string): boolean {
   return pathname === base || pathname.startsWith(base + "/");

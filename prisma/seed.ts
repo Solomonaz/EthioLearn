@@ -1068,7 +1068,7 @@ async function main() {
     prisma.reward.create({
       data: {
         name: "School Bag",
-        description: "Premium EthioLearn branded school backpack with laptop compartment",
+        description: "Premium Abugida branded school backpack with laptop compartment",
         tier: "GOLD",
         pointsCost: 600,
         inventoryCount: 10,
@@ -1162,7 +1162,7 @@ async function main() {
     await prisma.paymentAccount.create({
       data: {
         method: "Telebirr",
-        accountName: "EthioLearn",
+        accountName: "Abugida",
         accountNumber: "0900000000",
         instructions: "Send the exact amount, then paste your transaction number and upload the receipt.",
         isActive: true,

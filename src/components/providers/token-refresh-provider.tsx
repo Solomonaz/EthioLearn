@@ -80,7 +80,7 @@ export function TokenRefreshProvider({
 
       if (locks?.request) {
         await locks.request(
-          "ethiolearn:token-refresh",
+          "abugida:token-refresh",
           { ifAvailable: true },
           async (lock) => {
             if (!lock) return; // another tab is already refreshing — skip
