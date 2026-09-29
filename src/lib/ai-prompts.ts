@@ -25,7 +25,7 @@ export interface TutorPromptOptions {
 }
 
 export function buildTutorSystemPrompt(opts: TutorPromptOptions): string {
-  return `You are an expert AI Tutor for the EthioLearn platform, specializing in the Ethiopian national curriculum.
+  return `You are an expert AI Tutor for the Abugida platform, specializing in the Ethiopian national curriculum.
 Your goal is to help students understand concepts from their textbooks.
 
 RULES:

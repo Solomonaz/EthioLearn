@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EthioLearn",
+  title: "Abugida",
   description: "Ethiopia's #1 gamified learning platform for students",
   manifest: "/manifest.json",
   keywords: [

@@ -19,7 +19,10 @@ export class EmailUnavailableError extends Error {
 
 /** Whether email can actually be sent (always true in development, which logs instead). */
 export function emailConfigured(): boolean {
-  return process.env.NODE_ENV !== "production" || !!process.env.RESEND_API_KEY;
+  return (
+    process.env.NODE_ENV !== "production" ||
+    (!!process.env.RESEND_API_KEY && !!process.env.RESEND_FROM_EMAIL)
+  );
 }
 
 export async function sendMail(to: string, subject: string, html: string, text: string): Promise<void> {
@@ -28,11 +31,14 @@ export async function sendMail(to: string, subject: string, html: string, text: 
     return;
   }
 
+  // The sender address must be on a domain verified in Resend, so it is
+  // configuration, never a default baked into the code.
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new EmailUnavailableError();
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!apiKey || !from) throw new EmailUnavailableError();
 
   const { error } = await new Resend(apiKey).emails.send({
-    from: process.env.RESEND_FROM_EMAIL || "EthioLearn <noreply@ethiolearn.com>",
+    from,
     to,
     subject,
     html,

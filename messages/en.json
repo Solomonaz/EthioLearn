@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "EthioLearn",
+    "appName": "Abugida",
     "signIn": "Sign In",
     "signOut": "Sign Out",
     "register": "Register",
@@ -96,17 +96,17 @@
     "history": "History",
     "geography": "Geography",
     "appEyebrow": "Mobile app · Coming soon",
-    "appTitle": "EthioLearn, in your pocket.",
+    "appTitle": "Abugida, in your pocket.",
     "appDesc": "Quizzes, battles, your daily challenge and your streak — in a phone app built for Ethiopian students. Android and iOS are on the way.",
     "appSoon": "Coming soon",
     "appPlay": "Google Play",
     "appStore": "App Store",
-    "appNote": "Until then, EthioLearn works in your phone's browser — add it to your home screen.",
-    "ctaTitle": "Bring EthioLearn to your class.",
+    "appNote": "Until then, Abugida works in your phone's browser — add it to your home screen.",
+    "ctaTitle": "Bring Abugida to your class.",
     "ctaSubtitle": "Create an account in a minute. Schools can add a plan at any time.",
     "ctaButton": "Create an account",
     "footerTagline": "Learning for Ethiopian students, teachers and schools.",
-    "footerCopyright": "© 2026 EthioLearn"
+    "footerCopyright": "© 2026 Abugida"
   },
   "nav": {
     "dashboard": "Dashboard",

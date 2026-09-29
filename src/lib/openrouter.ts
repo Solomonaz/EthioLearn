@@ -132,7 +132,7 @@ async function openRouterCompletion(
         Authorization: `Bearer ${apiKey}`,
         // OpenRouter attributes traffic with these; harmless if absent.
         "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3001",
-        "X-Title": "EthioLearn",
+        "X-Title": "Abugida",
       },
       body: JSON.stringify({
         model,

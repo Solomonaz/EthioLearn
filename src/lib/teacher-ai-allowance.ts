@@ -118,7 +118,7 @@ export function teacherAiDenial(
     return {
       status: 402,
       error:
-        "Your school's EthioLearn subscription is not active, so AI writing is paused. " +
+        "Your school's Abugida subscription is not active, so AI writing is paused. " +
         "Everything else you use in class still works — ask your school admin to renew.",
     };
   }

@@ -2,7 +2,7 @@ import { GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type LogoProps = {
-  /** Hide the "EthioLearn" wordmark and render only the icon mark. */
+  /** Hide the "Abugida" wordmark and render only the icon mark. */
   iconOnly?: boolean;
   /** Visual size of the mark + wordmark. */
   size?: "sm" | "md" | "lg";
@@ -18,14 +18,15 @@ const SIZES = {
 } as const;
 
 /**
- * EthioLearn brand mark: a graduation-cap badge in Ethiopian green with a
- * yellow "spark" accent, next to the two-tone wordmark. The wordmark stays
- * Latin ("EthioLearn") in every locale — a brand name, not translated copy.
+ * Abugida brand mark: a graduation-cap badge in Ethiopian green with a
+ * yellow "spark" accent, next to the wordmark. Abugida (አቡጊዳ) is the order of
+ * the Ethiopic script — where traditional schooling began. The wordmark stays
+ * Latin ("Abugida") in every locale — a brand name, not translated copy.
  */
 export function Logo({ iconOnly = false, size = "md", onDark = false, className }: LogoProps) {
   const s = SIZES[size];
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)} aria-label="EthioLearn">
+    <span className={cn("inline-flex items-center gap-2.5", className)} aria-label="Abugida">
       <span
         className={cn(
           "relative inline-flex shrink-0 items-center justify-center bg-gradient-to-br from-primary to-[#2E7D32] shadow-sm",
@@ -44,8 +45,7 @@ export function Logo({ iconOnly = false, size = "md", onDark = false, className 
       </span>
       {!iconOnly && (
         <span className={cn("font-black tracking-tight", s.word)}>
-          <span className={onDark ? "text-primary-light" : "text-primary"}>Ethio</span>
-          <span className={onDark ? "text-white" : "text-text-primary"}>Learn</span>
+          <span className={onDark ? "text-primary-light" : "text-primary"}>Abugida</span>
         </span>
       )}
     </span>

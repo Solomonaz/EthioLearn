@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "ኢትዮለርን",
+    "appName": "አቡጊዳ",
     "signIn": "ግባ",
     "signOut": "ውጣ",
     "register": "ተመዝገብ",
@@ -96,17 +96,17 @@
     "history": "ታሪክ",
     "geography": "ጂኦግራፊ",
     "appEyebrow": "የሞባይል መተግበሪያ · በቅርቡ",
-    "appTitle": "EthioLearn በኪስህ ውስጥ።",
+    "appTitle": "አቡጊዳ በኪስህ ውስጥ።",
     "appDesc": "ፈተናዎች፣ ውድድሮች፣ የዕለት ፈተናህና ተከታታይ ቀናትህ — ለኢትዮጵያ ተማሪዎች በተሰራ የስልክ መተግበሪያ። የAndroid እና iOS መተግበሪያዎች በቅርቡ ይመጣሉ።",
     "appSoon": "በቅርቡ",
     "appPlay": "Google Play",
     "appStore": "App Store",
-    "appNote": "እስከዚያው ድረስ EthioLearn በስልክህ ብራውዘር ይሰራል — ወደ መነሻ ስክሪንህ ጨምረው።",
-    "ctaTitle": "EthioLearnን ወደ ክፍልህ አምጣ።",
+    "appNote": "እስከዚያው ድረስ አቡጊዳ በስልክህ ብራውዘር ይሰራል — ወደ መነሻ ስክሪንህ ጨምረው።",
+    "ctaTitle": "አቡጊዳን ወደ ክፍልህ አምጣ።",
     "ctaSubtitle": "በአንድ ደቂቃ መለያ ፍጠር። ትምህርት ቤቶች በማንኛውም ጊዜ እቅድ መጨመር ይችላሉ።",
     "ctaButton": "መለያ ፍጠር",
     "footerTagline": "ለኢትዮጵያ ተማሪዎች፣ መምህራንና ትምህርት ቤቶች የሚሆን ትምህርት።",
-    "footerCopyright": "© 2026 EthioLearn"
+    "footerCopyright": "© 2026 Abugida"
   },
   "nav": {
     "dashboard": "ዳሽቦርድ",

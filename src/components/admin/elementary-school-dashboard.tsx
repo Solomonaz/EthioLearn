@@ -30,7 +30,7 @@ export interface ElementaryDashboardData {
 
 /**
  * Dashboard for an elementary school's admin. The school has no students on
- * the platform, so this is about its teachers: who is using EthioLearn, what
+ * the platform, so this is about its teachers: who is using Abugida, what
  * they have built, and how much of their AI allowance they have used.
  */
 export function ElementarySchoolDashboard({ data }: { data: ElementaryDashboardData }) {
@@ -41,7 +41,7 @@ export function ElementarySchoolDashboard({ data }: { data: ElementaryDashboardD
       <div>
         <h1 className="text-2xl font-bold text-text-primary">School Dashboard</h1>
         <p className="text-sm text-text-secondary">
-          How your teachers are using EthioLearn in their classrooms
+          How your teachers are using Abugida in their classrooms
         </p>
       </div>
 

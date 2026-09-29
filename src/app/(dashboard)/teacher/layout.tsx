@@ -52,8 +52,8 @@ export default async function TeacherLayout({
             Your account isn&apos;t linked to a school
           </h1>
           <p className="mt-2 text-sm text-text-secondary">
-            Teachers use EthioLearn through their school. Ask your school&apos;s
-            EthioLearn administrator to add you, then sign in again.
+            Teachers use Abugida through their school. Ask your school&apos;s
+            Abugida administrator to add you, then sign in again.
           </p>
         </div>
       </div>

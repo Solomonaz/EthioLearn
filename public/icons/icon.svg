@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
   <rect width="192" height="192" rx="32" fill="#1B5E20"/>
-  <text x="96" y="80" font-family="system-ui,sans-serif" font-size="72" font-weight="900" fill="white" text-anchor="middle" dominant-baseline="middle">E</text>
-  <text x="96" y="145" font-family="system-ui,sans-serif" font-size="22" font-weight="600" fill="#FDD835" text-anchor="middle">EthioLearn</text>
+  <text x="96" y="80" font-family="system-ui,sans-serif" font-size="72" font-weight="900" fill="white" text-anchor="middle" dominant-baseline="middle">A</text>
+  <text x="96" y="145" font-family="system-ui,sans-serif" font-size="24" font-weight="600" fill="#FDD835" text-anchor="middle">Abugida</text>
 </svg>

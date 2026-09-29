@@ -1,7 +1,7 @@
 // Bumping this name purges every older cache on activate. Raise it whenever
 // the caching rules below change — v1 cached the app shell cache-first, which
 // left returning visitors on stale HTML pointing at deleted build chunks.
-const CACHE_NAME = "ethiolearn-v2";
+const CACHE_NAME = "abugida-v1";
 const OFFLINE_URL = "/offline";
 const STATIC_ASSETS = ["/offline", "/manifest.json"];
 

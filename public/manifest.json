@@ -1,6 +1,6 @@
 {
-  "name": "EthioLearn - Gamified Learning Platform",
-  "short_name": "EthioLearn",
+  "name": "Abugida - Learning for Ethiopian Schools",
+  "short_name": "Abugida",
   "description": "Transform textbooks into interactive quizzes. Compete, learn, and earn rewards.",
   "start_url": "/",
   "display": "standalone",

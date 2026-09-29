@@ -60,15 +60,15 @@ export async function POST(request: Request) {
   try {
     await sendMail(
       email,
-      "Set your EthioLearn password",
+      "Set your Abugida password",
       `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#1a6b2e;margin-bottom:8px">EthioLearn</h2>
+        <h2 style="color:#1a6b2e;margin-bottom:8px">Abugida</h2>
         <p style="color:#374151">Hello ${escapeHtml(user.name)},</p>
         <p style="color:#374151">Use the button below to set a new password. The link works once and expires in 1 hour.</p>
         <p style="margin:24px 0"><a href="${link}" style="background:#1a6b2e;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">Set my password</a></p>
         <p style="color:#6b7280;font-size:13px">If you did not ask for this, you can ignore this email.</p>
       </div>`,
-      `Hello ${user.name},\n\nSet a new EthioLearn password here (works once, expires in 1 hour):\n${link}\n\nIf you did not ask for this, ignore this email.`,
+      `Hello ${user.name},\n\nSet a new Abugida password here (works once, expires in 1 hour):\n${link}\n\nIf you did not ask for this, ignore this email.`,
     );
   } catch (err) {
     console.error("[Password reset] email failed:", err);

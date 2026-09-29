@@ -313,7 +313,7 @@ function TeacherSidebar({
           href="/teacher"
           onClick={onClose}
           className={cn("block", collapsed && "md:hidden")}
-          aria-label="EthioLearn"
+          aria-label="Abugida"
         >
           <Logo size="sm" />
         </Link>
