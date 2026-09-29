@@ -287,7 +287,11 @@ export default async function HomePage() {
             <span className="hidden sm:inline">·</span>
             <span>{t("footerTagline")}</span>
           </div>
-          <p>{t("footerCopyright")}</p>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-[var(--lp-ink)]">Privacy</Link>
+            <Link href="/terms" className="hover:text-[var(--lp-ink)]">Terms</Link>
+            <p>{t("footerCopyright")}</p>
+          </div>
         </div>
       </footer>
     </div>
