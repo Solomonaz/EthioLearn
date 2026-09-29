@@ -33,8 +33,8 @@ function LoginForm() {
   const callbackUrl    = searchParams.get("callbackUrl") ?? "";
   const errorCode      = searchParams.get("error") ?? "";
   const tgError        = searchParams.get("tg_error") ?? "";
-  const tgErrorMsg     = tgError === "already_exists"
-    ? "This Telegram account is already registered. Please sign in."
+  const tgErrorMsg     = tgError === "failed"
+    ? "Telegram sign-in didn't go through. Please try again."
     : "";
   const initialError   = tgErrorMsg ||
     (AUTH_ERROR_MESSAGES[errorCode] ?? (errorCode ? AUTH_ERROR_MESSAGES.Default : ""));

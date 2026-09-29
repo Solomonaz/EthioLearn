@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ── Nightly backup: database + uploads, copied off the server ───────────────
 #
-# Run from cron as the deploy user (see DEPLOY.md):
-#   30 2 * * * /home/deploy/abugida/deploy/backup.sh >> /home/deploy/backup.log 2>&1
+# Run from cron as the server user, `ubuntu` on OVH (see DEPLOY.md):
+#   30 2 * * * /home/ubuntu/abugida/deploy/backup.sh >> /home/ubuntu/backup.log 2>&1
 #
 # Keeps KEEP_DAYS of backups on this server, and — when BACKUP_REMOTE is set in
 # .env — mirrors them to off-server storage (e.g. a Hetzner Storage Box) over

@@ -102,17 +102,10 @@ function TelegramCallbackInner() {
         redirect: false,
       });
 
+      // Telegram now finds or creates the account either way (like Google),
+      // so a failure here means the Telegram data was invalid or expired.
       if (!result?.ok || result?.error) {
-        const error = result?.error ?? "";
-        if (error === "NoAccount") {
-          router.replace("/register?tg_error=no_account");
-          return;
-        }
-        if (error === "AlreadyExists") {
-          router.replace("/login?tg_error=already_exists");
-          return;
-        }
-        router.replace(action === "register" ? "/register" : "/login");
+        router.replace(`${action === "register" ? "/register" : "/login"}?tg_error=failed`);
         return;
       }
 

@@ -198,16 +198,12 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
       name: "Telegram",
       credentials: {
         telegramData: { label: "Telegram Data", type: "text" },
-        // "login"    → only find existing account, throw NoAccount if not found
-        // "register" → only create new account, throw AlreadyExists if found
+        // Kept for compatibility with the sign-in/sign-up buttons; both now
+        // behave the same (find the account, or create it), like Google.
         action: { label: "Action", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.telegramData) return null;
-
-        const action = (credentials.action as string) === "register"
-          ? "register"
-          : "login"; // default to login (safe: no auto-creation)
 
         try {
           const data = JSON.parse(credentials.telegramData) as Record<string, string>;
@@ -220,66 +216,55 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
           if (!authDate || isNaN(authDate) || authDate > nowSecs + 5 || nowSecs - authDate > 300) return null;
 
           const telegramId = String(data.id);
-          const existing = await db.user.findFirst({ where: { telegramId } as any });
+          const existing = await db.user.findFirst({ where: { telegramId } });
 
-          if (action === "login") {
-            // ── Login path: account must already exist ─────────────────────
-            if (!existing) throw new Error("NoAccount");
+          // ── Existing account (a student who signed up with Telegram, or anyone
+          //    who linked Telegram from their profile) → sign in ─────────────
+          if (existing) {
             if (!existing.isActive || existing.suspendedAt) return null;
-
-            const profileIncomplete = existing.role === "STUDENT" && !existing.grade;
             return {
               id:    existing.id,
               name:  existing.name,
-              phone: (existing as any).phoneNumber ?? null,
+              email: existing.email,
+              phone: null,
               role:  existing.role,
               grade: existing.grade,
               xpLevel:      existing.xpLevel,
               totalPoints:  existing.totalPoints,
               schoolId:     existing.schoolId,
               mustChangePassword: existing.mustChangePassword,
-              profileIncomplete,
+              profileIncomplete:  existing.role === "STUDENT" && !existing.grade,
             } as any;
           }
 
-          // ── Register path: account must NOT already exist ──────────────
-          if (existing) throw new Error("AlreadyExists");
-
+          // ── First time with this Telegram account → new independent student,
+          //    the same as Google. Staff never arrive here: a teacher or admin
+          //    links Telegram from their profile first, which makes them
+          //    "existing" above.
           const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ");
-
-          // Build an internal phone-number-slot identifier from the Telegram
-          // username (globally unique on Telegram).  Falls back to the numeric
-          // Telegram ID when the user has no username set.
-          // Format: "telegram@solomon"  or  "telegram@id874952384"
-          // This value is NEVER displayed to users — it is for DB uniqueness only.
-          const tgIdentifier = data.username
-            ? `telegram@${data.username.toLowerCase()}`
-            : `telegram@id${telegramId}`;
-
           const newUser = await db.user.create({
             data: {
-              name:        fullName || "Telegram User",
+              name:       fullName || "Telegram User",
               telegramId,
-              phoneNumber: tgIdentifier,
-              role:        "STUDENT",
-            } as any,
+              role:       "STUDENT",
+            },
           });
 
           return {
             id:    newUser.id,
             name:  newUser.name,
+            email: null,
             phone: null,
             role:  newUser.role,
             grade: null,
             xpLevel:          0,
             totalPoints:      0,
-            profileIncomplete: true, // new user always needs grade
+            schoolId:         null,
+            mustChangePassword: false,
+            profileIncomplete: true, // a new student picks their grade first
           } as any;
-        } catch (err: any) {
-          // Re-throw known errors so NextAuth passes them to the client
-          if (err?.message === "NoAccount" || err?.message === "AlreadyExists") {
-            throw err;
-          }
+        } catch (err) {
+          console.error("[Auth] Telegram sign-in failed:", err);
           return null;
         }
       },

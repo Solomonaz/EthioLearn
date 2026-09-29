@@ -1,6 +1,6 @@
 # Deploying Abugida
 
-One Hetzner Cloud server runs everything with Docker Compose:
+One **OVHcloud VPS** (VPS-1: 2 vCores, 4 GB RAM, 40 GB, Ubuntu 24.04, France–Gravelines) runs everything with Docker Compose:
 
 | Service | What it is |
 |---|---|
@@ -10,11 +10,13 @@ One Hetzner Cloud server runs everything with Docker Compose:
 
 The address for now is **`abugida.aderasend.com`**. Moving to `abugida.et` later is in step 12.
 
+The commands work on any Ubuntu server with 4 GB of RAM or more. On OVH you log in as the user **`ubuntu`**, which can run admin commands with `sudo`.
+
 ---
 
 ## 0. What you need before you start
 
-- A **Hetzner** account (international card or PayPal).
+- The OVH **"VPS ready" email**, with the server's **IP address** and the `ubuntu` login.
 - Access to the **DNS settings of `aderasend.com`**.
 - A **Resend** account (password-reset emails). Its free tier is enough to start.
 - The **Google Cloud** project you use for "Sign in with Google", and the **Telegram bot** you already have.
@@ -23,17 +25,11 @@ The address for now is **`abugida.aderasend.com`**. Moving to `abugida.et` later
 
 ---
 
-## 1. Create the server
+## 1. The server
 
-In Hetzner Cloud Console → **Add Server**:
+Already ordered: OVH VPS-1, Ubuntu 24.04, France (Gravelines), with the daily automated backup included.
 
-- **Location:** Falkenstein or Nuremberg (Germany), or Helsinki.
-- **Image:** Ubuntu 24.04.
-- **Type:** shared vCPU, x86, **4 GB RAM or more** (2 GB is too small to build the app).
-- **SSH key:** add your computer's public key. On Windows, run `ssh-keygen -t ed25519` once in PowerShell, then paste the contents of `C:\Users\<you>\.ssh\id_ed25519.pub`.
-- **Backups:** turn on (about 20% extra). It snapshots the whole server daily.
-
-Write down the server's **IPv4 address**.
+From the OVH email, write down the **IPv4 address**. Replace `SERVER_IP` with it in every command below.
 
 ## 2. Point the subdomain at the server
 
@@ -45,50 +41,70 @@ At the DNS provider for `aderasend.com`, add:
 
 It usually works within minutes; allow up to an hour.
 
-## 3. Secure the server (once)
+## 3. First login and securing the server (once)
 
-From your computer:
+**a. Log in.** In PowerShell on your computer:
 
 ```bash
-ssh root@SERVER_IP
+ssh ubuntu@SERVER_IP
 ```
 
-On the server, as root:
+- Say `yes` to the fingerprint question the first time.
+- If OVH gave you a password, use it here. If you added your SSH key when ordering, no password is needed.
+
+**b. If you logged in with a password, add your SSH key** so you never need the password again. Type `exit` to log out, then run this in PowerShell on **your computer** (enter the password once more):
 
 ```bash
-# A normal user for day-to-day work, with your SSH key
-adduser --disabled-password --gecos "" deploy
-usermod -aG sudo deploy
-mkdir -p /home/deploy/.ssh && cp ~/.ssh/authorized_keys /home/deploy/.ssh/
-chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh
-echo "deploy ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/deploy
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh ubuntu@SERVER_IP "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+Then log in again with `ssh ubuntu@SERVER_IP`. It should **not** ask for a password now. If it does, stop and fix the key before going on, because the next part switches passwords off.
+
+**c. Secure it.** On the server, paste these commands (each starts with `sudo`, since `ubuntu` is not root):
+
+```bash
+# Allow SSH keys only, no passwords (stops password-guessing attacks).
+# Named 01-… on purpose: SSH uses the FIRST value it reads, and OVH's own
+# 50-cloud-init.conf turns passwords on, so a later-sorting file would lose.
+echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/01-keys-only.conf
+sudo sshd -t && sudo systemctl restart ssh
+sudo sshd -T | grep -i '^passwordauthentication'   # must print: passwordauthentication no
 
 # Firewall: only SSH and web traffic
-ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp
-ufw --force enable
+sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow 443/udp
+sudo ufw --force enable
 
 # Automatic security updates
-apt-get update && apt-get install -y unattended-upgrades
-dpkg-reconfigure -f noninteractive unattended-upgrades
+sudo apt-get update && sudo apt-get install -y unattended-upgrades
+sudo dpkg-reconfigure -f noninteractive unattended-upgrades
 
 # 2 GB swap, so the app build never runs out of memory
-fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
+
+**Keep this window open** and check from a **second** PowerShell window that `ssh ubuntu@SERVER_IP` still logs in. Only close the first window once the second one works.
 
 ## 4. Install Docker
 
-Still as root:
-
 ```bash
-curl -fsSL https://get.docker.com | sh
-usermod -aG docker deploy
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker ubuntu
+exit
 ```
 
-From now on, log in as `deploy`:
+Log in again (`ssh ubuntu@SERVER_IP`) so the new permission applies, then check:
 
 ```bash
-ssh deploy@SERVER_IP
+docker compose version
+```
+
+It should print a version number. **If the install script failed** (it can lag behind a brand-new Ubuntu release), use Ubuntu's own packages instead:
+
+```bash
+sudo apt-get install -y docker.io docker-compose-v2
+sudo usermod -aG docker ubuntu
+exit
 ```
 
 ## 5. Get the code
@@ -185,7 +201,7 @@ Changing any **`NEXT_PUBLIC_*`** value needs a rebuild (`docker compose up -d --
 
 `deploy/backup.sh` dumps the database and uploads every night, keeps 14 days on the server, and copies them **off the server**.
 
-**Off-server storage (recommended):** create a Hetzner **Storage Box**, enable SSH support in its settings, then on the server:
+**Off-server storage (recommended):** any storage you can reach over SSH works. A Hetzner **Storage Box** is cheap and works even though the server is at OVH. Create one, enable SSH support in its settings, then on the server:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""      # skip if the key already exists
@@ -205,7 +221,7 @@ crontab -e
 Add this line:
 
 ```
-30 2 * * * /home/deploy/abugida/deploy/backup.sh >> /home/deploy/backup.log 2>&1
+30 2 * * * /home/ubuntu/abugida/deploy/backup.sh >> /home/ubuntu/backup.log 2>&1
 ```
 
 **Monthly (10 minutes):** check that a backup actually restores:

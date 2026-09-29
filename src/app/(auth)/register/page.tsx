@@ -28,8 +28,8 @@ function RegisterForm() {
   const { data: session, status } = useSession();
 
   const tgError = searchParams.get("tg_error") ?? "";
-  const tgErrorMsg = tgError === "no_account"
-    ? "No Telegram account found. Please register with your Telegram below."
+  const tgErrorMsg = tgError === "failed"
+    ? "Telegram sign-up didn't go through. Please try again."
     : "";
 
   useEffect(() => {
@@ -92,10 +92,6 @@ function RegisterForm() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
-          <p className="mb-6 rounded-lg bg-primary/5 px-3 py-2 text-xs text-text-secondary">
-            {t("teacherSignupNote")}
-          </p>
-
           <SocialSignIn
             action="register"
             googleLabel={t("signUpGoogle")}
