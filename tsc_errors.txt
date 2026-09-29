@@ -1,8 +1,0 @@
-﻿src/app/api/admin/textbooks/[id]/process/route.ts(2,20): error TS2307: Cannot find module '@/lib/db' or its corresponding type declarations.
-src/app/api/admin/textbooks/[id]/process/route.ts(3,32): error TS2307: Cannot find module '@/lib/get-session' or its corresponding type declarations.
-src/app/api/admin/textbooks/[id]/process/route.ts(4,30): error TS2307: Cannot find module '@/lib/content-chunker' or its corresponding type declarations.
-src/app/api/admin/textbooks/[id]/process/route.ts(5,95): error TS2307: Cannot find module '@/lib/embeddings' or its corresponding type declarations.
-src/app/api/admin/textbooks/[id]/process/route.ts(6,41): error TS2307: Cannot find module '@/lib/bloom-tagger' or its corresponding type declarations.
-src/app/api/admin/textbooks/[id]/process/route.ts(167,12): error TS2802: Type 'Set<unknown>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
-src/app/api/admin/textbooks/route.ts(2,20): error TS2307: Cannot find module '@/lib/db' or its corresponding type declarations.
-src/app/api/admin/textbooks/route.ts(3,32): error TS2307: Cannot find module '@/lib/get-session' or its corresponding type declarations.

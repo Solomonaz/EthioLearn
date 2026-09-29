@@ -72,21 +72,14 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (email !== undefined && email !== null && email !== "") {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (typeof email !== "string" || !emailRegex.test(email)) {
-      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
-    }
-    const existing = await db.user.findFirst({
-      where: { email, id: { not: user.id } },
-      select: { id: true },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "Email is already taken by another user" },
-        { status: 409 },
-      );
-    }
+  // The email is how staff sign in (Google, or a password reset link) and
+  // their school admin set it, so it is not self-editable — changing it would
+  // hand the account to whoever owns the new address.
+  if (email !== undefined) {
+    return NextResponse.json(
+      { error: "Your email is managed by your school administrator." },
+      { status: 400 },
+    );
   }
 
   if (avatarUrl !== undefined && avatarUrl !== null && typeof avatarUrl !== "string") {
@@ -95,7 +88,6 @@ export async function PATCH(request: Request) {
 
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name.trim();
-  if (email !== undefined) updateData.email = email === "" ? null : email;
   if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl || null;
 
   if (Object.keys(updateData).length === 0) {

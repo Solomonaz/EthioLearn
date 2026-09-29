@@ -1,20 +1,23 @@
 "use client";
 
 /**
- * TelegramLinkButton — for the Settings page "Connected Accounts" section.
+ * TelegramLinkButton — for the "Connected Accounts" / sign-in methods cards.
  *
  * Redirects to Telegram's OAuth confirmation page so the user explicitly
- * approves the link.  On return, /auth/telegram-callback?tg_action=link
- * calls POST /api/students/me/link-telegram and redirects to settings.
+ * approves the link.  On return, /telegram-callback?tg_action=link calls
+ * POST /api/students/me/link-telegram and redirects back to `backTo` (the
+ * page the button sits on; defaults to the student settings page).
  */
 
 const BOT_ID = process.env.NEXT_PUBLIC_TELEGRAM_BOT_ID ?? "";
 
 interface TelegramLinkButtonProps {
   botUsername: string; // kept for display consistency, not used to build URL
+  /** Same-origin path to return to after linking. */
+  backTo?: string;
 }
 
-export function TelegramLinkButton({ botUsername: _botUsername }: TelegramLinkButtonProps) {
+export function TelegramLinkButton({ botUsername: _botUsername, backTo }: TelegramLinkButtonProps) {
   const handleClick = () => {
     if (!BOT_ID) {
       console.error("NEXT_PUBLIC_TELEGRAM_BOT_ID is not set");
@@ -23,7 +26,8 @@ export function TelegramLinkButton({ botUsername: _botUsername }: TelegramLinkBu
 
     const origin   = window.location.origin;
     // Note: (auth) is a Next.js route group — the URL is /telegram-callback, NOT /auth/telegram-callback
-    const returnTo = `${origin}/telegram-callback?tg_action=link`;
+    const back = backTo ? `&back=${encodeURIComponent(backTo)}` : "";
+    const returnTo = `${origin}/telegram-callback?tg_action=link${back}`;
 
     const telegramAuthUrl =
       `https://oauth.telegram.org/auth` +

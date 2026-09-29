@@ -5,7 +5,7 @@ import { validateCsrfOrigin } from "@/lib/csrf";
 import {
   canonicalizeClasses,
   classKey,
-  normalizePhone,
+  normalizeEmail,
   parseClasses,
   type ParsedClass,
 } from "@/lib/teacher-classes";
@@ -17,7 +17,7 @@ import { teacherRoleForLevel } from "@/lib/teacher-band";
  * Update one teacher's account. SUPER_ADMIN and SCHOOL_ADMIN only, and a
  * school admin may only touch a teacher inside their own school.
  *
- * Editable: name, phone number, the classes they hold, and active/suspended
+ * Editable: name, email, the classes they hold, and active/suspended
  * state. It can never change a ROLE, so this endpoint cannot be used to promote
  * anyone. Targets are teachers of either band; a school admin reaches only the
  * band that matches their school's level. Grades 1-8 classes are validated as
@@ -54,7 +54,7 @@ export async function PATCH(
 
   let body: {
     name?: unknown;
-    phone?: unknown;
+    email?: unknown;
     isActive?: unknown;
     suspendReason?: unknown;
     /** When present, the complete set of classes this teacher should hold. */
@@ -98,27 +98,28 @@ export async function PATCH(
     data.name = name;
   }
 
-  // Phone is their login identity, so a change here is how an admin fixes a
-  // number that was mistyped at provisioning and is locking the teacher out.
-  if (body.phone !== undefined) {
-    const phoneNumber = normalizePhone(String(body.phone ?? ""));
-    if (!phoneNumber) {
-      return NextResponse.json(
-        { error: "Enter a valid Ethiopian phone number (e.g. 9XXXXXXXX)." },
-        { status: 400 },
-      );
+  // The email is how they sign in (Google, or a password they set through
+  // "Forgot password"). A new address has not been proven by its owner yet.
+  if (body.email !== undefined) {
+    const email = normalizeEmail(body.email);
+    if (!email) {
+      return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
     }
     const clash = await db.user.findFirst({
-      where: { phoneNumber, id: { not: id } },
+      where: { email, id: { not: id } },
       select: { id: true },
     });
     if (clash) {
       return NextResponse.json(
-        { error: "Another account already uses that phone number." },
+        { error: "Another account already uses that email." },
         { status: 409 },
       );
     }
-    data.phoneNumber = phoneNumber;
+    const current = await db.user.findUnique({ where: { id }, select: { email: true } });
+    if (current?.email !== email) {
+      data.email = email;
+      data.emailVerifiedAt = null;
+    }
   }
 
   if (body.isActive !== undefined) {
@@ -196,7 +197,6 @@ export async function PATCH(
     select: {
       id: true,
       name: true,
-      phoneNumber: true,
       email: true,
       role: true,
       isActive: true,

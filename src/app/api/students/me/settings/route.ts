@@ -14,8 +14,9 @@ export async function GET() {
     user: {
       id: user.id,
       name: user.name,
-      phoneNumber: user.phoneNumber,
+      username: user.username,
       email: user.email,
+      hasPassword: !!user.passwordHash,
       grade: user.grade,
       section: user.section,
       avatarUrl: user.avatarUrl,
@@ -86,10 +87,23 @@ export async function PATCH(req: Request) {
     }
   }
 
-  // Validate email
+  // Validate email. It is a sign-in identity (password or Google), so it is
+  // stored lower-case, a new address counts as unverified, and a student who
+  // signs in with nothing else may not remove it.
+  const normalizedEmail =
+    typeof email === "string" && email.trim() ? email.trim().toLowerCase() : email;
+  if (email === "" || email === null) {
+    const hasOtherWay = !!(user.username || user.googleId || user.telegramId || user.facebookId);
+    if (user.email && !hasOtherWay) {
+      return NextResponse.json(
+        { error: "You sign in with this email, so it can't be removed." },
+        { status: 400 },
+      );
+    }
+  }
   if (email !== undefined && email !== null && email !== "") {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(String(normalizedEmail))) {
       return NextResponse.json(
         { error: "Invalid email format" },
         { status: 400 },
@@ -99,7 +113,7 @@ export async function PATCH(req: Request) {
     // Check uniqueness
     const existing = await db.user.findFirst({
       where: {
-        email,
+        email: normalizedEmail,
         id: { not: user.id },
       },
     });
@@ -124,7 +138,10 @@ export async function PATCH(req: Request) {
   // Build update data — only include provided fields
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name.trim();
-  if (email !== undefined) updateData.email = email === "" ? null : email;
+  if (email !== undefined && (normalizedEmail || null) !== user.email) {
+    updateData.email = normalizedEmail || null;
+    updateData.emailVerifiedAt = null;
+  }
   if (grade !== undefined) updateData.grade = grade;
   // Normalised, so a self-managed student cannot store "b" against the "B"
   // every other writer holds.

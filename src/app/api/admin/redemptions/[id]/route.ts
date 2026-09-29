@@ -89,7 +89,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         approvedById: user.id,
       },
       include: {
-        student: { select: { id: true, name: true, phoneNumber: true, grade: true, totalPoints: true } },
+        student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true, grade: true, totalPoints: true } },
         reward: { select: { id: true, name: true, tier: true, pointsCost: true } },
         approvedBy: { select: { name: true } },
       },
@@ -117,7 +117,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           approvedById: user.id,
         },
         include: {
-          student: { select: { id: true, name: true, phoneNumber: true, grade: true, totalPoints: true } },
+          student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true, grade: true, totalPoints: true } },
           reward: { select: { id: true, name: true, tier: true, pointsCost: true } },
           approvedBy: { select: { name: true } },
         },
@@ -167,7 +167,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       where: { id },
       data: { status: "FULFILLED" },
       include: {
-        student: { select: { id: true, name: true, phoneNumber: true, grade: true, totalPoints: true } },
+        student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true, grade: true, totalPoints: true } },
         reward: { select: { id: true, name: true, tier: true, pointsCost: true } },
         approvedBy: { select: { name: true } },
       },

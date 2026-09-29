@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition, Suspense } from "react";
 import {
   User,
-  Phone,
+  AtSign,
+  KeyRound,
   Shield,
   Lock,
   LogOut,
@@ -34,14 +35,17 @@ import { logout } from "@/lib/logout";
 import { useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
+import Link from "next/link";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface UserSettings {
   id: string;
   name: string;
-  phoneNumber: string;
+  /** School-issued sign-in name, when the school created this student. */
+  username: string | null;
   email: string | null;
+  hasPassword: boolean;
   grade: number | null;
   section: string | null;
   avatarUrl: string | null;
@@ -427,14 +431,26 @@ function StudentSettingsInner() {
         <CardContent>
           <div className="space-y-4">
             <InfoRow
-              icon={<Phone className="h-4 w-4 text-text-secondary" />}
-              label="Phone Number"
-              value={
-                userData.phoneNumber?.startsWith("telegram@")
-                  ? "—"
-                  : userData.phoneNumber || "—"
-              }
+              icon={<AtSign className="h-4 w-4 text-text-secondary" />}
+              label="Sign in as"
+              value={userData.username ?? userData.email ?? "—"}
             />
+
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-4">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Password</p>
+                <p className="text-xs text-text-secondary">
+                  {userData.hasPassword ? "Set" : "Not set — you sign in with Google or Telegram"}
+                </p>
+              </div>
+              <Link
+                href="/change-password"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-primary hover:bg-border/40"
+              >
+                <KeyRound className="h-4 w-4" />
+                {userData.hasPassword ? "Change" : "Set a password"}
+              </Link>
+            </div>
 
             {TELEGRAM_ENABLED && (
               <div>

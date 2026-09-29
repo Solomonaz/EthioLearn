@@ -10,7 +10,7 @@ import { PRIMARY_MAX_GRADE, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/l
 import { MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
 
 /**
- * Edit a teacher: their name, the phone number they sign in with, and the
+ * Edit a teacher: their name, the email they sign in with, and the
  * classes they hold. Grades 1-8 teachers (`elementary`) hold entries with no
  * section, each naming a subject, a grade, or both — and may hold none.
  *
@@ -36,7 +36,7 @@ export interface EditableClass {
 export interface EditableTeacher {
   id: string;
   name: string;
-  phoneNumber: string | null;
+  email: string | null;
   teachingAssignments: EditableClass[];
 }
 
@@ -55,9 +55,7 @@ export function EditTeacherDialog({
   const grades = elementary ? ELEMENTARY_GRADES : SECONDARY_GRADES;
   const [name, setName] = useState(teacher.name);
   // Stored as +251XXXXXXXXX; the field shows the local part, like the add form.
-  const [phone, setPhone] = useState(
-    (teacher.phoneNumber ?? "").replace(/^\+251/, ""),
-  );
+  const [email, setEmail] = useState(teacher.email ?? "");
   const [classes, setClasses] = useState<EditableClass[]>(
     teacher.teachingAssignments.map((c) => ({ ...c })),
   );
@@ -122,8 +120,6 @@ export function EditTeacherDialog({
       }
 
       // Normalise so a pasted 0912…, 251912… or +251912… also works.
-      const localDigits = phone.trim().replace(/\D/g, "").replace(/^251/, "").replace(/^0/, "");
-
       setSaving(true);
       try {
         const res = await fetch(`/api/admin/teachers/${teacher.id}`, {
@@ -131,7 +127,7 @@ export function EditTeacherDialog({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: name.trim(),
-            phone: `+251${localDigits}`,
+            email: email.trim(),
             assignments: classes.map((c) => ({
               subject: c.subject,
               grade: c.grade,
@@ -151,15 +147,13 @@ export function EditTeacherDialog({
         setSaving(false);
       }
     },
-    [saving, classes, phone, name, teacher.id, onSaved, onClose, elementary],
+    [saving, classes, email, name, teacher.id, onSaved, onClose, elementary],
   );
 
   const fieldClass =
     "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
 
-  const phoneChanged =
-    phone.trim().replace(/\D/g, "").replace(/^251/, "").replace(/^0/, "") !==
-    (teacher.phoneNumber ?? "").replace(/^\+251/, "");
+  const emailChanged = email.trim().toLowerCase() !== (teacher.email ?? "").toLowerCase();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
@@ -201,29 +195,23 @@ export function EditTeacherDialog({
 
           <div className="space-y-1.5">
             <label
-              htmlFor="edit-phone"
+              htmlFor="edit-email"
               className="text-xs font-semibold uppercase text-text-muted"
             >
-              Phone number
+              Email
             </label>
-            <div className="flex">
-              <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-gray-50 px-3 text-sm text-text-secondary">
-                +251
-              </span>
-              <Input
-                id="edit-phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={saving}
-                className="rounded-l-none"
-                inputMode="numeric"
-                required
-              />
-            </div>
-            {phoneChanged && (
+            <Input
+              id="edit-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={saving}
+              required
+            />
+            {emailChanged && (
               <p className="text-xs text-amber-600">
-                This is how they sign in — changing it means they must use the new
-                number from now on.
+                This is how they sign in — from now on they must use the new
+                address.
               </p>
             )}
           </div>

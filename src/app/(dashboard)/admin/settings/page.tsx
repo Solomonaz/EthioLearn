@@ -17,7 +17,7 @@ import {
   Gift,
   Calendar,
   User,
-  Phone,
+  Mail,
   Shield,
   Download,
   Library,
@@ -45,7 +45,7 @@ interface SchoolData {
 
 interface UserData {
   name: string;
-  phoneNumber: string;
+  email: string | null;
   role: string;
 }
 
@@ -203,10 +203,10 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Phone className="h-4 w-4 text-text-muted" />
+                <Mail className="h-4 w-4 text-text-muted" />
                 <div>
-                  <p className="text-xs text-text-muted">{t("adminPhone")}</p>
-                  <p className="text-sm font-medium text-text-primary">{currentUser?.phoneNumber ?? "N/A"}</p>
+                  <p className="text-xs text-text-muted">{t("adminEmail")}</p>
+                  <p className="text-sm font-medium text-text-primary">{currentUser?.email ?? "N/A"}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -414,11 +414,11 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Phone className="h-4 w-4 text-text-muted" />
+              <Mail className="h-4 w-4 text-text-muted" />
               <div>
-                <p className="text-xs text-text-muted">{t("adminPhone")}</p>
+                <p className="text-xs text-text-muted">{t("adminEmail")}</p>
                 <p className="text-sm font-medium text-text-primary">
-                  {currentUser?.phoneNumber ?? "N/A"}
+                  {currentUser?.email ?? "N/A"}
                 </p>
               </div>
             </div>

@@ -53,7 +53,6 @@ interface Teacher {
   role: "TEACHER" | "SECONDARY_TEACHER";
   gameSets: number;
   name: string;
-  phoneNumber: string | null;
   email: string | null;
   isActive: boolean;
   lastActiveAt: string | null;
@@ -118,7 +117,7 @@ export default function AdminTeachersPage() {
 
   // ── New teacher form ────────────────────────────────────────────────────
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [schoolId, setSchoolId] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   // Null = "All grades" (elementary only).
@@ -249,7 +248,7 @@ export default function AdminTeachersPage() {
 
   function resetForm() {
     setName("");
-    setPhone("");
+    setEmail("");
     setClasses([]);
     setSchoolId("");
     setDraftSection("");
@@ -265,10 +264,6 @@ export default function AdminTeachersPage() {
       return;
     }
 
-    // Normalise so a pasted 0912…, 251912… or +251912… also works, matching
-    // how the students form sends it.
-    const localDigits = phone.trim().replace(/\D/g, "").replace(/^251/, "").replace(/^0/, "");
-
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/teachers", {
@@ -276,7 +271,7 @@ export default function AdminTeachersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          phone: `+251${localDigits}`,
+          email: email.trim(),
           assignments: classes,
           ...(isSuperAdmin && schoolId ? { schoolId } : {}),
         }),
@@ -285,7 +280,7 @@ export default function AdminTeachersPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Failed to add teacher");
 
-      toast.success(`${data.teacher.name} can now sign in with their phone number.`);
+      toast.success(`${data.teacher.name} was added. They can sign in with ${data.teacher.email}.`);
       resetForm();
       await fetchTeachers();
     } catch (err) {
@@ -336,15 +331,14 @@ export default function AdminTeachersPage() {
             <>
               Elementary (grades 1–{PRIMARY_MAX_GRADE}) and secondary (grades{" "}
               {SECONDARY_MIN_GRADE}–{SECONDARY_MAX_GRADE}) teachers. The school you pick
-              decides which kind you add. They sign in with the phone number you
-              register here — no self sign-up.
+              decides which kind you add. They sign in with Google using this email, or set a password with “Forgot password” on the sign-in page.
             </>
           ) : (
             <>
               {ownLevel === "ELEMENTARY"
                 ? `Teachers, grades 1–${PRIMARY_MAX_GRADE}.`
                 : `Secondary teachers, grades ${SECONDARY_MIN_GRADE}–${SECONDARY_MAX_GRADE}.`}{" "}
-              They sign in with the phone number you register here — no self sign-up.
+              They sign in with Google using this email, or set a password with “Forgot password” on the sign-in page.
             </>
           )}
         </p>
@@ -396,28 +390,23 @@ export default function AdminTeachersPage() {
 
                 <div className="space-y-2">
                   <label
-                    htmlFor="teacher-phone"
+                    htmlFor="teacher-email"
                     className="text-xs font-semibold uppercase text-text-muted"
                   >
-                    Phone number
+                    Email
                   </label>
-                  <div className="flex">
-                    <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-gray-50 px-3 text-sm text-text-secondary">
-                      +251
-                    </span>
-                    <Input
-                      id="teacher-phone"
-                      placeholder="9XXXXXXXX"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      disabled={submitting}
-                      className="rounded-l-none"
-                      inputMode="numeric"
-                      required
-                    />
-                  </div>
+                  <Input
+                    id="teacher-email"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={submitting}
+                    autoComplete="off"
+                    required
+                  />
                   <p className="text-xs text-text-muted">
-                    This is how they sign in. Ethiopian numbers only.
+                    How they sign in — no invite is sent.
                   </p>
                 </div>
 
@@ -592,7 +581,7 @@ export default function AdminTeachersPage() {
               <div className="relative mt-3">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
                 <Input
-                  placeholder="Search by name or phone"
+                  placeholder="Search by name or email"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
@@ -643,7 +632,7 @@ export default function AdminTeachersPage() {
                           )}
                         </div>
                         <p className="mt-0.5 text-xs text-text-muted">
-                          {teacher.phoneNumber ?? "No phone"}
+                          {teacher.email ?? "No email"}
                           {teacher.school ? ` · ${teacher.school.name}` : " · Unassigned"}
                           {" · "}
                           {teacher.lastActiveAt

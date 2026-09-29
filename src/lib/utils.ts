@@ -9,16 +9,6 @@ export function generateRoomCode(): string {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-export function formatPhoneNumber(phone: string): string {
-  if (phone.startsWith("0")) {
-    return "+251" + phone.slice(1);
-  }
-  if (phone.startsWith("251")) {
-    return "+" + phone;
-  }
-  return phone;
-}
-
 export function getPointsForDifficulty(difficulty: "EASY" | "MEDIUM" | "HARD"): number {
   const points = { EASY: 10, MEDIUM: 20, HARD: 30 };
   return points[difficulty];

@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   const request = await db.paymentRequest.findUnique({
     where: { id },
     include: {
-      student: { select: { id: true, name: true, phoneNumber: true } },
+      student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true } },
       plan: { select: { id: true, name: true } },
     },
   });

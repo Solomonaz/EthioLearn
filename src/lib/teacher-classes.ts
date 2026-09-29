@@ -112,19 +112,13 @@ export function classKey(c: {
 }
 
 /**
- * Normalize an Ethiopian phone number to +251XXXXXXXXX, or null if invalid.
- * Accepts every form an admin might type or paste: +251912…, 251912…, 0912…,
- * and the bare nine-digit local number the forms ask for.
+ * Normalise an email to the stored form (trimmed, lower-case), or null when it
+ * is not a plausible address. Staff sign in with it — through Google, or a
+ * password set via "Forgot password" — so it must match exactly.
  */
-export function normalizePhone(raw: string): string | null {
-  const trimmed = raw.trim().replace(/\s+/g, "");
-  let n: string;
-  if (trimmed.startsWith("+251")) n = trimmed;
-  else if (trimmed.startsWith("251")) n = "+" + trimmed;
-  else if (trimmed.startsWith("0")) n = "+251" + trimmed.slice(1);
-  else if (/^[0-9]{9}$/.test(trimmed)) n = "+251" + trimmed;
-  else return null;
-  return /^\+251[0-9]{9}$/.test(n) ? n : null;
+export function normalizeEmail(raw: unknown): string | null {
+  const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254 ? email : null;
 }
 
 /**

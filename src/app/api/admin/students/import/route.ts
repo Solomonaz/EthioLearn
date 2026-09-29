@@ -3,37 +3,32 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import Papa from "papaparse";
-import { Prisma } from "@prisma/client";
 import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
+import { generateTempPassword, generateUsername, hashPassword } from "@/lib/password";
+
+/**
+ * POST /api/admin/students/import  { csvData }
+ *
+ * CSV columns: name, grade, section. Each student gets a school-issued
+ * username and a temporary password; the full list comes back ONCE in
+ * `credentials` for the admin to print or save — passwords are never stored
+ * in readable form. Each student replaces theirs at first sign-in.
+ *
+ * Rows are matched against existing students of the same school by name,
+ * grade and section, so re-uploading a file does not create everyone twice.
+ */
 
 interface CsvRow {
   name?: string;
-  phone?: string;
-  phoneNumber?: string;
   grade?: string;
   section?: string;
 }
 
-function normalizePhone(phone: string): string | null {
-  const trimmed = phone.trim();
+/** Most rows in one upload. Hashing each password takes real CPU time. */
+const MAX_ROWS = 1000;
 
-  // Validate Ethiopian phone format
-  if (
-    !trimmed.startsWith("0") &&
-    !trimmed.startsWith("+251") &&
-    !trimmed.startsWith("251")
-  ) {
-    return null;
-  }
-
-  if (trimmed.startsWith("0")) {
-    return "+251" + trimmed.slice(1);
-  }
-  if (trimmed.startsWith("251")) {
-    return "+" + trimmed;
-  }
-  // Already starts with +251
-  return trimmed;
+function matchKey(name: string, grade: number, section: string): string {
+  return `${name.toLowerCase().replace(/\s+/g, " ")}::${grade}::${section}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -76,37 +71,26 @@ export async function POST(req: NextRequest) {
     transformHeader: (header: string) => header.trim().toLowerCase(),
   });
 
+  if (parsed.data.length > MAX_ROWS) {
+    return NextResponse.json(
+      { error: `Upload at most ${MAX_ROWS} students at a time — split the file.` },
+      { status: 400 }
+    );
+  }
+
   const errors: { row: number; message: string }[] = [];
-  const validRows: Prisma.UserCreateManyInput[] = [];
+  const valid: { name: string; grade: number; section: string }[] = [];
 
   for (let i = 0; i < parsed.data.length; i++) {
     const row = parsed.data[i];
     const rowNum = i + 2; // 1-indexed + header row
 
-    // Name validation
-    const name = row.name?.trim();
-    if (!name) {
-      errors.push({ row: rowNum, message: "Name is required" });
+    const name = row.name?.trim().replace(/\s+/g, " ");
+    if (!name || name.length < 2 || name.length > 50) {
+      errors.push({ row: rowNum, message: "Name is required (2-50 characters)" });
       continue;
     }
 
-    // Phone validation and normalization
-    const rawPhone = (row.phone || row.phoneNumber || "").trim();
-    if (!rawPhone) {
-      errors.push({ row: rowNum, message: "Phone number is required" });
-      continue;
-    }
-
-    const normalizedPhone = normalizePhone(rawPhone);
-    if (!normalizedPhone) {
-      errors.push({
-        row: rowNum,
-        message: `Invalid Ethiopian phone format: ${rawPhone}`,
-      });
-      continue;
-    }
-
-    // Grade validation
     const gradeStr = row.grade?.trim();
     if (!gradeStr) {
       errors.push({ row: rowNum, message: "Grade is required" });
@@ -130,31 +114,66 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    validRows.push({
-      name,
-      phoneNumber: normalizedPhone,
-      grade: gradeNum,
-      section,
-      role: "STUDENT" as const,
-      schoolId: user.schoolId,
-      isActive: true,
-    });
+    valid.push({ name, grade: gradeNum, section: section as string });
   }
 
-  let imported = 0;
-  if (validRows.length > 0) {
-    const result = await db.user.createMany({
-      data: validRows,
-      skipDuplicates: true,
-    });
-    imported = result.count;
+  // Skip students already in this school (same name, grade and section), and
+  // repeats within the file itself.
+  const existing = await db.user.findMany({
+    where: { role: "STUDENT", schoolId: user.schoolId ?? null },
+    select: { name: true, grade: true, section: true },
+  });
+  const seen = new Set(
+    existing
+      .filter((e) => e.grade !== null && e.section)
+      .map((e) => matchKey(e.name, e.grade as number, e.section as string)),
+  );
+
+  const reserved = new Set<string>();
+  const credentials: {
+    name: string;
+    grade: number;
+    section: string;
+    username: string;
+    tempPassword: string;
+  }[] = [];
+  let skipped = 0;
+
+  for (const row of valid) {
+    const key = matchKey(row.name, row.grade, row.section);
+    if (seen.has(key)) {
+      skipped++;
+      continue;
+    }
+    seen.add(key);
+
+    const username = await generateUsername(row.name, reserved);
+    const tempPassword = generateTempPassword();
+    credentials.push({ ...row, username, tempPassword });
   }
 
-  const skipped = validRows.length - imported;
+  // Hash in parallel (scrypt runs on libuv's thread pool), then insert.
+  const hashes = await Promise.all(credentials.map((c) => hashPassword(c.tempPassword)));
+  if (credentials.length > 0) {
+    await db.user.createMany({
+      data: credentials.map((c, i) => ({
+        name: c.name,
+        username: c.username,
+        passwordHash: hashes[i],
+        mustChangePassword: true,
+        grade: c.grade,
+        section: c.section,
+        role: "STUDENT" as const,
+        schoolId: user.schoolId,
+        isActive: true,
+      })),
+    });
+  }
 
   return NextResponse.json({
-    imported,
+    imported: credentials.length,
     skipped,
     errors,
+    credentials,
   });
 }

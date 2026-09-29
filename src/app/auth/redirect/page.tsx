@@ -24,7 +24,14 @@ export default function AuthRedirectPage() {
       return;
     }
 
-    const user = session?.user as ({ profileIncomplete?: boolean; role?: string } | undefined);
+    const user = session?.user as
+      | { profileIncomplete?: boolean; mustChangePassword?: boolean; role?: string }
+      | undefined;
+
+    if (user?.mustChangePassword) {
+      router.replace("/change-password");
+      return;
+    }
 
     if (user?.profileIncomplete) {
       router.replace("/complete-profile");

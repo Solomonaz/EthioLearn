@@ -10,7 +10,7 @@ import {
   Flame,
   Calendar,
   School,
-  Phone,
+  AtSign,
   TrendingUp,
   Star,
   Clock,
@@ -76,7 +76,9 @@ interface StudentDetailResponse {
   student: {
     id: string;
     name: string;
-    phoneNumber: string;
+    /** School-issued sign-in name; null for students who signed up themselves. */
+    username: string | null;
+    email: string | null;
     grade: number | null;
     section: string | null;
     xpLevel: number;
@@ -135,21 +137,22 @@ export default function AdminStudentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  // A freshly issued temporary password, shown once for the admin to hand over.
+  const [issued, setIssued] = useState<{ signInAs: string | null; tempPassword: string } | null>(null);
 
   /**
    * Editing the student's record.
    *
    * These are the fields the student themself can no longer change — name,
-   * grade and section are how their teachers identify them, and the phone
-   * number is how they sign in. The school owns all four, so this is the only
-   * place they can be corrected.
+   * grade and section are how their teachers identify them. The school owns
+   * them, so this is the only place they can be corrected. Sign-in details are
+   * not edited here: a forgotten password is replaced with "Reset password".
    */
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
-    phoneNumber: "",
     grade: "" as number | "",
     section: "",
   });
@@ -157,9 +160,6 @@ export default function AdminStudentDetailPage() {
   function startEditing(student: StudentDetailResponse["student"]) {
     setForm({
       name: student.name,
-      // Shown as the local 9-digit number the forms ask for, not the stored
-      // +251 form — an admin should not have to retype a country code.
-      phoneNumber: student.phoneNumber.replace(/^\+251/, ""),
       grade: student.grade ?? "",
       section: student.section ?? "",
     });
@@ -176,7 +176,6 @@ export default function AdminStudentDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
-          phoneNumber: form.phoneNumber,
           grade: form.grade === "" ? undefined : String(form.grade),
           section: form.section,
         }),
@@ -290,10 +289,12 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-sm text-text-secondary sm:justify-start">
-                <span className="flex items-center gap-1.5">
-                  <Phone className="h-4 w-4" />
-                  {student.phoneNumber}
-                </span>
+                {(student.username || student.email) && (
+                  <span className="flex items-center gap-1.5">
+                    <AtSign className="h-4 w-4" />
+                    {student.username ?? student.email}
+                  </span>
+                )}
                 {student.grade && (
                   <span className="flex items-center gap-1.5">
                     <BookOpen className="h-4 w-4" />
@@ -346,35 +347,6 @@ export default function AdminStudentDetailPage() {
                         maxLength={50}
                         className={editFieldClass}
                       />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="edit-phone"
-                        className="mb-1 block text-xs font-semibold uppercase text-text-muted"
-                      >
-                        Phone number
-                      </label>
-                      <div className="flex items-stretch">
-                        <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-border/30 px-2.5 text-sm text-text-secondary">
-                          +251
-                        </span>
-                        <input
-                          id="edit-phone"
-                          value={form.phoneNumber}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, phoneNumber: e.target.value }))
-                          }
-                          disabled={saving}
-                          inputMode="tel"
-                          placeholder="9XXXXXXXX"
-                          className={`${editFieldClass} rounded-l-none`}
-                        />
-                      </div>
-                      <p className="mt-1 text-[11px] text-text-muted">
-                        This is how they sign in. Changing it means they must use
-                        the new number next time.
-                      </p>
                     </div>
 
                     <div>
@@ -914,38 +886,53 @@ export default function AdminStudentDetailPage() {
           {/* Divider */}
           <div className="border-t border-border" />
 
-          {/* Reset OTP Lock */}
-          <div className="flex items-center justify-between">
+          {/* Reset password */}
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-text-primary">Reset OTP Lock</p>
+              <p className="text-sm font-medium text-text-primary">Reset password</p>
               <p className="text-xs text-text-secondary">
-                Clears rate limits and stored OTP for this student.
+                Gives the student a new temporary password and signs them out
+                everywhere. They choose their own at next sign-in.
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
               disabled={actionLoading}
-              className="gap-1.5"
+              className="shrink-0 gap-1.5"
               onClick={async () => {
+                if (!window.confirm("Give this student a new temporary password?")) return;
                 setActionLoading(true);
                 try {
-                  const res = await fetch(`/api/admin/students/${id}/reset-otp`, {
+                  const res = await fetch(`/api/admin/students/${id}/reset-password`, {
                     method: "POST",
                   });
-                  if (!res.ok) throw new Error("Failed");
-                  toast.success("OTP lock reset successfully");
-                } catch {
-                  toast.error("Failed to reset OTP lock");
+                  const payload = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(payload.error ?? "Failed");
+                  setIssued({ signInAs: payload.signInAs, tempPassword: payload.tempPassword });
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Failed to reset the password");
                 } finally {
                   setActionLoading(false);
                 }
               }}
             >
               <KeyRound className="h-3.5 w-3.5" />
-              Reset OTP
+              Reset password
             </Button>
           </div>
+          {issued && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">Give these to the student — they are shown only once.</p>
+              <p className="mt-1">
+                Sign in as: <span className="font-mono font-semibold">{issued.signInAs}</span>
+              </p>
+              <p>
+                Temporary password:{" "}
+                <span className="font-mono font-semibold">{issued.tempPassword}</span>
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

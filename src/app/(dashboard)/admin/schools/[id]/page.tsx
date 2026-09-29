@@ -29,7 +29,6 @@ import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 interface SchoolAdmin {
   id: string;
   name: string;
-  phoneNumber?: string;
   email?: string;
   createdAt: string;
 }
@@ -70,7 +69,7 @@ export default function SchoolDetailPage() {
   // Add admin
   const [adminMode, setAdminMode] = useState<"create" | "assign">("create");
   const [adminName, setAdminName] = useState("");
-  const [adminPhone, setAdminPhone] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
   const [adminUserId, setAdminUserId] = useState("");
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [removingAdminId, setRemovingAdminId] = useState<string | null>(null);
@@ -142,8 +141,8 @@ export default function SchoolDetailPage() {
   async function handleAddAdmin(e: React.FormEvent) {
     e.preventDefault();
 
-    if (adminMode === "create" && (!adminName.trim() || !adminPhone.trim())) {
-      toast.error("Please fill in name and phone number.");
+    if (adminMode === "create" && (!adminName.trim() || !adminEmail.trim())) {
+      toast.error("Please fill in name and email.");
       return;
     }
     if (adminMode === "assign" && !adminUserId.trim()) {
@@ -153,17 +152,9 @@ export default function SchoolDetailPage() {
 
     setAddingAdmin(true);
     try {
-      // The "+251" shown in the form is a fixed label — prepend it before
-      // sending. Normalise so a pasted 0912…, 251912…, or +251912… also works:
-      // keep digits only, then strip a leading country code (251) or trunk 0.
-      const localDigits = adminPhone
-        .trim()
-        .replace(/\D/g, "")
-        .replace(/^251/, "")
-        .replace(/^0/, "");
       const body =
         adminMode === "create"
-          ? { name: adminName.trim(), phoneNumber: `+251${localDigits}` }
+          ? { name: adminName.trim(), email: adminEmail.trim() }
           : { userId: adminUserId.trim() };
 
       const res = await fetch(`/api/admin/schools/${schoolId}/admins`, {
@@ -179,7 +170,7 @@ export default function SchoolDetailPage() {
 
       toast.success("Administrator added successfully!");
       setAdminName("");
-      setAdminPhone("");
+      setAdminEmail("");
       setAdminUserId("");
       await fetchSchool();
     } catch (e) {
@@ -465,7 +456,7 @@ export default function SchoolDetailPage() {
                       {admin.name}
                     </p>
                     <p className="text-xs text-text-secondary">
-                      {admin.phoneNumber || admin.email || "No contact info"}
+                      {admin.email || "No email"}
                       {" \u00b7 "}
                       Joined {new Date(admin.createdAt).toLocaleDateString()}
                     </p>
@@ -533,20 +524,19 @@ export default function SchoolDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase text-text-muted">
-                    Phone Number
+                    Email
                   </label>
-                  <div className="flex">
-                    <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-gray-50 px-3 text-sm text-text-secondary">
-                      +251
-                    </span>
-                    <Input
-                      placeholder="9XXXXXXXX"
-                      value={adminPhone}
-                      onChange={(e) => setAdminPhone(e.target.value)}
-                      disabled={addingAdmin}
-                      className="rounded-l-none"
-                    />
-                  </div>
+                  <Input
+                    type="email"
+                    placeholder="name@school.edu.et"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    disabled={addingAdmin}
+                  />
+                  <p className="text-xs text-text-muted">
+                    They sign in with Google on this email, or set a password with
+                    “Forgot password”. No invite is sent.
+                  </p>
                 </div>
               </div>
             ) : (

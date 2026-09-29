@@ -48,6 +48,8 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             phoneNumber: true,
+            email: true,
+            username: true,
             grade: true,
             totalPoints: true,
           },

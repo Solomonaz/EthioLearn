@@ -36,6 +36,10 @@ function TelegramCallbackInner() {
     called.current = true;
 
     const action = searchParams.get("tg_action") ?? "login";
+    // Where a "link" returns to. Only a same-origin path is accepted, so the
+    // parameter cannot send anyone off-site.
+    const backParam = searchParams.get("back") ?? "";
+    const linkBack = /^\/[A-Za-z0-9/_-]*$/.test(backParam) ? backParam : "/student/settings";
 
     // ── Parse the hash fragment ────────────────────────────────────────────
     // Telegram appends: #tgAuthResult=<base64url-encoded JSON>
@@ -44,7 +48,7 @@ function TelegramCallbackInner() {
     if (!hash || !hash.includes("tgAuthResult=")) {
       // User cancelled or navigated here directly — go back
       const fallback = action === "register" ? "/register"
-                     : action === "link"     ? "/student/settings"
+                     : action === "link"     ? linkBack
                      :                         "/login";
       router.replace(fallback);
       return;
@@ -80,13 +84,13 @@ function TelegramCallbackInner() {
           const data = await res.json();
           if (!res.ok) {
             router.replace(
-              `/student/settings?tg_link_error=${encodeURIComponent(data.error ?? "Failed to link")}`,
+              `${linkBack}?tg_link_error=${encodeURIComponent(data.error ?? "Failed to link")}`,
             );
           } else {
-            router.replace("/student/settings?tg_linked=true");
+            router.replace(`${linkBack}?tg_linked=true`);
           }
         } catch {
-          router.replace("/student/settings?tg_link_error=network");
+          router.replace(`${linkBack}?tg_link_error=network`);
         }
         return;
       }

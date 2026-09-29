@@ -8,8 +8,10 @@ import { Lock } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [otp, setOtp] = useState("");
+  // The env super admin (SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD). It signs
+  // in through the same password provider as everyone else.
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,14 +21,18 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signIn("credentials", {
+      const result = await signIn("password", {
         redirect: false,
-        phoneNumber: "+251" + phoneNumber,
-        otp,
+        identifier: email.trim(),
+        password,
       });
 
       if (result?.error) {
-        setError("Invalid credentials. Enter the master phone and OTP.");
+        setError(
+          result.error === "TooManyAttempts"
+            ? "Too many attempts. Wait 15 minutes."
+            : "Invalid credentials.",
+        );
       } else {
         const sess = await getSession();
         const role = (sess?.user as any)?.role;
@@ -53,35 +59,32 @@ export default function AdminLoginPage() {
 
         <form onSubmit={handleAdminLogin} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-gray-400">
-              Master Phone Number
+            <label htmlFor="admin-email" className="mb-1 block text-xs font-medium uppercase text-gray-400">
+              Email
             </label>
-            <div className="flex gap-2">
-              <span className="flex items-center rounded-lg border border-gray-700 bg-gray-800 px-3 text-sm text-gray-300">
-                +251
-              </span>
-              <input
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full rounded-lg border border-gray-700 bg-black px-4 py-3 text-white outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                maxLength={10}
-                required
-                disabled={isLoading}
-              />
-            </div>
+            <input
+              id="admin-email"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-700 bg-black px-4 py-3 text-white outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              required
+              disabled={isLoading}
+            />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-gray-400">
-               Master OTP
+            <label htmlFor="admin-password" className="mb-1 block text-xs font-medium uppercase text-gray-400">
+              Password
             </label>
             <input
-              type="text"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-black px-4 py-3 text-center text-2xl tracking-widest text-white outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-              maxLength={6}
+              id="admin-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-gray-700 bg-black px-4 py-3 text-white outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
               required
               disabled={isLoading}
             />

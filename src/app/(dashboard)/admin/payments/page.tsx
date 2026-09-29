@@ -34,7 +34,13 @@ interface PaymentRow {
   reviewedAt: string | null;
   createdAt: string;
   receiptName: string | null;
-  student: { id: string; name: string | null; phoneNumber: string | null };
+  student: {
+    id: string;
+    name: string | null;
+    phoneNumber: string | null;
+    email: string | null;
+    username: string | null;
+  };
   plan: { id: string; name: string };
 }
 
@@ -203,7 +209,7 @@ export default function AdminPaymentsPage() {
                     <tr key={r.id} className="align-top hover:bg-background/40">
                       <td className="px-4 py-3">
                         <p className="font-medium text-text-primary">{r.student.name ?? "—"}</p>
-                        <p className="text-xs text-text-muted">{r.student.phoneNumber ?? ""}</p>
+                        <p className="text-xs text-text-muted">{r.student.email ?? r.student.username ?? r.student.phoneNumber ?? ""}</p>
                         <p className="mt-0.5 text-[11px] text-text-muted">
                           {new Date(r.createdAt).toLocaleDateString()}
                         </p>

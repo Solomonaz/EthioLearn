@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   User as UserIcon,
   Mail,
-  Phone,
   Building2,
   CalendarDays,
   Layers,
@@ -24,6 +23,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
 import { useSound } from "@/hooks/use-sound";
 import { PRIMARY_MAX_GRADE } from "@/lib/teacher-band";
+import { SignInMethodsCard } from "@/components/auth/sign-in-methods-card";
 
 interface TeacherProfile {
   id: string;
@@ -63,7 +63,6 @@ export default function TeacherProfilePage() {
 
   // Editable form state
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -83,7 +82,6 @@ export default function TeacherProfilePage() {
         setProfile(u);
         setStats(d.stats ?? { gameSets: 0 });
         setName(u.name ?? "");
-        setEmail(u.email ?? "");
         setAvatarUrl(u.avatarUrl ?? "");
       })
       .catch(() => setError(true))
@@ -154,7 +152,6 @@ export default function TeacherProfilePage() {
   const dirty =
     profile !== null &&
     (name.trim() !== (profile.name ?? "") ||
-      email.trim() !== (profile.email ?? "") ||
       (avatarUrl || "") !== (profile.avatarUrl ?? ""));
 
   const save = async (e: React.FormEvent) => {
@@ -171,7 +168,6 @@ export default function TeacherProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          email: email.trim(),
           avatarUrl: avatarUrl || "",
         }),
       });
@@ -288,21 +284,6 @@ export default function TeacherProfilePage() {
           />
         </div>
 
-        {/* email */}
-        <div className="mt-4">
-          <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-text-primary">
-            {t("profileEmail")}
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t("profileEmailPh")}
-            className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
-
         <button
           type="submit"
           disabled={saving || !dirty}
@@ -414,7 +395,6 @@ export default function TeacherProfilePage() {
           <Shield className="h-5 w-5 text-primary" /> {t("profileAccount")}
         </h2>
         <div className="divide-y divide-border">
-          <InfoRow icon={<Phone className="h-4 w-4" />} label={t("profilePhone")} value={profile.phone || "—"} />
           <InfoRow icon={<Mail className="h-4 w-4" />} label={t("profileEmail")} value={profile.email || "—"} />
           <InfoRow
             icon={<Building2 className="h-4 w-4" />}
@@ -438,6 +418,9 @@ export default function TeacherProfilePage() {
           />
         </div>
       </div>
+
+      {/* ── Sign-in methods: link Telegram, set a password ── */}
+      <SignInMethodsCard />
 
       {/* ── Sign out ───────────────────────────────────────── */}
       <div className="flex justify-end">

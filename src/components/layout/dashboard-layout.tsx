@@ -70,8 +70,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       window.location.replace("/login");
       return;
     }
-    const user = session?.user as { profileIncomplete?: boolean } | undefined;
-    if (user?.profileIncomplete) {
+    const user = session?.user as
+      | { profileIncomplete?: boolean; mustChangePassword?: boolean }
+      | undefined;
+    // A school-issued temporary password must be replaced before anything else.
+    if (user?.mustChangePassword) {
+      router.replace("/change-password");
+    } else if (user?.profileIncomplete) {
       router.replace("/complete-profile");
     }
   }, [status, session, router]);

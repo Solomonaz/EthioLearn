@@ -5,7 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import {
   canonicalizeClasses,
-  normalizePhone,
+  normalizeEmail,
   parseClasses,
 } from "@/lib/teacher-classes";
 import { teacherRoleForLevel } from "@/lib/teacher-band";
@@ -25,7 +25,9 @@ import { teacherRoleForLevel } from "@/lib/teacher-band";
  *
  * Teachers are created by an admin rather than self-registering, so `schoolId`
  * is authoritative instead of self-claimed — every school-scoped cohort query
- * downstream depends on that.
+ * downstream depends on that. They are created by EMAIL with no password: the
+ * teacher signs in with Google (matched on that email) or sets a password
+ * through "Forgot password", which proves they own the address.
  *
  * Mirrors the scoping convention of /api/admin/students: a school admin acts
  * inside their own school; a super admin may target any school (or none).
@@ -52,8 +54,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     name?: string;
-    phone?: string;
-    phoneNumber?: string;
+    email?: string;
     schoolId?: string | null;
     assignments?: unknown;
   };
@@ -71,10 +72,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const phoneNumber = normalizePhone(String(body.phone ?? body.phoneNumber ?? ""));
-  if (!phoneNumber) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
     return NextResponse.json(
-      { error: "Enter a valid Ethiopian phone number (e.g. 9XXXXXXXX)." },
+      { error: "Enter the teacher's email address." },
       { status: 400 },
     );
   }
@@ -109,22 +110,22 @@ export async function POST(req: NextRequest) {
   const classes = await canonicalizeClasses(parsed.classes);
 
   const existing = await db.user.findUnique({
-    where: { phoneNumber },
+    where: { email },
     select: { id: true },
   });
   if (existing) {
     return NextResponse.json(
-      { error: "A user with this phone number already exists." },
+      { error: "A user with this email already exists." },
       { status: 409 },
     );
   }
 
   // The row is created before the teacher ever signs in; they then log in with
-  // this phone number over the normal OTP flow.
+  // Google with this email, or after setting a password via "Forgot password".
   const teacher = await db.user.create({
     data: {
       name,
-      phoneNumber,
+      email,
       role,
       schoolId,
       teachingAssignments: classes.length
@@ -140,7 +141,7 @@ export async function POST(req: NextRequest) {
     select: {
       id: true,
       name: true,
-      phoneNumber: true,
+      email: true,
       role: true,
       isActive: true,
       createdAt: true,
@@ -214,7 +215,7 @@ export async function GET(req: NextRequest) {
       ? {
           OR: [
             { name: { contains: search, mode: "insensitive" as const } },
-            { phoneNumber: { contains: search } },
+            { email: { contains: search, mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -229,7 +230,6 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         name: true,
-        phoneNumber: true,
         email: true,
         role: true,
         isActive: true,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { normalizeEmail } from "@/lib/teacher-classes";
 
 export async function GET(
   _req: NextRequest,
@@ -59,7 +60,7 @@ export async function POST(
       return NextResponse.json({ error: "School not found" }, { status: 404 });
     }
 
-    const { userId, phoneNumber, name } = await req.json();
+    const { userId, email: rawEmail, name } = await req.json();
 
     if (userId) {
       const existingUser = await db.user.findUnique({ where: { id: userId } });
@@ -81,7 +82,6 @@ export async function POST(
           id: true,
           name: true,
           email: true,
-          phoneNumber: true,
           createdAt: true,
         },
       });
@@ -89,29 +89,26 @@ export async function POST(
       return NextResponse.json({ admin }, { status: 201 });
     }
 
-    if (phoneNumber) {
-      const phoneRegex = /^\+251[0-9]{9}$/;
-      if (!phoneRegex.test(phoneNumber)) {
-        return NextResponse.json(
-          { error: "Invalid phone number format. Must be +251 followed by 9 digits." },
-          { status: 400 }
-        );
+    // A new admin is created by EMAIL with no password: they sign in with
+    // Google on that address, or set a password through "Forgot password".
+    if (rawEmail !== undefined) {
+      const email = normalizeEmail(rawEmail);
+      if (!email) {
+        return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
       }
 
-      const existingPhone = await db.user.findFirst({
-        where: { phoneNumber },
-      });
-      if (existingPhone) {
+      const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
+      if (existing) {
         return NextResponse.json(
-          { error: "A user with this phone number already exists" },
+          { error: "A user with this email already exists" },
           { status: 400 }
         );
       }
 
       const admin = await db.user.create({
         data: {
-          phoneNumber,
-          name: name || "School Admin",
+          email,
+          name: typeof name === "string" && name.trim() ? name.trim() : "School Admin",
           role: "SCHOOL_ADMIN",
           schoolId: id,
         },
@@ -119,7 +116,6 @@ export async function POST(
           id: true,
           name: true,
           email: true,
-          phoneNumber: true,
           createdAt: true,
         },
       });
@@ -128,7 +124,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: "Either userId or phoneNumber is required" },
+      { error: "Either userId or email is required" },
       { status: 400 }
     );
   } catch (error) {

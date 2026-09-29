@@ -45,3 +45,8 @@ prisma/*.db-journal
 
 # Student submission files (see lib/uploads.ts). Never commit student work.
 uploads/
+
+# local build/debug leftovers
+tsc*.log
+tsc_*.txt
+*.bak

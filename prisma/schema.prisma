@@ -222,6 +222,22 @@ model User {
   facebookId String? @unique
   telegramId String? @unique
 
+  // ── Password sign-in (lib/password.ts) ──
+  /// School-issued sign-in name for students a school creates (they may have
+  /// no email). Lower-case; everyone else signs in with their email.
+  username           String?   @unique
+  /// scrypt hash, "scrypt$<salt>$<hash>". Null = no password yet (Google or
+  /// Telegram only, or an admin-created account whose owner has not set one).
+  passwordHash       String?
+  /// Set on a school-issued temporary password: the user must choose their
+  /// own before using the app.
+  mustChangePassword Boolean   @default(false)
+  /// When the owner proved they control `email` (password reset link or
+  /// Google). An unverified self-registered password is discarded the first
+  /// time Google links the account, so nobody can pre-register someone else's
+  /// email and keep a way in.
+  emailVerifiedAt    DateTime?
+
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id])
 
@@ -491,7 +507,9 @@ model Subject {
 
 model OtpCode {
   id        String   @id @default(cuid())
-  key       String   @unique // phone number
+  // "pwreset:<userId>" — password-reset links (lib/password). `code` holds
+  // a sha256 hash, never the token itself.
+  key       String   @unique
   code      String
   expiresAt DateTime
   createdAt DateTime @default(now())

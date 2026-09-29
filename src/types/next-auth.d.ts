@@ -11,8 +11,10 @@ declare module "next-auth" {
       grade: number | null;
       xpLevel: number;
       totalPoints: number;
-      /** True when a Telegram-registered user hasn't completed their profile yet */
+      /** True when a student hasn't picked their grade yet */
       profileIncomplete?: boolean;
+      /** True while a school-issued temporary password is still in use */
+      mustChangePassword?: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -27,7 +29,9 @@ declare module "next-auth/jwt" {
     totalPoints: number;
     /** DB session ID used for revocation tracking (§4.1.2) */
     sessionId?: string;
-    /** True when a Telegram-registered user hasn't completed their profile yet */
+    /** True when a student hasn't picked their grade yet */
     profileIncomplete?: boolean;
+    /** True while a school-issued temporary password is still in use */
+    mustChangePassword?: boolean;
   }
 }

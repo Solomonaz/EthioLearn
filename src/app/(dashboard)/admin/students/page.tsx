@@ -39,7 +39,9 @@ import { PRIMARY_MAX_GRADE, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/l
 interface Student {
   id: string;
   name: string;
-  phoneNumber: string;
+  /** School-issued sign-in name; null for students who signed up themselves. */
+  username: string | null;
+  email: string | null;
   grade: number | null;
   section: string | null;
   xpLevel: number;
@@ -84,10 +86,87 @@ function gradesForLevel(level: LevelFilter): number[] {
   return Array.from({ length: to - from + 1 }, (_, i) => i + from);
 }
 
+/** Sign-in details the server issued — shown once, never retrievable later. */
+interface IssuedCredential {
+  name: string;
+  grade: number | null;
+  section: string | null;
+  username: string;
+  tempPassword: string;
+}
+
 interface ImportResult {
   imported: number;
   skipped: number;
   errors: string[];
+  credentials: IssuedCredential[];
+}
+
+function downloadCredentialsCsv(rows: IssuedCredential[]) {
+  const csv = Papa.unparse(
+    rows.map((r) => ({
+      name: r.name,
+      grade: r.grade ?? "",
+      section: r.section ?? "",
+      username: r.username,
+      temporary_password: r.tempPassword,
+    })),
+  );
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "student_sign_in_details.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * The one-time list of usernames and temporary passwords, with download and
+ * print. Printing shows only this table (see `.print-area` in globals.css) so
+ * the school can cut the sheet into slips for each student.
+ */
+function IssuedCredentials({ rows }: { rows: IssuedCredential[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+      <p className="text-sm font-semibold text-amber-900">
+        Save or print these now — the passwords are shown only once. Each student
+        chooses their own password at first sign-in.
+      </p>
+      <div className="print-hide flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadCredentialsCsv(rows)}>
+          <Download className="h-3.5 w-3.5" /> Download CSV
+        </Button>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.print()}>
+          <FileText className="h-3.5 w-3.5" /> Print
+        </Button>
+      </div>
+      <div className="print-area max-h-64 overflow-auto rounded-md border border-amber-200 bg-white print:max-h-none print:overflow-visible">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-gray-50 text-left text-xs uppercase text-text-muted">
+            <tr>
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Class</th>
+              <th className="px-3 py-2">Username</th>
+              <th className="px-3 py-2">Temporary password</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((r) => (
+              <tr key={r.username}>
+                <td className="px-3 py-1.5 text-text-primary">{r.name}</td>
+                <td className="px-3 py-1.5 text-text-secondary">
+                  {r.grade ? `G${r.grade}` : ""} {r.section ?? ""}
+                </td>
+                <td className="px-3 py-1.5 font-mono text-text-primary">{r.username}</td>
+                <td className="px-3 py-1.5 font-mono text-text-primary">{r.tempPassword}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,7 +204,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function downloadTemplate() {
-    const blob = new Blob(["name,phone,grade,section\n"], { type: "text/csv" });
+    const blob = new Blob(["name,grade,section\n"], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -191,21 +270,25 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
       const json = await res.json();
 
       if (!res.ok) {
-        setResult({ imported: 0, skipped: 0, errors: [json.error || "Import failed"] });
+        setResult({ imported: 0, skipped: 0, errors: [json.error || "Import failed"], credentials: [] });
         return;
       }
 
       setResult({
         imported: json.imported ?? 0,
         skipped: json.skipped ?? 0,
-        errors: json.errors ?? [],
+        // Row problems arrive as { row, message }.
+        errors: (json.errors ?? []).map((e: { row?: number; message?: string } | string) =>
+          typeof e === "string" ? e : `Row ${e.row}: ${e.message}`,
+        ),
+        credentials: json.credentials ?? [],
       });
 
       if ((json.imported ?? 0) > 0) {
         onImported();
       }
     } catch {
-      setResult({ imported: 0, skipped: 0, errors: ["Network error during import."] });
+      setResult({ imported: 0, skipped: 0, errors: ["Network error during import."], credentials: [] });
     } finally {
       setImporting(false);
     }
@@ -268,7 +351,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
                 setParseError(null);
                 setResult(null);
               }}
-              placeholder={"name,phone,grade,section\nAbebe Kebede,0911223344,9,A"}
+              placeholder={"name,grade,section\nAbebe Kebede,9,A"}
               rows={5}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono"
             />
@@ -350,6 +433,7 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
                   ))}
                 </ul>
               )}
+              <IssuedCredentials rows={result.credentials} />
             </div>
           )}
         </CardContent>
@@ -363,19 +447,20 @@ function CsvImportModal({ onClose, onImported }: { onClose: () => void; onImport
 // ── Add a single student ──────────────────────────────────────────────────────
 function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [grade, setGrade] = useState("");
   const [section, setSection] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // After saving, the modal stays open to show the one-time sign-in details.
+  const [issued, setIssued] = useState<IssuedCredential | null>(null);
 
   const selectClass =
     "w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
-      setError("Name and phone number are required.");
+    if (!name.trim()) {
+      setError("The student's name is required.");
       return;
     }
     // Section is required: class rosters and every cohort view are keyed on it,
@@ -387,14 +472,11 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
     setError(null);
     setSaving(true);
     try {
-      // Normalise so a pasted 0912…, 251912…, or +251912… also works.
-      const localDigits = phone.trim().replace(/\D/g, "").replace(/^251/, "").replace(/^0/, "");
       const res = await fetch("/api/admin/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          phone: `+251${localDigits}`,
           grade: grade || undefined,
           section,
         }),
@@ -404,9 +486,15 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
         setError(data.error ?? "Failed to add student.");
         return;
       }
-      toast.success("Student added successfully!");
+      toast.success("Student added.");
       onAdded();
-      onClose();
+      setIssued({
+        name: data.student.name,
+        grade: data.student.grade,
+        section: data.student.section,
+        username: data.student.username,
+        tempPassword: data.tempPassword,
+      });
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -428,28 +516,22 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
             </button>
           </div>
 
+          {issued ? (
+            <div className="space-y-3">
+              <IssuedCredentials rows={[issued]} />
+              <Button type="button" className="w-full" onClick={onClose}>
+                Done
+              </Button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            <p className="text-xs text-text-muted">
+              The student gets a username and a temporary password to sign in
+              with — no email or phone needed.
+            </p>
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase text-text-muted">Full Name</label>
               <Input placeholder="e.g. Abebe Kebede" value={name} onChange={(e) => setName(e.target.value)} disabled={saving} />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase text-text-muted">Phone Number</label>
-              <div className="flex">
-                <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-gray-50 px-3 text-sm text-text-secondary">
-                  +251
-                </span>
-                <Input
-                  placeholder="9XXXXXXXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={saving}
-                  className="rounded-l-none"
-                  inputMode="numeric"
-                />
-              </div>
-              <p className="text-xs text-text-muted">The student signs in with this number via OTP.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -487,6 +569,7 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
               </Button>
             </div>
           </form>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -823,9 +906,9 @@ function AdminStudentsContent() {
                       </div>
                     </td>
 
-                    {/* Phone */}
+                    {/* Sign-in: school-issued username, or their own email */}
                     <td className="px-4 py-3 text-text-secondary">
-                      {student.phoneNumber}
+                      {student.username ?? student.email ?? "—"}
                     </td>
 
                     {/* Grade / Section */}

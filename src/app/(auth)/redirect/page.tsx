@@ -5,7 +5,7 @@
  *
  * Landing page after social sign-in (Google, Telegram).
  * Reads the user's role from the session and routes them to the correct
- * dashboard — the same logic the OTP login page uses.
+ * dashboard — the same logic the sign-in page uses.
  */
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";

@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       reviewedAt: true,
       createdAt: true,
       receiptName: true,
-      student: { select: { id: true, name: true, phoneNumber: true } },
+      student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true } },
       plan: { select: { id: true, name: true } },
     },
   });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { requireCompleteProfile } from "@/lib/get-session";
+import { getCurrentUser } from "@/lib/get-session";
 import { revokeAllUserSessions } from "@/lib/session-store";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
@@ -27,12 +27,27 @@ function validateTelegramAuth(data: Record<string, string>): boolean {
   return computedHash === hash;
 }
 
+// ── GET /api/students/me/link-telegram ───────────────────────────────────────
+// Whether the current user has Telegram linked (any role).
+
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user || user.id === "env_super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return NextResponse.json({ linked: !!user.telegramId, hasPassword: !!user.passwordHash });
+}
+
 // ── POST /api/students/me/link-telegram ──────────────────────────────────────
-// Links a Telegram account to the current user after HMAC validation.
+// Links a Telegram account to the current user after HMAC validation. Any
+// role may link: a teacher or admin created by email signs in once with Google
+// or a password, links Telegram, and can use Telegram from then on.
 
 export async function POST(req: Request) {
-  const user = await requireCompleteProfile();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user || user.id === "env_super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   if (!validateCsrfOrigin(req)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
@@ -98,20 +113,25 @@ export async function POST(req: Request) {
 // are revoked and the response signals the client to sign out immediately.
 
 export async function DELETE(req: Request) {
-  const user = await requireCompleteProfile();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user || user.id === "env_super_admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   if (!validateCsrfOrigin(req)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  // Determine whether Telegram is the only way this user can log in.
-  // Phone-registered users have a phoneNumber; Google/Facebook users have an email.
-  // Telegram-only users have neither — removing telegramId leaves them with no auth method.
+  // Determine whether Telegram is the only way this user can sign in. A
+  // password, Google or Facebook is another way; so is an email, because
+  // "Forgot password" can set a password on it. (Telegram sign-ups carry a
+  // "telegram@…" placeholder in phoneNumber, so the phone says nothing.)
   const isTelegramOnly =
-    !(user as any).phoneNumber &&
-    !(user as any).email &&
-    !!(user as any).telegramId;
+    !user.passwordHash &&
+    !user.googleId &&
+    !user.facebookId &&
+    !user.email &&
+    !!user.telegramId;
 
   // Unlink Telegram
   await db.user.update({

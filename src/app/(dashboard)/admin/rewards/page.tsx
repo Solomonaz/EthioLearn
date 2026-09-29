@@ -40,7 +40,9 @@ interface Redemption {
   student: {
     id: string;
     name: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
+    email: string | null;
+    username: string | null;
     grade: number | null;
     totalPoints: number;
   };
@@ -757,7 +759,10 @@ function RedemptionsTab({ pendingCount }: RedemptionsTabProps) {
                         <div className="text-xs text-text-secondary">
                           {redemption.student.grade ? `Grade ${redemption.student.grade}` : "—"}
                           {" · "}
-                          {redemption.student.phoneNumber}
+                          {redemption.student.email ??
+                            redemption.student.username ??
+                            redemption.student.phoneNumber ??
+                            "—"}
                         </div>
                       </td>
                       <td className="px-4 py-3">

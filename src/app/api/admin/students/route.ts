@@ -5,18 +5,12 @@ import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
 import { PRIMARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
-
-// Normalize an Ethiopian phone number to +251XXXXXXXXX, or null if invalid.
-function normalizePhone(raw: string): string | null {
-  const trimmed = raw.trim().replace(/\s+/g, "");
-  let n = trimmed;
-  if (trimmed.startsWith("0")) n = "+251" + trimmed.slice(1);
-  else if (trimmed.startsWith("251")) n = "+" + trimmed;
-  else if (!trimmed.startsWith("+251")) return null;
-  return /^\+251[0-9]{9}$/.test(n) ? n : null;
-}
+import { generateTempPassword, generateUsername, hashPassword } from "@/lib/password";
 
 // ─── POST: create a single student ──
+// The school issues sign-in details: a username made from the name and a
+// temporary password, returned ONCE for the admin to hand over. The student
+// replaces the password at first sign-in. Students need no email or phone.
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
@@ -38,7 +32,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { name?: string; phone?: string; phoneNumber?: string; grade?: string | number; section?: string };
+  let body: { name?: string; grade?: string | number; section?: string };
   try {
     body = await req.json();
   } catch {
@@ -48,15 +42,6 @@ export async function POST(req: NextRequest) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (name.length < 2) {
     return NextResponse.json({ error: "Please enter the student's full name." }, { status: 400 });
-  }
-
-  const rawPhone = String(body.phone ?? body.phoneNumber ?? "");
-  const phoneNumber = normalizePhone(rawPhone);
-  if (!phoneNumber) {
-    return NextResponse.json(
-      { error: "Enter a valid Ethiopian phone number (e.g. 9XXXXXXXX)." },
-      { status: 400 }
-    );
   }
 
   const gradeNum =
@@ -75,28 +60,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const existing = await db.user.findUnique({ where: { phoneNumber }, select: { id: true } });
-  if (existing) {
-    return NextResponse.json(
-      { error: "A user with this phone number already exists." },
-      { status: 409 }
-    );
-  }
+  const username = await generateUsername(name);
+  const tempPassword = generateTempPassword();
 
   const student = await db.user.create({
     data: {
       name,
-      phoneNumber,
+      username,
+      passwordHash: await hashPassword(tempPassword),
+      mustChangePassword: true,
       role: "STUDENT",
       grade: gradeNum,
       section,
       // School admins add to their own school; super admins create unassigned.
       schoolId: user.schoolId ?? null,
     },
-    select: { id: true, name: true, phoneNumber: true, grade: true, section: true },
+    select: { id: true, name: true, username: true, grade: true, section: true },
   });
 
-  return NextResponse.json({ student }, { status: 201 });
+  return NextResponse.json({ student, tempPassword }, { status: 201 });
 }
 
 export async function GET(req: NextRequest) {
@@ -139,7 +121,8 @@ export async function GET(req: NextRequest) {
       ? {
           OR: [
             { name: { contains: search, mode: "insensitive" as const } },
-            { phoneNumber: { contains: search } },
+            { username: { contains: search.toLowerCase() } },
+            { email: { contains: search, mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -205,7 +188,8 @@ export async function GET(req: NextRequest) {
   const formattedStudents = students.map((s) => ({
     id: s.id,
     name: s.name,
-    phoneNumber: s.phoneNumber,
+    username: s.username,
+    email: s.email,
     grade: s.grade,
     section: s.section,
     xpLevel: s.xpLevel,

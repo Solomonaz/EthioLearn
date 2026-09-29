@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Layers,
   Mail,
-  Phone,
   Plus,
   Shield,
   Trash2,
@@ -18,6 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
 import { MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
+import { SignInMethodsCard } from "@/components/auth/sign-in-methods-card";
 
 /** Grades this band may teach — mirrors the server's own validation. */
 const GRADES = Array.from(
@@ -51,7 +51,6 @@ export default function SecondaryTeacherProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [newSubject, setNewSubject] = useState("");
@@ -74,7 +73,6 @@ export default function SecondaryTeacherProfilePage() {
       if (!meRes.ok) throw new Error(meData.error ?? "Failed to load your profile");
       setProfile(meData.user);
       setName(meData.user?.name ?? "");
-      setEmail(meData.user?.email ?? "");
 
       const aData = await aRes.json().catch(() => ({}));
       setAssignments(aRes.ok ? aData.assignments ?? [] : []);
@@ -101,7 +99,7 @@ export default function SecondaryTeacherProfilePage() {
       const res = await fetch("/api/secondary-teacher/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+        body: JSON.stringify({ name: name.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not save your profile");
@@ -212,22 +210,6 @@ export default function SecondaryTeacherProfilePage() {
                 id="profile-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                disabled={saving}
-              />
-            </div>
-            <div className="space-y-2">
-              <label
-                htmlFor="profile-email"
-                className="text-xs font-semibold uppercase text-text-muted"
-              >
-                Contact email
-              </label>
-              <Input
-                id="profile-email"
-                type="email"
-                placeholder="optional"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 disabled={saving}
               />
             </div>
@@ -360,7 +342,6 @@ export default function SecondaryTeacherProfilePage() {
         </CardHeader>
         <CardContent>
           <dl className="divide-y divide-border">
-            <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={profile.phone ?? "—"} />
             <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={profile.email ?? "—"} />
             <InfoRow
               icon={<Building2 className="h-4 w-4" />}
@@ -380,6 +361,8 @@ export default function SecondaryTeacherProfilePage() {
           </dl>
         </CardContent>
       </Card>
+
+      <SignInMethodsCard />
     </div>
   );
 }

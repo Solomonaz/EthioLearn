@@ -29,14 +29,18 @@ export const getCurrentUser = cache(async () => {
   if (!token?.id) return null;
 
   // ── Handle env-configured Super Admin (no DB record) ───────────────────
-  // When the master phone/OTP from .env is used, authorize() returns
-  // id: "env_super_admin".  This user has no DB row, so we synthesise a
-  // virtual user object that satisfies every downstream check.
+  // When SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD from .env are used,
+  // authorize() returns id: "env_super_admin".  This user has no DB row, so we
+  // synthesise a virtual user object that satisfies every downstream check.
   if (token.id === "env_super_admin") {
     return {
       id: "env_super_admin",
-      phoneNumber: process.env.SUPER_ADMIN_PHONE ?? "",
-      email: null,
+      phoneNumber: null,
+      email: process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase() ?? null,
+      username: null,
+      passwordHash: null,
+      mustChangePassword: false,
+      emailVerifiedAt: null,
       name: "System Super Admin",
       role: "SUPER_ADMIN" as const,
       grade: null,
@@ -53,6 +57,7 @@ export const getCurrentUser = cache(async () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       googleId: null,
+      facebookId: null,
       telegramId: null,
       schoolId: null,
       school: null,

@@ -4,7 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import FacebookProvider from "next-auth/providers/facebook";
 import crypto from "crypto";
 import { db } from "./db";
-import { peekOTP, consumeOTP } from "./otp-store";
+import { hashPassword, normalizeUsername, safeEqual, verifyPassword } from "./password";
 import { createUserSession, touchSession, revokeSessionByToken } from "./session-store";
 import { rateLimit } from "./rate-limit";
 
@@ -46,25 +46,41 @@ async function resolveSocialUser(
   // 1. Look up by provider ID first (fastest, most reliable)
   let user = await db.user.findFirst({ where: { [idField]: providerId } as any });
 
-  // 2. Fall back to email lookup (existing account linked by email)
-  if (!user && email) {
-    user = await db.user.findUnique({ where: { email } });
+  // 2. Fall back to email lookup (existing account linked by email). This is
+  //    how an admin-created teacher or school admin signs in with Google.
+  const normalizedEmail = email?.trim().toLowerCase() || null;
+  if (!user && normalizedEmail) {
+    user = await db.user.findUnique({ where: { email: normalizedEmail } });
   }
 
   // 3. Auto-create a new account
   if (!user) {
     user = await db.user.create({
       data: {
-        email:    email ?? null,
+        email:    normalizedEmail,
         name:     name?.trim() || fallbackName,
         [idField]: providerId,
         role:     "STUDENT",
+        emailVerifiedAt: normalizedEmail ? new Date() : null,
       } as any,
     });
   } else if (!(user as any)[idField]) {
-    // Lazily back-fill provider ID on existing account
+    // Link the provider to the existing account. The provider has just proved
+    // the email is theirs, so mark it verified — and if the account carries a
+    // password set WITHOUT that proof (a self-registration), discard it:
+    // otherwise someone could register another person's email with a password
+    // of their own, wait for the owner to arrive through Google, and keep a
+    // way into the owner's account.
+    const discardPassword = !user.emailVerifiedAt && !!user.passwordHash;
     await db.user
-      .update({ where: { id: user.id }, data: { [idField]: providerId } as any })
+      .update({
+        where: { id: user.id },
+        data: {
+          [idField]: providerId,
+          emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+          ...(discardPassword ? { passwordHash: null } : {}),
+        } as any,
+      })
       .catch(() => {});
   }
 
@@ -73,36 +89,67 @@ async function resolveSocialUser(
 
 // ── Build Provider List ──────────────────────────────────────────────────────
 
+// A hash of a random string, checked when no account matches, so a sign-in
+// for an unknown account spends the same time hashing as one for a real
+// account — the response time must not reveal which emails and usernames exist.
+const dummyHash = hashPassword(crypto.randomBytes(16).toString("hex"));
+
+/** What the password provider hands to the jwt callback. */
+function sessionUser(user: {
+  id: string; name: string; email: string | null; phoneNumber: string | null; role: string;
+  grade: number | null; xpLevel: number; totalPoints: number; schoolId: string | null;
+  mustChangePassword: boolean;
+}) {
+  return {
+    id:          user.id,
+    name:        user.name,
+    email:       user.email,
+    phone:       user.phoneNumber,
+    role:        user.role,
+    grade:       user.grade,
+    xpLevel:     user.xpLevel,
+    totalPoints: user.totalPoints,
+    schoolId:    user.schoolId,
+    mustChangePassword: user.mustChangePassword,
+    profileIncomplete:  user.role === "STUDENT" && !user.grade,
+  };
+}
+
 const providers: NextAuthOptions["providers"] = [
-  // ── Phone OTP (primary) ────────────────────────────────────────────────────
+  // ── Email or username + password ──────────────────────────────────────────
+  // Email for everyone who has one; a username for students a school created.
   CredentialsProvider({
-    id: "credentials",
-    name: "Phone OTP",
+    id: "password",
+    name: "Password",
     credentials: {
-      phoneNumber: { label: "Phone Number", type: "tel" },
-      otp: { label: "OTP", type: "text" },
+      identifier: { label: "Email or username", type: "text" },
+      password:   { label: "Password", type: "password" },
     },
     async authorize(credentials) {
-      if (!credentials?.phoneNumber || !credentials?.otp) return null;
+      const identifier = (credentials?.identifier ?? "").trim();
+      const password = credentials?.password ?? "";
+      if (!identifier || !password) return null;
 
-      const phoneVal = credentials.phoneNumber;
-      const otpVal   = credentials.otp;
+      // Per account, so guessing one account's password is slow.
+      const rl = rateLimit(`auth:password:${identifier.toLowerCase()}`, 10, 15 * 60 * 1000);
+      if (!rl.success) throw new Error("TooManyAttempts");
 
-      // Rate limit: 5 attempts per 5 minutes per phone number
-      const rl = rateLimit(`auth:credentials:${phoneVal}`, 5, 5 * 60 * 1000);
-      if (!rl.success) return null;
-
-      // Super Admin shortcut
-      if (
-        process.env.SUPER_ADMIN_PHONE &&
-        process.env.SUPER_ADMIN_OTP &&
-        phoneVal === process.env.SUPER_ADMIN_PHONE &&
-        otpVal   === process.env.SUPER_ADMIN_OTP
-      ) {
+      // Break-glass super admin from the environment. In production the
+      // password must be long — it is the key to the whole platform.
+      const adminEmail = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+      const adminPassword = process.env.SUPER_ADMIN_PASSWORD ?? "";
+      if (adminEmail && identifier.toLowerCase() === adminEmail) {
+        const strongEnough = adminPassword.length >= 16 || process.env.NODE_ENV !== "production";
+        if (!strongEnough) {
+          console.error("[Auth] SUPER_ADMIN_PASSWORD is shorter than 16 characters; super-admin sign-in refused.");
+          return null;
+        }
+        if (!adminPassword || !safeEqual(password, adminPassword)) return null;
         return {
           id: "env_super_admin",
           name: "System Super Admin",
-          phone: phoneVal,
+          email: adminEmail,
+          phone: null,
           role: "SUPER_ADMIN",
           grade: null,
           xpLevel: 0,
@@ -110,61 +157,15 @@ const providers: NextAuthOptions["providers"] = [
         };
       }
 
-      const isValid = await peekOTP(phoneVal, otpVal);
-      if (!isValid) return null;
+      const user = identifier.includes("@")
+        ? await db.user.findUnique({ where: { email: identifier.toLowerCase() } })
+        : await db.user.findUnique({ where: { username: normalizeUsername(identifier) } });
 
-      const user = await db.user.findUnique({ where: { phoneNumber: phoneVal } });
-      if (!user || !user.isActive || user.suspendedAt) return null;
-
-      await consumeOTP(phoneVal);
-
-      return {
-        id:           user.id,
-        name:         user.name,
-        phone:        user.phoneNumber,
-        role:         user.role,
-        grade:        user.grade,
-        xpLevel:      user.xpLevel,
-        totalPoints:  user.totalPoints,
-        schoolId:     user.schoolId,
-      };
-    },
-  }),
-
-  // ── Email OTP ─────────────────────────────────────────────────────────────
-  CredentialsProvider({
-    id: "email-otp",
-    name: "Email OTP",
-    credentials: {
-      email: { label: "Email", type: "email" },
-      otp:   { label: "OTP",   type: "text"  },
-    },
-    async authorize(credentials) {
-      if (!credentials?.email || !credentials?.otp) return null;
-
-      const email = credentials.email.toLowerCase().trim();
-      const otp   = credentials.otp;
-
-      const isValid = await peekOTP(email, otp);
-      if (!isValid) throw new Error("InvalidOTP");
-
-      const user = await db.user.findUnique({ where: { email } });
-      if (!user) throw new Error("NoAccount");
+      const ok = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
+      if (!user || !user.passwordHash || !ok) return null;
       if (!user.isActive || user.suspendedAt) return null;
 
-      await consumeOTP(email);
-
-      return {
-        id:          user.id,
-        name:        user.name,
-        email:       user.email,
-        phone:       user.phoneNumber,
-        role:        user.role,
-        grade:       user.grade,
-        xpLevel:     user.xpLevel,
-        totalPoints: user.totalPoints,
-        schoolId:    user.schoolId,
-      };
+      return sessionUser(user);
     },
   }),
 ];
@@ -226,7 +227,7 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
             if (!existing) throw new Error("NoAccount");
             if (!existing.isActive || existing.suspendedAt) return null;
 
-            const profileIncomplete = !existing.grade;
+            const profileIncomplete = existing.role === "STUDENT" && !existing.grade;
             return {
               id:    existing.id,
               name:  existing.name,
@@ -235,6 +236,8 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
               grade: existing.grade,
               xpLevel:      existing.xpLevel,
               totalPoints:  existing.totalPoints,
+              schoolId:     existing.schoolId,
+              mustChangePassword: existing.mustChangePassword,
               profileIncomplete,
             } as any;
           }
@@ -342,7 +345,7 @@ export const authOptions: NextAuthOptions = {
         if (account?.provider === "google" || account?.provider === "facebook") {
           // Look up the DB user we created/found in signIn callback
           const dbUser = await db.user.findUnique({
-            where: { email: user.email! },
+            where: { email: user.email!.trim().toLowerCase() },
           });
           if (dbUser) {
             token.id           = dbUser.id;
@@ -353,15 +356,18 @@ export const authOptions: NextAuthOptions = {
             token.xpLevel      = dbUser.xpLevel;
             token.totalPoints  = dbUser.totalPoints;
             token.schoolId     = dbUser.schoolId;
-            // Profile is incomplete until the user picks a grade
-            token.profileIncomplete = !dbUser.grade;
+            token.mustChangePassword = dbUser.mustChangePassword;
+            // A student's profile is incomplete until they pick a grade.
+            // Teachers and admins have no grade and are never "incomplete".
+            token.profileIncomplete = dbUser.role === "STUDENT" && !dbUser.grade;
           }
         } else {
-          // Credentials providers (Phone OTP, Email OTP, Telegram)
+          // Credentials providers (password, Telegram)
           const u = user as unknown as {
-            id: string; role: string; phone: string | null;
+            id: string; role: string; phone: string | null; email?: string | null;
             grade: number | null; xpLevel: number; totalPoints: number;
             profileIncomplete?: boolean; schoolId?: string | null;
+            mustChangePassword?: boolean;
           };
           token.id              = u.id;
           token.role            = u.role;
@@ -370,7 +376,9 @@ export const authOptions: NextAuthOptions = {
           token.xpLevel         = u.xpLevel;
           token.totalPoints     = u.totalPoints;
           token.schoolId        = u.schoolId ?? null;
+          token.email           = u.email ?? token.email;
           token.profileIncomplete = u.profileIncomplete ?? false;
+          token.mustChangePassword = u.mustChangePassword ?? false;
         }
 
         // Create DB session record
@@ -384,18 +392,19 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // ── Step 2: On refresh, clear profileIncomplete once grade is saved ────
-      if (!user && token.profileIncomplete && token.id) {
+      // ── Step 2: On refresh, clear a pending gate once it is satisfied ─────
+      // (a student saved their grade, or a school-issued password was changed)
+      if (!user && (token.profileIncomplete || token.mustChangePassword) && token.id) {
         const dbUser = await db.user.findUnique({
           where: { id: token.id as string },
-          select: { phoneNumber: true, grade: true },
+          select: { grade: true, mustChangePassword: true },
         });
-        // Profile is complete once grade is set (all providers)
-        const isComplete = !!dbUser?.grade;
-        if (isComplete) {
+        if (token.profileIncomplete && dbUser?.grade) {
           token.profileIncomplete = false;
-          token.phone = dbUser?.phoneNumber ?? token.phone;
-          token.grade = dbUser?.grade ?? token.grade;
+          token.grade = dbUser.grade;
+        }
+        if (token.mustChangePassword && dbUser && !dbUser.mustChangePassword) {
+          token.mustChangePassword = false;
         }
       }
 
@@ -420,6 +429,7 @@ export const authOptions: NextAuthOptions = {
         u.totalPoints  = token.totalPoints;
         u.schoolId     = token.schoolId;
         u.profileIncomplete = token.profileIncomplete;
+        u.mustChangePassword = token.mustChangePassword;
 
         (session as any).sessionId = token.sessionId;
       }

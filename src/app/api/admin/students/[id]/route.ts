@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
-import { normalizePhone } from "@/lib/teacher-classes";
 
 export async function GET(
   _req: NextRequest,
@@ -143,7 +142,8 @@ export async function GET(
     student: {
       id: student.id,
       name: student.name,
-      phoneNumber: student.phoneNumber,
+      username: student.username,
+      email: student.email,
       grade: student.grade,
       section: student.section,
       xpLevel: student.xpLevel,
@@ -213,10 +213,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { name, phoneNumber, grade, section, isActive, resetStreak, suspend, suspendReason } =
+  const { name, grade, section, isActive, resetStreak, suspend, suspendReason } =
     body as {
       name?: string;
-      phoneNumber?: string;
       grade?: string;
       section?: string;
       isActive?: boolean;
@@ -236,36 +235,6 @@ export async function PATCH(
       );
     }
     updateData.name = trimmed;
-  }
-
-  // The phone number is how this student SIGNS IN, so changing it hands the
-  // account to whoever holds the new number. Two consequences:
-  //   • it is normalised to the one stored form, or the student would be
-  //     unable to log in with a number that looks identical to them;
-  //   • it must be unique, and the collision is checked explicitly so the
-  //     admin gets a readable error instead of a unique-constraint crash.
-  //
-  // Existing sessions survive deliberately: the account and its owner have
-  // not changed, only the number they will use next time.
-  if (phoneNumber !== undefined) {
-    const normalized = normalizePhone(String(phoneNumber));
-    if (!normalized) {
-      return NextResponse.json(
-        { error: "Enter a valid Ethiopian phone number (e.g. 9XXXXXXXX)." },
-        { status: 400 },
-      );
-    }
-    const clash = await db.user.findUnique({
-      where: { phoneNumber: normalized },
-      select: { id: true },
-    });
-    if (clash && clash.id !== student.id) {
-      return NextResponse.json(
-        { error: "Another account already uses that phone number." },
-        { status: 409 },
-      );
-    }
-    updateData.phoneNumber = normalized;
   }
 
   // User.grade is an Int. Sending a string here made Prisma throw
@@ -318,7 +287,8 @@ export async function PATCH(
     select: {
       id: true,
       name: true,
-      phoneNumber: true,
+      username: true,
+      email: true,
       grade: true,
       section: true,
       isActive: true,
