@@ -18,9 +18,11 @@ interface Settings {
   rewardsEnabled: boolean;
   antiCheatEnabled: boolean;
   teacherAiDefaultMonthlyCredits: number | null;
+  tutorDailyMessageLimit: number | null;
 }
 
-type Key = Exclude<keyof Settings, "teacherAiDefaultMonthlyCredits">;
+type NumberKey = "teacherAiDefaultMonthlyCredits" | "tutorDailyMessageLimit";
+type Key = Exclude<keyof Settings, NumberKey>;
 
 function Toggle({
   checked,
@@ -81,15 +83,20 @@ function Row({
 }
 
 /**
- * The default monthly AI credits for secondary teachers. Saved on an explicit
- * button press rather than per keystroke, so typing "300" never briefly caps
- * every teacher at 3.
+ * A numeric cap (blank = no cap). Saved on an explicit button press rather
+ * than per keystroke, so typing "300" never briefly caps everyone at 3.
  */
-function TeacherCreditsRow({
+function LimitRow({
+  label,
+  desc,
+  max,
   value,
   disabled,
   onSave,
 }: {
+  label: string;
+  desc: string;
+  max: number;
   value: number | null;
   disabled?: boolean;
   onSave: (v: number | null) => Promise<boolean>;
@@ -100,28 +107,24 @@ function TeacherCreditsRow({
 
   const trimmed = draft.trim();
   const parsed = trimmed === "" ? null : Number(trimmed);
-  const valid = parsed === null || (Number.isInteger(parsed) && parsed >= 0 && parsed <= 100_000);
+  const valid = parsed === null || (Number.isInteger(parsed) && parsed >= 0 && parsed <= max);
   const dirty = parsed !== value;
 
   return (
     <div className="flex flex-wrap items-start justify-between gap-4 py-3">
       <div className="min-w-0 flex-1">
         <p className={cn("text-sm font-medium", disabled ? "text-text-muted" : "text-text-primary")}>
-          Default teacher AI credits / month
+          {label}
         </p>
-        <p className="mt-0.5 text-xs text-text-secondary">
-          Used when a school&apos;s plan sets no limit, and always while pricing is off. An
-          assistant reply is 1 credit, a workout set or merge 2, an AI-written paper 1 per
-          question. Blank = no cap.
-        </p>
+        <p className="mt-0.5 text-xs text-text-secondary">{desc}</p>
       </div>
       <div className="flex items-center gap-2">
         <input
           type="number"
           min={0}
-          max={100000}
+          max={max}
           inputMode="numeric"
-          aria-label="Default teacher AI credits per month"
+          aria-label={label}
           value={draft}
           disabled={disabled || saving}
           onChange={(e) => setDraft(e.target.value)}
@@ -200,18 +203,18 @@ export function PlatformSettingsPanel() {
     }
   }
 
-  async function saveTeacherCredits(value: number | null): Promise<boolean> {
+  async function saveLimit(key: NumberKey, value: number | null, done: string): Promise<boolean> {
     try {
       const res = await fetch("/api/admin/platform-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherAiDefaultMonthlyCredits: value }),
+        body: JSON.stringify({ [key]: value }),
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) throw new Error(d?.error);
-      const confirmed = d?.settings?.teacherAiDefaultMonthlyCredits ?? null;
-      setSettings((prev) => (prev ? { ...prev, teacherAiDefaultMonthlyCredits: confirmed } : prev));
-      toast.success("Teacher AI credits updated.");
+      const confirmed = d?.settings?.[key] ?? null;
+      setSettings((prev) => (prev ? { ...prev, [key]: confirmed } : prev));
+      toast.success(done);
       return true;
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "Couldn't update the setting.");
@@ -270,6 +273,14 @@ export function PlatformSettingsPanel() {
             disabled={aiOff}
             onChange={(v) => update("aiTutorEnabled", v)}
           />
+          <LimitRow
+            label="Tutor messages per student / day"
+            desc="Each student's AI tutor replies per day. Renews at midnight, Addis Ababa time. Blank = no cap."
+            max={10000}
+            value={settings.tutorDailyMessageLimit}
+            disabled={aiOff || !settings.aiTutorEnabled}
+            onSave={(v) => saveLimit("tutorDailyMessageLimit", v, "Daily tutor limit updated.")}
+          />
           <Row
             label="AI Question / Quiz Generation"
             desc="Admin question generation and student AI quizzes."
@@ -298,10 +309,13 @@ export function PlatformSettingsPanel() {
             disabled={aiOff}
             onChange={(v) => update("aiTeacherAssistantEnabled", v)}
           />
-          <TeacherCreditsRow
+          <LimitRow
+            label="Default teacher AI credits / month"
+            desc="Used when a school's plan sets no limit, and always while pricing is off. An assistant reply is 1 credit, a workout set or merge 2, an AI-written paper 1 per question. Blank = no cap."
+            max={100000}
             value={settings.teacherAiDefaultMonthlyCredits}
             disabled={aiOff || !settings.aiTeacherAssistantEnabled}
-            onSave={saveTeacherCredits}
+            onSave={(v) => saveLimit("teacherAiDefaultMonthlyCredits", v, "Teacher AI credits updated.")}
           />
         </div>
 

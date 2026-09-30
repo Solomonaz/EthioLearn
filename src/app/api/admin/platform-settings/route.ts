@@ -63,6 +63,21 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Tutor messages per user per day: a whole number, or null for no cap.
+  if ("tutorDailyMessageLimit" in body) {
+    const v = body.tutorDailyMessageLimit;
+    if (v === null) {
+      data.tutorDailyMessageLimit = null;
+    } else if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 10_000) {
+      data.tutorDailyMessageLimit = v;
+    } else {
+      return NextResponse.json(
+        { error: "Daily tutor messages must be a whole number from 0 to 10000, or empty for no cap." },
+        { status: 400 },
+      );
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No valid settings to update" }, { status: 400 });
   }
@@ -82,6 +97,7 @@ export async function PATCH(request: Request) {
       rewardsEnabled: true,
       antiCheatEnabled: true,
       teacherAiDefaultMonthlyCredits: true,
+      tutorDailyMessageLimit: true,
     },
   });
 

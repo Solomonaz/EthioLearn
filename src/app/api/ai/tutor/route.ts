@@ -8,6 +8,12 @@ import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { rewriteQueryForRAG } from "@/lib/query-rewriter";
+import {
+  getTutorDailyStatus,
+  recordTutorMessage,
+  tutorLimitMessage,
+  tutorLimitReached,
+} from "@/lib/tutor-allowance";
 
 // How many of the most relevant chunks to retrieve as tutor context.
 const TUTOR_RETRIEVAL_LIMIT = 8;
@@ -110,6 +116,16 @@ export async function POST(req: Request) {
     );
   }
 
+  // Daily cap (the platform setting). The env super admin tests uncapped.
+  const capped = user.role !== "SUPER_ADMIN";
+  const daily = capped ? await getTutorDailyStatus(user.id) : null;
+  if (daily && tutorLimitReached(daily)) {
+    return NextResponse.json(
+      { error: tutorLimitMessage(daily.limit!), code: "DAILY_LIMIT", remainingToday: 0 },
+      { status: 429 }
+    );
+  }
+
   try {
     const { chapterId, message, history: rawHistory } = await req.json();
     const history = capHistory(rawHistory);
@@ -159,9 +175,14 @@ export async function POST(req: Request) {
       grade: chapter.textbook.grade,
     });
 
+    // Count only a delivered reply, so a failed call never uses up a message.
+    const usedToday = capped ? await recordTutorMessage(user.id) : null;
+    const limit = daily?.limit ?? null;
+
     return NextResponse.json({
       response: result.response,
       provider: result.provider,
+      remainingToday: limit !== null && usedToday !== null ? Math.max(0, limit - usedToday) : null,
     });
   } catch (error) {
     console.error("[Tutor API Error]", error);

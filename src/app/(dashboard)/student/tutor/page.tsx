@@ -56,6 +56,8 @@ export default function TutorPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // Tutor messages left today (daily cap); null = unknown or no cap.
+  const [remainingToday, setRemainingToday] = useState<number | null>(null);
   const [fetchingData, setFetchingData] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -131,9 +133,18 @@ export default function TutorPage() {
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to get tutor response");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (typeof data?.remainingToday === "number") setRemainingToday(data.remainingToday);
+        // Limits and plan messages are written for the student; show them as-is.
+        if (typeof data?.error === "string" && res.status !== 500) {
+          setMessages([...newMessages, { role: "model", parts: [{ text: data.error }] }]);
+          return;
+        }
+        throw new Error("Failed to get tutor response");
+      }
 
-      const data = await res.json();
+      if (typeof data.remainingToday === "number") setRemainingToday(data.remainingToday);
       setMessages([
         ...newMessages,
         { role: "model", parts: [{ text: data.response }] },
@@ -376,7 +387,7 @@ export default function TutorPage() {
                   ? "Ask your tutor anything..."
                   : "Please select a chapter first..."
               }
-              disabled={!selectedChapter || isLoading}
+              disabled={!selectedChapter || isLoading || remainingToday === 0}
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
@@ -384,7 +395,7 @@ export default function TutorPage() {
               type="submit"
               size="sm"
               className="absolute right-2 top-1.5 h-10 w-10 rounded-lg shadow-lg shadow-primary/20 transition-transform active:scale-95 disabled:grayscale"
-              disabled={!selectedChapter || !input.trim() || isLoading}
+              disabled={!selectedChapter || !input.trim() || isLoading || remainingToday === 0}
             >
               <Send className="h-4 w-4" />
             </Button>
@@ -392,6 +403,10 @@ export default function TutorPage() {
           <p className="mt-3 text-[10px] text-center text-text-muted">
             The tutor follows the official curriculum and focuses on the
             selected chapter only.
+            {remainingToday !== null &&
+              (remainingToday === 0
+                ? " No messages left today. They renew at midnight."
+                : ` ${remainingToday} message${remainingToday === 1 ? "" : "s"} left today.`)}
           </p>
         </div>
       </div>

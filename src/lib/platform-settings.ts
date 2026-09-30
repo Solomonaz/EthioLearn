@@ -13,6 +13,8 @@ export interface PlatformSettings {
   antiCheatEnabled: boolean;
   /** Secondary teachers' monthly AI credits when no plan sets one; null = no cap. */
   teacherAiDefaultMonthlyCredits: number | null;
+  /** AI tutor messages per user per day (Addis Ababa day); null = no cap. */
+  tutorDailyMessageLimit: number | null;
 }
 
 // Individual AI features are gated by BOTH the master switch and their own flag.
@@ -41,6 +43,7 @@ const DEFAULTS: PlatformSettings = {
   rewardsEnabled: true,
   antiCheatEnabled: true,
   teacherAiDefaultMonthlyCredits: 300,
+  tutorDailyMessageLimit: 20,
 };
 
 /**
@@ -65,6 +68,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
         rewardsEnabled: true,
         antiCheatEnabled: true,
         teacherAiDefaultMonthlyCredits: true,
+        tutorDailyMessageLimit: true,
       },
     });
     return row;

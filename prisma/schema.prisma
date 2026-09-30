@@ -413,9 +413,26 @@ model PlatformSettings {
   /// limit — and ALWAYS while pricing is off, so a free launch is still capped.
   /// Null = no cap. See lib/teacher-ai-allowance for what each credit buys.
   teacherAiDefaultMonthlyCredits Int? @default(300)
+  /// AI tutor messages each user may send per day (the day resets at
+  /// midnight Addis Ababa time). Null = no daily cap. See lib/tutor-allowance.
+  tutorDailyMessageLimit Int? @default(20)
   updatedAt         DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+/// How many AI tutor replies one user received on one day, for the daily cap
+/// (PlatformSettings.tutorDailyMessageLimit). Kept in the database rather than
+/// the in-memory rate limiter so a server restart does not hand out a fresh
+/// allowance. No FK: the env super admin has no users row.
+model TutorDailyUse {
+  userId String
+  /// Calendar day in Addis Ababa time (UTC+3), stored as a date.
+  day    DateTime @db.Date
+  count  Int      @default(0)
+
+  @@id([userId, day])
+  @@map("tutor_daily_uses")
 }
 
 // ─── AI Provider Configuration ──────────────────────────────
