@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/site";
 import { LEGAL_CONTACT_EMAIL, LegalPage } from "@/components/legal/legal-page";
 
-export const metadata: Metadata = {
-  title: "Terms of Service · Abugida",
-  description: "The terms for using Abugida.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Terms of Service",
+  description: "The terms for using Abugida, the learning platform for Ethiopian students, teachers and schools.",
+  path: "/terms",
+});
 
 export default function TermsPage() {
   return (

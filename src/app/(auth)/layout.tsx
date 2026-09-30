@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import { NO_INDEX } from "@/lib/site";
+
 /**
  * Auth pages depend on the session (a signed-in user is sent to their
  * dashboard), so they must never be served from a cache. Forcing dynamic
@@ -6,6 +9,10 @@
  * restore it for a user who is already signed in.
  */
 export const dynamic = "force-dynamic";
+
+// One-off steps (email links, callbacks, password changes) stay out of search
+// results. /login and /register opt back in with their own layouts.
+export const metadata: Metadata = NO_INDEX;
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return children;

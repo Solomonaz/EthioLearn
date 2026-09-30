@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Fraunces } from "next/font/google";
 import { getTranslations } from "next-intl/server";
@@ -27,6 +28,7 @@ import { HeroPreview } from "@/components/home/hero-preview";
 import { AppPreview } from "@/components/home/app-preview";
 import { LandingNav } from "@/components/home/landing-nav";
 import { QuizSimulation } from "@/components/home/quiz-simulation";
+import { SITE_DESCRIPTION, SITE_NAME, pageMetadata, siteUrl } from "@/lib/site";
 
 // Display face for headings only; body text stays on the app's sans stack.
 const display = Fraunces({
@@ -34,6 +36,10 @@ const display = Fraunces({
   variable: "--font-display",
   display: "swap",
 });
+
+export const metadata: Metadata = pageMetadata({ description: SITE_DESCRIPTION, path: "/" });
+
+const FAQ_COUNT = 7;
 
 type Feature = { icon: LucideIcon; title: string; desc: string };
 type Audience = { id: string; label: string; lead: string; features: Feature[] };
@@ -86,8 +92,65 @@ export default async function HomePage() {
     t("english"), t("amharic"), t("history"), t("geography"),
   ];
 
+  const faqs = Array.from({ length: FAQ_COUNT }, (_, i) => ({
+    q: t(`faq${i + 1}Q`),
+    a: t(`faq${i + 1}A`),
+  }));
+
+  // Structured data for search engines: who we are, the site, the app, and
+  // the FAQ exactly as it appears on the page.
+  const url = siteUrl();
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${url}/#organization`,
+        name: SITE_NAME,
+        url,
+        logo: `${url}/icons/icon-512.png`,
+        description: t("footerTagline"),
+        areaServed: { "@type": "Country", name: "Ethiopia" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${url}/#website`,
+        name: SITE_NAME,
+        url,
+        inLanguage: ["en", "am"],
+        publisher: { "@id": `${url}/#organization` },
+      },
+      {
+        "@type": "WebApplication",
+        name: SITE_NAME,
+        url,
+        applicationCategory: "EducationalApplication",
+        operatingSystem: "Any (web browser)",
+        description: SITE_DESCRIPTION,
+        inLanguage: ["en", "am"],
+        audience: { "@type": "EducationalAudience", educationalRole: ["student", "teacher"] },
+        educationalLevel: "Grades 1–12",
+        about: subjects,
+        publisher: { "@id": `${url}/#organization` },
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: faqs.map((f) => ({
+          "@type": "Question",
+          name: f.q,
+          acceptedAnswer: { "@type": "Answer", text: f.a },
+        })),
+      },
+    ],
+  };
+
   return (
     <div className={`lp ${display.variable} min-h-screen`}>
+      <script
+        type="application/ld+json"
+        // "<" escaped so text can never close the script tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
       <LandingNav
         links={[
           ...audiences.map((a) => ({ href: `#${a.id}`, label: a.label })),
@@ -100,6 +163,7 @@ export default async function HomePage() {
         menuLabel={t("navMenu")}
       />
 
+      <main>
       {/* ── Hero ── */}
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div>
@@ -261,6 +325,34 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── FAQ ── */}
+      <section id="faq" className="scroll-mt-20 border-t border-[var(--lp-rule)]">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-20 sm:px-6 md:grid-cols-[1fr_2fr] md:gap-16">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--lp-green-ink)]">
+              {t("faqEyebrow")}
+            </p>
+            <h2 className="lp-display mt-3 text-3xl font-semibold sm:text-4xl">{t("faqTitle")}</h2>
+          </div>
+          <div className="divide-y divide-[var(--lp-rule)] border-y border-[var(--lp-rule)]">
+            {faqs.map((f) => (
+              <details key={f.q} className="group py-5">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-4 text-[17px] font-semibold [&::-webkit-details-marker]:hidden">
+                  <h3>{f.q}</h3>
+                  <span
+                    aria-hidden
+                    className="mt-0.5 text-xl leading-none text-[var(--lp-faint)] transition-transform group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </summary>
+                <p className="mt-3 max-w-2xl leading-relaxed text-[var(--lp-muted)]">{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Call to action ── */}
       <section className="px-4 py-20 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 rounded-3xl bg-[var(--lp-band)] px-8 py-12 text-[var(--lp-band-ink)] sm:px-12 md:flex-row md:items-center">
@@ -277,6 +369,8 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      </main>
 
       {/* ── Footer ── */}
       <footer className="border-t border-[var(--lp-rule)]">

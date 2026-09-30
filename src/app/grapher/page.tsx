@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/get-session";
 import { GrapherApp } from "@/components/student/grapher/grapher-app";
+import { NO_INDEX } from "@/lib/site";
+
+export const metadata: Metadata = { title: "Grapher", ...NO_INDEX };
 
 /**
  * Standalone, chrome-free grapher — opened as its own window from the in-app
