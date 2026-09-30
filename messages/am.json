@@ -532,7 +532,17 @@
     "changeSubtitleForced": "ከትምህርት ቤትዎ በተሰጠ ጊዜያዊ የይለፍ ቃል ገብተዋል። ለመቀጠል የራስዎን ይምረጡ።",
     "changeSubtitle": "ለመግባት የሚጠቀሙበትን የይለፍ ቃል ይቀይሩ።",
     "changeBtn": "አስቀምጥና ቀጥል",
-    "networkError": "የአውታረ መረብ ችግር። ግንኙነትዎን አረጋግጠው እንደገና ይሞክሩ።"
+    "networkError": "የአውታረ መረብ ችግር። ግንኙነትዎን አረጋግጠው እንደገና ይሞክሩ።",
+    "checkEmailTitle": "ኢሜይልዎን ይመልከቱ",
+    "checkEmailBody": "ወደ <b>{email}</b> ሊንክ ልከናል። ኢሜይልዎን ለማረጋገጥ ይክፈቱት፣ ከዚያ ይግቡ። አንድ ደቂቃ ሊወስድ ይችላል — የአይፈለጌ (spam) ማህደሩንም ይመልከቱ።",
+    "resendLink": "ሊንኩን እንደገና ላክ",
+    "linkResent": "አዲስ ሊንክ ተልኳል።",
+    "emailNotVerified": "እባክዎ መጀመሪያ ኢሜይልዎን ያረጋግጡ።",
+    "verifyingEmail": "ኢሜይልዎን በማረጋገጥ ላይ…",
+    "emailVerifiedTitle": "ኢሜይል ተረጋግጧል",
+    "emailVerifiedBody": "መለያዎ ዝግጁ ነው። አሁን መግባት ይችላሉ።",
+    "verifyFailed": "ይህ ሊንክ ትክክል አይደለም ወይም ጊዜው አልፏል። አዲስ ለማግኘት ይግቡ።",
+    "goToSignIn": "ወደ መግቢያ ሂድ"
   },
   "student": {
     "welcome": "እንኳን ደህና መጡ",

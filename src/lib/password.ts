@@ -118,23 +118,27 @@ export function normalizeUsername(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-// ─── Password reset links ─────────────────────────────────────────────────
+// ─── One-time email links (password reset, email verification) ───────────
 //
-// Stored in the existing `otp_codes` table under the key "pwreset:<userId>",
-// hashed exactly as the table always stores codes, so a database leak does not
-// leak working links. One live link per user: asking again replaces it.
+// Stored in the existing `otp_codes` table under "<purpose>:<userId>", hashed
+// exactly as the table always stores codes, so a database leak does not leak
+// working links. One live link per user and purpose: asking again replaces it.
 
-const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+type LinkPurpose = "pwreset" | "verify";
+
+const LINK_TTL_MS: Record<LinkPurpose, number> = {
+  pwreset: 60 * 60 * 1000,      // 1 hour
+  verify: 24 * 60 * 60 * 1000,  // 24 hours
+};
 
 function sha256(v: string): string {
   return crypto.createHash("sha256").update(v).digest("hex");
 }
 
-/** Create a reset token for a user and return it (to be put in the emailed link). */
-export async function createResetToken(userId: string): Promise<string> {
+async function createLinkToken(userId: string, purpose: LinkPurpose): Promise<string> {
   const token = crypto.randomBytes(32).toString("base64url");
-  const key = `pwreset:${userId}`;
-  const expiresAt = new Date(Date.now() + RESET_TTL_MS);
+  const key = `${purpose}:${userId}`;
+  const expiresAt = new Date(Date.now() + LINK_TTL_MS[purpose]);
   await db.otpCode.upsert({
     where: { key },
     create: { key, code: sha256(token), expiresAt },
@@ -144,15 +148,15 @@ export async function createResetToken(userId: string): Promise<string> {
 }
 
 /**
- * Consume a reset token. Returns the user id it was issued for, or null when
- * it is unknown, used or expired. Single use: it is deleted either way.
+ * Consume a link token. Returns the user id it was issued for, or null when it
+ * is unknown, used or expired. Single use: a valid token is deleted.
  */
-export async function consumeResetToken(raw: string): Promise<string | null> {
+async function consumeLinkToken(raw: string, purpose: LinkPurpose): Promise<string | null> {
   const dot = raw.indexOf(".");
   if (dot <= 0) return null;
   const userId = raw.slice(0, dot);
   const token = raw.slice(dot + 1);
-  const key = `pwreset:${userId}`;
+  const key = `${purpose}:${userId}`;
 
   const row = await db.otpCode.findUnique({ where: { key } });
   if (!row) return null;
@@ -163,3 +167,11 @@ export async function consumeResetToken(raw: string): Promise<string | null> {
   await db.otpCode.delete({ where: { key } }).catch(() => {});
   return userId;
 }
+
+/** A password-reset link token (1 hour). */
+export const createResetToken = (userId: string) => createLinkToken(userId, "pwreset");
+export const consumeResetToken = (raw: string) => consumeLinkToken(raw, "pwreset");
+
+/** An email-verification link token (24 hours). */
+export const createVerifyToken = (userId: string) => createLinkToken(userId, "verify");
+export const consumeVerifyToken = (raw: string) => consumeLinkToken(raw, "verify");

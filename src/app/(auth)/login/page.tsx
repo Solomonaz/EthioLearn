@@ -14,6 +14,7 @@ import {
   inputClass,
   primaryButtonClass,
 } from "@/components/auth/social-sign-in";
+import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 
 // ── Error messages ───────────────────────────────────────────────────────────
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -56,11 +57,14 @@ function LoginForm() {
   const [password, setPassword]     = useState("");
   const [isLoading, setIsLoading]   = useState(false);
   const [error, setError]           = useState(initialError);
+  // The password was right but the email isn't confirmed yet.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
 
   // ── Email / username + password ──────────────────────────────────────────
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setUnverifiedEmail(null);
     setIsLoading(true);
     try {
       const result = await signIn("password", {
@@ -70,6 +74,10 @@ function LoginForm() {
       });
 
       if (result?.error) {
+        if (result.error === "EmailNotVerified") {
+          setUnverifiedEmail(identifier.trim().toLowerCase());
+          return;
+        }
         setError(result.error === "TooManyAttempts" ? t("tooManyAttempts") : t("wrongCredentials"));
         return;
       }
@@ -187,6 +195,12 @@ function LoginForm() {
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
+            {unverifiedEmail && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-red-600">{t("emailNotVerified")}</p>
+                <CheckEmailPanel email={unverifiedEmail} compact />
+              </div>
+            )}
             <button type="submit" disabled={isLoading} className={primaryButtonClass}>
               {isLoading ? t("signingIn") : t("signInBtn")}
             </button>

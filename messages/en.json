@@ -532,7 +532,17 @@
     "changeSubtitleForced": "You signed in with a temporary password from your school. Choose your own to continue.",
     "changeSubtitle": "Change the password you use to sign in.",
     "changeBtn": "Save and continue",
-    "networkError": "Network error. Please check your connection and try again."
+    "networkError": "Network error. Please check your connection and try again.",
+    "checkEmailTitle": "Check your email",
+    "checkEmailBody": "We sent a link to <b>{email}</b>. Open it to confirm your email, then sign in. It can take a minute — check your spam folder too.",
+    "resendLink": "Send the link again",
+    "linkResent": "A new link is on its way.",
+    "emailNotVerified": "Please confirm your email first.",
+    "verifyingEmail": "Confirming your email…",
+    "emailVerifiedTitle": "Email confirmed",
+    "emailVerifiedBody": "Your account is ready. You can sign in now.",
+    "verifyFailed": "This link is invalid or has expired. Sign in to get a new one.",
+    "goToSignIn": "Go to sign in"
   },
   "student": {
     "welcome": "Welcome back",

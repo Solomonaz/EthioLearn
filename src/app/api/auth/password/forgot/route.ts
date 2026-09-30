@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
-import { createResetToken } from "@/lib/password";
-import { emailConfigured, sendMail } from "@/lib/mailer";
+import { emailConfigured } from "@/lib/mailer";
+import { sendPasswordResetEmail } from "@/lib/auth-emails";
 
 /**
  * POST /api/auth/password/forgot  { email }
@@ -53,23 +53,8 @@ export async function POST(request: Request) {
   });
   if (!user || !user.isActive || user.suspendedAt) return sent;
 
-  const token = await createResetToken(user.id);
-  const base = (process.env.NEXTAUTH_URL || "http://localhost:3001").replace(/\/$/, "");
-  const link = `${base}/reset-password?token=${encodeURIComponent(token)}`;
-
   try {
-    await sendMail(
-      email,
-      "Set your Abugida password",
-      `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <img src="${base}/brand/logo-email.png" alt="Abugida" width="200" style="display:block;margin-bottom:16px;border:0" />
-        <p style="color:#374151">Hello ${escapeHtml(user.name)},</p>
-        <p style="color:#374151">Use the button below to set a new password. The link works once and expires in 1 hour.</p>
-        <p style="margin:24px 0"><a href="${link}" style="background:#1a6b2e;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">Set my password</a></p>
-        <p style="color:#6b7280;font-size:13px">If you did not ask for this, you can ignore this email.</p>
-      </div>`,
-      `Hello ${user.name},\n\nSet a new Abugida password here (works once, expires in 1 hour):\n${link}\n\nIf you did not ask for this, ignore this email.`,
-    );
+    await sendPasswordResetEmail({ id: user.id, name: user.name, email });
   } catch (err) {
     console.error("[Password reset] email failed:", err);
     return NextResponse.json(
@@ -79,8 +64,4 @@ export async function POST(request: Request) {
   }
 
   return sent;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }

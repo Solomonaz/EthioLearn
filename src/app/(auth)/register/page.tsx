@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 import { useState, useEffect, Suspense } from "react";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { homeRouteForRole } from "@/lib/teacher-band";
@@ -14,6 +14,7 @@ import {
   inputClass,
   primaryButtonClass,
 } from "@/components/auth/social-sign-in";
+import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 
 /**
  * Self sign-up — always an independent student. Teachers and school staff are
@@ -46,6 +47,8 @@ function RegisterForm() {
   const [grade, setGrade]       = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError]       = useState(tgErrorMsg);
+  // Set once the account exists: it must be confirmed by email before use.
+  const [sentTo, setSentTo]     = useState<string | null>(null);
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,13 +70,8 @@ function RegisterForm() {
         return;
       }
 
-      // Signed straight in — no second trip through the sign-in form.
-      const result = await signIn("password", {
-        identifier: email.trim(),
-        password,
-        redirect: false,
-      });
-      router.replace(result?.ok ? "/student" : "/login?registered=true");
+      // The account can't be used until the email is confirmed.
+      setSentTo(data.email ?? email.trim().toLowerCase());
     } catch {
       setError(t("networkError"));
     } finally {
@@ -92,6 +90,10 @@ function RegisterForm() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
+          {sentTo ? (
+            <CheckEmailPanel email={sentTo} />
+          ) : (
+          <>
           <SocialSignIn
             action="register"
             googleLabel={t("signUpGoogle")}
@@ -191,6 +193,8 @@ function RegisterForm() {
               {isLoading ? t("creating") : t("createAccountBtn")}
             </button>
           </form>
+          </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-sm text-text-secondary">

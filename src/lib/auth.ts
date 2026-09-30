@@ -164,6 +164,11 @@ const providers: NextAuthOptions["providers"] = [
       const ok = await verifyPassword(password, user?.passwordHash ?? (await dummyHash));
       if (!user || !user.passwordHash || !ok) return null;
       if (!user.isActive || user.suspendedAt) return null;
+      // An email sign-in only works once the owner has confirmed the address
+      // (the sign-up link, a password-reset link, or Google). Checked only
+      // after the password matched, so it reveals nothing to a stranger.
+      // School-issued usernames have no email and are not affected.
+      if (identifier.includes("@") && !user.emailVerifiedAt) throw new Error("EmailNotVerified");
 
       return sessionUser(user);
     },

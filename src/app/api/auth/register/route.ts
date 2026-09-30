@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { hashPassword, passwordProblem } from "@/lib/password";
+import { emailConfigured } from "@/lib/mailer";
+import { sendVerificationEmail } from "@/lib/auth-emails";
 
 /**
  * Self sign-up with email + password. Only ever creates an independent
@@ -9,9 +11,12 @@ import { hashPassword, passwordProblem } from "@/lib/password";
  * school's students by their school. `role` and `schoolId` in the body are
  * ignored.
  *
- * The email is not verified here. If its owner later signs in with Google,
- * the Google link discards this password (see resolveSocialUser in
- * lib/auth), so pre-registering someone else's email gains nothing.
+ * The email must be confirmed before the password works: we email a 24-hour
+ * link, and password sign-in refuses an unconfirmed email (lib/auth). So an
+ * account made with someone else's — or a made-up — email is unusable, and
+ * the real owner can still take the address: registering again replaces an
+ * unconfirmed sign-up, "Forgot password" confirms it, and Google discards
+ * its password (resolveSocialUser in lib/auth).
  */
 export async function POST(request: Request) {
   try {
@@ -47,26 +52,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Choose your grade." }, { status: 400 });
     }
 
-    const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
-    if (existing) {
+    // Without email, nobody could ever confirm — don't create dead accounts.
+    if (!emailConfigured()) {
       return NextResponse.json(
-        { error: "An account with this email already exists. Please sign in instead." },
+        { error: "Sign-up with email is not available right now. Please use Google or Telegram." },
+        { status: 503 }
+      );
+    }
+
+    const existing = await db.user.findUnique({
+      where: { email },
+      select: {
+        id: true, role: true, emailVerifiedAt: true, googleId: true, telegramId: true,
+        facebookId: true, schoolId: true, username: true,
+      },
+    });
+
+    // An unconfirmed email sign-up was never usable, so a new sign-up for the
+    // same address replaces it — otherwise whoever typed the address first
+    // would block its real owner. Anything else is a real account.
+    const replaceable =
+      existing &&
+      existing.role === "STUDENT" &&
+      !existing.emailVerifiedAt &&
+      !existing.googleId && !existing.telegramId && !existing.facebookId &&
+      !existing.schoolId && !existing.username;
+
+    if (existing && !replaceable) {
+      return NextResponse.json(
+        { error: "An account with this email already exists. Sign in, or use “Forgot password?” if it’s yours." },
         { status: 409 }
       );
     }
 
-    const user = await db.user.create({
-      data: {
-        name,
-        email,
-        passwordHash: await hashPassword(password as string),
-        role: "STUDENT",
-        grade,
-      },
-      select: { id: true, name: true, email: true, role: true, grade: true, createdAt: true },
-    });
+    const data = {
+      name,
+      email,
+      passwordHash: await hashPassword(password as string),
+      role: "STUDENT" as const,
+      grade,
+    };
+    const user = existing
+      ? await db.user.update({ where: { id: existing.id }, data, select: { id: true, name: true, email: true } })
+      : await db.user.create({ data, select: { id: true, name: true, email: true } });
 
-    return NextResponse.json({ success: true, user });
+    try {
+      await sendVerificationEmail({ id: user.id, name: user.name, email });
+    } catch (err) {
+      // The account exists; the sign-in page can send the link again.
+      console.error("[Register] verification email failed:", err);
+      return NextResponse.json({ success: true, verificationSent: false, email });
+    }
+
+    return NextResponse.json({ success: true, verificationSent: true, email });
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
