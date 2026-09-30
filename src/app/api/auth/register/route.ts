@@ -18,6 +18,9 @@ import { sendVerificationEmail } from "@/lib/auth-emails";
  * unconfirmed sign-up, "Forgot password" confirms it, and Google discards
  * its password (resolveSocialUser in lib/auth).
  */
+const EMAIL_TAKEN =
+  "An account with this email already exists. Sign in, or use “Forgot password?” if it’s yours.";
+
 export async function POST(request: Request) {
   try {
     // 3 registrations per IP per 10 minutes
@@ -80,7 +83,7 @@ export async function POST(request: Request) {
 
     if (existing && !replaceable) {
       return NextResponse.json(
-        { error: "An account with this email already exists. Sign in, or use “Forgot password?” if it’s yours." },
+        { error: EMAIL_TAKEN },
         { status: 409 }
       );
     }
@@ -106,7 +109,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, verificationSent: true, email });
   } catch (error) {
+    // Two sign-ups for the same address at once: the second hits the unique
+    // index after passing the lookup above.
+    if ((error as { code?: string })?.code === "P2002") {
+      return NextResponse.json({ error: EMAIL_TAKEN }, { status: 409 });
+    }
     console.error("Registration error:", error);
-    return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Something went wrong on our side and your account was not created. Please try again in a minute." },
+      { status: 500 }
+    );
   }
 }

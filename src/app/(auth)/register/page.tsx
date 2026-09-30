@@ -17,6 +17,21 @@ import {
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 
 /**
+ * What to show when the server's reply carries no message of its own — a
+ * crash page, a proxy error or a timeout rather than our JSON. Say what kind
+ * of failure it was instead of a bare "failed".
+ */
+function registerFailureMessage(status: number): string {
+  if (status === 409) return "An account with this email already exists. Sign in, or use “Forgot password?” if it’s yours.";
+  if (status === 429) return "Too many sign-up attempts from this network. Please wait 10 minutes and try again.";
+  if (status === 502 || status === 503 || status === 504) {
+    return `The server is not reachable right now (error ${status}). Please try again in a minute.`;
+  }
+  if (status >= 500) return `Something went wrong on our side (error ${status}). Your account was not created — please try again.`;
+  return `Your sign-up could not be sent (error ${status}). Please refresh the page and try again.`;
+}
+
+/**
  * Self sign-up — always an independent student. Teachers and school staff are
  * created by their school's admin, and a school's own students get a
  * school-issued username, so neither registers here.
@@ -66,7 +81,7 @@ function RegisterForm() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Failed to create account. Please try again.");
+        setError(data.error || registerFailureMessage(res.status));
         return;
       }
 
