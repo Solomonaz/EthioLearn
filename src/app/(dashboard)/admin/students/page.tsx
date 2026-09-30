@@ -42,6 +42,8 @@ interface Student {
   /** School-issued sign-in name; null for students who signed up themselves. */
   username: string | null;
   email: string | null;
+  /** Telegram's numeric user ID. Permanent, unlike the @username, which is optional and can change. */
+  telegramId: string | null;
   grade: number | null;
   section: string | null;
   xpLevel: number;
@@ -906,9 +908,11 @@ function AdminStudentsContent() {
                       </div>
                     </td>
 
-                    {/* Sign-in: school-issued username, or their own email */}
+                    {/* Sign-in: school-issued username, their own email, or the Telegram ID */}
                     <td className="px-4 py-3 text-text-secondary">
-                      {student.username ?? student.email ?? "—"}
+                      {student.username ??
+                        student.email ??
+                        (student.telegramId ? `Telegram · ${student.telegramId}` : "—")}
                     </td>
 
                     {/* Grade / Section */}

@@ -123,6 +123,8 @@ export async function GET(req: NextRequest) {
             { name: { contains: search, mode: "insensitive" as const } },
             { username: { contains: search.toLowerCase() } },
             { email: { contains: search, mode: "insensitive" as const } },
+            // Telegram accounts have no email; admins find them by the permanent ID.
+            { telegramId: { contains: search } },
           ],
         }
       : {}),
@@ -190,6 +192,7 @@ export async function GET(req: NextRequest) {
     name: s.name,
     username: s.username,
     email: s.email,
+    telegramId: s.telegramId,
     grade: s.grade,
     section: s.section,
     xpLevel: s.xpLevel,
