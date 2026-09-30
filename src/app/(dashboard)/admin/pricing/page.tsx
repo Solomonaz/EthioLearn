@@ -768,7 +768,7 @@ function PlanEditor({
                   disabled={saving}
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 />
-                AI features (AI tutor, AI videos, AI-generated quizzes)
+                AI features (AI tutor, AI-generated quizzes)
               </label>
               <label className="flex items-center gap-2 text-sm text-text-primary">
                 <input

@@ -15,7 +15,7 @@ import { db } from "./db";
 import { getPlatformSettings } from "./platform-settings";
 
 export interface Entitlements {
-  /** AI tutor, AI video tutorials, AI quiz generation. */
+  /** AI tutor, AI quiz generation. */
   ai: boolean;
   /** Battle / group (multiplayer) games. Solo is always allowed. */
   multiplayer: boolean;
@@ -121,7 +121,7 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
 
 // Human-readable messages returned by the API when a capability is locked.
 export const UPGRADE_MESSAGES = {
-  ai: "AI features aren't included in your current plan. Upgrade to a full-access plan to use the AI tutor, AI videos, and AI-generated quizzes.",
+  ai: "AI features aren't included in your current plan. Upgrade to a full-access plan to use the AI tutor and AI-generated quizzes.",
   multiplayer: "Battle mode isn't included in your current plan. Upgrade to a full-access plan to play against others.",
   rewards: "Rewards aren't included in your current plan. Upgrade to a full-access plan to earn and redeem rewards.",
   leaderboard: "The leaderboard isn't included in your current plan. Upgrade to a full-access plan to see rankings.",

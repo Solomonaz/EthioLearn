@@ -1136,14 +1136,14 @@ async function main() {
     features: ["Solo quizzes from the question bank", "Daily challenges", "Solo games", "Progress tracking"],
   });
   await upsertStudentPlan("Full Access", {
-    description: "Everything: AI tutor, AI videos, AI quizzes, battle mode, rewards, leaderboard, graphing, and 3D geometry.",
+    description: "Everything: AI tutor, AI quizzes, battle mode, rewards, leaderboard, graphing, and 3D geometry.",
     price: 99, isActive: true, sortOrder: 1,
     // 99 ETB/month. Longer cycles save: 3-month −10%, yearly −20% (admin-editable).
     quarterlyDiscountPct: 10, yearlyDiscountPct: 20,
     allowAi: true, allowMultiplayer: true, allowRewards: true, allowLeaderboard: true, allowMathTools: true,
     features: [
       "Everything in Free",
-      "AI Tutor & AI video tutorials",
+      "AI Tutor",
       "AI-generated quizzes",
       "AI Adaptive difficulty",
       "AI study recommendations",

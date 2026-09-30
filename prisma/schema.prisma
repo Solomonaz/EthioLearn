@@ -1192,7 +1192,7 @@ model PricingPlan {
   // Entitlements — what the plan unlocks. Primarily for STUDENT plans; school
   // students and school plans are always treated as full access regardless.
   // Default true so existing/full plans keep every capability.
-  allowAi          Boolean @default(true) // AI tutor, AI video, AI quiz generation
+  allowAi          Boolean @default(true) // AI tutor, AI quiz generation
   allowMultiplayer Boolean @default(true) // battle / group games (solo is always allowed)
   allowRewards     Boolean @default(true) // rewards catalogue & redemption
   allowLeaderboard Boolean @default(true) // leaderboard / rankings
