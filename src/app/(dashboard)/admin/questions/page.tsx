@@ -78,6 +78,8 @@ interface QuestionItem {
   canManage: boolean;
   language: string;
   createdAt: string;
+  /** DRAFT = hidden from students until published. */
+  status: "DRAFT" | "PUBLISHED";
   chapterId: string;
   chapter: {
     id: string;
@@ -177,6 +179,10 @@ export default function AdminQuestionsPage() {
   const [filterDifficulty, setFilterDifficulty] = useState<Difficulty | "ALL">("ALL");
   const [filterType, setFilterType] = useState<QuestionType | "">("");
   const [unusedOnly, setUnusedOnly] = useState(false);
+  // Show only drafts (imported/generated questions students can't see yet).
+  const [draftsOnly, setDraftsOnly] = useState(false);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [publishingAll, setPublishingAll] = useState(false);
   const [sort, setSort] = useState<SortKey>("newest");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -221,8 +227,13 @@ export default function AdminQuestionsPage() {
   const [importResult, setImportResult] = useState<{
     imported: number;
     skipped: number;
+    duplicates?: number;
+    status?: "DRAFT" | "PUBLISHED";
     errors: { row: number; reason: string }[];
   } | null>(null);
+  // Off by default: questions written outside Abugida haven't had their
+  // answers checked, so they wait as drafts for review.
+  const [importPublish, setImportPublish] = useState(false);
   const [bulkTextbookId, setBulkTextbookId] = useState<string | null>(null);
   const [bulkChapterId, setBulkChapterId] = useState<string | null>(null);
 
@@ -334,6 +345,7 @@ export default function AdminQuestionsPage() {
       if (filterDifficulty !== "ALL") params.set("difficulty", filterDifficulty);
       if (filterType) params.set("type", filterType);
       if (unusedOnly) params.set("unused", "1");
+      if (draftsOnly) params.set("status", "DRAFT");
       if (search) params.set("search", search);
       params.set("sort", sort);
       params.set("page", String(page));
@@ -358,7 +370,7 @@ export default function AdminQuestionsPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [filterTextbookId, filterChapterId, filterDifficulty, filterType, unusedOnly, search, sort, page]);
+  }, [filterTextbookId, filterChapterId, filterDifficulty, filterType, unusedOnly, draftsOnly, search, sort, page]);
 
   function refreshAll() {
     textbooksLoaded.current = false;
@@ -418,7 +430,7 @@ export default function AdminQuestionsPage() {
   }
 
   const hasActiveFilters =
-    !!filterTextbookId || !!filterChapterId || filterDifficulty !== "ALL" || !!filterType || unusedOnly || !!search;
+    !!filterTextbookId || !!filterChapterId || filterDifficulty !== "ALL" || !!filterType || unusedOnly || draftsOnly || !!search;
 
   function clearFilters() {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -427,6 +439,7 @@ export default function AdminQuestionsPage() {
     setFilterDifficulty("ALL");
     setFilterType("");
     setUnusedOnly(false);
+    setDraftsOnly(false);
     setSearchInput("");
     setSearch("");
     setPage(1);
@@ -588,6 +601,66 @@ export default function AdminQuestionsPage() {
     }
   }
 
+  // ─── Publish drafts ───────────────────────────────────────
+
+  async function handlePublish(id: string) {
+    setPublishingId(id);
+    try {
+      const res = await fetch(`/api/admin/questions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PUBLISHED" }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Question published. Students can now get it in quizzes.");
+      await fetchQuestions();
+    } catch {
+      toast.error("Couldn't publish the question.");
+    } finally {
+      setPublishingId(null);
+    }
+  }
+
+  /** Publish every draft the current filters show (difficulty aside). */
+  async function handlePublishAll() {
+    setPublishingAll(true);
+    try {
+      const res = await fetch("/api/admin/questions/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          textbookId: filterTextbookId || undefined,
+          chapterId: filterChapterId || undefined,
+          type: filterType || undefined,
+          search: search || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error);
+      toast.success(`Published ${data.published} question${data.published === 1 ? "" : "s"}.`);
+      await fetchQuestions();
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Couldn't publish the drafts.");
+    } finally {
+      setPublishingAll(false);
+    }
+  }
+
+  /** Jump the bank to the drafts an import just created. */
+  function reviewImportedDrafts() {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    setFilterTextbookId(bulkTextbookId ?? "");
+    setFilterChapterId(bulkChapterId ?? "");
+    setFilterDifficulty("ALL");
+    setFilterType("");
+    setUnusedOnly(false);
+    setDraftsOnly(true);
+    setSearchInput("");
+    setSearch("");
+    setPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   // ─── Bulk Import helpers ──────────────────────────────────
 
   function handleCsvFile(file: File | null) {
@@ -605,8 +678,12 @@ export default function AdminQuestionsPage() {
 
   function downloadTemplate() {
     const headers = "questionText,optionA,optionB,optionC,optionD,correctAnswer,difficulty,explanation";
-    const example = "What is the powerhouse of the cell?,Nucleus,Mitochondria,Ribosome,Cell wall,Mitochondria,EASY,Mitochondria produce ATP energy";
-    const csv = `${headers}\n${example}\n`;
+    // correctAnswer may be the option's text or its letter (A–D).
+    const examples = [
+      "What is the powerhouse of the cell?,Nucleus,Mitochondria,Ribosome,Cell wall,Mitochondria,EASY,Mitochondria produce ATP energy",
+      "What is the SI unit of force?,Joule,Newton,Watt,Pascal,B,EASY,Force is measured in newtons (N)",
+    ];
+    const csv = `${headers}\n${examples.join("\n")}\n`;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -624,6 +701,7 @@ export default function AdminQuestionsPage() {
       const fd = new FormData();
       fd.append("chapterId", bulkChapterId);
       fd.append("file", csvFile);
+      if (importPublish) fd.append("publish", "1");
       const res = await fetch("/api/admin/questions/import", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
@@ -934,6 +1012,28 @@ export default function AdminQuestionsPage() {
                 >
                   Never answered
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftsOnly((v) => !v);
+                    goToPage(1);
+                  }}
+                  aria-pressed={draftsOnly}
+                  title="Questions students can't see until you publish them"
+                  className={cn(
+                    "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors",
+                    draftsOnly
+                      ? "border-warning bg-warning/10 text-warning"
+                      : "border-border text-text-secondary hover:border-warning/40 hover:text-text-primary",
+                  )}
+                >
+                  Drafts
+                  {!!stats?.drafts && (
+                    <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular-nums text-warning">
+                      {stats.drafts}
+                    </span>
+                  )}
+                </button>
                 {hasActiveFilters && (
                   <button
                     type="button"
@@ -983,6 +1083,22 @@ export default function AdminQuestionsPage() {
                 })}
               </div>
             </div>
+
+            {/* Drafts waiting for review */}
+            {draftsOnly && !!stats?.drafts && !fetchError && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-warning/5 px-4 py-3">
+                <p className="text-sm text-text-secondary">
+                  <span className="font-semibold text-text-primary">
+                    {stats.drafts.toLocaleString()} draft{stats.drafts === 1 ? "" : "s"}
+                  </span>{" "}
+                  {stats.drafts === 1 ? "is" : "are"} hidden from students. Open each one to check the answer, then
+                  publish.
+                </p>
+                <Button size="sm" onClick={handlePublishAll} isLoading={publishingAll} className="gap-1.5">
+                  <Check className="h-4 w-4" /> Publish all {stats.drafts.toLocaleString()}
+                </Button>
+              </div>
+            )}
 
             {/* Question list */}
             <div>
@@ -1041,6 +1157,8 @@ export default function AdminQuestionsPage() {
                       onAskDelete={() => setConfirmDeleteId(q.id)}
                       onCancelDelete={() => setConfirmDeleteId(null)}
                       onDelete={() => handleDelete(q.id)}
+                      isPublishing={publishingId === q.id}
+                      onPublish={() => handlePublish(q.id)}
                     />
                   ))}
                 </div>
@@ -1349,7 +1467,8 @@ export default function AdminQuestionsPage() {
               {activeTab === "bulk" && (
                 <div className="space-y-4">
                   <p className="text-sm text-text-secondary">
-                    Upload a CSV file to import multiple questions at once.
+                    Upload a CSV of multiple-choice questions for one chapter. The correct answer can be the
+                    option&apos;s text or its letter (A–D). Questions the chapter already has are skipped.
                   </p>
 
                   {/* Template download */}
@@ -1436,6 +1555,22 @@ export default function AdminQuestionsPage() {
                     </div>
                   )}
 
+                  <label htmlFor="import-publish" className="flex items-start gap-2 text-sm text-text-secondary">
+                    <input
+                      id="import-publish"
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={importPublish}
+                      onChange={(e) => setImportPublish(e.target.checked)}
+                    />
+                    <span>
+                      Publish immediately
+                      <span className="block text-xs text-text-muted">
+                        Off: questions are saved as drafts, hidden from students until you check and publish them.
+                      </span>
+                    </span>
+                  </label>
+
                   {/* Import result */}
                   {importResult && (
                     <div
@@ -1445,7 +1580,16 @@ export default function AdminQuestionsPage() {
                       )}
                     >
                       {importResult.imported > 0 && (
-                        <p>✓ Imported {importResult.imported} question{importResult.imported !== 1 ? "s" : ""}</p>
+                        <p>
+                          ✓ Imported {importResult.imported} question{importResult.imported !== 1 ? "s" : ""}
+                          {importResult.status === "DRAFT" ? " as drafts" : ""}
+                        </p>
+                      )}
+                      {!!importResult.duplicates && (
+                        <p>
+                          ↺ Skipped {importResult.duplicates} repeat{importResult.duplicates !== 1 ? "s" : ""} of
+                          questions the chapter already has
+                        </p>
                       )}
                       {importResult.skipped > 0 && (
                         <p>⚠ Skipped {importResult.skipped} row{importResult.skipped !== 1 ? "s" : ""}</p>
@@ -1459,6 +1603,11 @@ export default function AdminQuestionsPage() {
                             <li>...and {importResult.errors.length - 5} more errors</li>
                           )}
                         </ul>
+                      )}
+                      {importResult.status === "DRAFT" && importResult.imported > 0 && (
+                        <Button size="sm" variant="outline" className="mt-2" onClick={reviewImportedDrafts}>
+                          Review the drafts
+                        </Button>
                       )}
                     </div>
                   )}

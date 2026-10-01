@@ -24,6 +24,9 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") ?? undefined;
   const sort = searchParams.get("sort") ?? "newest";
   const unusedOnly = searchParams.get("unused") === "1";
+  // DRAFT = imported or generated questions students can't see yet.
+  const statusParam = searchParams.get("status");
+  const status = statusParam === "DRAFT" || statusParam === "PUBLISHED" ? statusParam : undefined;
   // The dashboard asks for textbooks once and skips them on every later page /
   // filter change, so paging doesn't re-walk every textbook's chapters.
   const withTextbooks = searchParams.get("textbooks") !== "0";
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
 
   // Everything except difficulty — the stats strip and the difficulty pill
   // counts describe this scope, so picking a pill doesn't zero the others.
-  const scopeWhere: Prisma.QuestionWhereInput = {
+  const baseScope: Prisma.QuestionWhereInput = {
     chapter: {
       textbook: visibleTextbookWhere(user),
       ...(chapterId ? { id: chapterId } : {}),
@@ -47,6 +50,7 @@ export async function GET(request: NextRequest) {
       : {}),
     ...(unusedOnly ? { quizAnswers: { none: {} } } : {}),
   };
+  const scopeWhere: Prisma.QuestionWhereInput = { ...baseScope, ...(status ? { status } : {}) };
 
   const where: Prisma.QuestionWhereInput = {
     ...scopeWhere,
@@ -66,7 +70,7 @@ export async function GET(request: NextRequest) {
           ? [{ quizAnswers: { _count: "asc" } }, { createdAt: "desc" }]
           : [{ createdAt: "desc" }];
 
-  const [questionsRaw, total, byDifficulty, unused, answered, correct] = await Promise.all([
+  const [questionsRaw, total, byDifficulty, unused, answered, correct, drafts] = await Promise.all([
     db.question.findMany({
       where,
       include: {
@@ -96,6 +100,8 @@ export async function GET(request: NextRequest) {
     db.question.count({ where: { ...scopeWhere, quizAnswers: { none: {} } } }),
     db.quizAnswer.count({ where: { question: scopeWhere } }),
     db.quizAnswer.count({ where: { question: scopeWhere, isCorrect: true } }),
+    // Unaffected by the status filter, so the "Drafts" tab always shows its count.
+    db.question.count({ where: { ...baseScope, status: "DRAFT" } }),
   ]);
 
   // Per-question answer counts + accuracy for just this page.
@@ -131,6 +137,7 @@ export async function GET(request: NextRequest) {
     unused,
     answered,
     avgAccuracy: answered > 0 ? correct / answered : null,
+    drafts,
   };
 
   if (!withTextbooks) {

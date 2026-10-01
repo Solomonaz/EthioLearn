@@ -32,6 +32,8 @@ export interface QuestionStats {
   unused: number;
   answered: number;
   avgAccuracy: number | null;
+  /** Drafts in scope (ignores the difficulty and status filters). */
+  drafts?: number;
 }
 
 export interface QuestionRowData {
@@ -45,6 +47,8 @@ export interface QuestionRowData {
   answerCount: number;
   accuracy: number | null;
   createdAt: string;
+  /** DRAFT = hidden from students until an admin publishes it. */
+  status?: "DRAFT" | "PUBLISHED";
   /** False for national-library questions viewed by a school admin. */
   canManage?: boolean;
   chapter: {
@@ -199,6 +203,8 @@ export function QuestionRow({
   onAskDelete,
   onCancelDelete,
   onDelete,
+  isPublishing,
+  onPublish,
 }: {
   q: QuestionRowData;
   expanded: boolean;
@@ -210,9 +216,12 @@ export function QuestionRow({
   onAskDelete: () => void;
   onCancelDelete: () => void;
   onDelete: () => void;
+  isPublishing?: boolean;
+  onPublish?: () => void;
 }) {
   const diff = DIFFICULTY_STYLE[q.difficulty];
   const readOnly = q.canManage === false;
+  const isDraft = q.status === "DRAFT";
 
   return (
     <div
@@ -247,6 +256,14 @@ export function QuestionRow({
               >
                 <Library className="h-3 w-3" />
                 Library
+              </span>
+            )}
+            {isDraft && (
+              <span
+                className="rounded-full bg-warning/10 px-2 py-0.5 font-semibold text-warning"
+                title="Students can't see this question until it is published"
+              >
+                Draft
               </span>
             )}
           </div>
@@ -305,6 +322,18 @@ export function QuestionRow({
             <>
               {!readOnly && (
               <>
+              {isDraft && onPublish && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  isLoading={isPublishing}
+                  onClick={onPublish}
+                  className="gap-1"
+                  title="Make this question available to students"
+                >
+                  <Check className="h-3.5 w-3.5" /> Publish
+                </Button>
+              )}
               <button
                 type="button"
                 className={cn(

@@ -36,6 +36,13 @@ export function canViewTextbook(user: AccessUser, textbookSchoolId: string | nul
   return isLibraryBook(textbookSchoolId) || (!!user.schoolId && textbookSchoolId === user.schoolId);
 }
 
+/** Textbooks an admin can change — the query form of `canManageTextbook`. */
+export function manageableTextbookWhere(user: AccessUser): Prisma.TextbookWhereInput {
+  if (user.role === "SUPER_ADMIN") return {};
+  if (user.role === "SCHOOL_ADMIN" && user.schoolId) return { schoolId: user.schoolId };
+  return { id: { in: [] } };
+}
+
 /** Textbooks an admin can see: everything for super admin, library + own school otherwise. */
 export function visibleTextbookWhere(user: AccessUser): Prisma.TextbookWhereInput {
   if (user.role === "SUPER_ADMIN") return {};

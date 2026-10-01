@@ -36,6 +36,7 @@ interface UpdateQuestionBody {
   explanation?: string;
   videoUrl?: string | null;
   type?: string;
+  status?: string;
 }
 
 export async function PATCH(
@@ -71,7 +72,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { questionText, options, correctAnswer, difficulty, explanation, videoUrl, type } = body;
+  const { questionText, options, correctAnswer, difficulty, explanation, videoUrl, type, status } = body;
 
   const validDifficulties: string[] = ["EASY", "MEDIUM", "HARD"];
   const validTypes: string[] = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
@@ -139,6 +140,14 @@ export async function PATCH(
     } else {
       return NextResponse.json({ error: "Invalid question type" }, { status: 400 });
     }
+  }
+
+  // Publish a draft (or take a question back to draft).
+  if (status !== undefined) {
+    if (status !== "DRAFT" && status !== "PUBLISHED") {
+      return NextResponse.json({ error: "status must be DRAFT or PUBLISHED" }, { status: 400 });
+    }
+    updateData.status = status;
   }
 
   const question = await db.question.update({
