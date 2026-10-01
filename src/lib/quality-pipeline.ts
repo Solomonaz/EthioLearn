@@ -293,9 +293,18 @@ const PROMISED_DATA_PATTERNS = [
   /\b(?:data|table|values|information|results)\s+(?:below|above|shown|provided|given)\b/i,
 ];
 
-/** Visual references that can never be rendered, so are always broken. */
+/**
+ * Visual references that can never be rendered, so are always broken.
+ *
+ * "Image" is left out of the first pattern on purpose: in optics "the image"
+ * is the image a mirror or lens forms ("Where is the image formed?"), and
+ * matching it rejected every such question as DANGLING_REFERENCE. A picture
+ * the student cannot see is still caught as "the following/above/below image",
+ * "image shown/below/above" or "as shown in the image".
+ */
 const VISUAL_REF_PATTERNS = [
-  /\b(?:the|this|following|above|below)\s+(?:diagram|figure|graph|image|picture|illustration|chart|map|photograph)\b/i,
+  /\b(?:the|this|following|above|below)\s+(?:diagram|figure|graph|picture|illustration|chart|map|photograph)\b/i,
+  /\b(?:following|above|below)\s+image\b/i,
   /\b(?:diagram|figure|graph|image|picture|illustration|chart)\s+(?:below|above|shown)\b/i,
   /\bas\s+shown\s+in\s+the\s+(?:diagram|figure|graph|image|chart)\b/i,
 ];
