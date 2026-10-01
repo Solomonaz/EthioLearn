@@ -640,8 +640,13 @@ Return JSON only — no markdown, no code fences:
 // Smaller than the old 20: the prompt now carries source passages for the
 // scope check, so a 20-question batch would send a very large request.
 const AI_CHECK_BATCH_SIZE = 8;
-/** Most source passages attached to one check batch. */
-const MAX_SCOPE_EXCERPTS = 5;
+/**
+ * Most source passages attached to one check batch — one per question, so every
+ * question keeps at least its best passage. This was 5, and the passages were
+ * taken in question order, so questions 4–8 of a batch were often checked
+ * against passages chosen for other questions.
+ */
+const MAX_SCOPE_EXCERPTS = AI_CHECK_BATCH_SIZE;
 /** Source windows retrieved per question — top-1 missed supporting passages. */
 const SCOPE_WINDOWS_PER_QUESTION = 2;
 /**
@@ -649,9 +654,49 @@ const SCOPE_WINDOWS_PER_QUESTION = 2;
  * enough that Groq's JSON mode failed outright (json_validate_failed with an
  * empty generation) — and because every check shares that one call, a prompt
  * too large for the scope check silently disabled difficulty, grammar and
- * factual checking too. Keep this modest.
+ * factual checking too. Keep this modest. Which 1,500 chars are kept is chosen
+ * per question by relevantSpan — taking the first 1,500 hid ~60% of every
+ * window and flagged questions OUT_OF_SCOPE whose facts sat further down.
  */
 const SCOPE_EXCERPT_CHARS = 1500;
+
+/** The text of a question that its supporting passage should share words with. */
+function questionMatchText(q: GeneratedQuestion): string {
+  return [q.questionText, ...(q.options ?? []), q.correctAnswer].join(" ");
+}
+
+/**
+ * The `maxChars`-long part of `window` that best matches `query`. Shared words
+ * are weighted by how rare they are in the window, so "pendulum" counts for
+ * more than "wave". With no shared words this returns the window's start,
+ * which is what the scope check was given before.
+ */
+export function relevantSpan(window: string, query: string, maxChars: number): string {
+  if (window.length <= maxChars) return window;
+  const words = (t: string) => t.toLowerCase().match(/[a-z0-9]{4,}/g) ?? [];
+  const wanted = new Set(words(query));
+  const freq = new Map<string, number>();
+  for (const w of words(window)) freq.set(w, (freq.get(w) ?? 0) + 1);
+
+  const STEP = 250;
+  const last = window.length - maxChars;
+  const starts: number[] = [];
+  for (let s = 0; s < last; s += STEP) starts.push(s);
+  starts.push(last);
+
+  let best = 0;
+  let bestScore = 0;
+  for (const s of starts) {
+    const shared = new Set(words(window.slice(s, s + maxChars)).filter((w) => wanted.has(w)));
+    let score = 0;
+    for (const w of shared) score += 1 / Math.log(2 + (freq.get(w) ?? 0));
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return window.slice(best, best + maxChars);
+}
 
 async function runAIQualityChecks(
   questions: GeneratedQuestion[],
@@ -665,12 +710,14 @@ async function runAIQualityChecks(
   for (let start = 0; start < questions.length; start += AI_CHECK_BATCH_SIZE) {
     const batch = questions.slice(start, start + AI_CHECK_BATCH_SIZE);
     // The distinct passages this batch came from — deduplicated, since several
-    // questions usually share one window.
-    const excerpts = [
-      ...new Set(
-        questionExcerpts.slice(start, start + AI_CHECK_BATCH_SIZE).flat().filter(Boolean)
-      ),
-    ]
+    // questions usually share one window. Every question's best passage comes
+    // before anyone's second-best, so the cap never drops a question entirely.
+    const perQuestion = questionExcerpts.slice(start, start + AI_CHECK_BATCH_SIZE);
+    const ranked: string[] = [];
+    for (let rank = 0; rank < SCOPE_WINDOWS_PER_QUESTION; rank++) {
+      for (const list of perQuestion) if (list[rank]) ranked.push(list[rank]);
+    }
+    const excerpts = [...new Set(ranked)]
       .slice(0, MAX_SCOPE_EXCERPTS)
       .map((e) => e.slice(0, SCOPE_EXCERPT_CHARS));
     const batchResult = await runAIQualityChecksBatch(batch, subject, grade, excerpts);
@@ -1488,7 +1535,7 @@ export async function runQualityPipeline(
       .map((se, w) => ({ w, sim: cosineSimilarity(qe, se) }))
       .sort((a, b) => b.sim - a.sim)
       .slice(0, SCOPE_WINDOWS_PER_QUESTION)
-      .map(({ w }) => sourceWindows[w]);
+      .map(({ w }) => relevantSpan(sourceWindows[w], questionMatchText(questions[i]), SCOPE_EXCERPT_CHARS));
   });
 
   const aiChecksMap = await runAIQualityChecks(questions, subject, grade, questionExcerpts);
