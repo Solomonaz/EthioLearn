@@ -169,6 +169,9 @@ export default function AdminTextbooksPage() {
   // The right-hand panel differs by role; don't render it until we know which.
   const [viewerLoaded, setViewerLoaded] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  // "" = all. Subject holds the subjectKey so "biology" and "Biology" are one.
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
   // Super admin only: upload even though the grade + subject already exists.
   const [allowDuplicate, setAllowDuplicate] = useState(false);
   const [jsonMeta, setJsonMeta] = useState<{ grade: number; subject: string } | null>(null);
@@ -730,9 +733,16 @@ export default function AdminTextbooksPage() {
 
   const libraryCount = textbooks.filter((tb) => tb.isLibrary).length;
   const schoolCount = textbooks.length - libraryCount;
-  const visibleTextbooks = textbooks.filter((tb) =>
-    sourceFilter === "library" ? tb.isLibrary : sourceFilter === "school" ? !tb.isLibrary : true,
-  );
+  const subjectOptions = [
+    ...new Map(textbooks.map((tb) => [subjectKey(tb.subject), tb.subject.trim()])).entries(),
+  ].sort((a, b) => a[1].localeCompare(b[1]));
+  const gradeOptions = [...new Set(textbooks.map((tb) => tb.grade))].sort((a, b) => a - b);
+  const visibleTextbooks = textbooks
+    .filter((tb) =>
+      sourceFilter === "library" ? tb.isLibrary : sourceFilter === "school" ? !tb.isLibrary : true,
+    )
+    .filter((tb) => !subjectFilter || subjectKey(tb.subject) === subjectFilter)
+    .filter((tb) => !gradeFilter || tb.grade === Number(gradeFilter));
 
   // Same rule the server enforces (lib/textbook-access findDuplicateTextbooks):
   // grade + subject already in the library, or already uploaded by this school.
@@ -758,6 +768,8 @@ export default function AdminTextbooksPage() {
 
   function jumpToTextbook(id: string) {
     setSourceFilter("all");
+    setSubjectFilter("");
+    setGradeFilter("");
     setExpandedTextbookId(id);
     setTimeout(() => {
       document.getElementById(`textbook-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -953,6 +965,30 @@ export default function AdminTextbooksPage() {
                       <span className="rounded-full bg-border/50 px-1.5 tabular-nums text-text-muted">{count}</span>
                     </button>
                   ))}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <select
+                    aria-label="Filter by subject"
+                    value={subjectFilter}
+                    onChange={(e) => setSubjectFilter(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
+                  >
+                    <option value="">All subjects</option>
+                    {subjectOptions.map(([key, name]) => (
+                      <option key={key} value={key}>{name}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Filter by grade"
+                    value={gradeFilter}
+                    onChange={(e) => setGradeFilter(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
+                  >
+                    <option value="">All grades</option>
+                    {gradeOptions.map((g) => (
+                      <option key={g} value={g}>Grade {g}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}
