@@ -80,6 +80,9 @@ const WINDOW_OVERLAP_CHARS = 5_000;
 // A chapter occupying more than this share of the book probably swallowed
 // headings that were never detected.
 const SUSPICIOUS_CHAPTER_SHARE = 0.25;
+// About two textbook pages. A scan-found heading starting nearer than this to
+// a chapter already found is that chapter, not a new one.
+const MIN_CHAPTER_CHARS = 4_000;
 
 // ── Front-matter acceptance test ────────────────────────
 // Windowing is only worth its cost when the cheap pass looks wrong, so the
@@ -159,10 +162,18 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
     // A contents-page heading drags its dot leader and page number along
     // ("Relations and Functions..........1"). Both are typesetting, not part
     // of the title, and they break every comparison downstream.
-    const title = (m[3] || "")
+    //
+    // A running page header ("UNIT 3 145" — unit label, then the page number)
+    // reaches here as a bare number, with no space left in front of it because
+    // the pattern above consumed it. Measured on the Grade 11 Chemistry
+    // textbook: units 3–6 came back as chapters titled "145", "193", "223" and
+    // "265" (one- and two-digit pages slipped under the length floor below).
+    // A title that is only a page number, Arabic or Roman, is no title.
+    let title = (m[3] || "")
       .replace(/[.·]{3,}.*$/, "")
       .replace(/\s+\d{1,4}\s*$/, "")
       .trim();
+    if (/^(\d{1,4}|[ivx]{1,6})$/i.test(title)) title = "";
     candidates.push({
       index: m.index,
       kind: m[1].toLowerCase(),
@@ -517,10 +528,18 @@ export async function detectChaptersFullText(opts: {
 
   let recoveredByScan = 0;
   for (const cand of scanned) {
-    const key = normaliseTitle(cand.title);
+    // An untitled heading ("Unit 3") normalises to nothing; key it by its
+    // label so it can still recover a unit — the position check below keeps
+    // it from duplicating one the AI already found.
+    const key = normaliseTitle(cand.title) || `${cand.kind} ${cand.number}`;
     // The AI's contents-page title is richer than a body heading, so an
     // already-present chapter wins and the scan entry is dropped.
     if (!key || findExistingKey(merged, key)) continue;
+    // Titles can disagree while the position doesn't: a running header
+    // ("UNIT 3 · CHEMISTRY GRADE 11") lands a page into the unit the AI already
+    // found under its real name. Two chapter starts this close are one chapter
+    // — no real chapter is shorter than a couple of pages.
+    if ([...merged.values()].some((c) => Math.abs(c.index - cand.index) < MIN_CHAPTER_CHARS)) continue;
     // Sits just after the last AI chapter that starts before it. The .5 keeps
     // it between two AI ranks without disturbing their relative order.
     const before = aiPositions.filter((p) => p < cand.index).length;
