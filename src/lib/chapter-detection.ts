@@ -501,6 +501,8 @@ export async function detectChaptersFullText(opts: {
   // locate anyway, so an unlocatable chapter is useless even when it is real.
   let rejectedHallucinations = 0;
   let aiRank = 0;
+  // Chapter numbers the accepted AI list already covers.
+  const aiNumbers = new Set<number>();
   for (const ch of [...aiChapters].sort((a, b) => a.chapterNumber - b.chapterNumber)) {
     const key = normaliseTitle(ch.title);
     if (!key || findExistingKey(merged, key)) continue;
@@ -511,6 +513,7 @@ export async function detectChaptersFullText(opts: {
       continue;
     }
     merged.set(key, { title: ch.title, index, rank: aiRank++ });
+    aiNumbers.add(ch.chapterNumber);
   }
 
   if (rejectedHallucinations > 0) {
@@ -540,6 +543,12 @@ export async function detectChaptersFullText(opts: {
     // found under its real name. Two chapter starts this close are one chapter
     // — no real chapter is shorter than a couple of pages.
     if ([...merged.values()].some((c) => Math.abs(c.index - cand.index) < MIN_CHAPTER_CHARS)) continue;
+    // Positions can't be trusted for that either: an AI title is placed at its
+    // first mention past the contents page, which in Grade 12 Physics is a
+    // passing "electromagnetism" in Unit 1 — so the real "Unit 4" heading looked
+    // like a new chapter. When the contents page was read and accepted, its
+    // numbering is authoritative: "Unit N" with N already listed is that unit.
+    if (strategy === "front-matter" && aiNumbers.has(cand.number)) continue;
     // Sits just after the last AI chapter that starts before it. The .5 keeps
     // it between two AI ranks without disturbing their relative order.
     const before = aiPositions.filter((p) => p < cand.index).length;
