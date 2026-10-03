@@ -696,7 +696,11 @@ export async function detectChaptersFullText(opts: {
   // ── Coverage check ──────────────────────────────────────────────────────
   // A chapter spanning a large share of the book usually means headings inside
   // it were missed. Surfaced rather than silently accepted.
-  const positions = [...merged.values()].sort((a, b) => a.index - b.index);
+  // Measured where the split will actually cut: at the headings when they are
+  // used, otherwise at the located titles.
+  const positions = headingsUsable
+    ? ordered.map((ch, i) => ({ title: ch.title, index: headingStarts[i] }))
+    : [...merged.values()].sort((a, b) => a.index - b.index);
   const suspiciouslyLargeChapters: string[] = [];
   for (let i = 0; i < positions.length; i++) {
     const start = Math.max(0, positions[i].index);
