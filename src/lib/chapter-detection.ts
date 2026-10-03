@@ -174,6 +174,7 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
       .replace(/\s+\d{1,4}\s*$/, "")
       .trim();
     if (/^(\d{1,4}|[ivx]{1,6})$/i.test(title)) title = "";
+    if (!title) title = titleFromFollowingLines(text, m.index + m[0].length, number);
     candidates.push({
       index: m.index,
       kind: m[1].toLowerCase(),
@@ -183,6 +184,49 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
   }
 
   return candidates;
+}
+
+// Section labels that follow a unit title and must not be read as part of it.
+const NOT_A_TITLE_LINE = /^(introduction|unit outcomes?|main contents?|learning outcomes?|contents)\b/i;
+
+/**
+ * Read a title set on the lines below a bare heading.
+ *
+ * The Grade 9 Geography textbook has no contents page, and each unit opens
+ * with "UNIT TWO" alone on its line and the title beneath it, numbered and
+ * often broken across lines:
+ *
+ *   UNIT SEVEN
+ *   7. CONTEMPORARY GEOGRAPHIC
+ *   ISSUES AND PUBLIC CONCERNS IN
+ *   ETHIOPIA
+ *
+ * Without this the scan named every unit just "Unit N", which the splitter
+ * cannot find in a text that spells the number as a word, so the whole book
+ * went into Unit 1. Only a line starting with the unit's own number is taken,
+ * which keeps ordinary body text from being read as a title; it is extended
+ * by the all-capitals lines that continue it.
+ */
+function titleFromFollowingLines(text: string, from: number, number: number): string {
+  const lines = text.slice(from, from + 400).split("\n").map((l) => l.trim());
+  let i = 0;
+  while (i < lines.length && lines[i] === "") i++;
+  const first = lines[i]?.match(new RegExp(`^${number}\\s*[.:)]?\\s+(.{3,})$`));
+  if (!first || /[a-z]/.test(first[1])) return "";
+
+  const parts = [first[1]];
+  for (let j = i + 1; j < lines.length && parts.length < 3; j++) {
+    const line = lines[j];
+    if (!line || /[a-z]/.test(line) || !/[A-Z]/.test(line) || NOT_A_TITLE_LINE.test(line)) break;
+    parts.push(line);
+  }
+  const title = parts.join(" ").replace(/\s+/g, " ").trim();
+  if (title.length > 90) return "";
+  // Body headings are set in capitals; store them in title case.
+  return title
+    .toLowerCase()
+    .replace(/(^|[\s–-])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase())
+    .replace(/(?<=\s)(And|Of|In|The|For|To|On)(?=\s)/g, (w) => w.toLowerCase());
 }
 
 function capitalise(s: string): string {

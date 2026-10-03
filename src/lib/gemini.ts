@@ -684,8 +684,12 @@ function findAllTitlePositions(
   const specific = new Set<number>();
   collectAll(normTitle).forEach((p) => specific.add(p));
 
+  // `normTitle` has already lost its punctuation, so the label's number can't
+  // be required to end in ".", ":" or ")" — that version never matched, and a
+  // scan title such as "Unit 2: Climate of Ethiopia" fell through to the
+  // single-long-word fallback ("ethiopia"), which hits every page of the book.
   const stripped = normTitle
-    .replace(/^(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)\s*[\d\w]*[.:)]\s*/i, "")
+    .replace(/^(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)\s+(\d{1,2}|[ivxlc]{1,5}|[፩-፼]{1,3})\s+/i, "")
     .trim();
   if (stripped.length > 4) collectAll(stripped).forEach((p) => specific.add(p));
 
