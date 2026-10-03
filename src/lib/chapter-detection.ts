@@ -83,6 +83,9 @@ const SUSPICIOUS_CHAPTER_SHARE = 0.25;
 // About two textbook pages. A scan-found heading starting nearer than this to
 // a chapter already found is that chapter, not a new one.
 const MIN_CHAPTER_CHARS = 4_000;
+// A unit label seen more often than this is a running page header, not the
+// heading that opens the unit.
+const MAX_OPENING_HEADING_REPEATS = 5;
 
 // ── Front-matter acceptance test ────────────────────────
 // Windowing is only worth its cost when the cheap pass looks wrong, so the
@@ -112,6 +115,8 @@ interface HeadingCandidate {
   kind: string;
   number: number;
   title: string;
+  /** Label set in capitals ("UNIT TWO"), as a real heading is. */
+  capitalised: boolean;
 }
 
 // ─── Deterministic heading scan ─────────────────────────
@@ -180,6 +185,7 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
       kind: m[1].toLowerCase(),
       number,
       title: title.length >= 3 ? `${capitalise(m[1])} ${number}: ${title}` : `${capitalise(m[1])} ${number}`,
+      capitalised: m[1] === m[1].toUpperCase() && m[1] !== m[1].toLowerCase(),
     });
   }
 
@@ -654,7 +660,38 @@ export async function detectChaptersFullText(opts: {
       ? a.rank - b.rank || a.index - b.index
       : a.index - b.index
   );
-  const ordered = sorted.map((c, i) => ({ chapterNumber: i + 1, title: c.title }));
+  const ordered: DetectedChapter[] = sorted.map((c, i) => ({ chapterNumber: i + 1, title: c.title }));
+
+  // ── Heading positions ───────────────────────────────────────────────────
+  // When the book's own headings give exactly units 1..N, one per chapter,
+  // they mark where each chapter starts better than any title search can.
+  // Grade 11 Geography's contents page reads "Climate Classification and
+  // Climate Regions of Our World" while every page of that unit is headed
+  // "Climate Classification and Regions of the World", and Unit 4's header is
+  // misspelt — so the title search put Unit 2 mid-sentence and gave Unit 3 a
+  // third of the book. Its "UNIT TWO" heading appears once, at the unit's
+  // first page.
+  //
+  // Only capitalised labels count: a sentence that wraps to start a line with
+  // "Unit 3 explains…" is a cross-reference, not a heading.
+  //
+  // Nor do running page headers. Grade 11 Chemistry prints "UNIT 3 145" at the
+  // top of every page, so the first "UNIT 3" sits a few pages into the unit.
+  // An opening heading appears once, or a few times with end-of-unit footers
+  // (Grade 9 Geography: 3–4); a page header appears dozens of times.
+  const headingStarts = scanned.map((c) => c.index);
+  const labelCounts = new Map<number, number>();
+  for (const c of bodyScan.length >= 2 ? bodyScan : rawScan) {
+    labelCounts.set(c.number, (labelCounts.get(c.number) ?? 0) + 1);
+  }
+  const headingsUsable =
+    scanned.length === ordered.length &&
+    scanned.every((c) => (labelCounts.get(c.number) ?? 0) <= MAX_OPENING_HEADING_REPEATS) &&
+    scanned.every((c, i) => c.number === i + 1 && c.capitalised) &&
+    headingStarts.every((p, i) => i === 0 || p - headingStarts[i - 1] >= MIN_CHAPTER_CHARS);
+  if (headingsUsable) {
+    ordered.forEach((ch, i) => { ch.startIndex = headingStarts[i]; });
+  }
 
   // ── Coverage check ──────────────────────────────────────────────────────
   // A chapter spanning a large share of the book usually means headings inside

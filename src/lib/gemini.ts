@@ -40,6 +40,12 @@ export interface GenerateOptions {
 export interface DetectedChapter {
   chapterNumber: number;
   title: string;
+  /**
+   * Where the chapter starts in the text, when the book's own headings pin it
+   * down. Set by detection only when every chapter has one; the splitter then
+   * cuts at these positions instead of searching for titles.
+   */
+  startIndex?: number;
 }
 
 export interface DetectChaptersOptions {
@@ -1007,10 +1013,25 @@ export function splitTextByChapters(
     return [{ ...chapters[0], content: fullText.trim() }];
   }
 
-  const { normText, indexMap } = buildNormWithMap(fullText);
-
   // Work in chapter-number order so boundaries follow the book's sequence.
   const ordered = [...chapters].sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+  // Positions from the book's own headings, when detection found one per
+  // chapter in order — exact, where a title search can land on a passing
+  // mention or miss a heading worded differently from the contents page.
+  const starts = ordered.map((ch) => ch.startIndex);
+  if (
+    starts.every((p): p is number => typeof p === "number" && p >= 0 && p < fullText.length) &&
+    starts.every((p, i) => i === 0 || p > starts[i - 1]!)
+  ) {
+    return ordered.map((ch, i) => ({
+      chapterNumber: ch.chapterNumber,
+      title: ch.title,
+      content: fullText.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : fullText.length).trim(),
+    }));
+  }
+
+  const { normText, indexMap } = buildNormWithMap(fullText);
 
   // 1. Gather EVERY candidate position for each chapter title, then discard
   //    Table-of-Contents occurrences so we match real body headings. Chapters
