@@ -86,6 +86,8 @@ const MIN_CHAPTER_CHARS = 4_000;
 // A unit label seen more often than this is a running page header, not the
 // heading that opens the unit.
 const MAX_OPENING_HEADING_REPEATS = 5;
+// Labels that can name a whole unit (a lesson or part is a section within one).
+const UNIT_LABEL_KINDS = new Set(["unit", "chapter", "ምዕራፍ"]);
 
 // ── Front-matter acceptance test ────────────────────────
 // Windowing is only worth its cost when the cheap pass looks wrong, so the
@@ -158,7 +160,7 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
   const candidates: HeadingCandidate[] = [];
   // "CHAPTER 4 — Cells", "Unit Two: Motion", "ምዕራፍ ፫ ...", "ክፍል 2 ..."
   const labelled =
-    /^[ \t]*(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)[ \t]+([0-9]{1,2}|[ivxlc]{1,5}|[a-z]+|[፩-፼]{1,3})[ \t]*[-–—.:)]?[ \t]*(.{0,90})$/gim;
+    /^[ \t_]*(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)[ \t]+_?([0-9]{1,2}|[ivxlc]{1,5}|[a-z]+|[፩-፼]{1,3})(?=[\s\-–—.:)|]|$)[ \t]*[-–—.:)]?[ \t]*(.{0,160})$/gim;
 
   let m: RegExpExecArray | null;
   while ((m = labelled.exec(text)) !== null) {
@@ -270,6 +272,153 @@ function filterToDominantSequence(candidates: HeadingCandidate[]): HeadingCandid
 
   // A lone match is far more likely to be noise than a real chapter list.
   return best.length >= 2 ? best : [];
+}
+
+/** Positions where a line begins, from `from` up to (not including) `to`. */
+function lineStartsBetween(text: string, from: number, to: number): number[] {
+  const out: number[] = [];
+  if (from === 0 || text[from - 1] === "\n") out.push(from);
+  for (let i = text.indexOf("\n", from); i >= 0 && i + 1 < to; i = text.indexOf("\n", i + 1)) out.push(i + 1);
+  return out;
+}
+
+/**
+ * Does the text at `pos` actually begin with this title?
+ *
+ * The title locator falls back to loose matches (its first few long words, or
+ * one long word) so a chapter can still be found when its title is garbled.
+ * That is too loose for choosing where a unit opens: in Grade 9 History it put
+ * Unit 8 ("Political, Social and Economic Processes…") at "political, social
+ * and ritual leadership" inside Unit 7. Require a line that begins with the
+ * title's opening words, in order, short words included.
+ */
+function opensWithTitle(text: string, pos: number, title: string): boolean {
+  // "&" on the contents page is often "and" on the unit's own title page.
+  const norm = (s: string) => s.toLowerCase().replace(/&/g, " and ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  // The label may lead either side: a contents title "Unit 3: Cells", or a
+  // title page reading "Unit 2: Characteristics and / Classification of…".
+  const unlabel = (s: string) => s.replace(/^\s*(chapter|unit|lesson|section|part)\s+\S+?\s*[-–—.:)|]+\s*/i, "");
+  const words = norm(unlabel(title)).split(" ").slice(0, 4);
+  if (words.length === 0 || words.join(" ").length < 6) return false;
+  return norm(unlabel(text.slice(pos, pos + 200))).startsWith(words.join(" "));
+}
+
+/**
+ * Where each of `titles.length` units starts, read from the book's own unit
+ * labels — or null when the labels don't account for every unit cleanly, in
+ * which case the splitter falls back to searching for titles.
+ *
+ * Title search fails in ways labels don't. Grade 11 Geography's contents page
+ * names a unit differently from the headers on its pages, so Unit 2 was cut
+ * mid-sentence; Grade 9 History's contents page says "c. 500 AD" where its
+ * pages say "c. 500AD", so Unit 2 was never found and Unit 1 was cut in half.
+ * Every one of these books labels its units, in one of two styles:
+ *
+ *   - an opening heading, once per unit ("UNIT TWO" — Grade 11/12 History,
+ *     Grade 11 Geography);
+ *   - a running header on every page ("Unit 2|Ancient World Civilizations…"
+ *     in Grade 9/10 History, "UNIT 3 145" in Grade 11 Chemistry).
+ *
+ * A unit starts at its first label. With running headers the opening page may
+ * carry no header (Grade 11 Chemistry), so if the unit's title appears after
+ * the previous unit's last header and before this unit's first, the unit
+ * starts at the title. A unit with no label at all (Grade 12 History, Unit 1)
+ * starts at its title.
+ *
+ * A contents page lists "UNIT ONE … UNIT NINE" a few lines apart, often
+ * without dot leaders (Grade 11/12 History), so a run of consecutive labels
+ * closer together than a chapter could be is skipped as the contents page.
+ */
+function headingChapterStarts(
+  text: string,
+  scan: HeadingCandidate[],
+  titles: string[],
+  frontMatterEnd: number,
+  textLength: number,
+): number[] | null {
+  const n = titles.length;
+  if (n < MIN_CHAPTERS_FOR_CONFIDENCE) return null;
+
+  // Labels that look like layout rather than prose: set in capitals, or a
+  // header repeated word for word on several pages. A sentence that happens to
+  // start a line with "Unit 3 explains…" is neither.
+  const repeats = new Map<string, number>();
+  for (const c of scan) repeats.set(c.title, (repeats.get(c.title) ?? 0) + 1);
+  const plausible = scan.filter(
+    (c) =>
+      UNIT_LABEL_KINDS.has(c.kind) &&
+      c.number >= 1 && c.number <= n &&
+      (c.capitalised || (repeats.get(c.title) ?? 0) >= 3),
+  );
+  // One labelling style per book — the kind that names the most units.
+  // "Lesson 1" and "Part IV" number sections, not units.
+  const unitsNamed = (kind: string) => new Set(plausible.filter((c) => c.kind === kind).map((c) => c.number)).size;
+  const kind = [...new Set(plausible.map((c) => c.kind))].sort((a, b) => unitsNamed(b) - unitsNamed(a))[0];
+  let labels = plausible.filter((c) => c.kind === kind).sort((a, b) => a.index - b.index);
+
+  // Skip the contents page: a run of three or more consecutive unit numbers,
+  // each closer to the last than any real chapter is long.
+  let lowerBound = frontMatterEnd;
+  for (let i = 0; i < labels.length && labels[i].index < textLength * 0.2; i++) {
+    if (labels[i].number !== 1) continue;
+    let j = i;
+    while (
+      j + 1 < labels.length &&
+      labels[j + 1].number === labels[j].number + 1 &&
+      labels[j + 1].index - labels[j].index < MIN_CHAPTER_CHARS
+    ) j++;
+    if (j - i + 1 >= 3) {
+      lowerBound = Math.max(lowerBound, labels[j].index + 1);
+      break;
+    }
+  }
+  labels = labels.filter((c) => c.index >= lowerBound);
+
+  const byNumber = new Map<number, number[]>();
+  for (const c of labels) byNumber.set(c.number, [...(byNumber.get(c.number) ?? []), c.index]);
+
+  const starts: number[] = [];
+  let labelled = 0;
+  // After a unit with running headers, the next unit's opening page lies
+  // between that unit's last header and the next unit's first label.
+  let afterLastHeader: number | null = null;
+  for (let k = 1; k <= n; k++) {
+    const prev = starts.length ? starts[starts.length - 1] : lowerBound - 1;
+    const own = (byNumber.get(k) ?? []).filter((p) => p > prev);
+    const first = own.length ? own[0] : undefined;
+    const nextFirst = (byNumber.get(k + 1) ?? []).find((p) => p > (first ?? prev));
+    const earliest = starts.length ? prev + MIN_CHAPTER_CHARS : lowerBound;
+
+    let start = first;
+    if (first !== undefined) labelled++;
+
+    // The title may open the unit just before its first label — but only look
+    // where that can't be a passing mention inside the previous unit: in the
+    // gap after the previous unit's last page header, or anywhere before the
+    // next label when this unit has no label at all.
+    const lo =
+      first === undefined ? earliest
+      : k === 1 ? (own.length > MAX_OPENING_HEADING_REPEATS ? lowerBound : Math.max(lowerBound, first - MIN_CHAPTER_CHARS))
+      : afterLastHeader !== null ? Math.max(afterLastHeader, earliest)
+      // After an opening heading, only the page or two before this unit's own
+      // heading: Grade 9 Biology sets each unit's title and contents there.
+      : Math.max(earliest, first - MIN_CHAPTER_CHARS);
+    if (lo !== null) {
+      const hi = first ?? nextFirst ?? textLength;
+      const titleAt = lineStartsBetween(text, lo, hi).find((p) => opensWithTitle(text, p, titles[k - 1]));
+      if (titleAt !== undefined) start = titleAt;
+    }
+
+    if (start === undefined || start < earliest) return null;
+    starts.push(start);
+
+    const ownBeforeNext = own.filter((p) => nextFirst === undefined || p < nextFirst);
+    afterLastHeader =
+      ownBeforeNext.length > MAX_OPENING_HEADING_REPEATS ? ownBeforeNext[ownBeforeNext.length - 1] : null;
+  }
+
+  // Mostly labelled, or this is a title search in disguise.
+  return labelled * 2 >= n ? starts : null;
 }
 
 // ─── Title normalisation (for cross-pass dedupe) ────────
@@ -663,33 +812,17 @@ export async function detectChaptersFullText(opts: {
   const ordered: DetectedChapter[] = sorted.map((c, i) => ({ chapterNumber: i + 1, title: c.title }));
 
   // ── Heading positions ───────────────────────────────────────────────────
-  // When the book's own headings give exactly units 1..N, one per chapter,
-  // they mark where each chapter starts better than any title search can.
-  // Grade 11 Geography's contents page reads "Climate Classification and
-  // Climate Regions of Our World" while every page of that unit is headed
-  // "Climate Classification and Regions of the World", and Unit 4's header is
-  // misspelt — so the title search put Unit 2 mid-sentence and gave Unit 3 a
-  // third of the book. Its "UNIT TWO" heading appears once, at the unit's
-  // first page.
-  //
-  // Only capitalised labels count: a sentence that wraps to start a line with
-  // "Unit 3 explains…" is a cross-reference, not a heading.
-  //
-  // Nor do running page headers. Grade 11 Chemistry prints "UNIT 3 145" at the
-  // top of every page, so the first "UNIT 3" sits a few pages into the unit.
-  // An opening heading appears once, or a few times with end-of-unit footers
-  // (Grade 9 Geography: 3–4); a page header appears dozens of times.
-  const headingStarts = scanned.map((c) => c.index);
-  const labelCounts = new Map<number, number>();
-  for (const c of bodyScan.length >= 2 ? bodyScan : rawScan) {
-    labelCounts.set(c.number, (labelCounts.get(c.number) ?? 0) + 1);
-  }
-  const headingsUsable =
-    scanned.length === ordered.length &&
-    scanned.every((c) => (labelCounts.get(c.number) ?? 0) <= MAX_OPENING_HEADING_REPEATS) &&
-    scanned.every((c, i) => c.number === i + 1 && c.capitalised) &&
-    headingStarts.every((p, i) => i === 0 || p - headingStarts[i - 1] >= MIN_CHAPTER_CHARS);
-  if (headingsUsable) {
+  // Where the book's own unit labels pin down every chapter's start, the split
+  // cuts there instead of searching for titles (see headingChapterStarts).
+  const headingStarts = headingChapterStarts(
+    content,
+    rawScan,
+    ordered.map((c) => c.title),
+    frontMatterEnd,
+    content.length,
+  );
+  const headingsUsable = headingStarts !== null;
+  if (headingStarts) {
     ordered.forEach((ch, i) => { ch.startIndex = headingStarts[i]; });
   }
 
@@ -699,7 +832,7 @@ export async function detectChaptersFullText(opts: {
   // Measured where the split will actually cut: at the headings when they are
   // used, otherwise at the located titles.
   const positions = headingsUsable
-    ? ordered.map((ch, i) => ({ title: ch.title, index: headingStarts[i] }))
+    ? ordered.map((ch, i) => ({ title: ch.title, index: headingStarts![i] }))
     : [...merged.values()].sort((a, b) => a.index - b.index);
   const suspiciouslyLargeChapters: string[] = [];
   for (let i = 0; i < positions.length; i++) {
