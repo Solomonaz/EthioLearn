@@ -444,7 +444,7 @@ export async function detectChaptersFullText(opts: {
     } else {
       console.warn(
         `[ChapterDetect] Front matter returned ${result.chapters.length} chapter(s) that failed the ` +
-        `completeness check — falling back to a windowed sweep of the whole document.`
+        `completeness check.`
       );
     }
   } catch (err) {
@@ -460,6 +460,34 @@ export async function detectChaptersFullText(opts: {
     );
   }
 
+  // ── Pass 2: deterministic scan of the entire document ───────────────────
+  //
+  // Contents-page entries are dropped BEFORE the sequence filter runs.
+  // `filterToDominantSequence` keeps only headings whose numbers ascend through
+  // the document, and a contents page wrecks that ordering: in this Grade 10
+  // Mathematics textbook its layout put units 1, 4, 5, 6 and 7 on the contents
+  // page but broke 2 and 3 across lines, so the scan saw 1,4,5,6,7 at the front
+  // and the real body headings for 2 and 3 a hundred thousand characters later
+  // — not ascending, so both were discarded. The scan could then never recover
+  // a unit the model had missed, which is the whole point of running it.
+  //
+  // Run before the windowed sweep so a complete scan can make that sweep
+  // unnecessary.
+  const rawScan = scanHeadingCandidates(content);
+  const bodyScan = rawScan.filter((c) => c.index > frontMatterEnd);
+  const scanned = filterToDominantSequence(
+    // Keep the unfiltered set if the cutoff leaves too little to work with —
+    // a book whose only chapter headings ARE its contents page.
+    bodyScan.length >= 2 ? bodyScan : rawScan
+  );
+
+  // Every unit from 1 to N found, each with a title. Grade 9 Geography has no
+  // contents page, so the front-matter pass fails there — but its headings
+  // give all 8 units, and the 8-call windowed sweep added nothing but noise.
+  const scanIsComplete =
+    scanned.length >= MIN_CHAPTERS_FOR_CONFIDENCE &&
+    scanned.every((c, i) => c.number === i + 1 && /:\s*\S/.test(c.title));
+
   // ── Pass 1b: windowed sweep — FALLBACK ONLY ─────────────────────────────
   // Reserved for documents the front matter DESCRIBED BADLY: scanned books
   // whose OCR mangled the contents page, or books with no contents page.
@@ -470,7 +498,17 @@ export async function detectChaptersFullText(opts: {
   // failed request into dozens, which is exactly what made a 400-page upload
   // hang for over thirty minutes. When nothing is reachable, fall through to
   // the free deterministic scan instead.
-  if (frontMatterAnswered && strategy !== "front-matter" && content.length > FRONT_MATTER_CHARS) {
+  if (scanIsComplete && strategy !== "front-matter") {
+    console.log(
+      `[ChapterDetect] No usable contents page, but the headings give units 1–${scanned.length} — skipping the windowed sweep.`
+    );
+  }
+  if (
+    frontMatterAnswered &&
+    strategy !== "front-matter" &&
+    !scanIsComplete &&
+    content.length > FRONT_MATTER_CHARS
+  ) {
     const windows: string[] = [];
     const stride = WINDOW_CHARS - WINDOW_OVERLAP_CHARS;
     for (let start = 0; start < content.length; start += stride) {
@@ -505,24 +543,6 @@ export async function detectChaptersFullText(opts: {
       );
     }
   }
-
-  // ── Pass 2: deterministic scan of the entire document ───────────────────
-  //
-  // Contents-page entries are dropped BEFORE the sequence filter runs.
-  // `filterToDominantSequence` keeps only headings whose numbers ascend through
-  // the document, and a contents page wrecks that ordering: in this Grade 10
-  // Mathematics textbook its layout put units 1, 4, 5, 6 and 7 on the contents
-  // page but broke 2 and 3 across lines, so the scan saw 1,4,5,6,7 at the front
-  // and the real body headings for 2 and 3 a hundred thousand characters later
-  // — not ascending, so both were discarded. The scan could then never recover
-  // a unit the model had missed, which is the whole point of running it.
-  const rawScan = scanHeadingCandidates(content);
-  const bodyScan = rawScan.filter((c) => c.index > frontMatterEnd);
-  const scanned = filterToDominantSequence(
-    // Keep the unfiltered set if the cutoff leaves too little to work with —
-    // a book whose only chapter headings ARE its contents page.
-    bodyScan.length >= 2 ? bodyScan : rawScan
-  );
 
   // ── Merge (union, AI titles preferred) ──────────────────────────────────
   //
@@ -579,9 +599,18 @@ export async function detectChaptersFullText(opts: {
     // label so it can still recover a unit — the position check below keeps
     // it from duplicating one the AI already found.
     const key = normaliseTitle(cand.title) || `${cand.kind} ${cand.number}`;
+    if (!key) continue;
     // The AI's contents-page title is richer than a body heading, so an
     // already-present chapter wins and the scan entry is dropped.
-    if (!key || findExistingKey(merged, key)) continue;
+    const existingKey = findExistingKey(merged, key);
+    if (existingKey) {
+      // Without a contents page the AI title was placed at its first mention,
+      // which can be a passing reference in an earlier unit. The heading is
+      // where the chapter really starts.
+      const existing = merged.get(existingKey);
+      if (existing && strategy !== "front-matter") existing.index = cand.index;
+      continue;
+    }
     // Titles can disagree while the position doesn't: a running header
     // ("UNIT 3 · CHEMISTRY GRADE 11") lands a page into the unit the AI already
     // found under its real name. Two chapter starts this close are one chapter
@@ -614,8 +643,16 @@ export async function detectChaptersFullText(opts: {
   }
 
   // Order by rank (AI order, scan entries slotted in), then renumber.
-  const sorted = [...merged.values()].sort(
-    (a, b) => a.rank - b.rank || a.index - b.index
+  //
+  // AI order is only authoritative when it came from the contents page. In
+  // the windowed sweep each window numbers its own chapters from 1, so sorting
+  // by those numbers interleaves windows: on Grade 9 Geography "Climate of
+  // Ethiopia" (window 3's chapter 2) landed seventh, and the splitter then
+  // merged its text into Unit 1. Without a contents page, book order wins.
+  const sorted = [...merged.values()].sort((a, b) =>
+    strategy === "front-matter"
+      ? a.rank - b.rank || a.index - b.index
+      : a.index - b.index
   );
   const ordered = sorted.map((c, i) => ({ chapterNumber: i + 1, title: c.title }));
 
