@@ -345,7 +345,18 @@ function opensWithTitle(text: string, pos: number, title: string): boolean {
   const unlabel = (s: string) => s.replace(/^\s*(chapter|unit|lesson|section|part)\s+\S+?\s*[-–—.:)|]+\s*/i, "");
   const words = norm(unlabel(title)).split(" ").slice(0, 4);
   if (words.length === 0 || words.join(" ").length < 6) return false;
-  return norm(unlabel(text.slice(pos, pos + 200))).startsWith(words.join(" "));
+  if (norm(unlabel(text.slice(pos, pos + 200))).startsWith(words.join(" "))) return true;
+  // A title page with the number set apart from its label (Grade 9/10
+  // Economics): "Unit The Basic Economic Problems" / "2 and Economic Systems",
+  // or "Unit Theory of Consumer Behaviour" / "1". Drop the bare label and the
+  // number that opens the next line. Allow a typo: that contents page lists
+  // "Markerts" for the "Markets" on the title page.
+  const page = text.slice(pos, pos + 200).match(/^[ \t]*(chapter|unit)[ \t]+(\S+)([^\n]*)\n[ \t]*\d{1,2}(?=\s)([^]*)$/i);
+  if (!page || parseNumberToken(page[2]) !== null) return false;
+  const want = words.join(" ");
+  const opening = norm(`${page[2]}${page[3]} ${page[4]}`).slice(0, want.length + 2);
+  const max = Math.max(1, Math.floor(want.length / 15));
+  return [want.length - 1, want.length, want.length + 1].some((len) => editDistance(opening.slice(0, len), want, max) <= max);
 }
 
 /**
