@@ -86,6 +86,8 @@ const MIN_CHAPTER_CHARS = 4_000;
 // A unit label seen more often than this is a running page header, not the
 // heading that opens the unit.
 const MAX_OPENING_HEADING_REPEATS = 5;
+// The share of a book its contents page can occupy.
+const CONTENTS_PAGE_SHARE = 0.05;
 // Labels that can name a whole unit (a lesson or part is a section within one).
 const UNIT_LABEL_KINDS = new Set(["unit", "chapter", "ምዕራፍ"]);
 
@@ -272,6 +274,49 @@ function filterToDominantSequence(candidates: HeadingCandidate[]): HeadingCandid
 
   // A lone match is far more likely to be noise than a real chapter list.
   return best.length >= 2 ? best : [];
+}
+
+/** Edit distance, giving up once it exceeds `max`. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      rowMin = Math.min(rowMin, cur[j]);
+    }
+    if (rowMin > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * The first line after the contents page that spells `title` almost exactly —
+ * a letter or two apart per ten — or null. Used only for titles that can't be
+ * found as written, i.e. a typo on the contents page or in the heading.
+ */
+function nearMatchingHeading(text: string, title: string, from: number): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const target = norm(title.replace(/^\s*(chapter|unit|lesson|section|part)\s+\S+?\s*[-–—.:)|]+\s*/i, ""));
+  if (target.length < 5) return null;
+  const max = Math.max(1, Math.floor(target.length / 10));
+  for (const raw of text.slice(from).split("\n")) {
+    const line = raw.trim();
+    if (!line || Math.abs(line.length - target.length) > max + 6) continue;
+    // A contents-page line ("…-------202") is not the unit's heading.
+    if (/[.\-_·]{4,}/.test(line)) continue;
+    const n = norm(line);
+    // Same first letter: a heading whose drop cap was lost ("ISTORY, …" for
+    // "HISTORY, …") is a worse title than the one we have.
+    if (n[0] !== target[0]) continue;
+    // A real spelling difference, not just spacing ("500 AD" / "500AD").
+    if (n.replace(/ /g, "") === target.replace(/ /g, "")) continue;
+    if (editDistance(n, target, max) <= max) return line;
+  }
+  return null;
 }
 
 /** Positions where a line begins, from `from` up to (not including) `to`. */
@@ -568,6 +613,24 @@ export async function detectChaptersFullText(opts: {
     return all.find((p) => p > frontMatterEnd) ?? all[0];
   };
 
+  // A title the contents page misspells can't be found in the body: Grade 10
+  // Chemistry lists Unit 2 as "SOLLUTIONS" while the unit itself is headed
+  // "SOLUTIONS", so the split fell back to halving Unit 1. Take the body's
+  // spelling when one heading line is a near-exact match.
+  const repairTitles = (chapters: DetectedChapter[]): DetectedChapter[] =>
+    chapters.map((ch) => {
+      // Found past the opening pages: fine. A title seen only on the contents
+      // page (its every occurrence within the first few percent of the book)
+      // is a title the body spells differently.
+      const seen = locate(ch.title);
+      const lastSeen = seen.length ? seen[seen.length - 1] : -1;
+      if (lastSeen > Math.max(frontMatterEnd, content.length * CONTENTS_PAGE_SHARE)) return ch;
+      const fixed = nearMatchingHeading(content, ch.title, Math.max(frontMatterEnd, lastSeen + 1));
+      if (!fixed) return ch;
+      console.log(`[ChapterDetect] "${ch.title}" not found; using the body heading "${fixed}".`);
+      return { ...ch, title: fixed };
+    });
+
   const aiChapters: DetectedChapter[] = [];
   let provider = "none";
   let strategy: DetectionStrategy = "none";
@@ -590,11 +653,12 @@ export async function detectChaptersFullText(opts: {
     windowsScanned = 1;
     frontMatterAnswered = true;
 
-    if (looksComplete(result.chapters, bodyIndexOf)) {
-      aiChapters.push(...result.chapters);
+    const chapters = repairTitles(result.chapters);
+    if (looksComplete(chapters, bodyIndexOf)) {
+      aiChapters.push(...chapters);
       strategy = "front-matter";
       console.log(
-        `[ChapterDetect] Front matter gave ${result.chapters.length} chapters via ${provider} — skipping the windowed sweep.`
+        `[ChapterDetect] Front matter gave ${chapters.length} chapters via ${provider} — skipping the windowed sweep.`
       );
     } else {
       console.warn(
@@ -676,7 +740,7 @@ export async function detectChaptersFullText(opts: {
       try {
         const result = await detect({ content: window, subject, grade, language });
         provider = result.provider;
-        aiChapters.push(...result.chapters);
+        aiChapters.push(...repairTitles(result.chapters));
       } catch (err) {
         failedWindows++;
         console.warn(
