@@ -12,16 +12,16 @@
   "explanation": "An Excel spreadsheet uses .xlsx, or .xls in older versions. .docx is used by Word documents and .mdb by Microsoft Access databases."
  },
  {
-  "questionText": "Which extension marks an audio file such as song.mp3?",
+  "questionText": "In the file extension table, which extension marks audio files on a PC played with Real Player?",
   "options": [
-   ".mp3",
-   ".jpg",
+   ".wav",
    ".rtf",
-   ".exe file"
+   ".mdb",
+   ".zip"
   ],
-  "correctAnswer": ".mp3",
+  "correctAnswer": ".wav",
   "difficulty": "EASY",
-  "explanation": "An audio file uses the .mp3 extension, as in song.mp3; .jpg is an image and .rtf is Rich Text Format."
+  "explanation": "The table lists .wav as audio files on a PC played with Real Player and .mp3 as audio for Windows Media Player; .rtf is Rich Text Format and .mdb an Access database."
  },
  {
   "questionText": "What is the first or top folder in a hierarchical directory structure called?",
@@ -168,16 +168,16 @@
   "explanation": "An absolute pathname is the complete name of a directory or file from the root directory downward, valid wherever you are working; a path from the working directory is relative."
  },
  {
-  "questionText": "What is a relative pathname?",
+  "questionText": "The current working directory is D, and file 10 is inside D's subfolder F. Which relative pathname reaches the file?",
   "options": [
-   "A path from the current working directory",
-   "A path that always starts at the root directory",
-   "A path that includes the drive letter first",
-   "A path stored inside the Recycle Bin"
+   "F/10",
+   "/D/F/10",
+   "D/10",
+   "10/F"
   ],
-  "correctAnswer": "A path from the current working directory",
+  "correctAnswer": "F/10",
   "difficulty": "MEDIUM",
-  "explanation": "Relative pathnames reference files relative to the working or current directory, so the user need not spell out the entire path from the root."
+  "explanation": "A relative pathname is given from the current directory, so with D as the working directory the file is reached as F/10. /D/F/10 starts from the root, which makes it an absolute pathname."
  },
  {
   "questionText": "How does file import differ from file export?",
@@ -219,13 +219,13 @@
   "questionText": "Why should you check a file after saving it in a different file format?",
   "options": [
    "Some features may not carry over correctly",
-   "The file is always deleted from its original folder",
-   "The new file cannot be opened in any program",
-   "The file extension is removed when the format changes"
+   "The original file is overwritten by the new one",
+   "The new file is saved without its extension",
+   "The file is compressed into a zip automatically"
   ],
   "correctAnswer": "Some features may not carry over correctly",
   "difficulty": "MEDIUM",
-  "explanation": "When you save a file in another format, some of the original file's features may not transfer correctly, so you should check the new file and always keep the original."
+  "explanation": "When you save a file in another format, some of the original file's features may not transfer correctly, so check the new file and always keep the original; saving in a new format does not overwrite or zip the original."
  },
  {
   "questionText": "Which Windows Settings option holds the Backup feature for copying files to an external drive?",
@@ -315,21 +315,21 @@
   "questionText": "Where should a proper backup copy be stored?",
   "options": [
    "Apart from the primary data, on another medium",
-   "In the same folder as the original file",
-   "In the Recycle Bin until it is needed",
-   "Inside the zipped folder of the original"
+   "On the same hard disk, in a separate folder",
+   "In a zipped folder on the desktop",
+   "On the same partition as Windows"
   ],
   "correctAnswer": "Apart from the primary data, on another medium",
   "difficulty": "HARD",
-  "explanation": "A proper backup copy is stored in a separate system or medium, such as tape or the cloud, from the primary data, protecting against loss from hardware or software failure."
+  "explanation": "A proper backup is stored on a separate system or medium, such as tape, an external drive or the cloud, so a failure of the primary hardware does not destroy the backup too; a folder on the same disk would be lost with it."
  },
  {
   "questionText": "Why would you combine several files into a single zipped folder before sharing them?",
   "options": [
    "To share the group of files more easily",
-   "To convert all of the files into PDF format",
-   "To remove the files' extensions permanently",
-   "To move the files into the Recycle Bin"
+   "To merge the files into one PDF document",
+   "To give each file a unique pathname",
+   "To restore the files from the Recycle Bin"
   ],
   "correctAnswer": "To share the group of files more easily",
   "difficulty": "HARD",
@@ -339,9 +339,9 @@
   "questionText": "Which of these is a reason given for deleting files?",
   "options": [
    "Making sensitive data unavailable to others",
-   "Making a file open in a different application",
-   "Giving a file a unique absolute pathname",
-   "Converting the file into a compressed format"
+   "Making a file open faster in its program",
+   "Giving the file a shorter pathname",
+   "Keeping a spare copy of it in the bin"
   ],
   "correctAnswer": "Making sensitive data unavailable to others",
   "difficulty": "HARD",

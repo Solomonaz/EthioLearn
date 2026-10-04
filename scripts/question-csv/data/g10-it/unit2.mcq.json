@@ -96,22 +96,22 @@
   "explanation": "In full-duplex mode both stations can transmit and receive simultaneously, like a two-way street; the telephone network is the common example."
  },
  {
-  "questionText": "What are the two fundamental versions of the IP address?",
+  "questionText": "In IPv4 dotted decimal notation (x.x.x.x), what values can each x take?",
   "options": [
-   "IPv4 and IPv6",
-   "IPv1 and IPv2",
-   "IPv3 and IPv5",
-   "IPv8 and IPv16"
+   "0 to 255",
+   "0 to 99",
+   "1 to 256",
+   "0 to 1023"
   ],
-  "correctAnswer": "IPv4 and IPv6",
+  "correctAnswer": "0 to 255",
   "difficulty": "EASY",
-  "explanation": "The IP address has two fundamental versions, IPv4 and IPv6; IPv4 is the common version in current networks."
+  "explanation": "IPv4 addresses are 32-bit numbers written in dotted decimal as x.x.x.x, where each x can be any value between 0 and 255, as in 192.0.2.146."
  },
  {
   "questionText": "Which committee is responsible for wireless LAN standards marketed under the Wi-Fi brand?",
   "options": [
    "IEEE 802.11",
-   "IEEE 802.3 (Ethernet)",
+   "IEEE 802.3",
    "IEEE 802.5",
    "IEEE 802.16"
   ],

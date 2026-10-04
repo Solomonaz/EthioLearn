@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Which reasons have traditionally been given for protecting IT facilities?",
+  "options": [
+   "To prevent theft or damage of hardware and information, and service disruption",
+   "To prevent viruses, spam and pop-up adverts",
+   "To prevent slow networks, full disks and old software",
+   "To prevent misuse by students, teachers and guests"
+  ],
+  "correctAnswer": "To prevent theft or damage of hardware and information, and service disruption",
+  "difficulty": "EASY",
+  "explanation": "Traditionally, IT facilities have been protected for three reasons: to prevent theft of or damage to the hardware, theft of or damage to the information, and disruption of service."
+ },
+ {
+  "questionText": "What is another name for computer security?",
+  "options": [
+   "Cyber security",
+   "Data privacy",
+   "Data backup",
+   "Network topology"
+  ],
+  "correctAnswer": "Cyber security",
+  "difficulty": "EASY",
+  "explanation": "Computer security, also known as cyber security, is information security applied to computing devices and networks, including the whole Internet. Data privacy is about personal data rights."
+ },
+ {
+  "questionText": "What can hackers do once they gain access to a computer?",
+  "options": [
+   "Steal passwords and control it remotely",
+   "Repair its security holes for the owner",
+   "Install the latest updates for the user",
+   "Back up its data to the cloud"
+  ],
+  "correctAnswer": "Steal passwords and control it remotely",
+  "difficulty": "EASY",
+  "explanation": "Hackers can do several things from stealing your passwords to controlling your computer through remote access, which is why every user must know about computer security."
+ },
+ {
+  "questionText": "Which device provides battery backup to a computer during a power outage?",
+  "options": [
+   "A UPS",
+   "A surge protector",
+   "An external hard drive",
+   "A cooling fan"
+  ],
+  "correctAnswer": "A UPS",
+  "difficulty": "EASY",
+  "explanation": "Installing protective electrical devices such as an Uninterruptible Power Supply (UPS) gives battery backup during a power outage; an external drive holds backup data, not power."
+ },
+ {
+  "questionText": "Which Windows account type can exist only once on a computer and offers no privacy, since anybody can log on?",
+  "options": [
+   "Guest",
+   "Administrator",
+   "Standard",
+   "Microsoft account"
+  ],
+  "correctAnswer": "Guest",
+  "difficulty": "EASY",
+  "explanation": "Guest accounts exist for temporary users and only one can exist on a computer; they are often used in internet cafes."
+ },
+ {
+  "questionText": "Which software scans, detects and removes viruses from a computer?",
+  "options": [
+   "Antivirus software",
+   "A firewall",
+   "A disk cleanup tool",
+   "Backup software"
+  ],
+  "correctAnswer": "Antivirus software",
+  "difficulty": "EASY",
+  "explanation": "Antivirus software scans, detects and removes viruses, worms and spyware. A firewall only allows or blocks network traffic and does not protect against all viruses."
+ },
+ {
+  "questionText": "What is a security threat?",
+  "options": [
+   "A malicious act that aims to corrupt or steal data or disrupt systems",
+   "An occurrence in which data may have been exposed",
+   "A rule that blocks traffic from untrusted sites",
+   "A copy of data kept for later recovery"
+  ],
+  "correctAnswer": "A malicious act that aims to corrupt or steal data or disrupt systems",
+  "difficulty": "EASY",
+  "explanation": "A security threat is a malicious act that aims to corrupt or steal data or disrupt systems; an occurrence in which data may have been exposed is a security event."
+ },
+ {
+  "questionText": "Which threat prevention strategy keeps lost, stolen or hacked documents from being read?",
+  "options": [
+   "Encrypting data",
+   "Taking a data backup",
+   "Installing a firewall",
+   "Creating a user account"
+  ],
+  "correctAnswer": "Encrypting data",
+  "difficulty": "EASY",
+  "explanation": "Encrypting data prevents lost, stolen or hacked documents and files from being seen. A backup only lets you recover data and does not stop others reading a stolen copy."
+ },
+ {
+  "questionText": "To whom should you report illegal Internet content or a suspected computer crime?",
+  "options": [
+   "Your local police",
+   "Your Internet service provider",
+   "The website's owner",
+   "A certified computer technician"
+  ],
+  "correctAnswer": "Your local police",
+  "difficulty": "EASY",
+  "explanation": "Illegal Internet content, suspected computer crime, identity theft or scams should be reported to your local police; a service provider or certified technician is for maintenance or software installation help."
+ },
+ {
+  "questionText": "Which malware secretly gathers information about a person or organization and passes it to others?",
+  "options": [
+   "Spyware",
+   "Adware",
+   "A worm",
+   "Ransomware"
+  ],
+  "correctAnswer": "Spyware",
+  "difficulty": "EASY",
+  "explanation": "Spyware installs itself and covertly monitors online behavior without permission, relaying the information to other parties. Ransomware locks files for payment."
+ },
+ {
+  "questionText": "How does privacy differ from security?",
+  "options": [
+   "Privacy: personal data rights; security: leaks and breaches",
+   "Privacy is about malware infections; security is about personal data rights",
+   "Privacy applies only to hardware; security applies only to software",
+   "Privacy and security mean exactly the same thing"
+  ],
+  "correctAnswer": "Privacy: personal data rights; security: leaks and breaches",
+  "difficulty": "MEDIUM",
+  "explanation": "Security is concerned with information leaks from malware infections and data breaches, while privacy concerns personal data rights: how information is acquired, used and maintained and who can access it."
+ },
+ {
+  "questionText": "How does a computer worm differ from a computer virus?",
+  "options": [
+   "A worm spreads itself using networks",
+   "A worm must infect a file to spread",
+   "A worm secretly gathers personal data",
+   "A worm locks files for a ransom"
+  ],
+  "correctAnswer": "A worm spreads itself using networks",
+  "difficulty": "MEDIUM",
+  "explanation": "A computer worm is a self-replicating program that spreads malicious code using computer networks, while a virus replicates by infecting files and programs; gathering data secretly is spyware."
+ },
+ {
+  "questionText": "What does a firewall decide about network traffic?",
+  "options": [
+   "Whether to allow or block it by rule",
+   "Which antivirus should scan it",
+   "How it should be encrypted",
+   "When it should be backed up"
+  ],
+  "correctAnswer": "Whether to allow or block it by rule",
+  "difficulty": "MEDIUM",
+  "explanation": "A firewall monitors incoming and outgoing network traffic and decides whether to allow or block specific traffic based on a defined set of security rules."
+ },
+ {
+  "questionText": "Why is antivirus software still needed when a firewall is installed?",
+  "options": [
+   "A firewall does not protect against all viruses",
+   "A firewall only protects private networks",
+   "A firewall cannot be turned on in Windows",
+   "A firewall blocks hackers but not worms"
+  ],
+  "correctAnswer": "A firewall does not protect against all viruses",
+  "difficulty": "MEDIUM",
+  "explanation": "A firewall program does not protect you from all viruses, so an antivirus or antimalware application such as Windows Defender is still needed."
+ },
+ {
+  "questionText": "Which user account type has limited ability to change the computer apart from personalizing it, such as changing a theme?",
+  "options": [
+   "Standard",
+   "Administrator",
+   "Guest",
+   "Owner"
+  ],
+  "correctAnswer": "Standard",
+  "difficulty": "MEDIUM",
+  "explanation": "Standard users can only personalize the computer, such as a screen saver or theme, and cannot access other users' personal files; most users get a standard account."
+ },
+ {
+  "questionText": "Which account type is the first user account created when Windows 10 is installed?",
+  "options": [
+   "Administrator",
+   "Standard",
+   "Guest",
+   "Microsoft account"
+  ],
+  "correctAnswer": "Administrator",
+  "difficulty": "MEDIUM",
+  "explanation": "Administrators have access to everything and can install software, change security settings and create or manage user accounts; the first account in Windows 10 is an administrator."
+ },
+ {
+  "questionText": "Which service stores a business's backed-up data and applications on a remote server?",
+  "options": [
+   "Cloud backup",
+   "Data encryption",
+   "Disaster recovery",
+   "Local backup to a flash drive"
+  ],
+  "correctAnswer": "Cloud backup",
+  "difficulty": "MEDIUM",
+  "explanation": "Cloud backup is the service in which data and applications on servers are backed up and stored on a remote server; a flash drive is local storage."
+ },
+ {
+  "questionText": "What is a security event?",
+  "options": [
+   "A time when data or a network may be exposed",
+   "A meeting where staff learn about computer security",
+   "A program that removes viruses from a computer",
+   "A rule that a firewall uses to block traffic"
+  ],
+  "correctAnswer": "A time when data or a network may be exposed",
+  "difficulty": "MEDIUM",
+  "explanation": "A security event refers to an occurrence during which school data or its network may have been exposed; an event that results in a breach is a security threat."
+ },
+ {
+  "questionText": "Which Control Panel path leads to Windows' backup option?",
+  "options": [
+   "System and Security, then Backup and Restore",
+   "User Accounts, then Backup and Restore",
+   "Network and Internet, then Backup now",
+   "Programs, then Backup and Restore"
+  ],
+  "correctAnswer": "System and Security, then Backup and Restore",
+  "difficulty": "MEDIUM",
+  "explanation": "In Windows the path is Start, Control Panel, System and Security, Backup and Restore, then Backup now. User Accounts is where accounts are added."
+ },
+ {
+  "questionText": "What are the two categories of threat prevention strategies?",
+  "options": [
+   "Technical and non-technical",
+   "Hardware-based and software-based",
+   "Online and offline",
+   "Natural and artificial"
+  ],
+  "correctAnswer": "Technical and non-technical",
+  "difficulty": "MEDIUM",
+  "explanation": "Threat prevention strategies are categorized as technical, such as backup, firewalls and antivirus, and non-technical, such as keeping computers in secure locations."
+ },
+ {
+  "questionText": "What results when computing resources lack availability?",
+  "options": [
+   "Denial of service",
+   "Unauthorized disclosure",
+   "Data modification",
+   "Identity theft"
+  ],
+  "correctAnswer": "Denial of service",
+  "difficulty": "MEDIUM",
+  "explanation": "Lack of availability of computing resources results in denial of service; lack of confidentiality is unauthorized disclosure and a failure of integrity is unauthorized modification."
+ },
+ {
+  "questionText": "What do settings in a user account determine?",
+  "options": [
+   "What a user can and cannot do",
+   "Which programs are installed on the PC",
+   "How the computer connects to the network",
+   "Which antivirus protects the account"
+  ],
+  "correctAnswer": "What a user can and cannot do",
+  "difficulty": "MEDIUM",
+  "explanation": "A user account is a collection of settings and permissions that determines what a user can and cannot do, including which files and folders they can access."
+ },
+ {
+  "questionText": "How is a guest account similar to a standard account but different from it?",
+  "options": [
+   "It has no privacy, as anybody can log onto it",
+   "It can install software and change all settings",
+   "It can open other users' personal folders",
+   "Several guest accounts can exist at once"
+  ],
+  "correctAnswer": "It has no privacy, as anybody can log onto it",
+  "difficulty": "HARD",
+  "explanation": "Guest accounts are like standard accounts except there is no privacy, as anybody can log on; only one guest account can exist and it cannot reach other users' personal folders."
+ },
+ {
+  "questionText": "When checking the accounts on a PC, what does the guidance say about the administrator account?",
+  "options": [
+   "Have only one, and do not use it daily",
+   "Make every daily account an administrator",
+   "Delete it once a standard account exists",
+   "Share it with all guests in a cafe"
+  ],
+  "correctAnswer": "Have only one, and do not use it daily",
+  "difficulty": "HARD",
+  "explanation": "You should only have one administrator account, and your daily-use account should not be the administrator account; changes to accounts need administrator access."
+ },
+ {
+  "questionText": "An application you need is being blocked by Microsoft Defender Firewall. What is the recommended action?",
+  "options": [
+   "Allow the application through the firewall",
+   "Turn the whole firewall off completely",
+   "Delete the antivirus program",
+   "Create a guest account to run it"
+  ],
+  "correctAnswer": "Allow the application through the firewall",
+  "difficulty": "HARD",
+  "explanation": "Turning the firewall off makes the device more vulnerable, so if an application you need is blocked, you should allow it through the firewall instead."
+ },
+ {
+  "questionText": "By default, what access does a new user added with 'Add someone else to this PC' get?",
+  "options": [
+   "No administrator access",
+   "Full administrator access",
+   "Guest access only",
+   "Access to all users' files"
+  ],
+  "correctAnswer": "No administrator access",
+  "difficulty": "HARD",
+  "explanation": "When you add a new user with a username, passphrase and security questions, by default the new user will not have administrator access."
+ },
+ {
+  "questionText": "Which of these is a non-technical prevention strategy against natural threats?",
+  "options": [
+   "Keeping the computer in a secure location",
+   "Installing antivirus software on every PC",
+   "Encrypting stored data",
+   "Installing a firewall"
+  ],
+  "correctAnswer": "Keeping the computer in a secure location",
+  "difficulty": "HARD",
+  "explanation": "Natural disasters cannot be prevented, but careful planning reduces damage: keeping the computer in a secure location, storing data safely and protecting programs and data are non-technical measures."
+ },
+ {
+  "questionText": "What can cyber-attacks lead to, according to the cyber security section?",
+  "options": [
+   "Power shutdowns and leaked national secrets",
+   "Faster networks and cheaper hardware",
+   "Automatic backups of medical records",
+   "Stronger passwords for every user"
+  ],
+  "correctAnswer": "Power shutdowns and leaked national secrets",
+  "difficulty": "HARD",
+  "explanation": "Cyber-attacks can cause electrical shutdowns, failure of military equipment and breaches of national security secrets, and theft of sensitive data like medical records."
+ },
+ {
+  "questionText": "What does a failure of integrity result from?",
+  "options": [
+   "Unauthorized modification of data",
+   "Unauthorized reading of stored data",
+   "A computer that is switched off",
+   "A slow Internet connection"
+  ],
+  "correctAnswer": "Unauthorized modification of data",
+  "difficulty": "HARD",
+  "explanation": "A failure of integrity results from unauthorized modification of data or damage to a system, while lack of confidentiality is unauthorized disclosure or access."
+ },
+ {
+  "questionText": "Which of these is listed as a common way of preventing cyber-attacks?",
+  "options": [
+   "Install the latest operating system updates",
+   "Keep old system versions to avoid new bugs",
+   "Use one long password for all accounts",
+   "Share your location online for safety"
+  ],
+  "correctAnswer": "Install the latest operating system updates",
+  "difficulty": "HARD",
+  "explanation": "Common prevention steps include strong passwords, securing your computer and mobile devices, installing the latest OS updates, securing your wireless network and protecting your e-identity."
+ }
+]
