@@ -67,6 +67,7 @@ function hasProviderKey(): boolean {
     // OpenRouter included: it serves the default question generator.
     process.env.OPENROUTER_API_KEY ||
       process.env.GEMINI_API_KEY ||
+      process.env.GEMINI_VERTEX_API_KEY ||
       process.env.GROQ_API_KEY ||
       process.env.NVIDIA_API_KEY,
   );

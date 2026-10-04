@@ -58,7 +58,7 @@ interface ProviderMeta {
  */
 export const PROVIDER_META: Record<AiProviderId, ProviderMeta> = {
   GEMINI: {
-    label: "Google Gemini",
+    label: "Google Gemini (AI Studio)",
     keyEnv: "GEMINI_API_KEY",
     baseUrlEnv: null,
     defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
@@ -71,6 +71,24 @@ export const PROVIDER_META: Record<AiProviderId, ProviderMeta> = {
     defaultPriority: 10,
     local: false,
     hint: "Strongest quality; billed per token. The only provider that can read images.",
+  },
+  // The same Gemini models through Google Cloud Agent Platform (Vertex AI),
+  // billed to the Cloud project so Cloud credits apply. lib/gemini.ts serves
+  // both — see lib/gemini-backend. No embedding slot: vectors stay on GEMINI
+  // so the index never mixes two embedding setups.
+  GEMINI_VERTEX: {
+    label: "Google Gemini (Agent Platform)",
+    keyEnv: "GEMINI_VERTEX_API_KEY",
+    baseUrlEnv: "GEMINI_VERTEX_BASE_URL",
+    defaultBaseUrl: "https://aiplatform.googleapis.com/v1",
+    slots: { chat: true, fast: true, embedding: false },
+    defaults: {
+      chat: { model: "gemini-3.8-flash", env: "GEMINI_VERTEX_MODEL" },
+      fast: { model: "gemini-3.1-flash-lite", env: "GEMINI_VERTEX_FAST_MODEL" },
+    },
+    defaultPriority: 15,
+    local: false,
+    hint: "Same Gemini models, billed to your Google Cloud project — Cloud credits apply. Can read images. Embeddings stay on AI Studio Gemini.",
   },
   GROQ: {
     label: "Groq",

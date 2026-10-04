@@ -1,10 +1,25 @@
-import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from "@google/generative-ai";
+import {
+  GoogleGenerativeAI,
+  SchemaType,
+  type GenerativeModel,
+  type ModelParams,
+  type RequestOptions,
+  type ResponseSchema,
+} from "@google/generative-ai";
 import { buildQuestionGenerationPrompt } from "./question-prompts";
 import { buildTutorSystemPrompt } from "./ai-prompts";
 import { validateQuestions, validateDetectedChapters } from "./question-validation";
 import { logUsage, geminiUsage, type UsageFeature, type UsageActor } from "./usage-logger";
 import { modelIdFor } from "./ai-settings";
 import { runTask } from "./ai-routing";
+import {
+  activeGeminiBackend,
+  geminiApiKey,
+  geminiProviderId,
+  geminiUsageProvider,
+  vertexEndpoint,
+  vertexModelPath,
+} from "./gemini-backend";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -141,9 +156,9 @@ export const CHAPTER_DETECTION_SCHEMA: ResponseSchema = {
 // newest stable Flash and is priced identically to 3.6-flash ($0.75/$3.75 per
 // 1M through 2026), so there is no reason to sit on the older one.
 const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-/** Flagship model id: admin setting -> env -> built-in default. */
+/** Flagship model id for the active backend: admin setting -> env -> built-in default. */
 export function geminiModel(): string {
-  return modelIdFor("GEMINI", "chat") ?? GEMINI_MODEL_FALLBACK;
+  return modelIdFor(geminiProviderId(), "chat") ?? GEMINI_MODEL_FALLBACK;
 }
 
 // FAST — high-volume or latency-sensitive work where flagship reasoning is not
@@ -152,9 +167,9 @@ export function geminiModel(): string {
 // gemini-3.1-flash-lite is a third of the flagship's input price and 40% of its
 // output price, which is what keeps whole-book tagging cheap.
 const GEMINI_FAST_MODEL_FALLBACK = process.env.GEMINI_FAST_MODEL || "gemini-3.1-flash-lite";
-/** Fast/cheap model id: admin setting -> env -> built-in default. */
+/** Fast/cheap model id for the active backend: admin setting -> env -> built-in default. */
 export function geminiFastModel(): string {
-  return modelIdFor("GEMINI", "fast") ?? GEMINI_FAST_MODEL_FALLBACK;
+  return modelIdFor(geminiProviderId(), "fast") ?? GEMINI_FAST_MODEL_FALLBACK;
 }
 
 /**
@@ -193,14 +208,32 @@ function withThinkingCap<T extends object>(cfg: T, budget = THINKING_BUDGET): T 
   return { ...cfg, thinkingConfig: { thinkingBudget: budget } } as T;
 }
 
-function getClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+/**
+ * A Gemini client for the active backend (see lib/gemini-backend).
+ *
+ * AI Studio is the SDK's own default. For Agent Platform the same SDK is
+ * pointed at aiplatform.googleapis.com: the request and response bodies are
+ * identical, only the URL differs — `{base}/v1/publishers/google/models/{id}:generateContent`
+ * instead of `{base}/v1beta/models/{id}:generateContent`. The key goes in the
+ * x-goog-api-key header either way.
+ */
+function getClient(): { getGenerativeModel(params: ModelParams, ro?: RequestOptions): GenerativeModel } {
+  const apiKey = geminiApiKey();
   if (!apiKey) {
-    throw new Error(
-      "GEMINI_API_KEY is not configured. Add it to your .env file."
-    );
+    const env = activeGeminiBackend() === "vertex" ? "GEMINI_VERTEX_API_KEY" : "GEMINI_API_KEY";
+    throw new Error(`${env} is not configured. Add it to your .env file.`);
   }
-  return new GoogleGenerativeAI(apiKey);
+  const client = new GoogleGenerativeAI(apiKey);
+  if (activeGeminiBackend() !== "vertex") return client;
+
+  const endpoint = vertexEndpoint();
+  return {
+    getGenerativeModel: (params, ro) =>
+      client.getGenerativeModel(
+        { ...params, model: vertexModelPath(params.model) },
+        { ...ro, ...endpoint },
+      ),
+  };
 }
 
 /**
@@ -208,7 +241,7 @@ function getClient() {
  *
  * A general-purpose helper mirroring `groqChat` / `nvidiaChat` so any pipeline
  * can use Gemini as its primary provider without rebuilding a client inline.
- * Returns null when GEMINI_API_KEY is missing or the request fails, letting
+ * Returns null when the active backend's key is missing or the request fails, letting
  * callers fall through to the next provider in their chain.
  */
 export async function geminiChat(
@@ -241,7 +274,7 @@ export async function geminiChat(
     thinkingBudget?: number;
   } = {}
 ): Promise<string | null> {
-  if (!process.env.GEMINI_API_KEY) return null;
+  if (!geminiApiKey()) return null;
   const modelId = opts.model ?? geminiModel();
   try {
     let model = getClient().getGenerativeModel({
@@ -280,7 +313,7 @@ export async function geminiChat(
     }
     logUsage({
       feature: opts.feature ?? "quality-check",
-      provider: "gemini",
+      provider: geminiUsageProvider(),
       model: modelId,
       usage: geminiUsage(result.response),
       actor: opts.actor,
@@ -347,7 +380,7 @@ export async function explainGraphImage(
       { text: prompt },
       { inlineData: { mimeType, data: base64 } },
     ]);
-    logUsage({ feature: "vision-graph", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    logUsage({ feature: "vision-graph", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response), actor });
     return result.response.text();
   });
 }
@@ -382,7 +415,7 @@ export async function readEquationsFromImage(
       { text: prompt },
       { inlineData: { mimeType, data: base64 } },
     ]);
-    logUsage({ feature: "vision-equation", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    logUsage({ feature: "vision-equation", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response), actor });
     return result.response.text();
   });
 }
@@ -410,7 +443,7 @@ export async function readSolidFromImage(base64: string, mimeType: string, actor
       { text: prompt },
       { inlineData: { mimeType, data: base64 } },
     ]);
-    logUsage({ feature: "vision-solid", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    logUsage({ feature: "vision-solid", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response), actor });
     return result.response.text();
   });
 }
@@ -450,7 +483,7 @@ export async function askAboutGraph(
       { text: prompt },
       { inlineData: { mimeType, data: base64 } },
     ]);
-    logUsage({ feature: "graph-qa", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response), actor });
+    logUsage({ feature: "graph-qa", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response), actor });
     return result.response.text();
   });
 }
@@ -487,7 +520,7 @@ export async function generateQuestionsFromContent(
       const result = await model.generateContent(prompt);
       // Log before parsing: a call that returns unparseable JSON still spent
       // tokens, and a retry issues a fresh billable call.
-      logUsage({ feature: "question-generation", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response) });
+      logUsage({ feature: "question-generation", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response) });
       const text = result.response.text();
       const parsed = JSON.parse(text);
       const questions = validateQuestions(parsed);
@@ -573,7 +606,7 @@ export async function detectChaptersFromContent(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await model.generateContent(prompt);
-      logUsage({ feature: "chapter-detection", provider: "gemini", model: geminiModel(), usage: geminiUsage(result.response) });
+      logUsage({ feature: "chapter-detection", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response) });
       const text = result.response.text();
       const parsed = JSON.parse(text);
       const chapters = validateDetectedChapters(parsed);
@@ -1149,6 +1182,6 @@ export async function tutorResponseFromContent(opts: {
   });
 
   const result = await chat.sendMessage(opts.message);
-  logUsage({ feature: "tutor-chat", provider: "gemini", model: geminiFastModel(), usage: geminiUsage(result.response), actor: opts.actor });
+  logUsage({ feature: "tutor-chat", provider: geminiUsageProvider(), model: geminiFastModel(), usage: geminiUsage(result.response), actor: opts.actor });
   return result.response.text();
 }

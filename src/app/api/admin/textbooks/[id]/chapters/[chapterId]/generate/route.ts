@@ -154,11 +154,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // Gemini, NVIDIA and Groq — accept ANY of them, not just the first two.
   if (
     !process.env.GEMINI_API_KEY &&
+    !process.env.GEMINI_VERTEX_API_KEY &&
     !process.env.GROQ_API_KEY &&
     !process.env.NVIDIA_API_KEY
   ) {
     return NextResponse.json(
-      { error: "AI generation is not configured. Set GEMINI_API_KEY, GROQ_API_KEY, or NVIDIA_API_KEY." },
+      { error: "AI generation is not configured. Set GEMINI_API_KEY, GEMINI_VERTEX_API_KEY, GROQ_API_KEY, or NVIDIA_API_KEY." },
       { status: 503 }
     );
   }

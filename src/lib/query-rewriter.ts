@@ -8,7 +8,7 @@
 
 import { geminiChat, geminiFastModel } from "./gemini";
 import { groqChat } from "./groq";
-import { getTaskChain, runStep, type AiProvider } from "./ai-routing";
+import { getTaskChain, runStep, implFor, type AiProvider } from "./ai-routing";
 import type { UsageActor } from "./usage-logger";
 
 export interface QueryRewriteOptions {
@@ -119,7 +119,7 @@ STANDALONE SEARCH QUERY:`;
 
     let rewritten: string | null = null;
     for (const step of await getTaskChain("query-rewrite")) {
-      const call = impl[step.provider];
+      const call = implFor(impl, step.provider);
       if (!call) continue;
       // Budget spent: don't fire (and pay for) a request whose answer we'd ignore.
       if (timedOut) break;

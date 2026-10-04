@@ -18,6 +18,7 @@
 import { AiProviderId } from "@prisma/client";
 import { db } from "./db";
 import { getProviderSettings, PROVIDER_META, type ResolvedProvider } from "./ai-settings";
+import { vertexEndpoint, vertexModelPath } from "./gemini-backend";
 
 export type ProbeStatus =
   | "ok"
@@ -116,12 +117,29 @@ async function probeOpenAiCompatible(
   return { ok: res.ok, httpStatus: res.status, body: res.ok ? "" : await res.text().catch(() => "") };
 }
 
-async function probeGemini(model: string): Promise<{ ok: boolean; httpStatus: number; body: string }> {
-  const key = process.env.GEMINI_API_KEY!;
-  const base = PROVIDER_META.GEMINI.defaultBaseUrl;
-  const res = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent?key=${key}`, {
+/**
+ * Smallest Gemini call, against AI Studio or Agent Platform (Vertex). The two
+ * share the request body; only the URL and the key differ. The key goes in the
+ * x-goog-api-key header, as the SDK sends it, so it never sits in a URL that
+ * could end up in a log.
+ */
+async function probeGemini(
+  model: string,
+  backend: "studio" | "vertex"
+): Promise<{ ok: boolean; httpStatus: number; body: string }> {
+  let url: string;
+  let key: string;
+  if (backend === "vertex") {
+    const { baseUrl, apiVersion } = vertexEndpoint();
+    url = `${baseUrl}/${apiVersion}/${vertexModelPath(model).split("/").map(encodeURIComponent).join("/")}:generateContent`;
+    key = process.env.GEMINI_VERTEX_API_KEY!;
+  } else {
+    url = `${PROVIDER_META.GEMINI.defaultBaseUrl}/models/${encodeURIComponent(model)}:generateContent`;
+    key = process.env.GEMINI_API_KEY!;
+  }
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
       contents: [{ parts: [{ text: "ok" }] }],
       generationConfig: { maxOutputTokens: 1 },
@@ -173,8 +191,8 @@ export async function probeProvider(
   const started = Date.now();
   try {
     let r: { ok: boolean; httpStatus: number; body: string };
-    if (p.id === "GEMINI") {
-      r = await probeGemini(model);
+    if (p.id === "GEMINI" || p.id === "GEMINI_VERTEX") {
+      r = await probeGemini(model, p.id === "GEMINI_VERTEX" ? "vertex" : "studio");
     } else if (p.id === "OLLAMA") {
       r = await probeOllama(p.baseUrl || "http://localhost:11434", model);
     } else {

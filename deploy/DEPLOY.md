@@ -144,6 +144,7 @@ Fill in at least:
 | `SUPER_ADMIN_EMAIL` | your email |
 | `SUPER_ADMIN_PASSWORD` | **at least 16 characters**; keep it in a password manager |
 | `GEMINI_API_KEY` (and any other AI keys you use) | from your accounts |
+| `GEMINI_VERTEX_API_KEY` (optional) | a Google Cloud **Agent Platform** key — runs Gemini billed to your Cloud project, so Cloud credits apply. Appears as its own provider in Admin → AI Models. Embeddings still use `GEMINI_API_KEY`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXT_PUBLIC_GOOGLE_ENABLED=true` | Google sign-in |
 | `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`, `NEXT_PUBLIC_TELEGRAM_BOT_ID` | Telegram sign-in |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | after step 9 |
