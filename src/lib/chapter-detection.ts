@@ -160,9 +160,11 @@ function parseNumberToken(token: string): number | null {
  */
 function scanHeadingCandidates(text: string): HeadingCandidate[] {
   const candidates: HeadingCandidate[] = [];
-  // "CHAPTER 4 — Cells", "Unit Two: Motion", "ምዕራፍ ፫ ...", "ክፍል 2 ..."
+  // "CHAPTER 4 — Cells", "Unit Two: Motion", "ምዕራፍ ፫ ...", "ክፍል 2 ...",
+  // and the hyphenated "UNIT-1 Information Systems…" — Grade 11 IT prints that
+  // running header on every page, and requiring a space hid all of them.
   const labelled =
-    /^[ \t_]*(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)[ \t]+_?([0-9]{1,2}|[ivxlc]{1,5}|[a-z]+|[፩-፼]{1,3})(?=[\s\-–—.:)|]|$)[ \t]*[-–—.:)]?[ \t]*(.{0,160})$/gim;
+    /^[ \t_]*(chapter|unit|lesson|section|part|ምዕራፍ|ክፍል)(?:[ \t]+|[ \t]*[-–][ \t]*)_?([0-9]{1,2}|[ivxlc]{1,5}|[a-z]+|[፩-፼]{1,3})(?=[\s\-–—.:)|]|$)[ \t]*[-–—.:)]?[ \t]*(.{0,160})$/gim;
 
   let m: RegExpExecArray | null;
   while ((m = labelled.exec(text)) !== null) {
@@ -183,6 +185,12 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
       .replace(/\s+\d{1,4}\s*$/, "")
       .trim();
     if (/^(\d{1,4}|[ivx]{1,6})$/i.test(title)) title = "";
+    // End-of-unit exercises are set out in parts — "Part I: Write True if the
+    // statement is correct…", "Part III: Choose the correct answer". An
+    // instruction to the student is never a chapter, but when a book's unit
+    // headings went unrecognised the scan took these for its chapters (Grade 11
+    // IT: three "chapters" named after exercise instructions).
+    if (m[1].toLowerCase() === "part" && EXERCISE_INSTRUCTION.test(title)) continue;
     if (!title) title = titleFromFollowingLines(text, m.index + m[0].length, number);
     candidates.push({
       index: m.index,
@@ -193,8 +201,89 @@ function scanHeadingCandidates(text: string): HeadingCandidate[] {
     });
   }
 
-  return candidates;
+  candidates.push(...scanNumberBelowTitlePages(text));
+  return candidates.sort((a, b) => a.index - b.index);
 }
+
+/** Section labels set in capitals after "UNIT" that are not unit titles. */
+const SECTION_LABEL = /^(SUMMARY|REVIEW|OUTCOMES?|OVERVIEW|EXERCISES?|QUESTIONS|CONTENTS|INTRODUCTION|ACTIVIT(Y|IES)|ASSESSMENT)\b/;
+
+/**
+ * Unit title pages that put the number on its own line BELOW the title.
+ *
+ * Grade 11 IT opens every unit like this, the label running into the title,
+ * the title wrapping in capitals and the number set last:
+ *
+ *   UNIT DATABASE MANAGEMENT        HARDWARE
+ *   3                               UNIT TROUBLESHOOTING
+ *                                   AND PREVENTIVE
+ *                                   MAINTENANCE
+ *                                   5
+ *
+ * The labelled pattern wants the number straight after the label, so it found
+ * none of them; the split then searched for the contents-page title, and since
+ * the Unit 5 page drops "Hardware" from its first line, the unit was cut at a
+ * sentence in its overview ("This unit covers hardware troubleshooting and
+ * preventive maintenance."). A title word the layout set above the label, like
+ * "HARDWARE", belongs to the heading, so the unit starts there.
+ *
+ * Strict on purpose: the label and every title line in capitals, at most three
+ * title lines, and a line holding nothing but the number to close it.
+ */
+function scanNumberBelowTitlePages(text: string): HeadingCandidate[] {
+  const out: HeadingCandidate[] = [];
+  const isTitleLine = (l: string) => /^[A-Z][A-Z0-9 ,&'’()\-–]{1,60}$/.test(l) && /[A-Z]{3}/.test(l);
+  const lineAt = /^[ \t]*(UNIT|CHAPTER)[ \t]+([A-Z][^\n]*)$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = lineAt.exec(text)) !== null) {
+    const first = m[2].trim();
+    // "UNIT 4" / "UNIT FOUR" / "UNIT-1" are the labelled pattern's job, and a
+    // section label in capitals ("UNIT SUMMARY") over a bare page number is no
+    // title page.
+    if (!isTitleLine(first) || parseNumberToken(first.split(/\s+/)[0]) !== null) continue;
+    if (SECTION_LABEL.test(first)) continue;
+
+    const after = text.slice(m.index + m[0].length + 1, m.index + m[0].length + 400).split("\n");
+    const titleLines = [first];
+    let number: number | null = null;
+    for (const raw of after.slice(0, 4)) {
+      const line = raw.trim();
+      const bare = line.match(/^(\d{1,2})$/);
+      if (bare) { number = parseInt(bare[1], 10); break; }
+      if (!isTitleLine(line) || titleLines.length === 3) break;
+      titleLines.push(line);
+    }
+    if (number === null || number < 1) continue;
+
+    // A capitals line directly above the label, itself after a blank line or
+    // the start of the text, is the title's first word set apart.
+    let index = m.index;
+    if (m.index > 0) {
+      const aboveStart = text.lastIndexOf("\n", m.index - 2) + 1;
+      const above = text.slice(aboveStart, m.index - 1).trim();
+      const aboveThatStart = aboveStart > 0 ? text.lastIndexOf("\n", aboveStart - 2) + 1 : aboveStart;
+      const aboveThat = aboveStart > 0 ? text.slice(aboveThatStart, aboveStart - 1).trim() : "";
+      if (above && isTitleLine(above) && !/\d/.test(above) && aboveThat === "") {
+        titleLines.unshift(above);
+        index = aboveStart;
+      }
+    }
+
+    const title = titleLines
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .replace(/(^|[\s–-])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase())
+      .replace(/(?<=\s)(And|Of|In|The|For|To|On)(?=\s)/g, (w) => w.toLowerCase());
+    const kind = m[1].toLowerCase();
+    out.push({ index, kind, number, title: `${capitalise(kind)} ${number}: ${title}`, capitalised: true });
+  }
+  return out;
+}
+
+/** The opening of an exercise instruction, as in "Part II: Choose the best answer". */
+const EXERCISE_INSTRUCTION =
+  /^(write|choose|answer|match|fill|give|discuss|complete|say|state|explain|define|circle|select|identify|list|describe|compare|short answer|multiple choice|true or false|matching|discussion|code writing|practical)\b/i;
 
 // Section labels that follow a unit title and must not be read as part of it.
 const NOT_A_TITLE_LINE = /^(introduction|unit outcomes?|main contents?|learning outcomes?|contents)\b/i;
