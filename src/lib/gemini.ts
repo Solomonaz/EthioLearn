@@ -209,6 +209,20 @@ function withThinkingCap<T extends object>(cfg: T, budget = THINKING_BUDGET): T 
 }
 
 /**
+ * The SDK sends a system instruction with role "system", which AI Studio takes
+ * but Agent Platform does not: it accepts only "user" and "model" as roles and
+ * answers anything else with 400 "Please use a valid role: user, model.". The
+ * instruction still travels in the systemInstruction field, so labelling it
+ * "user" does not turn it into a user message. An instruction that already
+ * carries a role is passed through unchanged.
+ */
+function vertexSystemInstruction(si: NonNullable<ModelParams["systemInstruction"]>): ModelParams["systemInstruction"] {
+  if (typeof si === "string") return { role: "user", parts: [{ text: si }] };
+  if ("parts" in si) return si.role ? si : { ...si, role: "user" };
+  return { role: "user", parts: [si] };
+}
+
+/**
  * A Gemini client for the active backend (see lib/gemini-backend).
  *
  * AI Studio is the SDK's own default. For Agent Platform the same SDK is
@@ -230,7 +244,13 @@ function getClient(): { getGenerativeModel(params: ModelParams, ro?: RequestOpti
   return {
     getGenerativeModel: (params, ro) =>
       client.getGenerativeModel(
-        { ...params, model: vertexModelPath(params.model) },
+        {
+          ...params,
+          model: vertexModelPath(params.model),
+          ...(params.systemInstruction !== undefined
+            ? { systemInstruction: vertexSystemInstruction(params.systemInstruction) }
+            : {}),
+        },
         { ...ro, ...endpoint },
       ),
   };

@@ -90,7 +90,15 @@ function classify(httpStatus: number, body: string): { status: ProbeStatus; mess
       message: snippet || (daily ? "Daily allowance exhausted." : "Too many requests — retry shortly."),
     };
   }
-  if (httpStatus === 400 && (lower.includes("model") || lower.includes("not_found"))) {
+  // Only a 400 that is ABOUT the model id. Matching the bare word "model" also
+  // caught Agent Platform's "Please use a valid role: user, model." and showed
+  // a request-format error as "Model not found".
+  if (
+    httpStatus === 400 &&
+    (lower.includes("not_found") ||
+      lower.includes("not found") ||
+      /\b(unknown|invalid|unsupported) model\b|model\b[^.]*\b(is not|not) (supported|available|found)/.test(lower))
+  ) {
     return { status: "bad_model", message: snippet || "Provider rejected the model id." };
   }
   return { status: "error", message: `HTTP ${httpStatus}${snippet ? ` — ${snippet}` : ""}` };
@@ -141,7 +149,9 @@ async function probeGemini(
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: "ok" }] }],
+      // Agent Platform rejects a message without a role (400 "Please use a
+      // valid role: user, model."); AI Studio accepts either.
+      contents: [{ role: "user", parts: [{ text: "ok" }] }],
       generationConfig: { maxOutputTokens: 1 },
     }),
     signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
