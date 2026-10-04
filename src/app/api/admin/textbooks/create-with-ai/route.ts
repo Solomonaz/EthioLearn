@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { extractAndDetectChapters } from "@/lib/textbook-ingest";
+import { extractAndDetectChapters, storeTextbookFile } from "@/lib/textbook-ingest";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { duplicateResponseBody, findDuplicateTextbooks } from "@/lib/textbook-access";
 
@@ -142,8 +142,20 @@ export async function POST(request: NextRequest) {
       language,
     });
 
+    // Keep a PDF for the student Library. The textbook doesn't exist yet, so
+    // the key goes back to the client and is claimed by the create call.
+    let readerFile: string | null = null;
+    if (fileName.endsWith(".pdf")) {
+      try {
+        readerFile = await storeTextbookFile(buffer, file.name);
+      } catch (err) {
+        warnings.push(`The PDF could not be kept for the Library: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
     // Return results for review (no DB creation yet)
     return NextResponse.json({
+      readerFile,
       extractedContent: {
         contentLength: extraction.text.length,
         wordCount: extraction.wordCount,

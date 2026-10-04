@@ -231,6 +231,16 @@ Return ONLY JSON: {"answers":[{"number":1,"letter":"B","explanation":"...","disa
 }
 
 /**
+ * An extraction still marked as running after this long died with the server
+ * (a restart or deploy kills background work); it may be started again.
+ */
+const STALE_EXTRACTION_MS = 30 * 60 * 1000;
+
+export function isStaleExtraction(updatedAt: Date | string): boolean {
+  return Date.now() - new Date(updatedAt).getTime() > STALE_EXTRACTION_MS;
+}
+
+/**
  * Read an uploaded paper into questions. Runs in the background after upload;
  * leaves the exam in REVIEW (or FAILED with a reason the admin can see).
  */
@@ -279,7 +289,11 @@ export async function extractNationalExam(examId: string): Promise<void> {
       let letter = q.answer;
       if (!letter) {
         letter = e?.letter ?? null;
-        notes.push(letter ? "Answer suggested by AI — not found in the paper's answer key." : "No answer found — please set it.");
+        notes.push(
+          letter
+            ? "AI-suggested answer — please confirm. The paper has no answer key for this question."
+            : "No answer found — please set it.",
+        );
       } else if (e?.disagrees && e.letter && e.letter !== letter) {
         notes.push(`AI thinks the answer is ${e.letter}, not ${letter} as in the key — please check.`);
       }
@@ -316,6 +330,43 @@ export async function extractNationalExam(examId: string): Promise<void> {
       data: { status: "FAILED", extractionError: message.slice(0, 1000) },
     });
   }
+}
+
+// ─── Attempts ────────────────────────────────────────────
+
+/** When an exam-mode attempt's time is up. */
+export function examDeadline(startedAt: Date, durationMinutes: number): Date {
+  return new Date(startedAt.getTime() + durationMinutes * 60_000);
+}
+
+/**
+ * Score and close an attempt. `answers` replaces what was saved (exam mode
+ * sends its final answers on submit); without it the saved answers count.
+ * Idempotent: a finished attempt is left as it is. No points are awarded.
+ */
+export async function finishAttempt(
+  attemptId: string,
+  answers?: unknown,
+): Promise<{ correctCount: number; totalQuestions: number } | null> {
+  const attempt = await db.nationalExamAttempt.findUnique({
+    where: { id: attemptId },
+    select: {
+      completedAt: true, answers: true, correctCount: true, totalQuestions: true,
+      exam: { select: { questions: { select: { id: true, options: true, correctAnswer: true } } } },
+    },
+  });
+  if (!attempt) return null;
+  if (attempt.completedAt) return { correctCount: attempt.correctCount, totalQuestions: attempt.totalQuestions };
+
+  const questions = attempt.exam.questions;
+  const final = cleanAnswers(answers ?? attempt.answers, questions);
+  const correctCount = questions.filter((q) => q.correctAnswer && final[q.id] === q.correctAnswer).length;
+  // completedAt: null in the filter, so two racing submits cannot both score it.
+  await db.nationalExamAttempt.updateMany({
+    where: { id: attemptId, completedAt: null },
+    data: { answers: final, correctCount, totalQuestions: questions.length, completedAt: new Date() },
+  });
+  return { correctCount, totalQuestions: questions.length };
 }
 
 /** Answers stored on an attempt, keeping only questions of this paper and option texts. */

@@ -6,6 +6,7 @@ import { resolveGradeScope } from "@/lib/grade-scope";
 
 /**
  * GET /api/library — textbooks a student can open in the PDF reader.
+ * Signed-in students only (plus the super admin).
  *
  * Same visibility as the rest of the app: approved books from the national
  * library plus the student's own school, within the student's study scope
@@ -15,6 +16,8 @@ import { resolveGradeScope } from "@/lib/grade-scope";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // The Library is a student feature; the super admin may look for checking.
+  if (user.role !== "STUDENT" && user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const where: Prisma.TextbookWhereInput = { approvalStatus: "APPROVED", readerFile: { not: null } };
   const scope = resolveGradeScope(user);

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { extractTextFromFile } from "@/lib/extract-text";
 import { canManageTextbook } from "@/lib/textbook-access";
+import { deleteTextbookFile, storeTextbookFile } from "@/lib/textbook-ingest";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // Verify textbook + school isolation
   const textbook = await db.textbook.findUnique({
     where: { id: textbookId },
-    select: { id: true, schoolId: true, title: true, approvalStatus: true },
+    select: { id: true, schoolId: true, title: true, approvalStatus: true, readerFile: true },
   });
 
   if (!textbook) {
@@ -88,11 +89,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Extract text from file
     const result = await extractTextFromFile(buffer, file.name);
 
+    // A PDF also becomes (or replaces) the copy students read in the Library.
+    let readerFile: string | null = null;
+    if (fileName.endsWith(".pdf")) {
+      try {
+        readerFile = await storeTextbookFile(buffer, file.name);
+      } catch (err) {
+        console.warn(`[File Upload] Could not keep the PDF for the Library: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
     // Save extracted text to textbook
     await db.textbook.update({
       where: { id: textbookId },
-      data: { content: result.text },
+      data: { content: result.text, ...(readerFile ? { readerFile, readerFileSize: buffer.length } : {}) },
     });
+    if (readerFile) await deleteTextbookFile(textbook.readerFile);
 
     return NextResponse.json({
       success: true,
@@ -100,6 +112,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       contentLength: result.text.length,
       wordCount: result.wordCount,
       pageCount: result.pageCount,
+      inLibrary: !!readerFile,
       // Extraction problems the admin must see — chiefly a scanned PDF longer
       // than the OCR page cap, whose tail was never read. Reporting a clean
       // success there used to hide the loss of most of the book.

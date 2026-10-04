@@ -27,7 +27,7 @@ export async function DELETE(
 
   const textbook = await db.textbook.findUnique({
     where: { id },
-    select: { id: true, schoolId: true, sourceFile: true },
+    select: { id: true, schoolId: true, sourceFile: true, readerFile: true },
   });
 
   if (!textbook) {
@@ -43,6 +43,7 @@ export async function DELETE(
   // so deleting the textbook cascades to chapters and their questions.
   await db.textbook.delete({ where: { id } });
   await deleteTextbookFile(textbook.sourceFile);
+  await deleteTextbookFile(textbook.readerFile);
 
   return NextResponse.json({ success: true });
 }

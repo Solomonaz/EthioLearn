@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, readFile, unlink, writeFile } from "fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
 import { UPLOAD_ROOT } from "@/lib/uploads";
@@ -62,6 +62,25 @@ function keyPath(key: string): string {
 
 export async function readTextbookFile(key: string): Promise<Buffer> {
   return readFile(keyPath(key));
+}
+
+/** Whether a stored key is a PDF — the only format the Library reader opens. */
+export function isPdfKey(key: string | null | undefined): key is string {
+  return !!key && key.endsWith(".pdf");
+}
+
+/**
+ * A PDF stored earlier in this flow (by create-with-ai) that a new textbook
+ * may claim as its reader file. Returns its size, or null when the key is not
+ * a stored PDF.
+ */
+export async function storedPdfSize(key: unknown): Promise<number | null> {
+  if (typeof key !== "string" || !/^[0-9a-f-]{36}\.pdf$/.test(key)) return null;
+  try {
+    return (await stat(keyPath(key))).size;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteTextbookFile(key: string | null | undefined): Promise<void> {
@@ -164,6 +183,8 @@ export async function ingestApprovedTextbook(textbookId: string): Promise<void> 
       approvalStatus: true,
       sourceFile: true,
       sourceFileName: true,
+      sourceFileSize: true,
+      readerFile: true,
       uploadedById: true,
       _count: { select: { chapters: true } },
     },
@@ -209,9 +230,18 @@ export async function ingestApprovedTextbook(textbookId: string): Promise<void> 
       }),
     ]);
 
-    // The text now lives in the database — the held file has done its job.
-    await deleteTextbookFile(tb.sourceFile);
-    await db.textbook.update({ where: { id: tb.id }, data: { sourceFile: null } });
+    // The text now lives in the database. A PDF stays on as the copy students
+    // read in the Library (unless one was attached already); any other format
+    // has done its job.
+    if (isPdfKey(tb.sourceFile) && !tb.readerFile) {
+      await db.textbook.update({
+        where: { id: tb.id },
+        data: { sourceFile: null, readerFile: tb.sourceFile, readerFileSize: tb.sourceFileSize },
+      });
+    } else {
+      await deleteTextbookFile(tb.sourceFile);
+      await db.textbook.update({ where: { id: tb.id }, data: { sourceFile: null } });
+    }
 
     if (tb.uploadedById) {
       await createNotification(

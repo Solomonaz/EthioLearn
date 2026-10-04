@@ -14,7 +14,9 @@ import { UPLOAD_ROOT } from "@/lib/uploads";
  * Range requests are honoured so pdf.js can fetch only the pages being read
  * instead of the whole book (textbooks run to tens of MB on slow connections).
  * Served inline for the viewer, never cached by shared caches, and only to
- * users who may see the book — same rules as GET /api/library.
+ * students who may see the book — same rules as GET /api/library. There is
+ * no download link in the app, but anything a browser can display can be
+ * saved by a determined user; this only discourages it.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -25,12 +27,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     where: { id },
     select: { readerFile: true, schoolId: true, grade: true, approvalStatus: true },
   });
+  // Signed-in students only (plus the super admin), as for GET /api/library.
   const allowed =
     !!tb?.readerFile &&
     (user.role === "SUPER_ADMIN" ||
-      (tb.approvalStatus === "APPROVED" &&
+      (user.role === "STUDENT" &&
+        tb.approvalStatus === "APPROVED" &&
         (!tb.schoolId || tb.schoolId === user.schoolId) &&
-        (user.role !== "STUDENT" || getStudyScope(user.grade).includes(tb.grade))));
+        getStudyScope(user.grade).includes(tb.grade)));
   if (!allowed || !tb?.readerFile || !/^[0-9a-f-]{36}\.pdf$/.test(tb.readerFile)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

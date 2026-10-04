@@ -5,6 +5,7 @@ import { Difficulty, QuestionType } from "@prisma/client";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { canonicalSubject } from "@/lib/subject";
 import { cleanChapterTitle } from "@/lib/display-text";
+import { storedPdfSize } from "@/lib/textbook-ingest";
 import {
   canManageTextbook,
   duplicateResponseBody,
@@ -116,6 +117,8 @@ interface CreateTextbookBody {
   chapters?: ChapterInput[];
   /** Super admin only: upload even though the grade + subject already exists. */
   allowDuplicate?: boolean;
+  /** Key of the PDF create-with-ai kept, to become the book's Library copy. */
+  readerFile?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -166,6 +169,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(duplicateResponseBody(user, duplicates), { status: 409 });
   }
 
+  // Only a stored PDF that no other book has claimed.
+  const readerFileSize = await storedPdfSize(body.readerFile);
+  const readerFile =
+    readerFileSize !== null && !(await db.textbook.findFirst({ where: { readerFile: body.readerFile }, select: { id: true } }))
+      ? (body.readerFile as string)
+      : null;
+
   const validDifficulties = ["EASY", "MEDIUM", "HARD"];
   const validTypes = ["MCQ", "TRUE_FALSE", "FILL_IN_BLANK", "MATCH_PAIRS", "ORDERING"];
 
@@ -180,6 +190,8 @@ export async function POST(request: NextRequest) {
       academicYear: academicYear?.trim() || undefined,
       content: content || undefined,
       fileUrl: "",
+      readerFile,
+      readerFileSize: readerFile ? readerFileSize : null,
       processingStatus: "COMPLETED",
       uploadedById: user.id === "env_super_admin" ? undefined : user.id,
       schoolId: user.schoolId ?? undefined,

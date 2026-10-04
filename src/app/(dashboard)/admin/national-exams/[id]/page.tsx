@@ -38,8 +38,12 @@ interface Exam {
   extractionError: string | null;
   hasSourceFile: boolean;
   attemptCount: number;
+  updatedAt: string;
   questions: Question[];
 }
+
+/** Same threshold as isStaleExtraction on the server: a reading this old died with the server. */
+const STALE_EXTRACTION_MS = 30 * 60 * 1000;
 
 const selectClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary";
@@ -119,6 +123,7 @@ export default function AdminNationalExamReviewPage() {
   const unanswered = exam.questions.filter((q) => !q.correctAnswer).length;
   const shown = onlyFlagged ? exam.questions.filter((q) => q.needsReview) : exam.questions;
   const published = exam.status === "PUBLISHED";
+  const stuck = exam.status === "EXTRACTING" && Date.now() - new Date(exam.updatedAt).getTime() > STALE_EXTRACTION_MS;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
@@ -146,7 +151,7 @@ export default function AdminNationalExamReviewPage() {
                   </Button>
                 </a>
               )}
-              {!published && exam.status !== "EXTRACTING" && exam.hasSourceFile && (
+              {!published && (exam.status !== "EXTRACTING" || stuck) && exam.hasSourceFile && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -163,7 +168,11 @@ export default function AdminNationalExamReviewPage() {
                 <Button
                   size="sm"
                   isLoading={busy === "publish"}
-                  onClick={() => run("publish", () => api(`/api/admin/national-exams/${id}`, json("PATCH", { action: "publish" })), "Published to students.")}
+                  onClick={() =>
+                    (flagged === 0 ||
+                      window.confirm(`${flagged} question(s) are still marked to check, including AI-suggested answers. Publish anyway?`)) &&
+                    run("publish", () => api(`/api/admin/national-exams/${id}`, json("PATCH", { action: "publish" })), "Published to students.")
+                  }
                 >
                   Publish
                 </Button>
@@ -198,7 +207,10 @@ export default function AdminNationalExamReviewPage() {
           {exam.status === "FAILED" && <p className="text-sm text-error">{exam.extractionError}</p>}
           {exam.status === "EXTRACTING" && (
             <p className="flex items-center gap-2 text-sm text-text-secondary">
-              <Spinner size="sm" className="text-primary" /> Reading the paper and its answers. This page refreshes on its own.
+              <Spinner size="sm" className="text-primary" />
+              {stuck
+                ? "This reading seems to have stopped (the server may have restarted). Use Re-read PDF to start it again."
+                : "Reading the paper and its answers. This page refreshes on its own."}
             </p>
           )}
 

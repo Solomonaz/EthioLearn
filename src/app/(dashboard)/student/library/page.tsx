@@ -67,6 +67,7 @@ export default function LibraryPage() {
                           <BookOpen className="h-10 w-10 text-primary" />
                         </div>
                         <p className="font-semibold text-text-primary">{b.subject}</p>
+                        <p className="line-clamp-2 text-xs text-text-secondary">{b.title}</p>
                         <p className="text-xs text-text-secondary">{t("grade", { grade: b.grade })}</p>
                         {b.readerFileSize ? (
                           <p className="mt-auto text-xs text-text-secondary">{(b.readerFileSize / 1024 / 1024).toFixed(1)} MB</p>
