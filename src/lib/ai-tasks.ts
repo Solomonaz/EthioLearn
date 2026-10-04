@@ -40,7 +40,8 @@ export type AiTask =
   | "factual-tiebreak"
   | "tutor-chat"
   | "query-rewrite"
-  | "teacher-assistant";
+  | "teacher-assistant"
+  | "exam-extraction";
 
 /**
  * One step of a task's chain.
@@ -184,6 +185,16 @@ export const AI_TASKS: TaskMeta[] = [
       { provider: "OPENROUTER", model: "openai/gpt-6-luna" },
       ...["GEMINI", "GROQ", "NVIDIA"].map((p) => step(p as AiProvider)),
     ],
+  },
+  {
+    id: "exam-extraction",
+    label: "National exam extraction",
+    description: "Reads uploaded past national exam papers into questions, options and answers for admin review.",
+    supported: ["GEMINI", "OPENROUTER", "GROQ"],
+    geminiSlot: "chat",
+    // Long, messy input (OCR'd papers): Gemini's long context first.
+    defaultChain: [step("GEMINI"), { provider: "OPENROUTER", model: "openai/gpt-6-luna" }, step("GROQ")],
+    note: "Runs only when an admin uploads a paper. Every extracted question is reviewed before publishing.",
   },
 ];
 

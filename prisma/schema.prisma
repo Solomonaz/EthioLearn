@@ -243,6 +243,7 @@ model User {
 
   // Relations
   quizzes              Quiz[]
+  nationalExamAttempts NationalExamAttempt[]
   hostedGameRooms      GameRoom[]        @relation("GameHost")
   gameParticipations   GamePlayer[]
   redemptions          Redemption[]
@@ -605,6 +606,10 @@ model Textbook {
   sourceFile       String?
   sourceFileName   String?
   sourceFileSize   Int?
+  /// PDF students open in the reader (Library). Kept separately from
+  /// sourceFile, which is a pending request's file and is deleted once ingested.
+  readerFile       String?
+  readerFileSize   Int?
   /// Why post-approval extraction / chapter detection failed, for a retry.
   processingError  String?
   chapterCount     Int              @default(0)
@@ -1401,4 +1406,91 @@ model TeacherAiUse {
 
   @@index([teacherId, createdAt])
   @@map("teacher_ai_uses")
+}
+
+// ─── Grade 12 national exam (past papers) ─────────────────────────────────
+// Real past ESSLCE papers uploaded by the super admin. The PDF is read and the
+// questions extracted by AI into REVIEW; nothing reaches students until the
+// admin has checked the questions and answers and published the paper.
+// Practice only: no points, no battles.
+enum NationalExamStatus {
+  EXTRACTING
+  REVIEW
+  PUBLISHED
+  FAILED
+}
+
+enum NationalExamMode {
+  EXAM
+  PRACTICE
+}
+
+model NationalExam {
+  id              String             @id @default(cuid())
+  subject         String
+  /// As printed on the paper, e.g. "2016 E.C." — kept as text because papers
+  /// are labelled by Ethiopian calendar year, sometimes with a session.
+  yearLabel       String
+  /// NATURAL, SOCIAL, or null when the paper is common to both streams.
+  stream          String?
+  durationMinutes Int                @default(120)
+  status          NationalExamStatus @default(EXTRACTING)
+  sourceFile      String?
+  sourceFileName  String?
+  extractionError String?
+  questionCount   Int                @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  questions NationalExamQuestion[]
+  attempts  NationalExamAttempt[]
+
+  @@index([status])
+  @@map("national_exams")
+}
+
+model NationalExamQuestion {
+  id            String   @id @default(cuid())
+  number        Int
+  questionText  String   @db.Text
+  /// Option texts in printed order (A, B, C, D…).
+  options       Json     @default("[]")
+  /// The correct option's text, or null while unknown.
+  correctAnswer String?
+  explanation   String?  @db.Text
+  /// Figure the question refers to, stored under UPLOAD_ROOT/exam-images.
+  imageFile     String?
+  /// Set by extraction when the answer was not in the paper's key, or the
+  /// question mentions a figure; cleared by the admin after checking.
+  needsReview   Boolean  @default(false)
+  reviewNote    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  examId String
+  exam   NationalExam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, number])
+  @@map("national_exam_questions")
+}
+
+model NationalExamAttempt {
+  id             String           @id @default(cuid())
+  mode           NationalExamMode
+  /// { [questionId]: chosen option text }
+  answers        Json             @default("{}")
+  correctCount   Int              @default(0)
+  totalQuestions Int              @default(0)
+  startedAt      DateTime         @default(now())
+  completedAt    DateTime?
+
+  examId    String
+  exam      NationalExam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([examId])
+  @@map("national_exam_attempts")
 }

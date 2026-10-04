@@ -39,6 +39,7 @@ import {
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
+  FileCheck2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
@@ -84,6 +85,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   const studentNavItems: NavItem[] = [
     { labelKey: "dashboard",   href: "/student",                icon: Home,          exact: true },
     { labelKey: "quiz",        href: "/student/quiz",           icon: BookOpen },
+    { labelKey: "nationalExam", href: "/student/national-exam", icon: FileCheck2 },
+    { labelKey: "library",     href: "/student/library",        icon: Library },
     { labelKey: "myWork",      href: "/student/activities",     icon: ClipboardList },
     { labelKey: "grapher",     href: "/student/grapher",        icon: LineChart },
     { labelKey: "geometry",    href: "/student/geometry",       icon: Boxes },
@@ -115,6 +118,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "textbooks",  href: "/admin/textbooks",    icon: Library },
     { labelKey: "subjects",   href: "/admin/subjects",     icon: BookMarked },
     { labelKey: "questions",  href: "/admin/questions",    icon: HelpCircle },
+    { labelKey: "nationalExams", href: "/admin/national-exams", icon: FileCheck2 },
     { labelKey: "rewards",    href: "/admin/rewards",      icon: Gift },
     { labelKey: "pricing",    href: "/admin/pricing",      icon: CreditCard },
     { labelKey: "payments",   href: "/admin/payments",     icon: Receipt },

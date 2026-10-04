@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert, ArrowUp, ArrowDown, Merge, ChevronRight, ScanEye, Library, School, Clock, Download, Send, RotateCw, Ban } from "lucide-react";
+import { BookOpen, Trash2, Plus, FileJson, FileText, ChevronDown, ChevronUp, XCircle, AlertCircle, CheckCircle, Sparkles, Check, X, Upload, Edit3, Cpu, TriangleAlert, ArrowUp, ArrowDown, Merge, ChevronRight, ScanEye, Library, School, Clock, Download, Send, RotateCw, Ban, BookOpenText } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -38,6 +39,9 @@ interface TextbookListItem {
   hasSourceFile: boolean;
   sourceFileName: string | null;
   sourceFileSize: number | null;
+  /** PDF students read in the Library. */
+  hasReaderFile: boolean;
+  readerFileSize: number | null;
   processingError: string | null;
   updatedAt: string;
 }
@@ -1101,6 +1105,14 @@ export default function AdminTextbooksPage() {
 
                           {textbook.canManage ? (
                           <div className="flex shrink-0 items-center gap-2">
+                            {textbook.approvalStatus === "APPROVED" && !isConfirming && (
+                              <ReaderPdfButton
+                                id={textbook.id}
+                                hasFile={textbook.hasReaderFile}
+                                size={textbook.readerFileSize}
+                                onDone={() => fetchTextbooks({ silent: true })}
+                              />
+                            )}
                             {/* Process Content Button */}
                             {textbook.hasContent && textbook.approvalStatus === "APPROVED" && !isConfirming && (
                               <button
@@ -2431,6 +2443,80 @@ function JsonExample() {
           {JSON_EXAMPLE}
         </pre>
       )}
+    </div>
+  );
+}
+
+/**
+ * Attach / replace / remove the PDF students read in the Library. Independent
+ * of processing: it never touches chapters, questions or embeddings.
+ */
+function ReaderPdfButton({ id, hasFile, size, onDone }: { id: string; hasFile: boolean; size: number | null; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/admin/textbooks/${id}/reader`, { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      toast.success("Students can now read this book in the Library.");
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm("Remove this book from the student Library?")) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/textbooks/${id}/reader`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Remove failed");
+      toast.success("Removed from the Library.");
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Remove failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        className={cn(
+          "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+          hasFile ? "bg-green-50 text-success hover:bg-green-100" : "text-text-muted hover:bg-primary/10 hover:text-primary",
+        )}
+        title={hasFile ? "Replace the PDF students read in the Library" : "Upload a PDF so students can read this book in the Library"}
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+      >
+        {busy ? <Spinner size="sm" /> : <BookOpenText className="h-4 w-4" />}
+        {hasFile ? `In Library${size ? ` · ${formatBytes(size)}` : ""}` : "Add to Library"}
+      </button>
+      {hasFile && !busy && (
+        <button className="rounded p-1 text-text-muted hover:text-red-600" title="Remove from Library" onClick={remove}>
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) upload(f);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }

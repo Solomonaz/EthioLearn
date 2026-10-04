@@ -59,6 +59,8 @@ export type UsageFeature =
   /** Rewrites a tutor follow-up into a search query before retrieval. */
   | "query-rewrite"
   | "teacher-assistant"
+  /** Reading uploaded national exam papers into questions. */
+  | "exam-extraction"
   | "vision-graph"
   | "vision-equation"
   | "vision-solid"

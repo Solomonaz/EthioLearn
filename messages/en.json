@@ -183,7 +183,10 @@
     "activities": "Activities",
     "myWork": "My Work",
     "assistant": "AI Assistant",
-    "myMaterials": "Materials"
+    "myMaterials": "Materials",
+    "nationalExam": "National Exam",
+    "library": "Library",
+    "nationalExams": "National Exams"
   },
   "teacher": {
     "welcome": "Welcome, {name}",
@@ -885,5 +888,48 @@
     "aiAdaptiveBanner": "AI Adaptive Mode",
     "aiAdaptiveBannerDesc": "Your difficulty will be calibrated automatically when the quiz starts.",
     "aiCalibratedLabel": "AI Calibrated:"
+  },
+  "library": {
+    "title": "Library",
+    "subtitle": "Read your textbooks right here in the app.",
+    "empty": "No books are available to read yet.",
+    "loadError": "Could not load the library. Please try again.",
+    "grade": "Grade {grade}",
+    "back": "Library"
+  },
+  "nationalExam": {
+    "title": "Grade 12 National Exam",
+    "subtitle": "Work through real past national exam papers. Exam mode is timed like the real exam; practice mode shows the answer after each question. No points — just practice.",
+    "stream_ALL": "All",
+    "stream_NATURAL": "Natural",
+    "stream_SOCIAL": "Social",
+    "empty": "No past papers have been published yet.",
+    "loadError": "Could not load. Please try again.",
+    "best": "Best {percent}%",
+    "meta": "{questions} questions · {minutes} min",
+    "attempts": "{count, plural, one {# attempt} other {# attempts}}",
+    "examMode": "Exam mode",
+    "practiceMode": "Practice mode",
+    "backToPapers": "Back to papers",
+    "timeUp": "Time is up — your paper was submitted.",
+    "answeredOf": "{answered} of {total} answered",
+    "submit": "Submit",
+    "finish": "Finish",
+    "questionN": "Question {n}",
+    "flag": "Flag",
+    "flagged": "Flagged",
+    "figureAlt": "Figure for question {n}",
+    "correct": "Correct!",
+    "incorrect": "Not quite.",
+    "previous": "Previous",
+    "next": "Next",
+    "questions": "Questions",
+    "confirmSubmit": "Submit your paper now?",
+    "confirmSubmitUnanswered": "You have {count} unanswered questions. Submit anyway?",
+    "scoreLine": "{correct} of {total} correct · {minutes} min",
+    "tryAgain": "Try again",
+    "filterAll": "All ({count})",
+    "filterWrong": "Wrong ({count})",
+    "filterUnanswered": "Unanswered ({count})"
   }
 }

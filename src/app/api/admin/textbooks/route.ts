@@ -46,6 +46,8 @@ export async function GET() {
       sourceFile: true,
       sourceFileName: true,
       sourceFileSize: true,
+      readerFile: true,
+      readerFileSize: true,
       processingError: true,
       updatedAt: true,
       uploadedBy: { select: { name: true } },
@@ -68,9 +70,10 @@ export async function GET() {
   })) as any;
 
   // Map to include hasContent flag without sending full content to client
-  const mapped = (textbooks as any[]).map(({ content, school, sourceFile, uploadedBy, ...rest }: any) => ({
+  const mapped = (textbooks as any[]).map(({ content, school, sourceFile, readerFile, uploadedBy, ...rest }: any) => ({
     ...rest,
     hasSourceFile: !!sourceFile,
+    hasReaderFile: !!readerFile,
     requestedBy: uploadedBy?.name ?? null,
     hasContent: !!content && content.length > 100,
     contentLength: content?.length ?? 0,

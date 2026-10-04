@@ -183,7 +183,10 @@
     "activities": "ተግባራት",
     "myWork": "ስራዎች",
     "assistant": "AI ረዳት",
-    "myMaterials": "የባት ትምህርቶች"
+    "myMaterials": "የባት ትምህርቶች",
+    "nationalExam": "ብሔራዊ ፈተና",
+    "library": "ቤተ-መጻሕፍት",
+    "nationalExams": "ብሔራዊ ፈተናዎች"
   },
   "teacher": {
     "welcome": "እንኳን ደህና መጡ፣ {name}",
@@ -885,5 +888,48 @@
     "aiAdaptiveBanner": "AI ተስማሚ ሁነታ",
     "aiAdaptiveBannerDesc": "ፈተናው ሲጀምር ዳርቻዎ ሰዓዊ ሆኖ ይወሰናል።",
     "aiCalibratedLabel": "AI ወስኗል:"
+  },
+  "library": {
+    "title": "ቤተ-መጻሕፍት",
+    "subtitle": "የመማሪያ መጻሕፍትዎን እዚሁ በመተግበሪያው ውስጥ ያንብቡ።",
+    "empty": "ለማንበብ የተዘጋጁ መጻሕፍት ገና የሉም።",
+    "loadError": "ቤተ-መጻሕፍቱን መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
+    "grade": "{grade}ኛ ክፍል",
+    "back": "ቤተ-መጻሕፍት"
+  },
+  "nationalExam": {
+    "title": "የ12ኛ ክፍል ብሔራዊ ፈተና",
+    "subtitle": "ያለፉ ትክክለኛ የብሔራዊ ፈተና ወረቀቶችን ይለማመዱ። የፈተና ሁነታ እንደ እውነተኛው ፈተና ጊዜ ይቆጠርለታል፤ የልምምድ ሁነታ ከእያንዳንዱ ጥያቄ በኋላ መልሱን ያሳያል። ነጥብ የለውም — ልምምድ ብቻ።",
+    "stream_ALL": "ሁሉም",
+    "stream_NATURAL": "የተፈጥሮ",
+    "stream_SOCIAL": "የማኅበራዊ",
+    "empty": "እስካሁን የታተሙ ያለፉ ፈተናዎች የሉም።",
+    "loadError": "መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
+    "best": "ምርጥ {percent}%",
+    "meta": "{questions} ጥያቄዎች · {minutes} ደቂቃ",
+    "attempts": "{count} ሙከራ",
+    "examMode": "የፈተና ሁነታ",
+    "practiceMode": "የልምምድ ሁነታ",
+    "backToPapers": "ወደ ፈተናዎቹ ተመለስ",
+    "timeUp": "ጊዜው አልቋል — ወረቀትዎ ገብቷል።",
+    "answeredOf": "ከ{total} {answered} ተመልሰዋል",
+    "submit": "አስገባ",
+    "finish": "ጨርስ",
+    "questionN": "ጥያቄ {n}",
+    "flag": "ምልክት አድርግ",
+    "flagged": "ምልክት ተደርጓል",
+    "figureAlt": "የጥያቄ {n} ምስል",
+    "correct": "ትክክል!",
+    "incorrect": "ትክክል አይደለም።",
+    "previous": "ቀዳሚ",
+    "next": "ቀጣይ",
+    "questions": "ጥያቄዎች",
+    "confirmSubmit": "ወረቀትዎን አሁን ያስገቡ?",
+    "confirmSubmitUnanswered": "{count} ያልተመለሱ ጥያቄዎች አሉ። ቢሆንም ያስገቡ?",
+    "scoreLine": "ከ{total} {correct} ትክክል · {minutes} ደቂቃ",
+    "tryAgain": "እንደገና ሞክር",
+    "filterAll": "ሁሉም ({count})",
+    "filterWrong": "የተሳሳቱ ({count})",
+    "filterUnanswered": "ያልተመለሱ ({count})"
   }
 }

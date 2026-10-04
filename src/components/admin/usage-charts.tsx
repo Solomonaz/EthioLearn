@@ -54,6 +54,7 @@ const FEATURE_LABELS: Record<string, string> = {
   "bloom-tagging": "Bloom tagging",
   "tutor-chat": "AI tutor chat",
   "teacher-assistant": "Teacher assistant",
+  "exam-extraction": "National exam extraction",
   "query-rewrite": "Tutor search rewrite",
   "vision-graph": "Graph reading (vision)",
   "vision-equation": "Equation reading (vision)",

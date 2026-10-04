@@ -131,7 +131,21 @@ async function extractFromPdf(buffer: Buffer): Promise<ExtractionResult> {
       throw error;
     }
 
-    // pdfParse itself failed — try OCR as last resort
+    // pdfParse bundles an old pdf.js that rejects some valid files (seen:
+    // "bad XRef entry" on ReportLab output). The current pdf.js usually reads
+    // them, so try it before paying for OCR.
+    try {
+      const laidOut = await extractPdfTextWithLayout(buffer);
+      const pageCount = laidOut?.pageCount ?? 1;
+      if (laidOut && laidOut.text.trim().length / Math.max(1, pageCount) >= MIN_CHARS_PER_PAGE) {
+        console.log("[Extract] pdfParse failed — read with the current pdf.js instead.");
+        return { text: laidOut.text, pageCount, wordCount: laidOut.text.split(/\s+/).length, usedOcr: false };
+      }
+    } catch {
+      /* fall through to OCR */
+    }
+
+    // Both text readers failed — try OCR as last resort
     console.log("[Extract] pdfParse failed — attempting OCR fallback...");
     try {
       return await extractFromPdfWithOcr(buffer);
