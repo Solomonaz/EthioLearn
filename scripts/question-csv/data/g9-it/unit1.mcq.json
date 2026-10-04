@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What is another name for a folder in a computer?",
+  "options": [
+   "Directory",
+   "Drive",
+   "Driver",
+   "Desktop icon"
+  ],
+  "correctAnswer": "Directory",
+  "difficulty": "EASY",
+  "explanation": "A folder, also called a directory, is a container used to store related files together. A drive is a hardware component that stores data, not another name for a folder."
+ },
+ {
+  "questionText": "What is a folder that is contained inside another folder called?",
+  "options": [
+   "A subfolder",
+   "A shortcut",
+   "A root drive",
+   "A file extension"
+  ],
+  "correctAnswer": "A subfolder",
+  "difficulty": "EASY",
+  "explanation": "A folder can contain another folder inside it, and a folder contained in another folder is called a subfolder. A shortcut is an icon that takes you to another place quickly."
+ },
+ {
+  "questionText": "Which keyboard shortcut opens File Explorer in Windows?",
+  "options": [
+   "Windows key + E",
+   "Ctrl + E",
+   "Alt + F4",
+   "Windows key + D"
+  ],
+  "correctAnswer": "Windows key + E",
+  "difficulty": "EASY",
+  "explanation": "You can use the Windows key + E keyboard shortcut to open File Explorer; it can also be opened from the taskbar icon or the Start menu."
+ },
+ {
+  "questionText": "Which key renames a selected file or folder?",
+  "options": [
+   "F2",
+   "F5",
+   "Delete",
+   "Esc"
+  ],
+  "correctAnswer": "F2",
+  "difficulty": "EASY",
+  "explanation": "After highlighting a file or folder, pressing the F2 key lets you rename it. The Delete key moves it to the Recycle Bin instead."
+ },
+ {
+  "questionText": "What file extension does Notepad give to a plain text file?",
+  "options": [
+   ".txt",
+   ".docx",
+   ".pdf",
+   ".pptx"
+  ],
+  "correctAnswer": ".txt",
+  "difficulty": "EASY",
+  "explanation": "Notepad saves any text file with the .txt extension, meaning no special formatting or fonts. .docx is used by word processors such as Microsoft Word."
+ },
+ {
+  "questionText": "Which application is the default image editing program in the Windows operating system?",
+  "options": [
+   "Microsoft Paint",
+   "Microsoft PowerPoint",
+   "Notepad",
+   "LibreOffice Writer"
+  ],
+  "correctAnswer": "Microsoft Paint",
+  "difficulty": "EASY",
+  "explanation": "Microsoft Paint is the default image editing application in Windows and can be used to simply edit an image file. Notepad is a text editor."
+ },
+ {
+  "questionText": "Which drive letter usually designates the hard disk drive?",
+  "options": [
+   "C:",
+   "A:",
+   "D:",
+   "G:"
+  ],
+  "correctAnswer": "C:",
+  "difficulty": "EASY",
+  "explanation": "A hard disk drive (hard disk or fixed disk) is usually designated as the C: drive, while a CD/DVD drive is usually D: or G:."
+ },
+ {
+  "questionText": "Where do deleted files go when they are deleted with only the Delete key?",
+  "options": [
+   "The Recycle Bin",
+   "The Quick Access area",
+   "The Downloads folder",
+   "The Documents folder"
+  ],
+  "correctAnswer": "The Recycle Bin",
+  "difficulty": "EASY",
+  "explanation": "Files deleted with the Delete key go to the Recycle Bin, where they can be restored unless permanently deleted. Quick Access only lists frequently used folders."
+ },
+ {
+  "questionText": "Which shortcut key cuts selected files so that they can be moved?",
+  "options": [
+   "Ctrl+X",
+   "Ctrl+C",
+   "Ctrl+V",
+   "Ctrl+Z"
+  ],
+  "correctAnswer": "Ctrl+X",
+  "difficulty": "EASY",
+  "explanation": "Ctrl+X cuts the selected files to a temporary clipboard and Ctrl+V pastes them at the destination, which moves them. Ctrl+C copies instead of cutting."
+ },
+ {
+  "questionText": "Which section of the Navigation pane shows all the drives mounted on the computer?",
+  "options": [
+   "This PC",
+   "Quick Access",
+   "OneDrive",
+   "Network"
+  ],
+  "correctAnswer": "This PC",
+  "difficulty": "EASY",
+  "explanation": "The This PC section of the Navigation pane contains all drives mounted on the computer. Network lets you see networked PCs."
+ },
+ {
+  "questionText": "How does a file differ from a folder?",
+  "options": [
+   "A file holds related data; a folder holds files",
+   "A file can hold other folders, while a folder holds only data",
+   "A file never has an extension, while a folder always has one",
+   "A file is a hardware part, while a folder is a software program"
+  ],
+  "correctAnswer": "A file holds related data; a folder holds files",
+  "difficulty": "MEDIUM",
+  "explanation": "A file is a collection of interrelated data, whereas a folder is a container used to store files and subfolders. Files have extensions to identify their types, but folders do not."
+ },
+ {
+  "questionText": "Why do folders allow two files to have the same name?",
+  "options": [
+   "Each file can sit in a different folder",
+   "Windows adds a hidden code to every name",
+   "Files with the same name merge into one",
+   "Folders store files without any names"
+  ],
+  "correctAnswer": "Each file can sit in a different folder",
+  "difficulty": "MEDIUM",
+  "explanation": "Folders allow more than one file with the same name, such as My-letter.doc in My Documents and another in Letter collection. If all files were in one place, every file would need a unique name."
+ },
+ {
+  "questionText": "StudentMarkList.pdf is copied into the same folder. What could the copy be named?",
+  "options": [
+   "StudentMarkList - Copy.pdf",
+   "StudentMarkList.pdf.pdf",
+   "Copy of StudentMarkList.pdf",
+   "StudentMarkList.copy"
+  ],
+  "correctAnswer": "StudentMarkList - Copy.pdf",
+  "difficulty": "MEDIUM",
+  "explanation": "A file name must be unique, so a number such as StudentMarkList (1).pdf or \"- Copy\" is appended to the copied file's name in the same folder. The extension stays .pdf."
+ },
+ {
+  "questionText": "What is the difference between Save and Save As?",
+  "options": [
+   "Save updates the file; Save As saves to a new name or place",
+   "Save creates a new file, while Save As updates an existing one",
+   "Save stores only text, while Save As stores pictures too",
+   "Save works in Notepad, while Save As works only in Word"
+  ],
+  "correctAnswer": "Save updates the file; Save As saves to a new name or place",
+  "difficulty": "MEDIUM",
+  "explanation": "Save updates a previously saved file with new content, whereas Save As saves a new file or an existing file to a new location with the same or a different name."
+ },
+ {
+  "questionText": "Which part of File Explorer lets you preview an item, such as a photo, without opening it?",
+  "options": [
+   "The Preview/Details pane",
+   "The Status bar at the bottom",
+   "The Address bar",
+   "The Navigation pane"
+  ],
+  "correctAnswer": "The Preview/Details pane",
+  "difficulty": "MEDIUM",
+  "explanation": "The Preview/Details pane lets you quickly preview an item such as a photo without opening it; it is not open by default. The Status bar shows the number and size of items."
+ },
+ {
+  "questionText": "Which part of File Explorer shows the total number of items in a folder, the number selected and the total file size?",
+  "options": [
+   "The Status bar",
+   "The Ribbon",
+   "The Column headings",
+   "The Search box"
+  ],
+  "correctAnswer": "The Status bar",
+  "difficulty": "MEDIUM",
+  "explanation": "The Status bar displays information about a selected folder and its contents, such as the total number of items, the number selected and the total file size."
+ },
+ {
+  "questionText": "How can a folder be pinned to the Quick Access area?",
+  "options": [
+   "Right-click it and select Pin to Quick access",
+   "Press F2 on the folder and type Quick access",
+   "Drag the folder into the Recycle Bin",
+   "Open the folder and press Ctrl+V"
+  ],
+  "correctAnswer": "Right-click it and select Pin to Quick access",
+  "difficulty": "MEDIUM",
+  "explanation": "To add or pin a folder to the Quick Access area, right-click the folder name and select Pin to Quick access. F2 renames a selected item."
+ },
+ {
+  "questionText": "In the Windows 10 Navigation pane, what does a right-pointing triangle next to a folder name show?",
+  "options": [
+   "The folder has subfolders",
+   "The folder is empty",
+   "The folder is being deleted",
+   "The folder's subfolders are displayed"
+  ],
+  "correctAnswer": "The folder has subfolders",
+  "difficulty": "MEDIUM",
+  "explanation": "A right-pointing triangle means the folder has subfolders; no triangle means it has none, and a down-pointing triangle means its subfolders are currently displayed."
+ },
+ {
+  "questionText": "What happens when Shift + Delete is used on a file?",
+  "options": [
+   "It is deleted for good, skipping the Recycle Bin",
+   "The file is moved to the Recycle Bin and can be restored later",
+   "The file is copied to the clipboard ready to be pasted elsewhere",
+   "The file is hidden but stays in its folder"
+  ],
+  "correctAnswer": "It is deleted for good, skipping the Recycle Bin",
+  "difficulty": "MEDIUM",
+  "explanation": "Holding Shift while pressing Delete deletes the files permanently; they do not go to the Recycle Bin, so restoring them from there is not possible."
+ },
+ {
+  "questionText": "What happens to the files inside a folder when that folder is deleted?",
+  "options": [
+   "All files and folders inside it are deleted too",
+   "The files are moved to the Desktop automatically",
+   "The files stay where they were without the folder",
+   "Only the empty subfolders inside it are deleted"
+  ],
+  "correctAnswer": "All files and folders inside it are deleted too",
+  "difficulty": "MEDIUM",
+  "explanation": "If you delete a folder or directory, all files and folders in that folder are deleted, which is why you should check that it is empty first."
+ },
+ {
+  "questionText": "How does Linux represent drives and folders, unlike Windows drive letters?",
+  "options": [
+   "As a tree whose root is a forward slash (/)",
+   "As a list of numbered drives starting from 0",
+   "As letters starting from A: for every drive",
+   "As separate windows for each storage device"
+  ],
+  "correctAnswer": "As a tree whose root is a forward slash (/)",
+  "difficulty": "MEDIUM",
+  "explanation": "Windows refers to drives by letters like C:, but Linux uses a tree structure starting from the root represented by a forward slash (/), with folders such as /home for users' files."
+ },
+ {
+  "questionText": "What is the difference between a drive and a driver?",
+  "options": [
+   "A drive stores data; a driver lets hardware talk to the OS",
+   "A drive is software that runs the printer, while a driver stores programs",
+   "A drive is removable, while a driver is always built into the computer",
+   "A drive and a driver are two names for the same storage device"
+  ],
+  "correctAnswer": "A drive stores data; a driver lets hardware talk to the OS",
+  "difficulty": "MEDIUM",
+  "explanation": "A drive typically refers to a hard drive or solid-state drive used to store the operating system, data and programs, while a driver is software code that lets hardware devices communicate with the operating system."
+ },
+ {
+  "questionText": "How does moving a file differ from copying it?",
+  "options": [
+   "Moving leaves only one copy, while copying makes a second copy",
+   "Moving makes a second copy, while copying leaves only one",
+   "Moving renames the file, while copying deletes the original one",
+   "Moving and copying both delete the file from its first place"
+  ],
+  "correctAnswer": "Moving leaves only one copy, while copying makes a second copy",
+  "difficulty": "HARD",
+  "explanation": "When copying files you get more than one copy on your computer, while moving keeps only one copy at the new location. Copy and paste is therefore not the same as moving."
+ },
+ {
+  "questionText": "When moving files by right-dragging them, what must you choose after releasing the mouse button?",
+  "options": [
+   "Move here",
+   "Copy here",
+   "Create shortcuts here",
+   "Paste here"
+  ],
+  "correctAnswer": "Move here",
+  "difficulty": "HARD",
+  "explanation": "With right-button drag-and-drop, a menu appears when you release the button, and you select Move here to move the files. Copy here would leave the originals in place."
+ },
+ {
+  "questionText": "Several files are selected and renamed at once by pressing F2 and typing test. What names do they get?",
+  "options": [
+   "test, test (1), test (2) and so on",
+   "test1, test2, test3 and so on",
+   "test-a, test-b, test-c and so on",
+   "All of them get the identical name test"
+  ],
+  "correctAnswer": "test, test (1), test (2) and so on",
+  "difficulty": "HARD",
+  "explanation": "Selecting several files and pressing F2 to type test renames them to test, test (1), test (2), test (3), and so on, keeping every name unique."
+ },
+ {
+  "questionText": "While renaming by clicking a selected file name a second time, why does the file sometimes open instead?",
+  "options": [
+   "The second click came too fast and acted as a double-click",
+   "The file is locked because it is stored on the C: drive",
+   "The F2 key was pressed instead of the mouse button",
+   "Renaming by clicking only works for folders and never for files"
+  ],
+  "correctAnswer": "The second click came too fast and acted as a double-click",
+  "difficulty": "HARD",
+  "explanation": "In this method you highlight the file, wait a few seconds and click the name again; if you do not wait long enough and click too fast, the file opens instead of allowing you to rename it."
+ },
+ {
+  "questionText": "Why should a flash drive be disconnected with Eject before it is pulled out of the USB port?",
+  "options": [
+   "To avoid damaging files on the drive",
+   "To rename the flash drive automatically",
+   "To copy its files to the C: drive",
+   "To delete its temporary files"
+  ],
+  "correctAnswer": "To avoid damaging files on the drive",
+  "difficulty": "HARD",
+  "explanation": "You must make sure the flash drive is disconnected properly with Disconnect or Eject to avoid damaging files on the drive, and only then remove it from the USB port."
+ },
+ {
+  "questionText": "Which search method lets you find a file on one specific drive?",
+  "options": [
+   "Click the drive under This PC, then search there",
+   "Press the Windows key and type the drive letter followed by F2",
+   "Open the Recycle Bin and sort the files by their drive letter",
+   "Open Notepad and use the Save As window to look for the file"
+  ],
+  "correctAnswer": "Click the drive under This PC, then search there",
+  "difficulty": "HARD",
+  "explanation": "To find a file on a specific drive, click the drive under Computer or This PC in the Navigation pane, then enter the file name in the Search field; you do not need the full name."
+ },
+ {
+  "questionText": "Why do you need the right permissions to rename some files and folders?",
+  "options": [
+   "It needs rights to the item, sometimes admin rights",
+   "Renaming always deletes the item's content, so it is restricted",
+   "Only files on removable drives can ever be renamed",
+   "Renaming moves the item to another drive, which needs a password"
+  ],
+  "correctAnswer": "It needs rights to the item, sometimes admin rights",
+  "difficulty": "HARD",
+  "explanation": "You must have rights or permissions to a file, folder or directory to rename it, and in some cases administrator privileges. Renaming does not remove a file's content."
+ },
+ {
+  "questionText": "Which browsers put downloaded files by default in the Download folder reached from Quick Access?",
+  "options": [
+   "Internet Explorer, Microsoft Edge and Chrome",
+   "Notepad, WordPad and the Microsoft Paint program",
+   "PowerPoint, Excel and Microsoft Word",
+   "File Explorer, This PC and OneDrive"
+  ],
+  "correctAnswer": "Internet Explorer, Microsoft Edge and Chrome",
+  "difficulty": "HARD",
+  "explanation": "Browsers such as Internet Explorer, Microsoft Edge and Chrome put all files downloaded from the Internet in the Download folder by default, which can be opened from Quick Access."
+ }
+]

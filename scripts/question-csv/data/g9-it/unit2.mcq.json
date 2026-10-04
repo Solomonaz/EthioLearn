@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What are the four basic elements that make up every data network?",
+  "options": [
+   "Hardware, software, protocols and medium",
+   "Computers, printers, scanners and security cameras",
+   "Bus, star, ring and mesh",
+   "PAN, LAN, MAN and WAN"
+  ],
+  "correctAnswer": "Hardware, software, protocols and medium",
+  "difficulty": "EASY",
+  "explanation": "Networks are comprised of four basic elements: hardware, network software, protocols and connection medium, and cannot function without them. Bus, star, ring and mesh are topologies."
+ },
+ {
+  "questionText": "What are end devices that send or receive data over a network also called?",
+  "options": [
+   "Hosts",
+   "Routers",
+   "Repeaters",
+   "Protocols"
+  ],
+  "correctAnswer": "Hosts",
+  "difficulty": "EASY",
+  "explanation": "End devices, also called hosts, are devices used to send or receive data over the network, such as computers, network printers and mobile devices. Routers are intermediary devices."
+ },
+ {
+  "questionText": "Which hardware component connects a computer to a network and has a slot for a network cable?",
+  "options": [
+   "Network Interface Card (NIC)",
+   "Wireless access point (WAP)",
+   "Repeater",
+   "Router"
+  ],
+  "correctAnswer": "Network Interface Card (NIC)",
+  "difficulty": "EASY",
+  "explanation": "A Network Interface Card (NIC) is a hardware component that connects a computer to a network; it comes as a plug-in card or is built into the system board and has a slot for a cable."
+ },
+ {
+  "questionText": "What is the smallest type of network by size, organized around one person?",
+  "options": [
+   "Personal area network (PAN)",
+   "Local area network (LAN)",
+   "Metropolitan area network (MAN)",
+   "Wide area network (WAN)"
+  ],
+  "correctAnswer": "Personal area network (PAN)",
+  "difficulty": "EASY",
+  "explanation": "The smallest network is the personal area network (PAN), meant for one person, such as a Bluetooth network linking a computer with its peripherals. LAN, MAN and WAN are progressively larger."
+ },
+ {
+  "questionText": "What is the best-known example of a public wide area network (WAN)?",
+  "options": [
+   "The Internet",
+   "A school computer laboratory",
+   "A Bluetooth headset link",
+   "A bank's single branch office"
+  ],
+  "correctAnswer": "The Internet",
+  "difficulty": "EASY",
+  "explanation": "A WAN occupies a very large area such as a country or the world, and the Internet is the best-known example of a public WAN. A school laboratory is a LAN."
+ },
+ {
+  "questionText": "In which topology is each node connected to every other node by direct links?",
+  "options": [
+   "Mesh topology",
+   "Bus topology",
+   "Star topology",
+   "Ring topology"
+  ],
+  "correctAnswer": "Mesh topology",
+  "difficulty": "EASY",
+  "explanation": "In mesh topology, also called complete topology, each node is connected to every other node by direct links. In star topology every device links only to a central switch."
+ },
+ {
+  "questionText": "What is the most common copper cable used in networks today?",
+  "options": [
+   "Unshielded twisted-pair (UTP)",
+   "Multimode fiber optic cable",
+   "Coaxial television cable",
+   "Telephone extension cord"
+  ],
+  "correctAnswer": "Unshielded twisted-pair (UTP)",
+  "difficulty": "EASY",
+  "explanation": "The most common copper cable used in networks is unshielded twisted-pair (UTP), which uses electric signals over a maximum of 100 meters. Fiber optic cable uses light instead."
+ },
+ {
+  "questionText": "What is another name for a peer-to-peer network?",
+  "options": [
+   "Workgroup",
+   "Domain",
+   "Internetwork",
+   "Backbone"
+  ],
+  "correctAnswer": "Workgroup",
+  "difficulty": "EASY",
+  "explanation": "A peer-to-peer network is also called a workgroup, and there is no hierarchy among its computers. A backbone is the cable in a bus topology."
+ },
+ {
+  "questionText": "What is a protocol in networking?",
+  "options": [
+   "A set of rules that governs data communication",
+   "A cable that carries signals between devices",
+   "A device that boosts a weak network signal",
+   "A table that lists the best routes to networks"
+  ],
+  "correctAnswer": "A set of rules that governs data communication",
+  "difficulty": "EASY",
+  "explanation": "In networking, a protocol is a set of rules that governs data communications, which all devices must follow to interact. A device that boosts weak signals is a repeater."
+ },
+ {
+  "questionText": "Which company is named as an example of an Internet service provider (ISP) connecting home networks to the global network?",
+  "options": [
+   "Ethio-telecom",
+   "Ethiopian Airlines",
+   "INSA",
+   "Hawassa University"
+  ],
+  "correctAnswer": "Ethio-telecom",
+  "difficulty": "EASY",
+  "explanation": "The central network device at home is connected to a global network through an Internet service provider such as Ethio-telecom. INSA is the information network security agency, not an ISP."
+ },
+ {
+  "questionText": "What does a repeater do in a network?",
+  "options": [
+   "It regenerates a weak signal to extend reach",
+   "It chooses the best route between two different networks",
+   "It connects wireless devices to a wired network",
+   "It stores shared files for every user on the network"
+  ],
+  "correctAnswer": "It regenerates a weak signal to extend reach",
+  "difficulty": "MEDIUM",
+  "explanation": "Signals become weak after travelling a long distance; a repeater refreshes or regenerates the weak signal so a network segment can extend beyond its distance limit. Choosing routes is the router's job."
+ },
+ {
+  "questionText": "Why is a switch more intelligent than a hub?",
+  "options": [
+   "It sends packets only to the destination device",
+   "It sends every packet it receives to all connected computers",
+   "It regenerates weak signals over long cable distances",
+   "It connects dissimilar networks using a routing table"
+  ],
+  "correctAnswer": "It sends packets only to the destination device",
+  "difficulty": "MEDIUM",
+  "explanation": "A switch learns the network and forwards packets to the specific destination using a table of physical addresses and port numbers, while a hub broadcasts all packets to all computers except the sender."
+ },
+ {
+  "questionText": "Which table does a router use to select the best route to a destination network?",
+  "options": [
+   "A routing table",
+   "A physical address table",
+   "A share-level security table",
+   "A file allocation table"
+  ],
+  "correctAnswer": "A routing table",
+  "difficulty": "MEDIUM",
+  "explanation": "A router uses a routing table, which contains destination network fields and router interface numbers, to select the best route. A switch uses a table of physical addresses and port numbers."
+ },
+ {
+  "questionText": "A computer sends a message to a computer on a different network segment connected to another switch. Which device handles this case?",
+  "options": [
+   "The router",
+   "The hub",
+   "The repeater",
+   "The network card"
+  ],
+  "correctAnswer": "The router",
+  "difficulty": "MEDIUM",
+  "explanation": "The router usually works when a computer in one network segment sends to another network connected to a different switch, selecting the best route; messages within one switch's network do not need it."
+ },
+ {
+  "questionText": "How does fiber optic cable compare with copper cable?",
+  "options": [
+   "It uses light and carries signals faster and further",
+   "It uses electricity and is limited to 100 meters",
+   "It uses radio waves and needs no physical cable",
+   "It uses infrared and only works inside one room"
+  ],
+  "correctAnswer": "It uses light and carries signals faster and further",
+  "difficulty": "MEDIUM",
+  "explanation": "Fiber optic cable uses light to transmit signals at faster speed and over longer distances than copper cable, which uses electric signals up to 100 meters for UTP."
+ },
+ {
+  "questionText": "Which kind of communication medium is also called unguided or unbounded media?",
+  "options": [
+   "Wireless medium",
+   "Wired medium",
+   "Fiber optic medium",
+   "Copper medium"
+  ],
+  "correctAnswer": "Wireless medium",
+  "difficulty": "MEDIUM",
+  "explanation": "Wireless medium, also called unguided or unbounded media, carries information through air, water or vacuum, e.g. radio waves and microwaves. Wired medium is called guided medium."
+ },
+ {
+  "questionText": "A bank connects three of its branches in one city using the city's telephone network. What type of network does this create?",
+  "options": [
+   "Metropolitan area network (MAN)",
+   "Personal area network (PAN)",
+   "Local area network (LAN)",
+   "Peer-to-peer workgroup network"
+  ],
+  "correctAnswer": "Metropolitan area network (MAN)",
+  "difficulty": "MEDIUM",
+  "explanation": "A MAN is designed to cover an entire city; a bank using the city's existing telephone network, such as Ethio-telecom's, to interconnect its offices creates a MAN."
+ },
+ {
+  "questionText": "What is a local area network that is entirely wireless called?",
+  "options": [
+   "A WLAN",
+   "A WAN",
+   "A MAN",
+   "A Bluetooth PAN"
+  ],
+  "correctAnswer": "A WLAN",
+  "difficulty": "MEDIUM",
+  "explanation": "If a LAN is entirely wireless, it is referred to as a wireless local area network (WLAN). A WAN covers a country or the world."
+ },
+ {
+  "questionText": "What is the major disadvantage of star topology?",
+  "options": [
+   "If the switch goes down, the whole network stops",
+   "Every node must be linked to every other node",
+   "Traffic can flow in only one direction",
+   "A break in the backbone cable disables the network"
+  ],
+  "correctAnswer": "If the switch goes down, the whole network stops",
+  "difficulty": "MEDIUM",
+  "explanation": "In a star topology all devices link only to a central switch, so if the switch goes down the entire network becomes defunct. One-direction traffic is a ring weakness."
+ },
+ {
+  "questionText": "Why is fault isolation relatively easy in a ring topology?",
+  "options": [
+   "A node getting no signal for long shows a fault",
+   "Every node has a direct link to every other node in the ring",
+   "All nodes connect to a central switch that reports failures",
+   "The backbone cable lights up at the place where it breaks"
+  ],
+  "correctAnswer": "A node getting no signal for long shows a fault",
+  "difficulty": "MEDIUM",
+  "explanation": "In a ring a signal normally circulates all the time, so a node not receiving any signal for a long time indicates a fault, making fault isolation relatively easy."
+ },
+ {
+  "questionText": "About how many computers can a peer-to-peer network usually have before it becomes very difficult to administer?",
+  "options": [
+   "10",
+   "100",
+   "1000",
+   "2"
+  ],
+  "correctAnswer": "10",
+  "difficulty": "MEDIUM",
+  "explanation": "The number of computers in a peer-to-peer network usually does not exceed 10; beyond this the network becomes very difficult to administer."
+ },
+ {
+  "questionText": "What is NAS in a network?",
+  "options": [
+   "Shared storage on a storage server",
+   "A cable type that uses light signals",
+   "A rule for addressing devices",
+   "A device that boosts weak signals"
+  ],
+  "correctAnswer": "Shared storage on a storage server",
+  "difficulty": "MEDIUM",
+  "explanation": "Storage devices such as hard disks shared on a storage server are called NAS (network attached storage) and can store and access vast amounts of information."
+ },
+ {
+  "questionText": "Why is security better on a client-server network than on a peer-to-peer network?",
+  "options": [
+   "Security is handled centrally by the server",
+   "Each computer protects its own data with trust",
+   "Clients share all of their resources with each other",
+   "No passwords are needed when there is a server"
+  ],
+  "correctAnswer": "Security is handled centrally by the server",
+  "difficulty": "HARD",
+  "explanation": "Security is enhanced on a client-server network because it is handled by the server, while peer-to-peer networks only provide share-level, trust-based security."
+ },
+ {
+  "questionText": "Why is it relatively difficult to add a new node to a bus topology?",
+  "options": [
+   "A new node changes the taps and their spacing",
+   "Each new node must be cabled to every other node directly",
+   "The central switch can only accept a fixed number of ports",
+   "Traffic in a bus flows in one direction around a closed loop"
+  ],
+  "correctAnswer": "A new node changes the taps and their spacing",
+  "difficulty": "HARD",
+  "explanation": "Adding a node changes the number of taps and the average distance between them, which are generally optimized for a bus length, making the bus inflexible. Linking every node to every other node describes mesh."
+ },
+ {
+  "questionText": "Why is mesh topology impractical for medium to large networks?",
+  "options": [
+   "The cable length makes it costly and complex",
+   "Its dedicated links cause heavy traffic congestion",
+   "A single broken link brings the whole network down",
+   "It needs a central switch that becomes a single point of failure"
+  ],
+  "correctAnswer": "The cable length makes it costly and complex",
+  "difficulty": "HARD",
+  "explanation": "Mesh has no congestion and is robust because each link is dedicated, but its main demerit is cable length and the resulting cost and complexity, which is impractical for medium to large networks."
+ },
+ {
+  "questionText": "Which statement correctly compares client-server and peer-to-peer networks?",
+  "options": [
+   "Client-server stresses sharing; P2P stresses connectivity",
+   "Client-server is cheaper; peer-to-peer is the more costly design",
+   "In client-server every node both requests and responds to services",
+   "Peer-to-peer becomes more stable as more peers are added"
+  ],
+  "correctAnswer": "Client-server stresses sharing; P2P stresses connectivity",
+  "difficulty": "HARD",
+  "explanation": "Client-server networks focus on information sharing and use a central server, while peer-to-peer networks focus on connectivity. Client-server is costlier, and peer-to-peer becomes less stable as peers increase."
+ },
+ {
+  "questionText": "What does a wireless access point (WAP) do?",
+  "options": [
+   "It links wireless devices with the wired network",
+   "It turns a weak wired signal into a strong signal over long distances",
+   "It selects the best path between two different wide area networks",
+   "It stores the routing table that the switch uses to send packets"
+  ],
+  "correctAnswer": "It links wireless devices with the wired network",
+  "difficulty": "HARD",
+  "explanation": "A WAP is an intermediary device that connects wireless communication devices to the network through Bluetooth and Wi-Fi, acting as an intermediary between wireless and wired devices."
+ },
+ {
+  "questionText": "What is always the backbone of a wireless network?",
+  "options": [
+   "A wired network",
+   "A Bluetooth network",
+   "A satellite link",
+   "A peer-to-peer workgroup"
+  ],
+  "correctAnswer": "A wired network",
+  "difficulty": "HARD",
+  "explanation": "Wireless devices connect through a wireless access point, and the backbone of a wireless network is always a wired network."
+ },
+ {
+  "questionText": "Which network disadvantage arises because a connected computer can be reached remotely?",
+  "options": [
+   "Vulnerabilities",
+   "Cost",
+   "Complexity",
+   "Sharing hardware"
+  ],
+  "correctAnswer": "Vulnerabilities",
+  "difficulty": "HARD",
+  "explanation": "When computers are connected they become accessible remotely, which can introduce new security issues or vulnerabilities for users, data, organizations and the country. Sharing hardware is an advantage."
+ },
+ {
+  "questionText": "How does an amplifier differ from a repeater?",
+  "options": [
+   "An amplifier boosts the noise along with the signal",
+   "An amplifier removes noise before resending the signal",
+   "An amplifier can only be used with fiber optic cables",
+   "An amplifier chooses the best route for each packet"
+  ],
+  "correctAnswer": "An amplifier boosts the noise along with the signal",
+  "difficulty": "HARD",
+  "explanation": "A repeater removes the noise that weakens the signal and regenerates a clean signal, while its analog version, the amplifier, amplifies not only the signal but also the noise."
+ }
+]

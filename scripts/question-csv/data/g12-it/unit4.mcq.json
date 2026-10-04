@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What does XSL do for an XML document?",
+  "options": [
+   "It transforms and renders it, as CSS styles HTML",
+   "It checks that every tag is properly nested",
+   "It declares the entities used in the document",
+   "It encodes the characters into binary form"
+  ],
+  "correctAnswer": "It transforms and renders it, as CSS styles HTML",
+  "difficulty": "EASY",
+  "explanation": "XSL is a style sheet for XML, as CSS is for HTML; it transforms and renders the XML document, as seen in the XSL Output view. Encoding characters into binary is set by the encoding in the XML declaration."
+ },
+ {
+  "questionText": "How many root elements can an XML document have?",
+  "options": [
+   "Exactly one",
+   "At least two",
+   "One per section",
+   "As many as needed"
+  ],
+  "correctAnswer": "Exactly one",
+  "difficulty": "EASY",
+  "explanation": "An XML document can have only one root element, which is the parent of all other elements, such as <people> in the athletes example."
+ },
+ {
+  "questionText": "What does DTD stand for in XML?",
+  "options": [
+   "Document Type Definition",
+   "Data Transfer Document Type",
+   "Dynamic Tag Declaration",
+   "Document Text Display"
+  ],
+  "correctAnswer": "Document Type Definition",
+  "difficulty": "EASY",
+  "explanation": "A Document Type Definition (DTD) defines the structure and the legal elements of an XML document, and an application can use it to check that XML data is valid."
+ },
+ {
+  "questionText": "Which is the correct syntax for a comment in XML?",
+  "options": [
+   "<!-- This is a comment -->",
+   "// This is a comment",
+   "<# This is a comment #>",
+   "/* This is a comment */"
+  ],
+  "correctAnswer": "<!-- This is a comment -->",
+  "difficulty": "EASY",
+  "explanation": "The syntax for a comment in XML is <!-- This is a comment -->, the same as in HTML; the XML parser ignores comments. The // and /* */ forms are comments in programming languages, not markup."
+ },
+ {
+  "questionText": "How many pre-defined entity references are there in XML?",
+  "options": [
+   "5",
+   "3",
+   "8",
+   "10"
+  ],
+  "correctAnswer": "5",
+  "difficulty": "EASY",
+  "explanation": "There are 5 pre-defined entity references in XML: &lt; (<), &gt; (>), &amp; (&), &apos; (') and &quot; (\")."
+ },
+ {
+  "questionText": "What does PCDATA stand for in a DTD such as <!ELEMENT first (#PCDATA)>?",
+  "options": [
+   "Parsed Character Data",
+   "Processed Code Data",
+   "Plain Content Data",
+   "Printed Character Data"
+  ],
+  "correctAnswer": "Parsed Character Data",
+  "difficulty": "EASY",
+  "explanation": "PCDATA stands for Parsed Character Data, the text found between the start tag and end tag of an XML element, such as Abebech."
+ },
+ {
+  "questionText": "Which top-level domain extension is meant for non-profit organizations?",
+  "options": [
+   ".org",
+   ".net",
+   ".com",
+   ".edu"
+  ],
+  "correctAnswer": ".org",
+  "difficulty": "EASY",
+  "explanation": "Common domain extensions include .com for commercial sites, .edu for educational institutions, .gov for government, .org for non-profit organizations, .mil for military and .net for network."
+ },
+ {
+  "questionText": "Which XML Notepad view shows an XML document after it has been transformed by a style sheet?",
+  "options": [
+   "XSL Output",
+   "Tree View",
+   "Page Source",
+   "Design View"
+  ],
+  "correctAnswer": "XSL Output",
+  "difficulty": "EASY",
+  "explanation": "XML Notepad shows a document in Tree View, which displays its structure, and XSL Output, which shows it transformed by an XSL style sheet. Page Source is the browser option for viewing raw code."
+ },
+ {
+  "questionText": "Which file does a web server return by default when a site's address is typed without a file name?",
+  "options": [
+   "index.html",
+   "home.css",
+   "main.js",
+   "default.xml"
+  ],
+  "correctAnswer": "index.html",
+  "difficulty": "EASY",
+  "explanation": "index.html contains the main home page, and web servers are set by default to return it when no file name is given, so moe.gov.et returns moe.gov.et/index.html. CSS and JS files hold styles and scripts."
+ },
+ {
+  "questionText": "Which website folder holds the code that adds interactive functionality, such as buttons that load data when clicked?",
+  "options": [
+   "The scripts folder",
+   "The images folder",
+   "The CSS folder",
+   "The pages subfolder"
+  ],
+  "correctAnswer": "The scripts folder",
+  "difficulty": "EASY",
+  "explanation": "The scripts folder contains all the JavaScript code used to add interactive functionality to the site. The CSS folder holds the code used to style the site."
+ },
+ {
+  "questionText": "What is the main purpose of XML?",
+  "options": [
+   "Storing and transferring data",
+   "Displaying data in a formatted layout",
+   "Styling web pages with colors and fonts",
+   "Adding interactive buttons to web pages"
+  ],
+  "correctAnswer": "Storing and transferring data",
+  "difficulty": "MEDIUM",
+  "explanation": "XML is designed to store data and is popularly used for the transfer of data; it describes structure, not presentation. Displaying formatted data is the purpose of HTML."
+ },
+ {
+  "questionText": "How do the tags used in XML differ from the tags used in HTML?",
+  "options": [
+   "XML tags are defined by the author to fit the document",
+   "XML tags are fixed and listed in a standard catalogue",
+   "XML uses the same predefined tags as HTML but in capitals",
+   "XML tags may only be used inside the HTML body section"
+  ],
+  "correctAnswer": "XML tags are defined by the author to fit the document",
+  "difficulty": "MEDIUM",
+  "explanation": "HTML uses predefined tags such as <head> and <title>, whereas in XML you define your own custom tags that meet the exact needs of your document, which makes data easier to organize and search."
+ },
+ {
+  "questionText": "Why is <name>Ibrahim</Name> an error in XML?",
+  "options": [
+   "Element names are case sensitive, so the tags do not match",
+   "Element names cannot start with a lowercase letter",
+   "Text inside an element must be in quotation marks",
+   "An element name must contain at least one digit"
+  ],
+  "correctAnswer": "Element names are case sensitive, so the tags do not match",
+  "difficulty": "MEDIUM",
+  "explanation": "XML elements are case sensitive, so the end tag must match the start tag exactly; <name> and </Name> are different names. Lowercase names are allowed, and element text needs no quotation marks."
+ },
+ {
+  "questionText": "Which XML fragment is properly nested?",
+  "options": [
+   "<Student><Name>Almaz</Name></Student>",
+   "<Name><Student>Almaz</Name></Student>",
+   "<Student><Name>Almaz</Student></Name>",
+   "<Student><Name>Almaz<Name></Student>"
+  ],
+  "correctAnswer": "<Student><Name>Almaz</Name></Student>",
+  "difficulty": "MEDIUM",
+  "explanation": "XML elements must not overlap and must be properly nested: an element opened inside another must close before its parent closes, as in <Student><Name>Almaz</Name></Student>."
+ },
+ {
+  "questionText": "Which element name breaks the XML naming rules?",
+  "options": [
+   "<1dollar>",
+   "<_price>",
+   "<first-name>",
+   "<book.title>"
+  ],
+  "correctAnswer": "<1dollar>",
+  "difficulty": "MEDIUM",
+  "explanation": "Element names must start with a letter or underscore, so <1dollar> is not allowed. Names can contain letters, digits, hyphens, underscores and periods, so the others are valid."
+ },
+ {
+  "questionText": "How does XML treat several spaces typed in a row inside an element, compared with HTML?",
+  "options": [
+   "XML keeps all the spaces, while HTML reduces them to one",
+   "XML reduces them to one space, while HTML keeps all of them",
+   "Both XML and HTML keep every space exactly as typed",
+   "Both XML and HTML reduce the spaces to a single space"
+  ],
+  "correctAnswer": "XML keeps all the spaces, while HTML reduces them to one",
+  "difficulty": "MEDIUM",
+  "explanation": "XML does not truncate multiple white-spaces, while in HTML multiple white-spaces are truncated to a single white-space."
+ },
+ {
+  "questionText": "Which part at the start of an XML document gives the version and the character encoding, such as UTF-8?",
+  "options": [
+   "The XML declaration",
+   "The root element",
+   "The internal DTD subset",
+   "The entity declaration"
+  ],
+  "correctAnswer": "The XML declaration",
+  "difficulty": "MEDIUM",
+  "explanation": "The XML declaration (processing instruction), such as <?xml version=\"1.0\" encoding=\"UTF-8\"?>, describes the document's general characteristics including its version and encoding. The root element encloses all the content."
+ },
+ {
+  "questionText": "After <!ENTITY publisher \"Berhanena Selam Printing\"> is declared, what does the parser do when it meets &publisher; in the document?",
+  "options": [
+   "It replaces it with the declared text",
+   "It shows the text &publisher; unchanged on screen",
+   "It reports an error because & is illegal",
+   "It creates a new element named publisher"
+  ],
+  "correctAnswer": "It replaces it with the declared text",
+  "difficulty": "MEDIUM",
+  "explanation": "When the parser meets an ampersand and semicolon identifying an entity reference, it looks up the name in the entity declarations and replaces &publisher; with the content it represents, Berhanena Selam Printing."
+ },
+ {
+  "questionText": "Why does opening an XML file in a browser not produce a nicely formatted page?",
+  "options": [
+   "XML only holds content; a style sheet must present it",
+   "Browsers cannot read XML files and always show an error message",
+   "XML files must first be converted into a relational database",
+   "The XML declaration hides all of the content from the browser"
+  ],
+  "correctAnswer": "XML only holds content; a style sheet must present it",
+  "difficulty": "MEDIUM",
+  "explanation": "XML is just information wrapped in tags; it is meant to hold content so that when combined with resources such as a style sheet (XSL) it becomes a finished product. Browsers do show it, usually as color-coded elements."
+ },
+ {
+  "questionText": "Which is listed as a disadvantage of XML?",
+  "options": [
+   "It has no intrinsic data type support",
+   "It separates the data from HTML",
+   "It makes documents transportable across systems",
+   "It simplifies the platform exchange process"
+  ],
+  "correctAnswer": "It has no intrinsic data type support",
+  "difficulty": "MEDIUM",
+  "explanation": "Disadvantages of XML include needing a processing application, confusing and redundant syntax, and no intrinsic data type support. Separating data from HTML and making documents transportable are advantages."
+ },
+ {
+  "questionText": "Where does the domain name appear in a web address such as http://www.example.gov.et/?",
+  "options": [
+   "Right after www",
+   "Right before http",
+   "After the last slash",
+   "Before the www part"
+  ],
+  "correctAnswer": "Right after www",
+  "difficulty": "MEDIUM",
+  "explanation": "A domain name is the part of the internet address that comes after www; in http://www.moe.gov.et/ the domain name is moe.gov. The part after the last slash would be a page or file name."
+ },
+ {
+  "questionText": "What must a website have to enable HTTPS?",
+  "options": [
+   "An SSL certificate",
+   "A registered .gov domain",
+   "An XML declaration",
+   "A scripts folder"
+  ],
+  "correctAnswer": "An SSL certificate",
+  "difficulty": "MEDIUM",
+  "explanation": "To enable HTTPS, a website needs an SSL (Secure Sockets Layer) certificate, which encrypts information sent between visitors and the site. A domain extension has nothing to do with security."
+ },
+ {
+  "questionText": "In the Bookstore example, which elements have element content rather than text content?",
+  "options": [
+   "<Bookstore> and <Book>",
+   "<title> and <author>",
+   "<price> and <year> elements",
+   "<author> and <price>"
+  ],
+  "correctAnswer": "<Bookstore> and <Book>",
+  "difficulty": "HARD",
+  "explanation": "<Bookstore> and <Book> have element contents because they contain other elements, while <title>, <author>, <year> and <price> have text content such as Kebede Michael."
+ },
+ {
+  "questionText": "How should an attribute be written when its value itself contains double quotation marks?",
+  "options": [
+   "Enclose the value in single quotation marks",
+   "Leave the value without any quotation marks",
+   "Enclose the value in double quotation marks twice",
+   "Move the value into a comment beside the element"
+  ],
+  "correctAnswer": "Enclose the value in single quotation marks",
+  "difficulty": "HARD",
+  "explanation": "Attribute values must always be quoted with single or double quotes; if the value contains double quotation marks, single quotation marks are used, as in name='Tilahun Gessesse \"Kome Limerkish\"'."
+ },
+ {
+  "questionText": "Which characters are strictly illegal inside XML element content?",
+  "options": [
+   "< and &",
+   "< and >",
+   "& and \"",
+   "> and '"
+  ],
+  "correctAnswer": "< and &",
+  "difficulty": "HARD",
+  "explanation": "Only the characters < and & are strictly illegal in XML; the greater-than character is legal, although it is a good habit to replace it with &gt;."
+ },
+ {
+  "questionText": "<person gender=\"female\"> and a <gender>female</gender> child element inside <person> are two ways to store gender. Which statement about them is correct?",
+  "options": [
+   "Both give the same information and there is no rule about which to use",
+   "Only the attribute form is valid, because elements cannot hold such data",
+   "Only the element form is valid, because attributes cannot hold text",
+   "The attribute form must be declared with an ENTITY first"
+  ],
+  "correctAnswer": "Both give the same information and there is no rule about which to use",
+  "difficulty": "HARD",
+  "explanation": "In one example gender is an attribute and in the other an element; both provide the same information, and there are no rules about when to use attributes or elements in XML."
+ },
+ {
+  "questionText": "Which comparison of XML and HTML is correct?",
+  "options": [
+   "XML is content driven, while HTML is format driven",
+   "XML ignores small coding errors, while HTML allows none",
+   "XML is case insensitive, while HTML is case sensitive",
+   "XML closing tags are optional, while HTML needs them"
+  ],
+  "correctAnswer": "XML is content driven, while HTML is format driven",
+  "difficulty": "HARD",
+  "explanation": "XML is content driven and HTML is format driven. The other statements are reversed: XML allows no coding errors, is case sensitive and requires closing tags, while HTML ignores small errors and does not always need them."
+ },
+ {
+  "questionText": "What is web hosting?",
+  "options": [
+   "Providing web server space where websites are stored",
+   "Registering a unique domain name for an organization",
+   "Encrypting visitors' data with an SSL certificate",
+   "Designing the folders and pages of a website"
+  ],
+  "correctAnswer": "Providing web server space where websites are stored",
+  "difficulty": "HARD",
+  "explanation": "Hosting companies provide web hosting services, meaning online space for storing websites on a web server, where the website actually resides. Registering a domain name is a separate step of publishing."
+ },
+ {
+  "questionText": "What does <!DOCTYPE album [...]> define in a DTD?",
+  "options": [
+   "The root element of the document",
+   "The character encoding of the file",
+   "An entity that replaces text",
+   "A comment ignored by the parser"
+  ],
+  "correctAnswer": "The root element of the document",
+  "difficulty": "HARD",
+  "explanation": "In a DTD, !DOCTYPE album defines the root element of the document, album, while !ELEMENT lines define each element. The encoding is given in the XML declaration."
+ },
+ {
+  "questionText": "Which statement about an empty XML element is correct?",
+  "options": [
+   "It can be written as <element></element> or <element />",
+   "It must contain at least one attribute to be valid",
+   "It can only be written as <element> with no end tag",
+   "It must hold the word EMPTY between its two tags"
+  ],
+  "correctAnswer": "It can be written as <element></element> or <element />",
+  "difficulty": "HARD",
+  "explanation": "An element without content is an empty element, and it can be written either as <element></element> or as <element />. A start tag without an end tag is not allowed in well-formed XML."
+ }
+]

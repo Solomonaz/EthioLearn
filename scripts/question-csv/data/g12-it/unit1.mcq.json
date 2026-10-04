@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Which ethical and legal issue is described as the ability to access, use and protect data, information and knowledge about ourselves or things we own?",
+  "options": [
+   "Digital ownership",
+   "Information gathering",
+   "Information privacy",
+   "Security liability"
+  ],
+  "correctAnswer": "Digital ownership",
+  "difficulty": "EASY",
+  "explanation": "Digital ownership is the ability to access and/or use and protect data, information and knowledge about ourselves or things we own. Privacy is about personal data stored on computer systems being viewed without authorization, not about owning and controlling content."
+ },
+ {
+  "questionText": "Which social issue is the practice of sending, posting or spreading hurtful or malicious content about someone else online?",
+  "options": [
+   "Cyberbullying",
+   "Plagiarism",
+   "Socialization gap",
+   "Gaming addiction"
+  ],
+  "correctAnswer": "Cyberbullying",
+  "difficulty": "EASY",
+  "explanation": "Cyberbullying is sending, posting or disseminating unfavorable, hurtful or malicious content about someone online, and can include disclosing private information to humiliate them. A socialization gap is the loss of natural interaction within families, not harmful posting."
+ },
+ {
+  "questionText": "Which toxic materials found in most electronic devices can leak into the ground and contaminate drinking water?",
+  "options": [
+   "Cadmium, lead and mercury",
+   "Copper, iron and aluminium",
+   "Silicon, glass and plastic",
+   "Gold, silver and copper"
+  ],
+  "correctAnswer": "Cadmium, lead and mercury",
+  "difficulty": "EASY",
+  "explanation": "Most electronic devices contain non-biodegradable materials, heavy metals and toxic materials like cadmium, lead and mercury, which can leak into the ground and contaminate water, plants and animals. Copper, iron and aluminium are common metals but are not the toxic materials named."
+ },
+ {
+  "questionText": "Which Ethiopian proclamation established the Intellectual Property Office and defined intellectual property as a legal right over a creative work of the human intellect?",
+  "options": [
+   "Proclamation No. 320/2003",
+   "Proclamation No. 410/2004",
+   "Proclamation No. 1205/2020",
+   "Proclamation No. 808/2013"
+  ],
+  "correctAnswer": "Proclamation No. 320/2003",
+  "difficulty": "EASY",
+  "explanation": "The Ethiopian Intellectual Property Office Establishment Proclamation, No. 320/2003, defines intellectual property as a legal right over a creative work of the human intellect, including patent, trademark, registration certificate and copyright. Proclamation 410/2004 concerns copyright and neighboring rights protection."
+ },
+ {
+  "questionText": "Customer lists, source code and the recipes of drinks such as Coca-Cola are examples of which type of intellectual property?",
+  "options": [
+   "Trade secrets",
+   "Registered patents",
+   "Copyrights",
+   "Trademarks"
+  ],
+  "correctAnswer": "Trade secrets",
+  "difficulty": "EASY",
+  "explanation": "Trade secrets are intellectual property rights on confidential information; examples include customer lists, source code and recipes for Pepsi, Coca-Cola and Sprite. A patent requires publishing the invention's technical details, the opposite of keeping a recipe confidential."
+ },
+ {
+  "questionText": "Which national project was started as part of the Digital Ethiopia 2025 strategy?",
+  "options": [
+   "The National ID project",
+   "The e-Tax registration project",
+   "The Ethio-telecom SIM project",
+   "The national e-passport project"
+  ],
+  "correctAnswer": "The National ID project",
+  "difficulty": "EASY",
+  "explanation": "The National ID project started as part of the Digital Ethiopia 2025 strategy and is a robust and reliable digital identification process for all Ethiopians and legal residents. The other projects are not described as the national digital identity initiative."
+ },
+ {
+  "questionText": "Trello, Asana and ClickUp belong to which category of digital collaboration tools?",
+  "options": [
+   "Project management tools",
+   "Communication tools",
+   "Data visualization tools",
+   "Notetaking tools"
+  ],
+  "correctAnswer": "Project management tools",
+  "difficulty": "EASY",
+  "explanation": "Trello, Asana and ClickUp are project management tools, which have project and task management capabilities at their core. Communication tools are examples like Zoom, Skype and Microsoft Teams."
+ },
+ {
+  "questionText": "Evernote, Microsoft OneNote and Google Keep are examples of which kind of collaboration tool?",
+  "options": [
+   "Notetaking tools",
+   "Documentation and file sharing tools",
+   "Project management tools",
+   "Communication tools"
+  ],
+  "correctAnswer": "Notetaking tools",
+  "difficulty": "EASY",
+  "explanation": "Notetaking tools help to quickly capture and organize notes, ideas and web page content; Evernote, OneNote and Google Keep are the examples given. File sharing tools are examples like Google Drive, Dropbox and SharePoint."
+ },
+ {
+  "questionText": "Which hashtag movement did Ethiopians use on social media in 2021 to support a national grand project?",
+  "options": [
+   "#It_is_my_dam",
+   "#Digital_Ethiopia",
+   "#Green_Legacy",
+   "#Ethiopia_Rising"
+  ],
+  "correctAnswer": "#It_is_my_dam",
+  "difficulty": "EASY",
+  "explanation": "In 2021 Ethiopians united behind the GERD with the \"#It_is_my_dam\" hashtag on Twitter, Facebook, Instagram and LinkedIn, an example of digital citizenship. The other hashtags are not the GERD movement described."
+ },
+ {
+  "questionText": "How is digital citizenship defined?",
+  "options": [
+   "Responsible use of technology by anyone who uses computers and the Internet to engage with society",
+   "The legal right of a citizen to own a registered online account recognised by the government",
+   "The collection of information about a person that exists online and identifies that person",
+   "Working with other individuals or teams to get things done using digital devices and tools"
+  ],
+  "correctAnswer": "Responsible use of technology by anyone who uses computers and the Internet to engage with society",
+  "difficulty": "EASY",
+  "explanation": "Digital citizenship refers to the responsible use of technology by anyone who uses computers, the Internet and digital devices to engage with society on any level. A collection of online information about a person is a digital identity, and working with teams through technology is digital collaboration."
+ },
+ {
+  "questionText": "Why do information gathering practices by applications raise a question of consent?",
+  "options": [
+   "Applications collect users' data and credentials, so users must know what is gathered and why",
+   "Users must pay a fee before any application may collect their data",
+   "Applications delete all collected data as soon as consent is given",
+   "Consent is needed only when an application shows advertisements"
+  ],
+  "correctAnswer": "Applications collect users' data and credentials, so users must know what is gathered and why",
+  "difficulty": "MEDIUM",
+  "explanation": "Many applications collect users' data and credentials, which opened a debate about what and why information can be gathered and raises the question of consent; users should examine the intention of any information-gathering request. Fees and advertisements have nothing to do with that consent question."
+ },
+ {
+  "questionText": "What is identity theft, which can follow a breach of information security?",
+  "options": [
+   "A third party harvesting innocent people's personal details for malicious use",
+   "A hacker locking a company's files and demanding payment",
+   "A company sharing purchase records with its own partners",
+   "An employee reading a colleague's emails without permission"
+  ],
+  "correctAnswer": "A third party harvesting innocent people's personal details for malicious use",
+  "difficulty": "MEDIUM",
+  "explanation": "Identity theft happens when the personal details of innocent people are harvested by a third party so that they can be used for malicious purposes. Locking files for a ransom is a different attack that does not harvest anyone's personal details."
+ },
+ {
+  "questionText": "In Ethiopia, what should government and private organizations do when they suffer a cyber security breach or attack?",
+  "options": [
+   "Report it to the designated government unit that protects national information infrastructure",
+   "Delete all affected data immediately so that the attackers cannot use it",
+   "Keep it confidential so that the organization's reputation is not damaged",
+   "Report it only to the internet service provider that supplies their connection"
+  ],
+  "correctAnswer": "Report it to the designated government unit that protects national information infrastructure",
+  "difficulty": "MEDIUM",
+  "explanation": "Government and private organizations in Ethiopia should report any cyber security breaches or attacks to the designated government unit responsible for protecting the country's information and information infrastructure. Users are told to report breaches promptly, not to hide them."
+ },
+ {
+  "questionText": "What are the features of social media and gaming addiction as a behavioral addiction?",
+  "options": [
+   "Overconcern, an urge to log on, and harm to life areas",
+   "Spending more than two hours online on most weekend days",
+   "Using social media mainly for school group discussions",
+   "Playing online games only with friends from school"
+  ],
+  "correctAnswer": "Overconcern, an urge to log on, and harm to life areas",
+  "difficulty": "MEDIUM",
+  "explanation": "Social media and gaming addiction is characterized by being overly concerned about social media and games, an uncontrollable urge to use them, and devoting so much time that it impairs other important life areas. Spending a set number of hours online is not part of the definition."
+ },
+ {
+  "questionText": "How does the University of Oxford definition describe plagiarism?",
+  "options": [
+   "Presenting someone else's work or ideas as your own without full acknowledgement",
+   "Summarizing an author's ideas in your own words and citing them",
+   "Quoting an author's exact words in quotation marks with a reference",
+   "Reusing your own earlier work in a new report with acknowledgement"
+  ],
+  "correctAnswer": "Presenting someone else's work or ideas as your own without full acknowledgement",
+  "difficulty": "MEDIUM",
+  "explanation": "Plagiarism is presenting work or ideas without the consent of the original author, incorporating them into your work without full acknowledgement. Summarizing or quoting with a citation gives that acknowledgement, so it is not plagiarism."
+ },
+ {
+  "questionText": "Which Ethiopian agency's official reports show an increasing trend of cyber-attacks against the country?",
+  "options": [
+   "Information Network Security Agency (INSA)",
+   "Ethiopian Intellectual Property Office",
+   "Ethiopian Communications Authority",
+   "Ethiopian Ministry of Innovation and Technology"
+  ],
+  "correctAnswer": "Information Network Security Agency (INSA)",
+  "difficulty": "MEDIUM",
+  "explanation": "Official reports from the Ethiopian Information Network Security Agency (INSA) show Ethiopia experiencing different cyber-attacks with an increasing trend. The Intellectual Property Office manages patents and other IP applications, not cyber-attack reporting."
+ },
+ {
+  "questionText": "Which group of workers is named as most at risk of losing jobs to automation?",
+  "options": [
+   "Cashiers, data entry clerks and factory workers",
+   "Software developers, network engineers and data scientists",
+   "Teachers, doctors and lawyers working in public institutions",
+   "Artists, writers and musicians who create original works"
+  ],
+  "correctAnswer": "Cashiers, data entry clerks and factory workers",
+  "difficulty": "MEDIUM",
+  "explanation": "Automated systems can manage jobs such as cashiers, data entry clerks and factory workers, so these jobs are lost, and people with low educational backgrounds are most at risk. Technology professionals are the ones whose skills are in demand."
+ },
+ {
+  "questionText": "What does e-waste management refer to?",
+  "options": [
+   "Systematically gathering e-waste, safely recycling its material, and disposing of it with minimal harm",
+   "Burying old devices in landfills so that their materials break down",
+   "Burning electronic waste so that it takes up less space",
+   "Storing old devices until they can be resold as they are"
+  ],
+  "correctAnswer": "Systematically gathering e-waste, safely recycling its material, and disposing of it with minimal harm",
+  "difficulty": "MEDIUM",
+  "explanation": "E-waste management is a systematic procedure for gathering e-waste, recovering and recycling material in a safe manner, and disposing of it with minimal environmental harm. Landfill burial is what lets cadmium, lead and mercury leak into the ground."
+ },
+ {
+  "questionText": "Which of these is listed as an example of a green or clean technology?",
+  "options": [
+   "Smart meters",
+   "Laptop computers",
+   "Photocopy machines",
+   "Gaming consoles"
+  ],
+  "correctAnswer": "Smart meters",
+  "difficulty": "MEDIUM",
+  "explanation": "Green or clean technologies monitor or reduce the negative impact of technology on the environment; examples given are solar panels, electric vehicles, smart meters, natural gas and wind turbines. Laptops and photocopiers consume power and resources and are not listed as green technologies."
+ },
+ {
+  "questionText": "Which computer-related health problems can result from long hours of using information systems and mobile devices?",
+  "options": [
+   "Musculoskeletal problems, eye strain, headaches and obesity",
+   "Fever, cough, sore throat and runny nose",
+   "Skin rashes, hair loss and tooth decay",
+   "Food poisoning, allergies and stomach pain"
+  ],
+  "correctAnswer": "Musculoskeletal problems, eye strain, headaches and obesity",
+  "difficulty": "MEDIUM",
+  "explanation": "Computer-related health problems include musculoskeletal problems in the back, neck, chest, arms, shoulders and feet, vision problems and eye strain, headaches, and obesity from long hours of sitting. Fever, cough or food poisoning have other causes and are not computer-related problems."
+ },
+ {
+  "questionText": "What does the patent owner give in exchange for the exclusive right to decide how an invention may be used?",
+  "options": [
+   "Technical details of the invention are published in the patent document",
+   "The invention's source code is handed over to the government for safekeeping",
+   "A yearly share of the profits from the invention is paid to competing companies",
+   "The right to use the invention is shared with any company that asks for it"
+  ],
+  "correctAnswer": "Technical details of the invention are published in the patent document",
+  "difficulty": "MEDIUM",
+  "explanation": "In exchange for the exclusive right, the patent owner makes technical information about the invention publicly available in the published patent document. Sharing the right with anyone who asks would defeat the exclusive right a patent grants."
+ },
+ {
+  "questionText": "Which ways of verifying a digital identity are listed?",
+  "options": [
+   "Database checks, document verification and biometric verification",
+   "Checking the person's email signature and profile picture",
+   "Comparing the person's typing speed with earlier sessions",
+   "Asking the person to describe their address in a message"
+  ],
+  "correctAnswer": "Database checks, document verification and biometric verification",
+  "difficulty": "MEDIUM",
+  "explanation": "Digital identification can be verified through database checks, document and identity verification, and biometric verification; after proving identity, a user can access services like banking, health and travel. An email signature or typing speed is not a listed verification method."
+ },
+ {
+  "questionText": "Which feature does a copyright have that a patent does not?",
+  "options": [
+   "Protection is automatic as soon as the work is created",
+   "Protection lasts forever and can never expire",
+   "It protects new inventions such as a light bulb",
+   "It requires the technical design to be published"
+  ],
+  "correctAnswer": "Protection is automatic as soon as the work is created",
+  "difficulty": "HARD",
+  "explanation": "Copyright protection is automatic: once you create something it is yours, and registration is needed only to file a lawsuit for infringement. Copyrights can expire, like patents, so permanent protection is wrong; inventions such as the light bulb are protected by patents."
+ },
+ {
+  "questionText": "How do trademark rights differ from patent and copyright protection in duration?",
+  "options": [
+   "Trademark rights come from using the mark and can be held indefinitely",
+   "Trademark rights expire after a fixed number of years set by WIPO",
+   "Trademark rights end as soon as the mark is registered with a government office",
+   "Trademark rights last only while the company keeps its source code secret"
+  ],
+  "correctAnswer": "Trademark rights come from using the mark and can be held indefinitely",
+  "difficulty": "HARD",
+  "explanation": "While patents and copyrights can expire, trademark rights come from the use of the trademark and can be held indefinitely; registration is not required but gives additional advantages. Keeping source code secret is the basis of a trade secret, not a trademark."
+ },
+ {
+  "questionText": "A software company protects the exact steps of its money-saving production process by keeping them confidential, and a rival obtains them by bribing an employee. Which right has been violated?",
+  "options": [
+   "Trade secret protection",
+   "Registered trademark protection",
+   "Copyright protection",
+   "Patent protection"
+  ],
+  "correctAnswer": "Trade secret protection",
+  "difficulty": "HARD",
+  "explanation": "Trade secrets are rights on confidential information; unauthorized acquisition or disclosure contrary to honest commercial practices violates trade secret protection, and software processes are a listed example. A patent would have required publishing the process, so nothing confidential would remain to steal."
+ },
+ {
+  "questionText": "Which activity is part of managing a digital identity?",
+  "options": [
+   "Limiting the data a person gives out and correcting incorrect personal data",
+   "Giving full personal details to every service so records match",
+   "Keeping copies of the same data in several systems",
+   "Storing as much personal data as possible for later use"
+  ],
+  "correctAnswer": "Limiting the data a person gives out and correcting incorrect personal data",
+  "difficulty": "HARD",
+  "explanation": "Digital identity management involves limiting the data a person gives out, avoiding excessive storage, checking stored data, correcting incorrect data and avoiding redundant data. Giving full details everywhere or storing as much as possible does the opposite."
+ },
+ {
+  "questionText": "What are the three components of digital collaboration?",
+  "options": [
+   "People, collaborative tools and devices",
+   "Hardware, software and networks",
+   "Teachers, students and the school's parents",
+   "Messages, files and meetings"
+  ],
+  "correctAnswer": "People, collaborative tools and devices",
+  "difficulty": "HARD",
+  "explanation": "The components of digital collaboration are people, who are at its heart, collaborative tools such as communication and file sharing tools, and devices such as smartphones, tablets and laptops. Messages, files and meetings are things the tools handle, not the components."
+ },
+ {
+  "questionText": "A team needs comments attached to files, version tracking and editing permissions for the documents it shares. Which category of collaboration tool fits this need?",
+  "options": [
+   "Documentation and file sharing tools",
+   "Data visualization and charting tools",
+   "Communication tools",
+   "Project management tools"
+  ],
+  "correctAnswer": "Documentation and file sharing tools",
+  "difficulty": "HARD",
+  "explanation": "Documentation and file sharing tools support different file types, comments and notes attached to files, tracking changes and versioning, editing permissions and access control; examples are Google Drive, Google Docs and Dropbox. Communication tools focus on messaging, conferencing and video chats."
+ },
+ {
+  "questionText": "Which behavior is one of the do's of good digital citizenship?",
+  "options": [
+   "Determining the validity of online sources of information",
+   "Engaging online only with people who share the same beliefs",
+   "Sharing news online quickly before others do",
+   "Using technology mainly for personal entertainment"
+  ],
+  "correctAnswer": "Determining the validity of online sources of information",
+  "difficulty": "HARD",
+  "explanation": "The do's include using technology to improve the community, engaging respectfully with people of different beliefs, making one's voice heard by leaders, and determining the validity of online sources. Engaging only with like-minded people is not respectful engagement."
+ },
+ {
+  "questionText": "Why is digital ownership hard to control?",
+  "options": [
+   "Information flows freely online, so content is easily copied and pasted",
+   "Creators lose their rights as soon as their work is uploaded to the Internet",
+   "Digital content cannot be protected by any form of intellectual property law",
+   "Only governments are allowed to own content that is stored on computer systems"
+  ],
+  "correctAnswer": "Information flows freely online, so content is easily copied and pasted",
+  "difficulty": "HARD",
+  "explanation": "The expansion of digital mediums has let information flow more freely than before, which makes content easily copied and pasted online and digital ownership hard to control. Creators keep the right to allow or deny use of their content, so they do not lose their rights on upload."
+ }
+]
