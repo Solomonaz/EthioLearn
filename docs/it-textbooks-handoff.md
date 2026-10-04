@@ -12,15 +12,35 @@ For each Information Technology student textbook (Grades 9, 10, 11, 12):
 4. 30 questions per chapter, imported through Admin -> Question Bank -> Bulk CSV
    (one CSV per chapter, as drafts), and a copy in Google Drive.
 
-## Status
-| Grade | Book PDF | Chapters checked | On live site | Questions |
+## Status — all four books done (2026-10-04)
+| Grade | Textbook id (live) | Chapters | Chunks | Questions |
 |---|---|---|---|---|
-| 9  | Drive IT/book (14.5 MB — too big for the Drive connector; download from kehulum.com) | no | no | no |
-| 10 | Drive IT/book (12.2 MB — same) | no | no | no |
-| 11 | Drive IT/book (4.4 MB, downloads fine) | **yes, 6 units** (below) | no | **done — 6 CSVs, 180 MCQs** in Drive IT/Questions/Grade 11 |
-| 12 | Drive IT/book (9 MB — the connector crashed on it; use kehulum.com) | no | no | no |
+| 9  | `cmuu2m0nt000iqc01r3aurl6c` | 6, fixed before save (below) | 83, COMPLETED | 180 drafts |
+| 10 | `cmuu2mgpi000pqc0199x1l3nc` | 6, detector split was right | 82, COMPLETED | 180 drafts |
+| 11 | `cmuu2jpef000bqc011rggzml9` | 6, fixed before save (below) | 60, COMPLETED | 180 drafts |
+| 12 | `cmuu2ieko0004qc01j0j4jtol` | 6, detector split was right | 90, COMPLETED | 180 drafts |
 
-Source PDF for Grade 12 on kehulum:
+All four books are APPROVED. All 720 questions (24 chapters × 30) were
+imported through `POST /api/admin/questions/import`. They are still
+**DRAFT**, so an admin must review and publish them in Admin -> Question Bank.
+A final sync showed every live question identical to its source JSON.
+
+Chapter fixes made before saving:
+- The live server does **not** run commit 279c9ce. Its detector made the same
+  mistakes as before, so the chapter text was corrected by hand before
+  `POST /api/admin/textbooks`.
+- G11: Unit 5 started mid-overview. Its title page and overview were moved from
+  the end of Unit 4 into Unit 5.
+- G9: Unit 5's title page ("5 SECURITY" on one line) was missed and left at the
+  end of Unit 4. It was moved into Unit 5. The Annex A acronym list was also
+  cut from the end of Unit 6.
+
+Google Drive: `IT/Questions/Grade N/` holds one CSV per unit, named
+`G<N> IT - Unit <M> - <Unit title>.csv` (24 files, plain text/csv). Each
+file's size was checked against the local build.
+
+Source PDFs: Drive `IT/book/`. G9, G10 and G12 are too big for the Drive
+connector, so they were downloaded from kehulum.com. For example, Grade 12:
 https://kehulum.com/bfile_asset/books_99/collection/grade-12-information-technology-new-curriculum--student-textbook-kehulumcom1759915352faae.pdf
 
 Drive layout (owner's): `IT/book/` holds the four PDFs; `IT/Questions/Grade 9|Grade 10|Grade 11|grade 12/` hold the CSVs.
@@ -35,8 +55,8 @@ Drive layout (owner's): `IT/book/` holds the four PDFs; `IT/Questions/Grade 9|Gr
 6. Fundamentals of Programming — "UNIT FUNDAMENTALS OF / PROGRAMMING / 6"
 Running header on every page: "UNIT-N <title>". Each unit should start at its
 title page and end just before the next one (about 27k–37k chars each). Before
-commit 279c9ce the split started Unit 5 mid-overview; that is fixed on this
-branch — make sure the server runs this branch.
+commit 279c9ce the split started Unit 5 mid-overview. That is fixed on this
+branch, but the live server did not run it on 2026-10-04.
 
 ## Question CSV format (what the importer accepts)
 `src/app/api/admin/questions/import/route.ts`: header
@@ -55,11 +75,15 @@ Quality bar used for Grade 11 (keep it for the other grades):
 - `scripts/question-csv/build-csv.ts <unit.mcq.json> <out.csv> <seed>` balances
   answer positions (A–D), writes the CSV and re-parses it exactly as the importer
   does (seed used for Grade 11: unit number × 7919).
-- Source sets: `scripts/question-csv/data/g11-it/unitN.mcq.json`.
+- Source sets: `scripts/question-csv/data/g{9,10,11,12}-it/unitN.mcq.json`.
+- If `npm install` is blocked, use `scripts/question-csv/build-csv.py` (same
+  arguments). It is a Python port that produces byte-identical CSVs. The
+  validator runs under `bun` with stub `clsx`/`tailwind-merge` packages in
+  node_modules.
 
 ## Access this needs (cloud session)
 - Network: `abugida.aderasend.com` and `kehulum.com` allowed in the environment.
-- Env vars: `ABUGIDA_ADMIN_EMAIL`, `ABUGIDA_ADMIN_PASSWORD` (super admin — a
+- Env vars: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` (super admin — a
   school admin's books are scoped to one school).
 - Login is NextAuth credentials provider `password` (fields `identifier`,
   `password`; get `/api/auth/csrf` first, keep cookies). Mutating admin routes
@@ -68,8 +92,13 @@ Quality bar used for Grade 11 (keep it for the other grades):
 - Upload flow: `POST /api/admin/textbooks/create-with-ai` (multipart: file,
   title, subject, grade, language) returns detected chapters WITHOUT saving ->
   review/fix -> save via `POST /api/admin/textbooks` -> `POST
-  /api/admin/textbooks/<id>/process` for chunking. Read each route before
-  calling it; field names above are from a first reading, not a test.
+  /api/admin/textbooks/<id>/process` for chunking. These field names were
+  used successfully. Save body: `title, subject, grade, content,
+  chapters[{title, chapterNumber, content}]`.
+- Questions: list with `GET /api/admin/questions?chapterId=..&limit=100&textbooks=0`
+  and edit with `PATCH /api/admin/questions/<id>`. The importer skips
+  near-duplicates, so a rewritten question that is too close to another is
+  silently dropped. Re-check the count after every import.
 
 ## Also on this branch
 - Gemini through Google Cloud Agent Platform (Vertex) as its own provider
