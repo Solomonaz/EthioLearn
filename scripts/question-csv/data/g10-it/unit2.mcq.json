@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What is the most common connector used on UTP network cable?",
+  "options": [
+   "RJ45",
+   "BNC",
+   "SC fiber",
+   "ST"
+  ],
+  "correctAnswer": "RJ45",
+  "difficulty": "EASY",
+  "explanation": "The most common UTP connector is RJ45 (registered jack), a keyed connector. BNC connectors are used on coaxial cable, and SC and ST on fiber-optic cable."
+ },
+ {
+  "questionText": "Which IEEE code refers to the Ethernet wiring standards used for UTP cable?",
+  "options": [
+   "802.3",
+   "802.11",
+   "802.15",
+   "802.1"
+  ],
+  "correctAnswer": "802.3",
+  "difficulty": "EASY",
+  "explanation": "UTP is used for the Ethernet wiring standards managed by IEEE and referred to by code 802.3; 802.11 is the committee for wireless LAN standards."
+ },
+ {
+  "questionText": "Which cable type transmits signals as pulses of light?",
+  "options": [
+   "Fiber-optic cable",
+   "Coaxial cable",
+   "Shielded twisted-pair",
+   "Unshielded twisted-pair"
+  ],
+  "correctAnswer": "Fiber-optic cable",
+  "difficulty": "EASY",
+  "explanation": "Fiber-optic cabling uses glass or plastic fibers to guide light impulses, while twisted-pair and coaxial cables carry electric current on copper conductors."
+ },
+ {
+  "questionText": "Which device converts a computer's digital signals to analog signals for standard telephone lines?",
+  "options": [
+   "Modem",
+   "Multiplexer",
+   "Repeater",
+   "Transponder"
+  ],
+  "correctAnswer": "Modem",
+  "difficulty": "EASY",
+  "explanation": "A modem converts digital signals to analog (modulation) and back (demodulation); its name is a contraction of modulate/demodulate. A transponder belongs to satellites."
+ },
+ {
+  "questionText": "Which wireless technology replaces the cables between nearby devices, such as a phone and a headset?",
+  "options": [
+   "Bluetooth",
+   "Microwave",
+   "Satellite link",
+   "Infrared"
+  ],
+  "correctAnswer": "Bluetooth",
+  "difficulty": "EASY",
+  "explanation": "Bluetooth is a short-range wireless technology that replaces cables connecting electronic devices, allowing a phone conversation via a headset."
+ },
+ {
+  "questionText": "Which wireless waves does a TV remote control use to change channels?",
+  "options": [
+   "Infrared waves",
+   "Radio waves",
+   "Microwaves",
+   "Light pulses in fiber"
+  ],
+  "correctAnswer": "Infrared waves",
+  "difficulty": "EASY",
+  "explanation": "Infrared waves have wavelengths longer than visible light, so they are invisible, and you use them to change channels with a TV remote control."
+ },
+ {
+  "questionText": "In a cellular network, what is the fixed transceiver that serves one cell called?",
+  "options": [
+   "Base station",
+   "Mobile station",
+   "Access point",
+   "Earth station"
+  ],
+  "correctAnswer": "Base station",
+  "difficulty": "EASY",
+  "explanation": "Each cell contains an antenna and is controlled by a base station (cell site); the mobile station is the moving phone, and earth stations belong to satellite systems."
+ },
+ {
+  "questionText": "Which data transmission mode lets both stations send and receive at the same time, as in a telephone call?",
+  "options": [
+   "Full-duplex",
+   "Half-duplex",
+   "Simplex mode",
+   "Multicast"
+  ],
+  "correctAnswer": "Full-duplex",
+  "difficulty": "EASY",
+  "explanation": "In full-duplex mode both stations can transmit and receive simultaneously, like a two-way street; the telephone network is the common example."
+ },
+ {
+  "questionText": "What are the two fundamental versions of the IP address?",
+  "options": [
+   "IPv4 and IPv6",
+   "IPv1 and IPv2",
+   "IPv3 and IPv5",
+   "IPv8 and IPv16"
+  ],
+  "correctAnswer": "IPv4 and IPv6",
+  "difficulty": "EASY",
+  "explanation": "The IP address has two fundamental versions, IPv4 and IPv6; IPv4 is the common version in current networks."
+ },
+ {
+  "questionText": "Which committee is responsible for wireless LAN standards marketed under the Wi-Fi brand?",
+  "options": [
+   "IEEE 802.11",
+   "IEEE 802.3 (Ethernet)",
+   "IEEE 802.5",
+   "IEEE 802.16"
+  ],
+  "correctAnswer": "IEEE 802.11",
+  "difficulty": "EASY",
+  "explanation": "The IEEE 802.11 committee is responsible for WLAN standards, and most modern WLANs are based on 802.11 and marketed as Wi-Fi."
+ },
+ {
+  "questionText": "Why are the two wires in twisted-pair cable twisted together?",
+  "options": [
+   "So noise hits both wires equally",
+   "So the cable carries light",
+   "So it can bend around corners",
+   "So it needs no connector"
+  ],
+  "correctAnswer": "So noise hits both wires equally",
+  "difficulty": "MEDIUM",
+  "explanation": "Twisting makes it probable that both wires are equally affected by noise or crosstalk, keeping a balance at the receiver; parallel wires would be affected differently."
+ },
+ {
+  "questionText": "Which Ethernet cable type is used to connect a computer to a switch or hub?",
+  "options": [
+   "Straight-through",
+   "Crossover",
+   "Coaxial patch cable",
+   "Rollover"
+  ],
+  "correctAnswer": "Straight-through",
+  "difficulty": "MEDIUM",
+  "explanation": "Straight-through cable connects different network devices, such as computers to switches or hubs; crossover cable connects similar devices, such as computer to computer."
+ },
+ {
+  "questionText": "In an environment with electric motors and radio transmitters, which cable is the preferred solution?",
+  "options": [
+   "Shielded twisted-pair (STP)",
+   "Unshielded twisted-pair (UTP)",
+   "Thin coaxial cable",
+   "Crossover UTP cable"
+  ],
+  "correctAnswer": "Shielded twisted-pair (STP)",
+  "difficulty": "MEDIUM",
+  "explanation": "UTP is subject to external electromagnetic interference, so where there are many interference sources such as motors and RF transmitters, shielded twisted-pair may be preferred."
+ },
+ {
+  "questionText": "Which coaxial cable connector family includes T-shaped and terminator variants?",
+  "options": [
+   "BNC",
+   "RJ45",
+   "MT-RJ",
+   "SC"
+  ],
+  "correctAnswer": "BNC",
+  "difficulty": "MEDIUM",
+  "explanation": "The most common coaxial connector is the Bayonet Neill-Concelman (BNC) connector, with BNC T and BNC terminator variants; MT-RJ is a fiber connector the size of RJ45."
+ },
+ {
+  "questionText": "How do single mode and multimode fiber compare?",
+  "options": [
+   "Single mode goes farther, at higher cost",
+   "Multimode reaches farther and costs more",
+   "Single mode has the larger diameter",
+   "Only multimode gives high bandwidth"
+  ],
+  "correctAnswer": "Single mode goes farther, at higher cost",
+  "difficulty": "MEDIUM",
+  "explanation": "Multimode cable has a larger diameter, and both give high bandwidth at high speed, but single mode provides more distance and is more expensive."
+ },
+ {
+  "questionText": "Which wireless propagation method sends very high-frequency signals in straight lines from antenna to antenna?",
+  "options": [
+   "Line-of-sight propagation",
+   "Ground-wave propagation",
+   "Sky propagation",
+   "Ionosphere propagation"
+  ],
+  "correctAnswer": "Line-of-sight propagation",
+  "difficulty": "MEDIUM",
+  "explanation": "In line-of-sight propagation, very high-frequency signals travel in straight lines between directional antennas; ground propagation hugs the earth and sky propagation reflects off the ionosphere."
+ },
+ {
+  "questionText": "Why are radio waves good for multicasting such as AM and FM radio?",
+  "options": [
+   "They are omnidirectional",
+   "They are unidirectional",
+   "They need aligned antennas",
+   "They travel only through cable"
+  ],
+  "correctAnswer": "They are omnidirectional",
+  "difficulty": "MEDIUM",
+  "explanation": "Radio waves are omnidirectional, propagating in all directions so any receiving antenna can get them, which suits one sender with many receivers. Microwaves are unidirectional."
+ },
+ {
+  "questionText": "Which two antenna types are used for microwave communications?",
+  "options": [
+   "Parabolic dish and horn",
+   "Omnidirectional and whip",
+   "Yagi and dipole",
+   "Loop and patch"
+  ],
+  "correctAnswer": "Parabolic dish and horn",
+  "difficulty": "MEDIUM",
+  "explanation": "Microwaves need unidirectional antennas; the two types used are the parabolic dish and the horn. Omnidirectional antennas are used for radio waves."
+ },
+ {
+  "questionText": "What does a mobile switching center (MSC) do in a cellular network?",
+  "options": [
+   "It connects, records and bills calls",
+   "It powers each cell's antenna with solar energy",
+   "It sends signals to satellites in orbit",
+   "It converts digital signals into analog"
+  ],
+  "correctAnswer": "It connects, records and bills calls",
+  "difficulty": "MEDIUM",
+  "explanation": "The MSC is a computerized center that coordinates the base stations with the telephone central office and is responsible for connecting calls, recording call information and billing."
+ },
+ {
+  "questionText": "At what altitude is the single orbit for geostationary (GEO) satellites?",
+  "options": [
+   "35,786 km",
+   "2,000 km",
+   "5,000 km",
+   "15,000 km (MEO)"
+  ],
+  "correctAnswer": "35,786 km",
+  "difficulty": "MEDIUM",
+  "explanation": "There is only one orbit, at 35,786 km, for GEO satellites; MEO satellites are between 5,000 and 15,000 km and LEO satellites normally below 2,000 km."
+ },
+ {
+  "questionText": "Which data transmission mode is like a one-lane road with traffic allowed in both directions?",
+  "options": [
+   "Half-duplex",
+   "Full-duplex",
+   "Simplex mode",
+   "Broadcast"
+  ],
+  "correctAnswer": "Half-duplex",
+  "difficulty": "MEDIUM",
+  "explanation": "In half-duplex each station can transmit and receive, but not at the same time, like a one-lane road where cars going one way must wait. Full-duplex is a two-way street."
+ },
+ {
+  "questionText": "What is the default network mask for a Class C IP address?",
+  "options": [
+   "255.255.255.0",
+   "255.255.0.0",
+   "255.0.0.0",
+   "255.255.255.255"
+  ],
+  "correctAnswer": "255.255.255.0",
+  "difficulty": "MEDIUM",
+  "explanation": "The default masks are 255.0.0.0 for Class A, 255.255.0.0 for Class B and 255.255.255.0 for Class C, matching their 8, 16 and 24 network bits."
+ },
+ {
+  "questionText": "Which class does the IP address 192.168.1.10 belong to?",
+  "options": [
+   "Class C",
+   "Class A network",
+   "Class B",
+   "Class D"
+  ],
+  "correctAnswer": "Class C",
+  "difficulty": "HARD",
+  "explanation": "The first octet decides the class: 192 lies in the Class C range 192 to 223. Class B is 128 to 191 and Class D is 224 to 239."
+ },
+ {
+  "questionText": "What are Class D IP addresses used for?",
+  "options": [
+   "Multicast",
+   "Experimental purposes",
+   "Host addresses on large networks",
+   "Host addresses on small networks"
+  ],
+  "correctAnswer": "Multicast",
+  "difficulty": "HARD",
+  "explanation": "Classes A, B and C are used for host addresses; Class D is used for multicast and Class E for experimental purposes."
+ },
+ {
+  "questionText": "Why is MEO the orbit chosen between the two Van Allen belts?",
+  "options": [
+   "Charged particles in a belt would destroy it",
+   "The belts block all radio waves sent from Earth",
+   "The belts make satellites move too slowly",
+   "Satellites in the belts cannot see the Earth"
+  ],
+  "correctAnswer": "Charged particles in a belt would destroy it",
+  "difficulty": "HARD",
+  "explanation": "A Van Allen belt contains charged particles, and a satellite orbiting in one would be destroyed by them; the MEO orbits are located between the two belts."
+ },
+ {
+  "questionText": "Why do digital signals have an advantage over analog signals over long distances?",
+  "options": [
+   "On-off pulses resist noise and can be boosted",
+   "Digital signals never need to be strengthened over any distance",
+   "Digital signals change their amplitude to carry more information",
+   "Analog signals cannot be sent over telephone lines at all"
+  ],
+  "correctAnswer": "On-off pulses resist noise and can be boosted",
+  "difficulty": "HARD",
+  "explanation": "Digital signals are discrete on-off pulses that are less affected by noise, since it is easier to tell on from off, so they can be repeatedly strengthened over long distances."
+ },
+ {
+  "questionText": "How can a WLAN access point (AP) effectively double the maximum distance between wireless nodes?",
+  "options": [
+   "By acting as a repeater",
+   "By using a coaxial cable",
+   "By switching to simplex mode",
+   "By lowering the data rate to zero"
+  ],
+  "correctAnswer": "By acting as a repeater",
+  "difficulty": "HARD",
+  "explanation": "The access point can act as a repeater for wireless nodes, effectively doubling the maximum distance between them; larger areas use several APs with 10 to 15% overlap."
+ },
+ {
+  "questionText": "How much overlap is recommended when several access points are installed to cover a large area?",
+  "options": [
+   "10-15%",
+   "50-60%",
+   "1-2%",
+   "90-100%"
+  ],
+  "correctAnswer": "10-15%",
+  "difficulty": "HARD",
+  "explanation": "To service larger areas, multiple access points may be installed with a 10 to 15% overlap so coverage is continuous."
+ },
+ {
+  "questionText": "Which 4G objective applies to stationary users?",
+  "options": [
+   "A data rate of 1 Gbit/s",
+   "A data rate of 100 Mbit/s",
+   "A data rate of 11 Mbit/s",
+   "A data rate of 1 Mbit/s"
+  ],
+  "correctAnswer": "A data rate of 1 Gbit/s",
+  "difficulty": "HARD",
+  "explanation": "The 4G objectives include 100 Mbit/s for access in a moving car and 1 Gbit/s for stationary users; 11 Mbit/s is the WLAN rate mentioned."
+ },
+ {
+  "questionText": "Why is fiber-optic cable the standard for connecting networks between buildings?",
+  "options": [
+   "It resists electrical noise, moisture and lightning",
+   "It is cheaper and easier to install than copper cable",
+   "It can be connected with ordinary RJ45 connectors",
+   "It carries electric current further than coaxial cable"
+  ],
+  "correctAnswer": "It resists electrical noise, moisture and lightning",
+  "difficulty": "HARD",
+  "explanation": "Fiber transmits light rather than electrical signals, eliminating electrical interference, and its immunity to moisture and lightning made it the standard between buildings."
+ }
+]

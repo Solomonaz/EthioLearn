@@ -36,7 +36,7 @@
   "explanation": "A Network Interface Card (NIC) is a hardware component that connects a computer to a network; it comes as a plug-in card or is built into the system board and has a slot for a cable."
  },
  {
-  "questionText": "What is the smallest type of network by size, organized around one person?",
+  "questionText": "A Bluetooth link connects a laptop, a mobile phone and a TV without cables. Which type of network is this?",
   "options": [
    "Personal area network (PAN)",
    "Local area network (LAN)",
@@ -48,16 +48,16 @@
   "explanation": "The smallest network is the personal area network (PAN), meant for one person, such as a Bluetooth network linking a computer with its peripherals. LAN, MAN and WAN are progressively larger."
  },
  {
-  "questionText": "What is the best-known example of a public wide area network (WAN)?",
+  "questionText": "Which type of network can contain multiple smaller networks such as LANs or MANs?",
   "options": [
-   "The Internet",
-   "A school computer laboratory",
-   "A Bluetooth headset link",
-   "A bank's single branch office"
+   "Wide area network (WAN)",
+   "Local area network (LAN)",
+   "Personal area network (PAN)",
+   "Wireless LAN (WLAN)"
   ],
-  "correctAnswer": "The Internet",
+  "correctAnswer": "Wide area network (WAN)",
   "difficulty": "EASY",
-  "explanation": "A WAN occupies a very large area such as a country or the world, and the Internet is the best-known example of a public WAN. A school laboratory is a LAN."
+  "explanation": "A WAN occupies a very large area such as a country or the world and can contain multiple smaller networks such as LANs or MANs; the Internet is the best-known public WAN."
  },
  {
   "questionText": "In which topology is each node connected to every other node by direct links?",
@@ -111,13 +111,13 @@
   "questionText": "Which company is named as an example of an Internet service provider (ISP) connecting home networks to the global network?",
   "options": [
    "Ethio-telecom",
-   "Ethiopian Airlines",
+   "Ethiopian Communications Authority",
    "INSA",
-   "Hawassa University"
+   "Ethiopian Electric Power"
   ],
   "correctAnswer": "Ethio-telecom",
   "difficulty": "EASY",
-  "explanation": "The central network device at home is connected to a global network through an Internet service provider such as Ethio-telecom. INSA is the information network security agency, not an ISP."
+  "explanation": "The central network device at home connects to a global network through an Internet service provider such as Ethio-telecom. INSA is the information network security agency, not an ISP."
  },
  {
   "questionText": "What does a repeater do in a network?",
@@ -144,12 +144,12 @@
   "explanation": "A switch learns the network and forwards packets to the specific destination using a table of physical addresses and port numbers, while a hub broadcasts all packets to all computers except the sender."
  },
  {
-  "questionText": "Which table does a router use to select the best route to a destination network?",
+  "questionText": "A router keeps a table with destination network fields and router interface numbers. What is this table called?",
   "options": [
    "A routing table",
+   "A switching table",
    "A physical address table",
-   "A share-level security table",
-   "A file allocation table"
+   "A share-level table"
   ],
   "correctAnswer": "A routing table",
   "difficulty": "MEDIUM",

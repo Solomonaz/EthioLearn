@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What is the smallest element of a digital image called?",
+  "options": [
+   "A pixel",
+   "A layer",
+   "A canvas",
+   "A histogram"
+  ],
+  "correctAnswer": "A pixel",
+  "difficulty": "EASY",
+  "explanation": "A digital image is represented in groups of bits called pixels, and a pixel is the smallest element of an image. A layer is a Photoshop editing level, not the smallest part of the image."
+ },
+ {
+  "questionText": "What is the graphic layout that sequences illustrations to tell a story visually before a multimedia product is made?",
+  "options": [
+   "A storyboard",
+   "A histogram",
+   "A template",
+   "A color palette"
+  ],
+  "correctAnswer": "A storyboard",
+  "difficulty": "EASY",
+  "explanation": "A storyboard is a graphic layout that sequences illustrations and images to tell a story visually, used by film makers and video creators as a planning strategy. A histogram shows tones in an image."
+ },
+ {
+  "questionText": "In what unit is image resolution typically described?",
+  "options": [
+   "Pixels per inch (PPI)",
+   "Bits per second (bps)",
+   "Frames per second (fps)",
+   "Dots per minute (DPM)"
+  ],
+  "correctAnswer": "Pixels per inch (PPI)",
+  "difficulty": "EASY",
+  "explanation": "Image resolution is typically described in Pixels per Inch (PPI), how many pixels are displayed per inch of an image; higher PPI gives a crisper image."
+ },
+ {
+  "questionText": "Which Photoshop tool removes unwanted outer areas of an image?",
+  "options": [
+   "Crop tool",
+   "Eyedropper tool",
+   "Hand tool",
+   "Dodge tool"
+  ],
+  "correctAnswer": "Crop tool",
+  "difficulty": "EASY",
+  "explanation": "The Crop tool cuts out or removes unwanted areas of an image. The Eyedropper samples colors and the Hand tool moves the view when zoomed in."
+ },
+ {
+  "questionText": "Which Photoshop tool samples the colors of an image?",
+  "options": [
+   "Eyedropper",
+   "Clone Stamp",
+   "Lasso",
+   "Gradient"
+  ],
+  "correctAnswer": "Eyedropper",
+  "difficulty": "EASY",
+  "explanation": "The Eyedropper samples the colors of an image, and a bigger Sample Size gives a better representation of the area's color. The Lasso makes freehand selections."
+ },
+ {
+  "questionText": "Which Photoshop tool lightens the area of the image you paint over?",
+  "options": [
+   "Dodge",
+   "Burn",
+   "Blur",
+   "Eraser"
+  ],
+  "correctAnswer": "Dodge",
+  "difficulty": "EASY",
+  "explanation": "The Dodge tool lightens an area of the image you paint over; Burn and Sponge are its optional tools. Burn has the opposite effect of darkening."
+ },
+ {
+  "questionText": "Which tool lets you make freehand selections around an object in Photoshop?",
+  "options": [
+   "Lasso",
+   "Crop tool",
+   "Zoom",
+   "Pen"
+  ],
+  "correctAnswer": "Lasso",
+  "difficulty": "EASY",
+  "explanation": "The Lasso tool allows freehand selections around an object and includes the Polygonal and Magnetic Lasso tools. The Pen draws accurate paths and shapes."
+ },
+ {
+  "questionText": "Which keyboard shortcut duplicates a layer in Photoshop?",
+  "options": [
+   "Ctrl + J",
+   "Ctrl + D",
+   "Ctrl + L",
+   "Ctrl + E"
+  ],
+  "correctAnswer": "Ctrl + J",
+  "difficulty": "EASY",
+  "explanation": "To duplicate a layer you can right-click the layer and choose Duplicate or press Ctrl + J, as used when fixing underexposed photos."
+ },
+ {
+  "questionText": "What is the empty work area of a new Photoshop document, full of pixels you can change, called?",
+  "options": [
+   "The canvas",
+   "The toolbar",
+   "The menu bar",
+   "The layer option"
+  ],
+  "correctAnswer": "The canvas",
+  "difficulty": "EASY",
+  "explanation": "A new project opens on the workspace, called the canvas, which is full of pixels you can change. The toolbar holds the main editing tools."
+ },
+ {
+  "questionText": "What kind of image is Photoshop mainly designed to work on?",
+  "options": [
+   "Raster images made up of pixels",
+   "Only vector drawings",
+   "Only scanned text documents",
+   "Only 3D models"
+  ],
+  "correctAnswer": "Raster images made up of pixels",
+  "difficulty": "EASY",
+  "explanation": "Photoshop is a general-purpose application designed to work on any raster-based image, made up of dots or pixels; it also offers some vector graphics features, so 'only vector' is wrong."
+ },
+ {
+  "questionText": "What causes the red-eye effect in photographs?",
+  "options": [
+   "The flash sits right above the lens",
+   "The photo was taken outdoors in bright sun",
+   "The image has too few pixels per inch",
+   "The colors in the photo are too saturated"
+  ],
+  "correctAnswer": "The flash sits right above the lens",
+  "difficulty": "MEDIUM",
+  "explanation": "The digital camera flash is located right above the lens, which causes red-eye; it can be fixed with the Red Eye tool. Too much saturation makes colors look unnatural, not red eyes."
+ },
+ {
+  "questionText": "Under which tool's button is the Red Eye tool found in Photoshop?",
+  "options": [
+   "Spot Healing Brush",
+   "Clone Stamp",
+   "Mixer Brush",
+   "Eraser"
+  ],
+  "correctAnswer": "Spot Healing Brush",
+  "difficulty": "MEDIUM",
+  "explanation": "The Red Eye tool is one of the additional tools of the Spot Healing Brush, along with the Healing Brush, Patch and Content-Aware Move. Clone Stamp has the Pattern Stamp as its extra tool."
+ },
+ {
+  "questionText": "A photo taken indoors without a flash is underexposed and dark. How is it fixed in Photoshop?",
+  "options": [
+   "Duplicate the layer and raise its Exposure",
+   "Paint over the dark areas with the Red Eye tool",
+   "Use the Clone Stamp in Darken mode",
+   "Apply the Blur tool to the whole image"
+  ],
+  "correctAnswer": "Duplicate the layer and raise its Exposure",
+  "difficulty": "MEDIUM",
+  "explanation": "Pictures taken indoors without a flash turn out underexposed and dark; you duplicate the layer (Ctrl + J) and use Image, Adjustments, Exposure to lighten it. The Clone Stamp in Darken mode is for hot spots caused by a flash."
+ },
+ {
+  "questionText": "Why is the Clone Stamp's blend mode set to Darken when removing hot spots?",
+  "options": [
+   "Only pixels lighter than the sample area are changed",
+   "All pixels in the image become darker evenly",
+   "The original layer is protected from any change",
+   "The sample area is copied without any blending"
+  ],
+  "correctAnswer": "Only pixels lighter than the sample area are changed",
+  "difficulty": "MEDIUM",
+  "explanation": "Hot spots are light-colored pixels; with Darken mode, Photoshop only changes pixels lighter than the sampled clean area, so the shiny spot darkens gradually."
+ },
+ {
+  "questionText": "Which key is held while clicking to set the Clone Stamp's reference point?",
+  "options": [
+   "Alt",
+   "Shift",
+   "Ctrl",
+   "Tab"
+  ],
+  "correctAnswer": "Alt",
+  "difficulty": "MEDIUM",
+  "explanation": "You hold down the Alt key and click on a clean area to set the reference point or sample; the cursor changes to an eye-dropper. Holding Alt with the Zoom tool zooms out."
+ },
+ {
+  "questionText": "In a Levels adjustment, what are the darkest parts of an image called?",
+  "options": [
+   "Shadows",
+   "Highlights",
+   "Midtones",
+   "Hues"
+  ],
+  "correctAnswer": "Shadows",
+  "difficulty": "MEDIUM",
+  "explanation": "Every image has shadows (the darkest parts), highlights (the brightest parts) and midtones (everything in between). Hue is a color property, not a tone range."
+ },
+ {
+  "questionText": "Why is an adjustment layer called non-destructive editing?",
+  "options": [
+   "It does not change the original image itself",
+   "It keeps a full copy of the image on disk",
+   "It cannot be removed once it is applied",
+   "It changes only the colors that are clipped"
+  ],
+  "correctAnswer": "It does not change the original image itself",
+  "difficulty": "MEDIUM",
+  "explanation": "An adjustment layer is non-destructive because it does not change anything about the original image, so you can keep tweaking it or turn it off to compare."
+ },
+ {
+  "questionText": "A histogram in the Levels panel shows a big gap with no information on its right side. What does this mean?",
+  "options": [
+   "The image is underexposed",
+   "The image is overexposed",
+   "The image is too saturated",
+   "The image has a red-eye problem"
+  ],
+  "correctAnswer": "The image is underexposed",
+  "difficulty": "MEDIUM",
+  "explanation": "A big gap on the right side of the histogram, where highlights are, means the image is underexposed; dragging the white slider left to the histogram's edge fixes it."
+ },
+ {
+  "questionText": "What happens when saturation is removed from an image completely?",
+  "options": [
+   "It becomes a black-and-white or grayscale image",
+   "Its colors become very bright and vivid",
+   "It becomes underexposed and much darker",
+   "Its edges become sharper"
+  ],
+  "correctAnswer": "It becomes a black-and-white or grayscale image",
+  "difficulty": "MEDIUM",
+  "explanation": "Increasing saturation makes colors vivid and reducing it makes them less vivid; removing it completely produces a black-and-white or grayscale image."
+ },
+ {
+  "questionText": "How does image sharpening make a photo look crisp?",
+  "options": [
+   "It increases the contrast along the edges of objects",
+   "It increases the number of pixels in the image",
+   "It removes the shadows from the whole image",
+   "It lowers the saturation of all colors"
+  ],
+  "correctAnswer": "It increases the contrast along the edges of objects",
+  "difficulty": "MEDIUM",
+  "explanation": "Sharpening enhances the edges of objects by increasing the contrast of the edges, bringing more definition to details; too much can make the image look worse."
+ },
+ {
+  "questionText": "Which Photoshop tool restores part of an image to an earlier state?",
+  "options": [
+   "History Brush",
+   "Spot Healing Brush",
+   "Gradient Tool",
+   "Path Selection"
+  ],
+  "correctAnswer": "History Brush",
+  "difficulty": "MEDIUM",
+  "explanation": "The History Brush restores part of an image to an earlier state and has the Art History Brush as an extra tool. The Spot Healing Brush removes blemishes."
+ },
+ {
+  "questionText": "What does digital image processing start with?",
+  "options": [
+   "Importing the image from a scanner or camera",
+   "Printing the image so that it can be checked by hand",
+   "Sharpening the image with the Unsharp Mask filter",
+   "Saving the image in a folder under Documents"
+  ],
+  "correctAnswer": "Importing the image from a scanner or camera",
+  "difficulty": "MEDIUM",
+  "explanation": "Digital image processing starts with importing, capturing the image through a scanner or digital camera, then analysis and manipulation in software, then output to a printer or monitor."
+ },
+ {
+  "questionText": "Which Unsharp Mask setting controls the size of the details that are sharpened, and is best kept very low?",
+  "options": [
+   "Radius",
+   "Amount",
+   "Threshold",
+   "Opacity"
+  ],
+  "correctAnswer": "Radius",
+  "difficulty": "HARD",
+  "explanation": "Radius controls the size of the details sharpened and is best set low, about 0.3 to 0.5 for most images. Amount sets how much sharpness is applied, and Threshold ignores some parts to reduce noise."
+ },
+ {
+  "questionText": "Why is the Unsharp Mask Threshold setting usually kept at 0?",
+  "options": [
+   "Parts of the image may sharpen inconsistently",
+   "Raising it removes all colors from the image",
+   "Raising it makes the radius too large to control",
+   "Raising it converts the layer into a smart object"
+  ],
+  "correctAnswer": "Parts of the image may sharpen inconsistently",
+  "difficulty": "HARD",
+  "explanation": "Increasing the threshold reduces visible noise by ignoring certain parts of the image, but different parts may then not be sharpened consistently, so it is kept at 0 unless sharpening creates a lot of noise."
+ },
+ {
+  "questionText": "What advantage does Smart Sharpen have over Unsharp Mask?",
+  "options": [
+   "It includes noise reduction",
+   "It needs no radius setting",
+   "It works only on vector shapes",
+   "It sharpens without any filter"
+  ],
+  "correctAnswer": "It includes noise reduction",
+  "difficulty": "HARD",
+  "explanation": "Smart Sharpen has noise reduction, which the Unsharp Mask lacks, to reduce the noise that comes with sharpening; it still uses an Amount and a Radius of around 1 or 2."
+ },
+ {
+  "questionText": "When sharpening with the High Pass filter, which blend mode gives stronger sharpening than Soft Light?",
+  "options": [
+   "Overlay",
+   "Darken",
+   "Normal",
+   "Multiply"
+  ],
+  "correctAnswer": "Overlay",
+  "difficulty": "HARD",
+  "explanation": "The two most common blend modes for High Pass sharpening are Overlay, which gives higher contrast and stronger sharpening, and Soft Light, which gives more subtle sharpening."
+ },
+ {
+  "questionText": "Why is the background layer converted to a smart object before using the High Pass filter?",
+  "options": [
+   "So sharpening leaves the original image unharmed",
+   "So the image turns gray before the filter is selected",
+   "So the radius can be set above 5 without clipping",
+   "So the layer can be duplicated with Ctrl + J"
+  ],
+  "correctAnswer": "So sharpening leaves the original image unharmed",
+  "difficulty": "HARD",
+  "explanation": "Converting the layer to a smart object means the High Pass sharpening is applied to the smart object as a smart filter, leaving the original image unharmed."
+ },
+ {
+  "questionText": "When cropping to a specific size with Width 8 and Height 10, what happens to the cropping border?",
+  "options": [
+   "It is constrained so the selected area fits an 8x10 photo",
+   "It is fixed at exactly 8 by 10 pixels on the screen",
+   "It is removed and the image is cropped automatically",
+   "It can be dragged freely to any shape you like"
+  ],
+  "correctAnswer": "It is constrained so the selected area fits an 8x10 photo",
+  "difficulty": "HARD",
+  "explanation": "With Width and Height specified, the cropping border is constrained: whatever size you drag it, the area within it keeps the 8x10 proportion so it fits on an 8x10 photo."
+ },
+ {
+  "questionText": "How does the Curves tool compare with Levels?",
+  "options": [
+   "It controls shadows, highlights and midtones separately",
+   "It can only make an image brighter, never darker",
+   "It changes the image size as well as its tones",
+   "It is a simpler tool meant for beginners"
+  ],
+  "correctAnswer": "It controls shadows, highlights and midtones separately",
+  "difficulty": "HARD",
+  "explanation": "Curves is similar to Levels but gives more power to control shadows, highlights and midtones separately; being more advanced, it must be used carefully."
+ },
+ {
+  "questionText": "How is contrast increased with the Curves tool?",
+  "options": [
+   "Drag the curve down in the shadows and up in the highlights",
+   "Drag the curve up in the shadows and down in the highlights",
+   "Move the two corner points toward the middle",
+   "Delete every point on the curve except the corners"
+  ],
+  "correctAnswer": "Drag the curve down in the shadows and up in the highlights",
+  "difficulty": "HARD",
+  "explanation": "To increase contrast, drag the curve down in the shadows on the left to darken them and up in the highlights on the right to brighten them; the opposite decreases contrast."
+ }
+]

@@ -135,13 +135,13 @@
   "questionText": "Why do folders allow two files to have the same name?",
   "options": [
    "Each file can sit in a different folder",
-   "Windows adds a hidden code to every name",
-   "Files with the same name merge into one",
-   "Folders store files without any names"
+   "Windows adds a number to the second file's name",
+   "The second file gets a different hidden extension",
+   "The two files are merged into one file"
   ],
   "correctAnswer": "Each file can sit in a different folder",
   "difficulty": "MEDIUM",
-  "explanation": "Folders allow more than one file with the same name, such as My-letter.doc in My Documents and another in Letter collection. If all files were in one place, every file would need a unique name."
+  "explanation": "Folders allow more than one file with the same name, such as My-letter.doc in My Documents and another in Letter collection, because each sits in a different folder. A number is added only when a copy is made in the same folder."
  },
  {
   "questionText": "StudentMarkList.pdf is copied into the same folder. What could the copy be named?",
@@ -327,9 +327,9 @@
   "questionText": "Which search method lets you find a file on one specific drive?",
   "options": [
    "Click the drive under This PC, then search there",
-   "Press the Windows key and type the drive letter followed by F2",
-   "Open the Recycle Bin and sort the files by their drive letter",
-   "Open Notepad and use the Save As window to look for the file"
+   "Search from the Start menu using the drive letter",
+   "Open Quick Access and search there",
+   "Open the Recycle Bin and search there"
   ],
   "correctAnswer": "Click the drive under This PC, then search there",
   "difficulty": "HARD",
@@ -339,24 +339,24 @@
   "questionText": "Why do you need the right permissions to rename some files and folders?",
   "options": [
    "It needs rights to the item, sometimes admin rights",
-   "Renaming always deletes the item's content, so it is restricted",
-   "Only files on removable drives can ever be renamed",
-   "Renaming moves the item to another drive, which needs a password"
+   "Renaming changes the extension, so it is restricted",
+   "Only the creator of a file can ever rename it",
+   "Renaming first moves the item to the Recycle Bin"
   ],
   "correctAnswer": "It needs rights to the item, sometimes admin rights",
   "difficulty": "HARD",
   "explanation": "You must have rights or permissions to a file, folder or directory to rename it, and in some cases administrator privileges. Renaming does not remove a file's content."
  },
  {
-  "questionText": "Which browsers put downloaded files by default in the Download folder reached from Quick Access?",
+  "questionText": "Where do web browsers such as Chrome and Microsoft Edge save files taken from the Internet by default?",
   "options": [
-   "Internet Explorer, Microsoft Edge and Chrome",
-   "Notepad, WordPad and the Microsoft Paint program",
-   "PowerPoint, Excel and Microsoft Word",
-   "File Explorer, This PC and OneDrive"
+   "The Download folder",
+   "The Documents folder",
+   "The Desktop",
+   "The Pictures folder"
   ],
-  "correctAnswer": "Internet Explorer, Microsoft Edge and Chrome",
+  "correctAnswer": "The Download folder",
   "difficulty": "HARD",
-  "explanation": "Browsers such as Internet Explorer, Microsoft Edge and Chrome put all files downloaded from the Internet in the Download folder by default, which can be opened from Quick Access."
+  "explanation": "Browsers such as Internet Explorer, Microsoft Edge and Chrome put downloaded files in the Download folder by default, reachable from Quick Access. Documents holds Word documents, letters and memos."
  }
 ]

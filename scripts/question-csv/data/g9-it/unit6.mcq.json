@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Who designed the four-step problem solving method that became a classic method for computational problems?",
+  "options": [
+   "George Polya",
+   "Alan Turing",
+   "Charles Babbage",
+   "Blaise Pascal"
+  ],
+  "correctAnswer": "George Polya",
+  "difficulty": "EASY",
+  "explanation": "George Polya, a mathematician, designed a four-step method to solve all kinds of problems, described in his book How to Solve It. The other names are computing pioneers not linked to this method."
+ },
+ {
+  "questionText": "Which flowchart symbol marks the starting or ending point of an algorithm?",
+  "options": [
+   "Terminator",
+   "Diamond",
+   "Parallelogram",
+   "Rectangle"
+  ],
+  "correctAnswer": "Terminator",
+  "difficulty": "EASY",
+  "explanation": "The terminator symbol marks the start or end and usually contains the word Start or End. A diamond is a decision and a parallelogram is input/output."
+ },
+ {
+  "questionText": "Which flowchart symbol represents a decision or branching point?",
+  "options": [
+   "Diamond",
+   "Rectangle",
+   "Small circle",
+   "Parallelogram"
+  ],
+  "correctAnswer": "Diamond",
+  "difficulty": "EASY",
+  "explanation": "A decision (diamond shape) indicates a choice or a question; the result decides the next step. A rectangle shows a process and a small circle is a connector."
+ },
+ {
+  "questionText": "Which flowchart symbol shows information being accepted into or released from the system?",
+  "options": [
+   "Parallelogram",
+   "Rectangle (process)",
+   "Diamond",
+   "Terminator"
+  ],
+  "correctAnswer": "Parallelogram",
+  "difficulty": "EASY",
+  "explanation": "A parallelogram (input/output) shows information required at that point, entering (input) or leaving (output) the system. A rectangle shows processing such as adding numbers."
+ },
+ {
+  "questionText": "What is a pseudocode?",
+  "options": [
+   "Concise English-like instructions for a solution",
+   "A diagram of boxes, ellipses and arrows",
+   "A program written in a programming language",
+   "A set of graphic blocks joined by drag and drop"
+  ],
+  "correctAnswer": "Concise English-like instructions for a solution",
+  "difficulty": "EASY",
+  "explanation": "A pseudocode represents an algorithm with a simple and concise sequence of English-like instructions; a flowchart represents it graphically with boxes, ellipses and arrows."
+ },
+ {
+  "questionText": "Which of these is a free block-based programming environment?",
+  "options": [
+   "Scratch",
+   "Flowgorithm",
+   "Raptor",
+   "Microsoft Excel"
+  ],
+  "correctAnswer": "Scratch",
+  "difficulty": "EASY",
+  "explanation": "Scratch and Blockly are popular free block-based programming environments. Flowgorithm and Raptor are flowchart-based programming environments."
+ },
+ {
+  "questionText": "In Scratch, what are the actors or main characters of a project called?",
+  "options": [
+   "Sprites",
+   "Scripts",
+   "Stages",
+   "Programming pallets"
+  ],
+  "correctAnswer": "Sprites",
+  "difficulty": "EASY",
+  "explanation": "Sprites are the actors or main characters in Scratch, a cat by default; the script tells the actors what to say or do, and the stage is where they appear."
+ },
+ {
+  "questionText": "What does the % operator (modulo-divide) give in Flowgorithm?",
+  "options": [
+   "The remainder of a division",
+   "The quotient of a division",
+   "The percentage of a number",
+   "The square of a number"
+  ],
+  "correctAnswer": "The remainder of a division",
+  "difficulty": "EASY",
+  "explanation": "Flowgorithm uses % as the modulo-divide operator, which gives the remainder of an integer division; for example 14 % 3 is 2."
+ },
+ {
+  "questionText": "What is a computational problem?",
+  "options": [
+   "A problem a computer can solve step by step",
+   "Any difficulty that people face in their community",
+   "A problem that only mathematicians are able to solve",
+   "A fault in computer hardware that needs repair"
+  ],
+  "correctAnswer": "A problem a computer can solve step by step",
+  "difficulty": "EASY",
+  "explanation": "A computational problem can be solved systematically (step by step) with a computer and usually has well-defined inputs, constraints and output conditions; issues like climate change cannot be solved directly by computers."
+ },
+ {
+  "questionText": "What is the value of 14 % 3?",
+  "options": [
+   "2",
+   "4",
+   "3",
+   "1"
+  ],
+  "correctAnswer": "2",
+  "difficulty": "EASY",
+  "explanation": "% gives the remainder of an integer division: 14 divided by 3 is 4 with a remainder of 2, so 14 % 3 is 2. The quotient 4 is not what % returns."
+ },
+ {
+  "questionText": "Which type of computational problem has only Yes or No answers, as in asking whether an integer n is even?",
+  "options": [
+   "Decision problem",
+   "Search problem",
+   "Counting problem",
+   "Optimization problem"
+  ],
+  "correctAnswer": "Decision problem",
+  "difficulty": "MEDIUM",
+  "explanation": "A decision problem is one where the answer is Yes or No, such as whether n is even. A counting problem's answer is the number of solutions."
+ },
+ {
+  "questionText": "Finding how many female students are in the Grade 9 students' list is which type of computational problem?",
+  "options": [
+   "Counting problem",
+   "Decision problem",
+   "Search problem",
+   "Optimization problem"
+  ],
+  "correctAnswer": "Counting problem",
+  "difficulty": "MEDIUM",
+  "explanation": "A counting problem's answer is the number of solutions to a search problem, such as how many female students are in the list. A search problem returns the values themselves."
+ },
+ {
+  "questionText": "Computing the fastest route from one location to another is which type of computational problem?",
+  "options": [
+   "Optimization problem",
+   "Decision problem",
+   "Counting problem",
+   "Sequencing problem"
+  ],
+  "correctAnswer": "Optimization problem",
+  "difficulty": "MEDIUM",
+  "explanation": "An optimization problem seeks the best possible solution, such as the fastest route; a router handles this kind of problem in network traffic. A decision problem only answers Yes or No."
+ },
+ {
+  "questionText": "In computer science, what replaces Polya's second step, 'Make a plan'?",
+  "options": [
+   "Develop an algorithm",
+   "Write the program",
+   "Test the program",
+   "Understand the problem"
+  ],
+  "correctAnswer": "Develop an algorithm",
+  "difficulty": "MEDIUM",
+  "explanation": "In IT the steps become understand the problem, develop an algorithm, write the program and test the program; 'make a plan' is represented as develop an algorithm."
+ },
+ {
+  "questionText": "In the algorithm for the average of 10 numbers, which step is the process?",
+  "options": [
+   "Adding the numbers and dividing by 10",
+   "Getting the 10 numbers from the keyboard",
+   "Reporting the average on the screen",
+   "Choosing which 10 numbers to use"
+  ],
+  "correctAnswer": "Adding the numbers and dividing by 10",
+  "difficulty": "MEDIUM",
+  "explanation": "Getting the 10 numbers is the input, calculating the sum and average is the process, and reporting the result is the output in the information-processing model."
+ },
+ {
+  "questionText": "Which of the three flows of instruction processing executes instructions depending on the outcome of a decision?",
+  "options": [
+   "Selection",
+   "Sequence",
+   "Repetition",
+   "Modularization"
+  ],
+  "correctAnswer": "Selection",
+  "difficulty": "MEDIUM",
+  "explanation": "Selection (condition) executes or jumps instructions depending on a decision's outcome; sequence runs instructions top-down in order, and repetition repeats them."
+ },
+ {
+  "questionText": "Why should an output prompt such as 'Please enter two numbers' come before input symbols in a flowchart?",
+  "options": [
+   "To alert the person to key in the data",
+   "To declare the variables that hold the data",
+   "To add the two numbers together",
+   "To end the flowchart after input"
+  ],
+  "correctAnswer": "To alert the person to key in the data",
+  "difficulty": "MEDIUM",
+  "explanation": "For computer-human interaction, an alerting message must be given with an output symbol before accepting data, so the person knows to enter the numbers. Declaration is done with its own symbol."
+ },
+ {
+  "questionText": "In Flowgorithm, which must always come before an input symbol for a variable?",
+  "options": [
+   "A declaration of the variable",
+   "An output of the variable's value",
+   "A decision on the variable",
+   "A call to a subroutine"
+  ],
+  "correctAnswer": "A declaration of the variable",
+  "difficulty": "MEDIUM",
+  "explanation": "Declaration names a variable where data from the keyboard will be placed, and declaration always comes before input; several variables can be declared together separated by commas."
+ },
+ {
+  "questionText": "Which Flowgorithm operator joins two strings, such as a name and a school name?",
+  "options": [
+   "&",
+   "+",
+   "%",
+   "="
+  ],
+  "correctAnswer": "&",
+  "difficulty": "MEDIUM",
+  "explanation": "The & operator is a string connector in Flowgorithm; joining \"Challa\" and the school name with & puts them on one line, without a space unless one is added inside the quotes."
+ },
+ {
+  "questionText": "What is the main idea of the top-down approach to problem solving?",
+  "options": [
+   "Split a big problem into parts, solve each, then integrate",
+   "Start from existing small modules and combine them into a bigger program",
+   "Write the whole program at once and then test it at the end",
+   "Solve only the easiest part of a problem and ignore the rest"
+  ],
+  "correctAnswer": "Split a big problem into parts, solve each, then integrate",
+  "difficulty": "MEDIUM",
+  "explanation": "Top-down decomposes a bigger problem into smaller, manageable sub-problems, solves them individually and integrates them; starting from existing modules is the bottom-up approach."
+ },
+ {
+  "questionText": "What is the solution developed for a smaller sub-problem called?",
+  "options": [
+   "A module",
+   "A sprite",
+   "A terminator",
+   "A pseudocode"
+  ],
+  "correctAnswer": "A module",
+  "difficulty": "MEDIUM",
+  "explanation": "The solution developed for a smaller problem is called a module, and dividing the problem into smaller problems is called modularization."
+ },
+ {
+  "questionText": "What range does the x-coordinate of the Scratch stage cover?",
+  "options": [
+   "-240 to 240",
+   "-180 to 180",
+   "0 to 480 only",
+   "-100 to 100"
+  ],
+  "correctAnswer": "-240 to 240",
+  "difficulty": "MEDIUM",
+  "explanation": "The Scratch stage has a coordinate system with X from -240 to 240 and Y from -180 to 180."
+ },
+ {
+  "questionText": "A flowchart sets num to 2, then while num < 10 it outputs num and adds 2 to it. What does it output?",
+  "options": [
+   "2, 4, 6, 8",
+   "2, 4, 6, 8, 10",
+   "0, 2, 4, 6, 8",
+   "2, 3, 4, 5, 6, 7, 8, 9"
+  ],
+  "correctAnswer": "2, 4, 6, 8",
+  "difficulty": "HARD",
+  "explanation": "num starts at 2 and grows by 2 each loop; it prints 2, 4, 6 and 8, and when num becomes 10 the condition num < 10 is false, so 10 is not printed."
+ },
+ {
+  "questionText": "A flowchart checks whether a number is even. Which condition belongs in its decision symbol?",
+  "options": [
+   "number % 2 = 0",
+   "number / 2 = 0",
+   "number % 2 = 1",
+   "number * 2 = 0"
+  ],
+  "correctAnswer": "number % 2 = 0",
+  "difficulty": "HARD",
+  "explanation": "A number is even when dividing it by 2 leaves no remainder, so the condition number % 2 = 0 sends the flow to 'number is even'; a remainder of 1 means odd."
+ },
+ {
+  "questionText": "Wage calculation for 10 labourers is split into a CalculateWage module and a main module that calls it inside a loop. Which approach is this?",
+  "options": [
+   "Top-down",
+   "Bottom-up",
+   "Sequence only",
+   "Trial and error"
+  ],
+  "correctAnswer": "Top-down",
+  "difficulty": "HARD",
+  "explanation": "The flowchart for 10 wages is the example of a top-down approach: the problem is divided into a module that calculates one wage and a main module that calls it repeatedly."
+ },
+ {
+  "questionText": "You already have working modules for the area and perimeter of each kind of polygon and combine them into one program. Which approach is this?",
+  "options": [
+   "Bottom-up",
+   "Top-down",
+   "Modularization only",
+   "Sequence only"
+  ],
+  "correctAnswer": "Bottom-up",
+  "difficulty": "HARD",
+  "explanation": "In bottom-up, the fundamental modules are designed or already exist and are then integrated into a bigger program, as with combining existing area and perimeter modules for polygons."
+ },
+ {
+  "questionText": "What do both the top-down and bottom-up strategies use?",
+  "options": [
+   "Incremental development and unit testing",
+   "A single test of the finished program",
+   "Only flowcharts and never pseudocode",
+   "Writing the program before the algorithm exists"
+  ],
+  "correctAnswer": "Incremental development and unit testing",
+  "difficulty": "HARD",
+  "explanation": "Both strategies are based on incremental development, building the program piece by piece, and both employ unit testing, testing each piece before moving to the next."
+ },
+ {
+  "questionText": "In the wage exercise, tax at 5% is charged on half of the total pay only when total pay exceeds 5,000. What is the net pay for a total pay of 6,000?",
+  "options": [
+   "5,850",
+   "5,700",
+   "6,000",
+   "5,975"
+  ],
+  "correctAnswer": "5,850",
+  "difficulty": "HARD",
+  "explanation": "6,000 exceeds 5,000, so tax is 5% of 50% of 6,000 = 5% of 3,000 = 150, and net pay is 6,000 - 150 = 5,850. Charging 5% on the full 6,000 would wrongly give 5,700."
+ },
+ {
+  "questionText": "Why must an algorithm be transformed into a computer program before a computer can run it?",
+  "options": [
+   "Computers understand programming languages, not human ones",
+   "Algorithms must first be approved by a teacher",
+   "Computers only run algorithms drawn as flowcharts",
+   "Algorithms are written in binary, which people cannot read"
+  ],
+  "correctAnswer": "Computers understand programming languages, not human ones",
+  "difficulty": "HARD",
+  "explanation": "Computers do not understand instructions written in English, Amharic, Afan Oromo or other human languages; they have their own programming languages, so the algorithm must become a program."
+ },
+ {
+  "questionText": "Which Scratch control block keeps repeating its blocks and stops once a condition, such as a counter reaching 12, becomes true?",
+  "options": [
+   "repeat until",
+   "repeat 10",
+   "forever",
+   "if ... else"
+  ],
+  "correctAnswer": "repeat until",
+  "difficulty": "HARD",
+  "explanation": "Repeat N repeats a fixed number of times and forever never stops; repeat until keeps repeating until its condition is met, such as a counter reaching 12."
+ }
+]
