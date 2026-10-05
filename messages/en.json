@@ -895,13 +895,7 @@
     "empty": "No books are available to read yet.",
     "loadError": "Could not load the library. Please try again.",
     "grade": "Grade {grade}",
-    "back": "Library",
-    "chapter": "Chapter",
-    "chapterN": "Chapter {n}",
-    "chapters": "{n, plural, one {# chapter} other {# chapters}}",
-    "noText": "This book has no text to show yet.",
-    "pdf": "PDF",
-    "text": "Text"
+    "back": "Library"
   },
   "nationalExam": {
     "title": "Grade 12 National Exam",

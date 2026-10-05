@@ -13,8 +13,6 @@ interface Book {
   subject: string;
   grade: number;
   readerFileSize: number | null;
-  chapterCount: number;
-  hasPdf: boolean;
 }
 
 /** Library: the textbooks a student can open and read in the app. */
@@ -70,11 +68,9 @@ export default function LibraryPage() {
                         </div>
                         <p className="font-semibold text-text-primary">{b.subject}</p>
                         <p className="text-xs text-text-secondary">{t("grade", { grade: b.grade })}</p>
-                        <p className="mt-auto text-xs text-text-secondary">
-                          {b.hasPdf
-                            ? `${t("pdf")}${b.readerFileSize ? ` · ${(b.readerFileSize / 1024 / 1024).toFixed(1)} MB` : ""}`
-                            : `${t("text")}${b.chapterCount ? ` · ${t("chapters", { n: b.chapterCount })}` : ""}`}
-                        </p>
+                        {b.readerFileSize ? (
+                          <p className="mt-auto text-xs text-text-secondary">{(b.readerFileSize / 1024 / 1024).toFixed(1)} MB</p>
+                        ) : null}
                       </CardContent>
                     </Card>
                   </Link>
