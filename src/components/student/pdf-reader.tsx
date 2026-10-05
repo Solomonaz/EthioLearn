@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ZoomIn, ZoomOut, ChevronUp, ChevronDown, Maximize2 } from "lucide-react";
+import { ZoomIn, ZoomOut, ChevronUp, ChevronDown, Maximize2, Minimize2 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 
@@ -24,6 +24,7 @@ const KEEP_AROUND = 4;
  * button; the last page read is remembered per book on this device.
  */
 export function PdfReader({ url, storageKey }: { url: string; storageKey: string }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<PdfDoc | null>(null);
   const baseSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -37,6 +38,46 @@ export function PdfReader({ url, storageKey }: { url: string; storageKey: string
   const [current, setCurrent] = useState(1);
   const [pageInput, setPageInput] = useState("1");
   const [error, setError] = useState<string | null>(null);
+  // Full screen: the browser's Fullscreen API where it exists; on iPhone
+  // Safari, which has none for page elements, the reader covers the window.
+  const [nativeFs, setNativeFs] = useState(false);
+  const [coverFs, setCoverFs] = useState(false);
+  const fullscreen = nativeFs || coverFs;
+
+  useEffect(() => {
+    const onChange = () => setNativeFs(document.fullscreenElement === rootRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // Esc leaves the covering mode, as it does native full screen.
+  useEffect(() => {
+    if (!coverFs) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setCoverFs(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [coverFs]);
+
+  const toggleFullscreen = async () => {
+    if (nativeFs) {
+      await document.exitFullscreen().catch(() => {});
+      return;
+    }
+    if (coverFs) {
+      setCoverFs(false);
+      return;
+    }
+    const el = rootRef.current;
+    if (el?.requestFullscreen && document.fullscreenEnabled) {
+      try {
+        await el.requestFullscreen();
+        return;
+      } catch {
+        /* refused: fall back to covering the window */
+      }
+    }
+    setCoverFs(true);
+  };
 
   // Load the document.
   useEffect(() => {
@@ -178,7 +219,14 @@ export function PdfReader({ url, storageKey }: { url: string; storageKey: string
   const placeholderW = base ? base.width * scale : 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      ref={rootRef}
+      className={
+        coverFs
+          ? "fixed inset-0 z-[80] flex flex-col bg-surface"
+          : "flex min-h-0 flex-1 flex-col bg-surface"
+      }
+    >
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-3 py-2">
         <div className="flex items-center gap-1">
@@ -210,12 +258,26 @@ export function PdfReader({ url, storageKey }: { url: string; storageKey: string
           <Button variant="ghost" size="sm" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, +(z - 0.25).toFixed(2)))} disabled={zoom <= MIN_ZOOM}>
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <span className="w-12 text-center text-sm text-text-secondary">{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="w-12 rounded text-center text-sm text-text-secondary hover:text-primary"
+            aria-label="Fit width"
+            title="Fit width"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
           <Button variant="ghost" size="sm" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, +(z + 0.25).toFixed(2)))} disabled={zoom >= MAX_ZOOM}>
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" aria-label="Fit width" onClick={() => setZoom(1)}>
-            <Maximize2 className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            title={fullscreen ? "Exit full screen" : "Full screen"}
+            onClick={toggleFullscreen}
+          >
+            {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         </div>
       </div>
