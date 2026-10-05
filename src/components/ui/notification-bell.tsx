@@ -40,7 +40,11 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export function NotificationBell() {
+/**
+ * `viewAllHref`: the full notifications page, linked from the dropdown's
+ * footer. The bell is the only way in — the page is not in the side menu.
+ */
+export function NotificationBell({ viewAllHref }: { viewAllHref?: string } = {}) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -205,6 +209,17 @@ export function NotificationBell() {
               ))
             )}
           </div>
+          {viewAllHref && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                router.push(viewAllHref);
+              }}
+              className="block w-full border-t border-border px-4 py-2.5 text-center text-xs font-medium text-primary hover:bg-gray-50"
+            >
+              View all notifications
+            </button>
+          )}
         </div>
       )}
     </div>
