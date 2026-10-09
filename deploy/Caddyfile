@@ -7,10 +7,8 @@
 	reverse_proxy app:3001
 }
 
-# ── Moving to a new domain later (e.g. abugida.et) ──────────────────────────
-# 1. Set DOMAIN=abugida.et in .env (and NEXTAUTH_URL=https://abugida.et).
-# 2. Uncomment this block with the OLD address, so old links keep working:
-#
-# abugida.aderasend.com {
-# 	redir https://abugida.et{uri} permanent
-# }
+# www and the old subdomain both forward to the main address, so old links and
+# bookmarks keep working. Each needs a DNS record pointing at this server.
+www.{$DOMAIN}, abugida.aderasend.com {
+	redir https://{$DOMAIN}{uri} permanent
+}

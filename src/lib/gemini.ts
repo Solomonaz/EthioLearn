@@ -189,23 +189,31 @@ export function geminiFastModel(): string {
  * it is given, so the JSON stays starved while the bill grows ~14x. Every task
  * here is structured extraction against text we supply, which is exactly the
  * shape that does not need extended reasoning; the quality pipeline is what
- * guards correctness. Set GEMINI_THINKING_BUDGET to raise it if a task ever
+ * guards correctness. Set GEMINI_THINKING_LEVEL to raise it if a task ever
  * genuinely needs deliberation.
+ *
+ * This is a thinking LEVEL, not a token budget: Google deprecated thinkingBudget
+ * (upcoming models reject it with 400 INVALID_ARGUMENT). "low" is the floor:
+ * gemini-3.8-flash rejects "minimal" with a 400 (checked 2026-10-09), and a
+ * short reasoning prompt thinks ~110 tokens at "low" vs ~425 at "high".
  */
-// `||`, not `??`: an empty GEMINI_THINKING_BUDGET="" (as in .env.example) must mean
-// "use the default", not Number("") = 0, which silently switches thinking off.
-const THINKING_BUDGET = Number(process.env.GEMINI_THINKING_BUDGET?.trim() || 512);
+export type GeminiThinkingLevel = "minimal" | "low" | "medium" | "high";
+// `||`, not `??`: an empty GEMINI_THINKING_LEVEL="" (as in .env.example) must
+// mean "use the default".
+const THINKING_LEVEL = (process.env.GEMINI_THINKING_LEVEL?.trim() || "low") as GeminiThinkingLevel;
 
 /**
  * Merge the thinking cap into a generationConfig.
  *
  * The cast is deliberate: `thinkingConfig` is a real REST field that this SDK
  * forwards verbatim, but @google/generative-ai@0.24.1 predates it and does not
- * declare it on GenerationConfig. Verified against the live API — the same call
- * reports thoughtsTokenCount 3,929 without it and 0 with it.
+ * declare it on GenerationConfig.
+ *
+ * No temperature/topP/topK anywhere in this file: Google ignores them since
+ * Gemini 3.6 Flash and upcoming models reject them with an error.
  */
-function withThinkingCap<T extends object>(cfg: T, budget = THINKING_BUDGET): T {
-  return { ...cfg, thinkingConfig: { thinkingBudget: budget } } as T;
+function withThinkingCap<T extends object>(cfg: T, level = THINKING_LEVEL): T {
+  return { ...cfg, thinkingConfig: { thinkingLevel: level } } as T;
 }
 
 /**
@@ -268,6 +276,8 @@ export async function geminiChat(
   prompt: string,
   opts: {
     system?: string;
+    /** Accepted so callers can share one options object across providers;
+     *  never sent to Gemini (see withThinkingCap). */
     temperature?: number;
     maxTokens?: number;
     model?: string;
@@ -287,11 +297,11 @@ export async function geminiChat(
      */
     plainText?: boolean;
     /**
-     * Thinking tokens allowed, overriding the global cap. Only for a task that
+     * Thinking level, overriding the global cap. Only for a task that
      * genuinely needs to work something out (the factual tie-break) — give it
      * a maxTokens large enough to hold the thinking AND the answer.
      */
-    thinkingBudget?: number;
+    thinkingLevel?: GeminiThinkingLevel;
   } = {}
 ): Promise<string | null> {
   if (!geminiApiKey()) return null;
@@ -305,9 +315,8 @@ export async function geminiChat(
           ? { responseMimeType: "text/plain" }
           : { responseMimeType: "application/json" }),
         ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
-        temperature: opts.temperature ?? 0.2,
         maxOutputTokens: opts.maxTokens ?? 4096,
-      }, opts.thinkingBudget),
+      }, opts.thinkingLevel),
     });
     let result;
     try {
@@ -322,9 +331,8 @@ export async function geminiChat(
           ...(opts.system ? { systemInstruction: opts.system } : {}),
           generationConfig: withThinkingCap({
             responseMimeType: "application/json",
-            temperature: opts.temperature ?? 0.2,
             maxOutputTokens: opts.maxTokens ?? 4096,
-          }, opts.thinkingBudget),
+          }, opts.thinkingLevel),
         });
         result = await model.generateContent(prompt);
       } else {
@@ -527,7 +535,6 @@ export async function generateQuestionsFromContent(
     generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       responseSchema: QUESTION_GENERATION_SCHEMA,
-      temperature: 0.7,
       maxOutputTokens: 4096,
     }),
   });
@@ -615,7 +622,6 @@ export async function detectChaptersFromContent(
     generationConfig: withThinkingCap({
       responseMimeType: "application/json",
       responseSchema: CHAPTER_DETECTION_SCHEMA,
-      temperature: 0.3,
       maxOutputTokens: 4096,
     }),
   });
@@ -1196,7 +1202,6 @@ export async function tutorResponseFromContent(opts: {
   const chat = model.startChat({
     history: opts.history,
     generationConfig: withThinkingCap({
-      temperature: 0.7,
       maxOutputTokens: 2048,
     }),
   });

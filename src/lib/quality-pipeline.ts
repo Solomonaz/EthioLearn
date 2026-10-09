@@ -1224,9 +1224,9 @@ async function tiebreakFactual(
           geminiChat(prompt, {
             temperature: 0.1,
             // Thinking counts against maxOutputTokens (see lib/gemini.ts), so
-            // leave room for the answer on top of the thinking budget.
+            // leave room for the answer on top of the thinking.
             maxTokens: 8192,
-            thinkingBudget: 4096,
+            thinkingLevel: "medium",
             feature: "factual-tiebreak",
             responseSchema: TIEBREAK_GEMINI_SCHEMA,
           }),
