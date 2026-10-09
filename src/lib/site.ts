@@ -4,12 +4,12 @@ import type { Metadata } from "next";
  * Public identity of the site, for search engines and link previews.
  *
  * SITE_URL follows NEXTAUTH_URL (the public URL the deployment already sets),
- * so moving to abugida.et means changing .env only — canonical links, the
+ * so changing the domain means changing .env only — canonical links, the
  * sitemap and structured data all follow. Read at request time: the Docker
  * build has no .env, so anything that uses it must render dynamically.
  */
 export function siteUrl(): string {
-  const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://abugida.aderasend.com";
+  const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://abugidatech.com";
   return url.replace(/\/$/, "");
 }
 
