@@ -107,6 +107,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     if (item.labelKey === "rewards" && !ent.rewards) return false;
     if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;
     if (item.labelKey === "billing" && !ent.pricingEnabled) return false;
+    // Homework only comes from school teachers; self-registered students have none.
+    if (item.labelKey === "myWork" && ent.isIndependent) return false;
     return true;
   });
 
