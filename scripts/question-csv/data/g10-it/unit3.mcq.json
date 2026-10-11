@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "In a table, what is the rectangle formed where a row and a column intersect called?",
+  "options": [
+   "A cell",
+   "A field",
+   "A border",
+   "A range"
+  ],
+  "correctAnswer": "A cell",
+  "difficulty": "EASY",
+  "explanation": "A table is made of horizontal rows and vertical columns, and the rectangles formed where they intersect are called cells. A border is the line drawn around cells."
+ },
+ {
+  "questionText": "What are Word's built-in preformatted tables, such as calendars and tabular lists, called?",
+  "options": [
+   "Quick tables",
+   "Table styles",
+   "Drawn tables",
+   "Smart tables"
+  ],
+  "correctAnswer": "Quick tables",
+  "difficulty": "EASY",
+  "explanation": "Quick tables are built-in preformatted tables such as calendars and tabular lists that you can insert and edit. Table styles only change the look of an existing table."
+ },
+ {
+  "questionText": "Which Excel function finds the highest value in a range of cells?",
+  "options": [
+   "MAX",
+   "SUM",
+   "COUNT",
+   "AVERAGE"
+  ],
+  "correctAnswer": "MAX",
+  "difficulty": "EASY",
+  "explanation": "MAX determines the highest cell value in the argument and MIN the lowest; COUNT counts cells with numerical data."
+ },
+ {
+  "questionText": "What is the default font of a new Excel workbook?",
+  "options": [
+   "Calibri",
+   "Arial (body)",
+   "Cambria",
+   "Tahoma"
+  ],
+  "correctAnswer": "Calibri",
+  "difficulty": "EASY",
+  "explanation": "By default, the font of each new workbook is set to Calibri, though Excel offers many other fonts. Cambria is used in the Word exercises."
+ },
+ {
+  "questionText": "Which keyboard shortcut runs a PowerPoint slide show from the first slide?",
+  "options": [
+   "F5",
+   "F2",
+   "Esc",
+   "Ctrl+M"
+  ],
+  "correctAnswer": "F5",
+  "difficulty": "EASY",
+  "explanation": "Pressing F5 runs the presentation to see the effects, and Esc ends it. Ctrl+M inserts a new slide."
+ },
+ {
+  "questionText": "What are the animated effects that occur when moving from one slide to the next called?",
+  "options": [
+   "Transitions",
+   "Animations",
+   "Slide masters",
+   "Themes"
+  ],
+  "correctAnswer": "Transitions",
+  "difficulty": "EASY",
+  "explanation": "Transitions are animated effects that happen when you move from one slide to another; animations apply to individual items on a slide."
+ },
+ {
+  "questionText": "Which Excel command lets you keep header rows visible while scrolling through data?",
+  "options": [
+   "Freeze Panes",
+   "Split window",
+   "Filter",
+   "Sort"
+  ],
+  "correctAnswer": "Freeze Panes",
+  "difficulty": "EASY",
+  "explanation": "Freeze Panes keeps chosen rows or columns in place, shown by a gray line, while you scroll. Split divides the sheet into separately scrolling panes."
+ },
+ {
+  "questionText": "Which keyboard shortcut underlines selected text in Excel?",
+  "options": [
+   "Ctrl+U",
+   "Ctrl+B",
+   "Ctrl+I",
+   "Ctrl+S"
+  ],
+  "correctAnswer": "Ctrl+U",
+  "difficulty": "EASY",
+  "explanation": "Ctrl+B makes text bold, Ctrl+I applies italics and Ctrl+U applies an underline. Ctrl+S saves the file."
+ },
+ {
+  "questionText": "When you insert a picture into Word, how does Word mark it by default?",
+  "options": [
+   "As an embedded object",
+   "As a linked external file",
+   "As a clip art image",
+   "As a screenshot"
+  ],
+  "correctAnswer": "As an embedded object",
+  "difficulty": "EASY",
+  "explanation": "Word marks an inserted picture as an embedded object by default, so it becomes part of the document and is no longer connected to the original image."
+ },
+ {
+  "questionText": "Which tab holds the Slide Master command in PowerPoint?",
+  "options": [
+   "View",
+   "Insert",
+   "Design",
+   "Transitions"
+  ],
+  "correctAnswer": "View",
+  "difficulty": "EASY",
+  "explanation": "To create a slide master, on the View tab you click Slide Master; the slide master then appears at the top of the thumbnail pane."
+ },
+ {
+  "questionText": "How many columns can the Insert Table dialog box create at most?",
+  "options": [
+   "63",
+   "9",
+   "255",
+   "1,000"
+  ],
+  "correctAnswer": "63",
+  "difficulty": "MEDIUM",
+  "explanation": "The Insert Table dialog box lets you create large tables of up to 63 columns and thousands of rows by typing or using the spin box arrows."
+ },
+ {
+  "questionText": "Why should two tables inserted in a document be separated by a blank line?",
+  "options": [
+   "To avoid joining the tables",
+   "To number the tables automatically",
+   "To apply a table style",
+   "To resize the columns"
+  ],
+  "correctAnswer": "To avoid joining the tables",
+  "difficulty": "MEDIUM",
+  "explanation": "When you insert more than one table in a document you should separate them with a blank line, pressing Enter below the first table, to avoid joining the tables."
+ },
+ {
+  "questionText": "What does holding Shift while dragging to draw a shape in Word do?",
+  "options": [
+   "It draws a 'perfect' shape",
+   "It locks Word into drawing mode",
+   "It rotates the shape as you draw",
+   "It deletes the previous shape"
+  ],
+  "correctAnswer": "It draws a 'perfect' shape",
+  "difficulty": "MEDIUM",
+  "explanation": "Holding Shift while clicking and dragging creates a perfect version of the selected shape. Lock Drawing Mode is chosen by right-clicking the shape in the menu."
+ },
+ {
+  "questionText": "How do you lock Word into drawing mode so that one shape can be drawn many times?",
+  "options": [
+   "Right-click it in the Shapes menu, then Lock Drawing Mode",
+   "Hold Shift and click the shape in the Shapes menu twice",
+   "Double-click the Shapes button on the Insert tab",
+   "Press Esc after drawing the first shape"
+  ],
+  "correctAnswer": "Right-click it in the Shapes menu, then Lock Drawing Mode",
+  "difficulty": "MEDIUM",
+  "explanation": "Right-clicking the shape in the Shapes drop-down and choosing Lock Drawing Mode lets you draw many instances; pressing Esc cancels the lock."
+ },
+ {
+  "questionText": "What is the result of the Excel formula =5+2*8?",
+  "options": [
+   "21",
+   "56",
+   "15",
+   "18"
+  ],
+  "correctAnswer": "21",
+  "difficulty": "MEDIUM",
+  "explanation": "Multiplication is done before addition, so 2*8 = 16 and 5 + 16 = 21; calculating left to right would wrongly give (5+2)*8 = 56."
+ },
+ {
+  "questionText": "According to the order of operations, what does Excel calculate first?",
+  "options": [
+   "Operations in parentheses",
+   "Addition and subtraction",
+   "Multiplication and division",
+   "Values in the first column"
+  ],
+  "correctAnswer": "Operations in parentheses",
+  "difficulty": "MEDIUM",
+  "explanation": "Excel calculates operations in parentheses first, then exponents, then multiplication and division, and finally addition and subtraction."
+ },
+ {
+  "questionText": "How must multiple arguments in an Excel function be separated?",
+  "options": [
+   "With commas",
+   "With colons",
+   "With semicolons",
+   "With spaces"
+  ],
+  "correctAnswer": "With commas",
+  "difficulty": "MEDIUM",
+  "explanation": "Multiple arguments must be separated by commas, as in =SUM(A1:A3, C1:C2, E2); a colon marks a cell range such as B1:B9."
+ },
+ {
+  "questionText": "What does the COUNT function count?",
+  "options": [
+   "Cells with numerical data",
+   "All non-empty cells in the range",
+   "Cells with text only",
+   "Every cell in the sheet"
+  ],
+  "correctAnswer": "Cells with numerical data",
+  "difficulty": "MEDIUM",
+  "explanation": "COUNT counts the number of cells with numerical data in the argument, which is useful for counting items in a range."
+ },
+ {
+  "questionText": "How are numbers aligned in a worksheet cell by default?",
+  "options": [
+   "Bottom-right",
+   "Bottom-left",
+   "Top-center",
+   "Middle-center"
+  ],
+  "correctAnswer": "Bottom-right",
+  "difficulty": "MEDIUM",
+  "explanation": "By default, text is aligned to the bottom-left of a cell and numbers to the bottom-right. Alignment commands on the Home tab change this."
+ },
+ {
+  "questionText": "What must a worksheet have for filtering to work correctly?",
+  "options": [
+   "A header row naming each column",
+   "A frozen first column on the left",
+   "A chart of the data",
+   "A split into two panes"
+  ],
+  "correctAnswer": "A header row naming each column",
+  "difficulty": "MEDIUM",
+  "explanation": "For filtering to work correctly, the worksheet should include a header row that identifies each column; drop-down arrows then appear in the header cells."
+ },
+ {
+  "questionText": "How do animations differ from transitions in PowerPoint?",
+  "options": [
+   "Animations apply to items on a slide",
+   "Animations apply to whole slides",
+   "Animations play only between slides",
+   "Animations change the layout of the slide"
+  ],
+  "correctAnswer": "Animations apply to items on a slide",
+  "difficulty": "MEDIUM",
+  "explanation": "Animations apply to individual items on a slide, while transitions apply only to entire slides as you move from one to the next."
+ },
+ {
+  "questionText": "What does a small star beside a slide miniature in the thumbnail pane show?",
+  "options": [
+   "A transition has been set on that slide",
+   "The slide is hidden in the show",
+   "The slide is the slide master",
+   "The slide has speaker notes attached"
+  ],
+  "correctAnswer": "A transition has been set on that slide",
+  "difficulty": "MEDIUM",
+  "explanation": "After you choose a transition effect, a small star symbol appears to the left of the slide miniature, indicating that a transition has been set up on that slide."
+ },
+ {
+  "questionText": "To freeze columns A and B, which column should you select before choosing Freeze Panes?",
+  "options": [
+   "Column C",
+   "Column A",
+   "Column B only",
+   "Row 1"
+  ],
+  "correctAnswer": "Column C",
+  "difficulty": "HARD",
+  "explanation": "To freeze columns you select the column to the right of the column(s) you wish to freeze, so for A and B you select column C."
+ },
+ {
+  "questionText": "How does Sort range differ from Sort sheet?",
+  "options": [
+   "Other content on the sheet is left as it is",
+   "It sorts by every column at once",
+   "It always sorts from Z to A",
+   "It removes rows that are duplicates"
+  ],
+  "correctAnswer": "Other content on the sheet is left as it is",
+  "difficulty": "HARD",
+  "explanation": "Sort sheet organizes all data in the worksheet by one column, while Sort range sorts only a range of cells and does not affect other content, useful when a sheet holds several tables."
+ },
+ {
+  "questionText": "What does =AVERAGE(B1:B9) calculate?",
+  "options": [
+   "The average of the values in B1 to B9",
+   "The average of B1 and B9 only",
+   "The number of cells from B1 to B9",
+   "The total of all the cells from B1 to B9"
+  ],
+  "correctAnswer": "The average of the values in B1 to B9",
+  "difficulty": "HARD",
+  "explanation": "B1:B9 is a single argument meaning the range from B1 to B9; AVERAGE adds those values and divides by the number of cells. B1 and B9 alone would be written B1, B9."
+ },
+ {
+  "questionText": "Why is it best to use one transition throughout a presentation?",
+  "options": [
+   "Mixed transitions distract and hurt accessibility",
+   "Mixed transitions make the file much larger",
+   "Each transition needs its own sound effect",
+   "Mixed transitions stop slide timings working"
+  ],
+  "correctAnswer": "Mixed transitions distract and hurt accessibility",
+  "difficulty": "HARD",
+  "explanation": "Different transition effects between slides may add interest but distract from the talk and are not good for accessibility, so it is best to stick to one transition."
+ },
+ {
+  "questionText": "How do you standardize the transition on every slide of a presentation?",
+  "options": [
+   "Choose the transition, then click Apply to All",
+   "Choose a transition on each slide one by one",
+   "Set the transition on the slide master and nowhere else",
+   "Press F5 after choosing any one transition"
+  ],
+  "correctAnswer": "Choose the transition, then click Apply to All",
+  "difficulty": "HARD",
+  "explanation": "To standardize, you remove effects by choosing None and Apply to All, then choose your preferred transition and click Apply to All so every slide uses it."
+ },
+ {
+  "questionText": "How is a finished slide master saved so it can be reused as a template?",
+  "options": [
+   "Save as type PowerPoint template",
+   "Save as type PDF document",
+   "Save it from Slide Sorter view as a .pptx",
+   "Save it as a Quick Table"
+  ],
+  "correctAnswer": "Save as type PowerPoint template",
+  "difficulty": "HARD",
+  "explanation": "After designing the slide master, on the File tab click Save As, type a file name and in the Save as type list choose PowerPoint template, then click Save."
+ },
+ {
+  "questionText": "Which tool in Word's Screenshot menu lets you draw a box to capture only part of the screen?",
+  "options": [
+   "Screen Clipping",
+   "Snipping Pane",
+   "Picture Crop",
+   "Active Window Capture"
+  ],
+  "correctAnswer": "Screen Clipping",
+  "difficulty": "HARD",
+  "explanation": "The Screenshot menu shows thumbnails of open windows; choosing Screen Clipping lets you draw a box and capture an image of just its contents."
+ },
+ {
+  "questionText": "Why does PowerPoint let bullet points appear one at a time?",
+  "options": [
+   "It stops the audience reading ahead",
+   "It makes the file load faster",
+   "It lets slides change automatically on a timer",
+   "It hides the slide title"
+  ],
+  "correctAnswer": "It stops the audience reading ahead",
+  "difficulty": "HARD",
+  "explanation": "Showing information one item at a time stops your audience from reading ahead of you, so they concentrate on each point individually."
+ }
+]

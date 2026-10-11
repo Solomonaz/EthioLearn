@@ -2,7 +2,7 @@ import { geminiChat } from "./gemini";
 import { groqChat } from "./groq";
 import { nvidiaChat } from "./nvidia";
 import { openRouterChat } from "./openrouter";
-import { getTaskChain, runStep, type AiProvider } from "./ai-routing";
+import { getTaskChain, runStep, implFor, type AiProvider } from "./ai-routing";
 import type { UsageActor } from "./usage-logger";
 import { ASSISTANT_TASKS, type AssistantTask } from "./assistant-tasks";
 import { ANSWER_KEY_FENCE } from "./answer-key";
@@ -98,7 +98,7 @@ export interface MergeSource {
 export interface AssistantResult {
   title: string;
   markdown: string;
-  provider: "gemini" | "groq" | "nvidia" | "openrouter";
+  provider: "gemini" | "gemini-vertex" | "groq" | "nvidia" | "openrouter";
 }
 
 /**
@@ -286,10 +286,10 @@ export async function askTeachingAssistant(
     OPENROUTER: () => openRouterChat(prompt, { ...opts, jsonMode: false }),
   };
   const providers = (await getTaskChain("teacher-assistant"))
-    .filter((s) => impl[s.provider])
+    .filter((s) => implFor(impl, s.provider))
     .map((s) => ({
       name: s.name as AssistantResult["provider"],
-      call: () => runStep(s, impl[s.provider]!),
+      call: () => runStep(s, implFor(impl, s.provider)!),
     }));
 
   const attempts: string[] = [];

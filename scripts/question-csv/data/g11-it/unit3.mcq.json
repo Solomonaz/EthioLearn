@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What role does a DBMS play between the stored data and the people or programs that use it?",
+  "options": [
+   "It acts as an interface between the database and end users or application programs",
+   "It holds the actual data that the organization collects from its users and programs",
+   "It defines which entities and attributes the database of the organization should contain",
+   "It replaces application programs by producing reports without any request from users"
+  ],
+  "correctAnswer": "It acts as an interface between the database and end users or application programs",
+  "difficulty": "EASY",
+  "explanation": "A DBMS is software that manages the database and serves as the interface between the database and end users or application programs. The data itself is held in the database, and deciding what data to store is the job of the data model."
+ },
+ {
+  "questionText": "When entities from a data model are implemented in a database, what are they equivalent to?",
+  "options": [
+   "Fields",
+   "Records",
+   "Tables",
+   "Primary keys"
+  ],
+  "correctAnswer": "Tables",
+  "difficulty": "EASY",
+  "explanation": "Entities are equivalent to tables when implemented in the database. Attributes correspond to fields and each record stores one instance, so fields and records are not the equivalent of entities."
+ },
+ {
+  "questionText": "Before any other object can be created in a newly made Microsoft Access database, which object must be created first?",
+  "options": [
+   "A query",
+   "A table",
+   "A report",
+   "A form"
+  ],
+  "correctAnswer": "A table",
+  "difficulty": "EASY",
+  "explanation": "After the database is created, a table object must be created before other database objects. A table is a set of fields that store data about an entity."
+ },
+ {
+  "questionText": "Besides the term record, which other term names a row in a relation?",
+  "options": [
+   "Tuple",
+   "Field",
+   "Attribute",
+   "Relation"
+  ],
+  "correctAnswer": "Tuple",
+  "difficulty": "EASY",
+  "explanation": "Each row of a relation is also called a record or tuple. Fields and attributes are names for columns, and a relation is the whole table of rows and columns."
+ },
+ {
+  "questionText": "What does a relational database contain?",
+  "options": [
+   "One large file holding unrelated records",
+   "A set of diagrams drawn with ellipses and rectangles",
+   "Several application programs that each process separate files",
+   "A logically related set of tables"
+  ],
+  "correctAnswer": "A logically related set of tables",
+  "difficulty": "EASY",
+  "explanation": "A relational database is a type of database that contains a logically related set of tables. A single file of unrelated records resembles file-based management and diagrams belong to the ERD, not the database."
+ },
+ {
+  "questionText": "In Microsoft Access, which item serves as the container for objects such as tables, forms, queries and reports?",
+  "options": [
+   "The table",
+   "The query",
+   "The database",
+   "The datasheet"
+  ],
+  "correctAnswer": "The database",
+  "difficulty": "EASY",
+  "explanation": "In MS Access a database is a container of database objects such as tables, forms, queries and reports. A table is only one of the objects inside it."
+ },
+ {
+  "questionText": "A hospital's application program needs the records that match a query about disease types. Which sequence correctly describes how the request is handled?",
+  "options": [
+   "The application program sends the query straight to the database, which then replies to the DBMS with the data",
+   "The application program submits the query to the DBMS, which retrieves the matching data from the database and replies to the program",
+   "The DBMS submits the query to the application program, which then retrieves the matching data from the database itself",
+   "The database finds the matching data and passes it to the DBMS, which then submits a query to the application program"
+  ],
+  "correctAnswer": "The application program submits the query to the DBMS, which retrieves the matching data from the database and replies to the program",
+  "difficulty": "MEDIUM",
+  "explanation": "Application programs sit at the top, the DBMS in the middle and the database at the bottom. Programs submit queries to the DBMS, which retrieves matching data and replies to them; programs never query the database directly and the DBMS does not send queries to programs."
+ },
+ {
+  "questionText": "A library keeps data about books, loans and borrowers. Which of the following would be an attribute rather than an entity in this library's data model?",
+  "options": [
+   "Loan",
+   "Borrower",
+   "Publication year",
+   "Book"
+  ],
+  "correctAnswer": "Publication year",
+  "difficulty": "MEDIUM",
+  "explanation": "Entities such as book, loan and borrower are things about which data is stored; publication year is a property that describes the book entity, so it is an attribute."
+ },
+ {
+  "questionText": "A school database stores data about students and teachers but not about patients or traffic accidents. Which feature of a data model accounts for this?",
+  "options": [
+   "It specifies what data to store, based on what is relevant to the organization's day-to-day activities",
+   "It sets the data type of every field so that the DBMS rejects any data about patients or accidents",
+   "It lets the DBMS block every user who has not been given the right to view patient or accident data",
+   "It makes each school department create and process its own separate files about its own activities"
+  ],
+  "correctAnswer": "It specifies what data to store, based on what is relevant to the organization's day-to-day activities",
+  "difficulty": "MEDIUM",
+  "explanation": "A data model guides what is stored in the database. A school stores student and teacher data because patient or accident data has no relevance to its daily activities; data types and access rights control how stored data is validated and accessed, not which subjects are stored."
+ },
+ {
+  "questionText": "A school keeps adding teachers to a Teacher table with fields for ID, name, sex, age and specialization. Which field is the most suitable primary key?",
+  "options": [
+   "The sex field",
+   "The age field",
+   "The specialization field",
+   "The ID field"
+  ],
+  "correctAnswer": "The ID field",
+  "difficulty": "MEDIUM",
+  "explanation": "A primary key must have a unique value for each record, as a student ID does because no two students share it. Sex, age and specialization will repeat across teachers, so they cannot identify records uniquely."
+ },
+ {
+  "questionText": "Which of the following table definitions is valid in a Microsoft Access database?",
+  "options": [
+   "A second table named Student in a database that already has a Student table",
+   "A Student table with only one field, Student_ID",
+   "A Student table whose fields are Sname, Sex, Age and Sname",
+   "A Teacher table with the fields Teacher_ID, tname and specialization"
+  ],
+  "correctAnswer": "A Teacher table with the fields Teacher_ID, tname and specialization",
+  "difficulty": "MEDIUM",
+  "explanation": "Table names must be unique in a database, a table needs two or more fields, and field names must be unique within a table. Only the Teacher table satisfies all three rules; the others break one rule each."
+ },
+ {
+  "questionText": "A teacher wants to see only the tname and specialization columns of the Teacher table, without changing or retyping the stored data. Which Access object is designed for this?",
+  "options": [
+   "A query",
+   "A form",
+   "A table",
+   "The database itself"
+  ],
+  "correctAnswer": "A query",
+  "difficulty": "MEDIUM",
+  "explanation": "A query is a database object that gives a custom view of data from one or more tables, so selecting just tname and specialization in the Field row of Query Design does this. A table stores the data itself and a form is used for data entry."
+ },
+ {
+  "questionText": "The Student table stores Sex values as the single characters M and F. What should be entered in the Criteria row under the Sex column to display only male students?",
+  "options": [
+   "Male",
+   "M",
+   "Boys",
+   "Sex = Male"
+  ],
+  "correctAnswer": "M",
+  "difficulty": "MEDIUM",
+  "explanation": "The criteria must be exactly the same as the data stored in the table. Because sex is stored as a single character, M returns male students while Male matches nothing."
+ },
+ {
+  "questionText": "A company's human resource and finance departments each keep their own employee files, managed by separate application programs, and changes HR makes for new hires never reach finance. The company then moves all employee data into one central database managed by a DBMS. Which result of this change is MOST accurate?",
+  "options": [
+   "Conflicting employee details no longer arise because the DBMS keeps separate departmental copies and copies each change from one to the other",
+   "Conflicting employee details persist because a central database cannot be accessed by more than one department at the same time",
+   "Conflicting employee details no longer arise because every department uses the same stored data, and only users given access rights can modify it",
+   "Access rights become unnecessary because holding the data in one repository stops any user from modifying it incorrectly"
+  ],
+  "correctAnswer": "Conflicting employee details no longer arise because every department uses the same stored data, and only users given access rights can modify it",
+  "difficulty": "HARD",
+  "explanation": "Contradictory data came from isolated files not linked to each other. A central database avoids redundancy and allows sharing through the DBMS, while data security still depends on access rights, so only authorized users can access and modify data."
+ },
+ {
+  "questionText": "In the Grade table, student ST0001 is paired with teachers T0001, T0002, T0003, T0004 and T0005, while teacher T0002 is paired with students ST0001, ST0002 and ST0003. Which relationship type between the Student and Teacher entities do these data support?",
+  "options": [
+   "Many-to-many",
+   "One-to-one",
+   "One-to-many, with one teacher linked to many students and each student linked to one teacher",
+   "One-to-many, with one student linked to many teachers and each teacher linked to one student"
+  ],
+  "correctAnswer": "Many-to-many",
+  "difficulty": "MEDIUM",
+  "explanation": "Instances on both sides are associated with multiple instances of the other entity (a student has several teachers and a teacher has several students), which defines a many-to-many relationship. One-to-many would require only one side to have multiple partners."
+ },
+ {
+  "questionText": "A query must show each student's name (Student table), the subject and grade (Grade table) and the teacher's name (Teacher table). The Grade table holds both Student ID and Teacher_ID. Which approach is required in the Query Design window?",
+  "options": [
+   "Add only the Grade table, because it already holds the Student ID and Teacher_ID values needed to show both names",
+   "Add only the Student and Teacher tables, because the subject and grade values can be typed into the Criteria row",
+   "Add all three tables but skip linking them, because the Criteria row alone connects the records of different tables",
+   "Add the Student, Grade and Teacher tables, drag each parent table's primary key onto Grade to link them, then select the fields"
+  ],
+  "correctAnswer": "Add the Student, Grade and Teacher tables, drag each parent table's primary key onto Grade to link them, then select the fields",
+  "difficulty": "HARD",
+  "explanation": "Data from several tables can be selected only after adding each table and establishing relationships by dragging the primary key field of the parent table to the child table; then sname, subject, grade and tname are chosen. The Grade table alone holds IDs, not names, and the Criteria row filters records rather than linking tables."
+ },
+ {
+  "questionText": "A study group concludes that the Student relation, which has 4 rows and 5 columns, contains 5 tuples and 4 attributes, reasoning that tuples describe the properties of a relation. Which diagnosis best identifies the flaw?",
+  "options": [
+   "Tuples and attributes are two different names for the same part of a relation, so the Student relation has 9 of them in total",
+   "Tuples are rows that each hold one unique instance, and attributes are columns describing properties, so it has 4 tuples and 5 attributes",
+   "Only the rows whose primary key is filled in count as tuples, and the primary key is a single row, so the relation has just 1 tuple",
+   "The reasoning is correct, since a tuple is a column that describes a property and an attribute is a row that holds one instance"
+  ],
+  "correctAnswer": "Tuples are rows that each hold one unique instance, and attributes are columns describing properties, so it has 4 tuples and 5 attributes",
+  "difficulty": "HARD",
+  "explanation": "In a relation each row (record or tuple) holds a unique instance denoting a real-world entity, and the columns (attributes or fields) describe properties. So 4 rows are 4 tuples and 5 columns are 5 attributes; tuples and attributes are not the same thing, and a primary key is a field, not a row."
+ },
+ {
+  "questionText": "The tables are Student (Student ID, Name, Sex, Grade, Address), Book (Book ID, Author, Title of book, Year) and Book_Loan (Book_Loan_No, Book ID, Student ID, Loan date). A librarian wants the names of students who borrowed Java Programming. Which chain of links retrieves them?",
+  "options": [
+   "Link Book directly to Student by matching the Year column of Book with the Grade column of Student",
+   "Follow Loan date from Book_Loan into Student, then follow Author from Student into the Book table",
+   "Find the Book ID of the title in Book, follow it into Book_Loan, then follow Student ID to Student",
+   "Follow Student ID from Student straight into Book, because the Book table holds Student's primary key"
+  ],
+  "correctAnswer": "Find the Book ID of the title in Book, follow it into Book_Loan, then follow Student ID to Student",
+  "difficulty": "HARD",
+  "explanation": "Book_Loan carries Book ID and Student ID as foreign keys that match the primary keys of Book and Student, so it is the navigational link between them. Book and Student share no common attribute, and Year, Grade, Loan date and Author are not keys."
+ },
+ {
+  "questionText": "A designer draws an ERD for teachers and class schedules. Teacher has teacher_id, name, sex and specialization; Schedule has schedule_id, room, period and section; the two are associated by a relationship named assigned. Which drawing follows ERD conventions?",
+  "options": [
+   "Teacher and Schedule as ellipses holding their names, attributes as rectangles, and assigned written on top of the joining line",
+   "Teacher and Schedule as rectangles holding their names, attributes as ellipses, and assigned written inside the Teacher rectangle",
+   "Teacher and Schedule as rectangles holding their names, attributes as joining lines, and assigned written inside an ellipse",
+   "Teacher and Schedule as rectangles holding their names, attributes as ellipses, and assigned written on top of the joining line"
+  ],
+  "correctAnswer": "Teacher and Schedule as rectangles holding their names, attributes as ellipses, and assigned written on top of the joining line",
+  "difficulty": "HARD",
+  "explanation": "Entities are rectangles holding entity names, attributes are ellipses holding attribute names, and relationships are lines with the relationship name placed on top of the line. The other drawings swap entity and attribute shapes or put the relationship name inside a shape."
+ },
+ {
+  "questionText": "A Teacher entity with the attributes teacher_id, name, sex and specialization is implemented in a relational database, and data about 5 teachers is entered. What is the result?",
+  "options": [
+   "One table with 5 fields and 4 records, each field describing one teacher",
+   "One table with 4 fields and 5 records, each record describing one teacher",
+   "Four tables, one per attribute, each table holding 5 records",
+   "Five tables, one per teacher, each table having 4 fields"
+  ],
+  "correctAnswer": "One table with 4 fields and 5 records, each record describing one teacher",
+  "difficulty": "MEDIUM",
+  "explanation": "An entity becomes a single table, its 4 attributes become 4 fields (columns), and each of the 5 teachers is one record (row) storing data about one real-world object. Swapping fields and records, or making a table per attribute or per teacher, misreads that mapping."
+ },
+ {
+  "questionText": "In the file-based approach to data management, what does any change to the data require?",
+  "options": [
+   "Modifying the program that uses the data",
+   "Redrawing the ERD of the whole organization",
+   "Asking the DBMS to update each department's copy",
+   "Giving the user new data access rights in the DBMS"
+  ],
+  "correctAnswer": "Modifying the program that uses the data",
+  "difficulty": "EASY",
+  "explanation": "In file-based data management, any change to data requires modification of the program that uses the data. There is no DBMS or central database in this approach, so access rights and DBMS updates do not apply."
+ },
+ {
+  "questionText": "What is the data model of a database described as?",
+  "options": [
+   "The central repository that stores the actual data",
+   "The blueprint of the database",
+   "The software interface between users and the data",
+   "The custom view of data produced by a query"
+  ],
+  "correctAnswer": "The blueprint of the database",
+  "difficulty": "EASY",
+  "explanation": "A data model is the blueprint of the database and guides what data is stored. The actual data is stored in the database, the DBMS is the interface, and a query gives a custom view."
+ },
+ {
+  "questionText": "If City is an entity, which of the following is an instance of that entity?",
+  "options": [
+   "Population",
+   "Code",
+   "Gondar",
+   "Country"
+  ],
+  "correctAnswer": "Gondar",
+  "difficulty": "EASY",
+  "explanation": "An instance is a single occurrence of an entity, as Addis Ababa is an instance of City, so Gondar is also one. Population and Code are attributes describing a city, and Country is a separate entity."
+ },
+ {
+  "questionText": "Apart from building a graphical query, how else can data be retrieved through a query in Microsoft Access?",
+  "options": [
+   "By drawing an Entity Relationship Diagram of the tables",
+   "By typing values into the table in Datasheet View",
+   "By writing Structured Query Language (SQL) statements",
+   "By setting the data type of each field in Table Design"
+  ],
+  "correctAnswer": "By writing Structured Query Language (SQL) statements",
+  "difficulty": "EASY",
+  "explanation": "In MS Access, data is retrieved through a query either by creating a graphical query or by writing SQL statements. Datasheet View is for entering data, Table Design defines fields, and an ERD only represents the data model."
+ },
+ {
+  "questionText": "A computer holds two Access databases, School and Library. A user wants to add a Teacher table to the School database. What must the user do before clicking Table Design?",
+  "options": [
+   "Click Blank database and create a new database named Teacher",
+   "Open the School database that will store the new table",
+   "Open Query Design and add the Teacher table from Show Table",
+   "Set Teacher_ID as the primary key in Datasheet View"
+  ],
+  "correctAnswer": "Open the School database that will store the new table",
+  "difficulty": "MEDIUM",
+  "explanation": "To create a new table, the database that will store it must be opened first, because there can be more than one database on one computer. Creating a new database would not put the table in School, and a query or primary key needs the table to exist already."
+ },
+ {
+  "questionText": "After saving the design of the Student table, a user wants to type in the records of six students. Which step lets the user do this?",
+  "options": [
+   "Open Query Design and type the records into the Criteria row",
+   "Click Table Design and type the records in as new field names",
+   "Click the table name and choose Datasheet View from View",
+   "Click Blank database and type the records in the File Name box"
+  ],
+  "correctAnswer": "Click the table name and choose Datasheet View from View",
+  "difficulty": "MEDIUM",
+  "explanation": "Records are entered by clicking the table name and selecting Datasheet View, then typing values for each field. The Criteria row filters query results, Table Design defines fields, and the File Name box names a new database."
+ },
+ {
+  "questionText": "Grade rows (Student ID, Teacher_ID, subject, grade) are: ST0001 T0001 Biology 75; ST0001 T0002 Chemistry 86; ST0002 T0002 Chemistry 70; ST0001 T0003 Mathematics 95; ST0001 T0004 Physics 65; ST0003 T0002 Chemistry 82; ST0002 T0003 Mathematics 78; ST0001 T0005 IT 90; ST0002 T0001 Biology 67. Teachers are T0001 Oljira Kuma, T0002 Hagos Kiros, T0003 Rediet Assefa, T0004 Ahmed Yusuf and T0005 Delebo Nurye. A query links Grade to Teacher through Teacher_ID, shows tname and subject, and has ST0002 in the Criteria row under Student ID. Which teacher names does it return?",
+  "options": [
+   "Hagos Kiros only",
+   "Hagos Kiros and Rediet Assefa",
+   "Oljira Kuma, Hagos Kiros and Rediet Assefa",
+   "Oljira Kuma, Hagos Kiros, Rediet Assefa, Ahmed Yusuf and Delebo Nurye"
+  ],
+  "correctAnswer": "Oljira Kuma, Hagos Kiros and Rediet Assefa",
+  "difficulty": "MEDIUM",
+  "explanation": "The criteria keep only the three Grade rows for ST0002, whose Teacher_ID values T0002, T0003 and T0001 link to Hagos Kiros, Rediet Assefa and Oljira Kuma. Matching T0002 to ST0002 or skipping the last row gives too few names, and all five teachers belong to ST0001."
+ },
+ {
+  "questionText": "Abebe sets the Student_ID field, which stores values such as ST0001, to the Number data type, arguing that an ID is a number and that a data type only labels a field without limiting what it stores. Which diagnosis BEST identifies the flaw?",
+  "options": [
+   "Data types validate entries, so a Number field would not accept ST0001 because it has letters, and Text suits this field",
+   "Data types validate entries, but Number is still right because a primary key field must always hold unique numbers",
+   "His reasoning holds, because only the Criteria row of a query checks whether the stored values are valid",
+   "The flaw is that a Number field can never be set as a primary key, so Student_ID has to use some other data type"
+  ],
+  "correctAnswer": "Data types validate entries, so a Number field would not accept ST0001 because it has letters, and Text suits this field",
+  "difficulty": "HARD",
+  "explanation": "Data types are a validation mechanism: a field accepts only values of its type, and IDs like ST0001 contain letters, which is why student_id is given Text. A primary key needs unique values, not numbers, and the Criteria row filters query results rather than validating stored data."
+ },
+ {
+  "questionText": "XY company stores Product (product ID, product name, quantity, price), Customer (customer ID, customer name, customer address) and Order (order ID, product ID, customer ID, order quantity, order date). Customers order products at different times and each product is sold to different customers. Which conclusion about Customer and Product is correct?",
+  "options": [
+   "They are one-to-one, because each Order row holds exactly one customer ID and exactly one product ID",
+   "They are many-to-many, linked through Order, whose product ID and customer ID match their primary keys",
+   "They are one-to-many, because customer ID is a foreign key in Order while product ID is its primary key",
+   "They are not related at all, because neither Customer nor Product contains any field of the other table"
+  ],
+  "correctAnswer": "They are many-to-many, linked through Order, whose product ID and customer ID match their primary keys",
+  "difficulty": "HARD",
+  "explanation": "One customer orders many products and one product is sold to many customers, so the relationship is many-to-many; Order links them because its product ID and customer ID are foreign keys matching the primary keys of Product and Customer. One row holding one ID of each does not make it one-to-one, order ID (not product ID) identifies orders, and the link exists through Order even though Customer and Product share no field."
+ },
+ {
+  "questionText": "Book_Loan has the fields Book_Loan_No (primary key), Book ID, Student ID and Loan date, and is linked to the Book and Student tables. If the Book ID column were deleted from Book_Loan, what would be the PRIMARY consequence?",
+  "options": [
+   "Loans could no longer be linked to any student, because Student ID works only together with Book ID",
+   "Nothing would be lost, because Book_Loan_No already identifies which book was borrowed in each loan",
+   "Loans could still be linked to students, but no query could find which book any loan was for",
+   "The Book table would lose its primary key, so its records could no longer be told apart from each other"
+  ],
+  "correctAnswer": "Loans could still be linked to students, but no query could find which book any loan was for",
+  "difficulty": "HARD",
+  "explanation": "Book ID and Student ID in Book_Loan are separate foreign keys linking it to Book and Student, so removing Book ID breaks only the link to Book. Book_Loan_No identifies a loan record, not a book, and the Book table keeps its own Book ID primary key."
+ }
+]

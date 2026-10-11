@@ -1,0 +1,362 @@
+[
+  {
+    "questionText": "Which set of components does the Power On Self-Test check each time a computer starts?",
+    "options": [
+      "The CPU usage, network connections and process list",
+      "The system image, backup drives and restore points",
+      "The keyboard, RAM and disk drives",
+      "The installed applications, user accounts and passwords"
+    ],
+    "correctAnswer": "The keyboard, RAM and disk drives",
+    "difficulty": "EASY",
+    "explanation": "POST is the part of the startup program that diagnoses the keyboard, the RAM, disk drives and other hardware to confirm they work properly. The other options describe monitoring tools, backups or software items, which POST does not test."
+  },
+  {
+    "questionText": "Which of the following is a benefit of using Device Manager?",
+    "options": [
+      "It records which user was logged in when each hardware problem occurred",
+      "It lists the current TCP connections and the processes listening on each port",
+      "It reorganizes scattered files on the disk into the smallest number of adjoining regions",
+      "It gives a central, organized view of all hardware that Windows recognizes on a system"
+    ],
+    "correctAnswer": "It gives a central, organized view of all hardware that Windows recognizes on a system",
+    "difficulty": "EASY",
+    "explanation": "Device Manager is a centralized utility that presents all hardware recognized by Windows in one organized view. Logged-in user details come from Event Viewer, TCP connection data from Resource Monitor, and file reorganization from a defragmenter."
+  },
+  {
+    "questionText": "Which Event Viewer log under the Windows Log category is switched off by default and records events such as logon attempts and resource access?",
+    "options": [
+      "Application",
+      "Security",
+      "System",
+      "Performance"
+    ],
+    "correctAnswer": "Security",
+    "difficulty": "EASY",
+    "explanation": "The Security log records security-related events like logon attempts and resource access, and security logging is off by default in Windows. The Application and System logs record other kinds of events, and no Performance log is listed under the Windows Log category."
+  },
+  {
+    "questionText": "Why is dust accumulation inside a computer case harmful to its components?",
+    "options": [
+      "It raises the voltage reaching the motherboard, so the power supply circuits are damaged",
+      "It scatters portions of files across nonadjacent areas of the hard disk, slowing access to them",
+      "It blocks the flow of air and reduces cooling, and hot components are more likely to break down",
+      "It drains the CMOS battery, so the onboard chip loses its time, date and hardware settings"
+    ],
+    "correctAnswer": "It blocks the flow of air and reduces cooling, and hot components are more likely to break down",
+    "difficulty": "EASY",
+    "explanation": "Dust that travels through the cooling fans builds up inside, blocks airflow and reduces cooling, and hot components are more likely to fail. Dust does not change the voltage, fragment files or drain the CMOS battery."
+  },
+  {
+    "questionText": "What is the primary function of the CMOS chip on a computer?",
+    "options": [
+      "To run diagnostic checks on the RAM during startup",
+      "To handle and store the BIOS configuration settings",
+      "To manage data flow between the operating system and attached devices",
+      "To record system and application errors together with their event ID numbers"
+    ],
+    "correctAnswer": "To handle and store the BIOS configuration settings",
+    "difficulty": "EASY",
+    "explanation": "The CMOS is an onboard chip whose primary function is to handle and store the BIOS configuration settings (it also holds time, date and hardware settings). Startup diagnostics are POST, data flow management is BIOS, and error recording is Event Viewer."
+  },
+  {
+    "questionText": "A keyboard does not respond when plugged into a computer, but it works immediately after being plugged into a different port. What does this result indicate?",
+    "options": [
+      "The keyboard itself is damaged and must be replaced with a new one",
+      "The CMOS battery needs to be replaced before the port can be used",
+      "The original port was the cause of the problem, not the keyboard",
+      "The POST detected an error in the RAM while the computer was starting"
+    ],
+    "correctAnswer": "The original port was the cause of the problem, not the keyboard",
+    "difficulty": "MEDIUM",
+    "explanation": "Trying a different port is the recommended way to check whether the problem is a port issue; if the device then works, the first port is at fault. Replacing the keyboard is only needed if the device itself is damaged."
+  },
+  {
+    "questionText": "A computer's power is on, but its screen stays blank. Which check should be made first?",
+    "options": [
+      "Whether the RAM sticks have gone bad, by removing them one at a time",
+      "Whether the video card has failed and must be replaced with a new card",
+      "Whether the monitor has power and is securely connected to the system unit",
+      "Whether the BIOS settings are wrong and must be reconfigured by a technician"
+    ],
+    "correctAnswer": "Whether the monitor has power and is securely connected to the system unit",
+    "difficulty": "MEDIUM",
+    "explanation": "A blank screen on a running computer often points to the connection between computer and screen, so the first step is to check that the monitor is plugged into a power outlet and securely connected to the system unit. Bad RAM, a failed video card or BIOS settings are deeper faults checked only after these simple checks."
+  },
+  {
+    "questionText": "A computer boots, completes the POST and then stops. What does this most likely indicate?",
+    "options": [
+      "A video card failure",
+      "A BIOS setting problem",
+      "A RAM stick that has gone bad",
+      "A power supply that has gone bad"
+    ],
+    "correctAnswer": "A BIOS setting problem",
+    "difficulty": "MEDIUM",
+    "explanation": "If the computer boots and stops after the POST, there is a BIOS setting problem, and a hardware technician should be contacted. RAM, video card and power supply faults show up as beep codes or failure during POST."
+  },
+  {
+    "questionText": "In Task Manager, an application shows CPU usage of almost 100% and the computer is sluggish. Which action is recommended?",
+    "options": [
+      "Replace the processor because it has been overloaded",
+      "Reinstall the operating system to clear all processes",
+      "Run the disk defragmenter on all of the drives",
+      "Disable the application and then start it again"
+    ],
+    "correctAnswer": "Disable the application and then start it again",
+    "difficulty": "MEDIUM",
+    "explanation": "When one application uses almost 100% of the CPU, the recommended step is to disable it and start it again. Replacing the CPU, reinstalling the OS or defragmenting are not the suggested remedy for an overloaded process."
+  },
+  {
+    "questionText": "In Windows Resource Monitor, a technician wants to learn more about an unfamiliar application that is using a lot of CPU. Which action opens search results about it in the default browser?",
+    "options": [
+      "Right-click the application's name and choose Search online",
+      "Right-click the application and choose End process from the menu",
+      "Press CTRL + ALT + Delete and choose Task Manager from the list",
+      "Click the Performance tab and select the application's name there"
+    ],
+    "correctAnswer": "Right-click the application's name and choose Search online",
+    "difficulty": "MEDIUM",
+    "explanation": "Right-clicking an application's name in Resource Monitor and choosing Search online opens the default browser with search results about it. End process only stops the application, and Task Manager's Performance tab shows device performance, not information about an application."
+  },
+  {
+    "questionText": "A user argues that regular antivirus scans are pointless because the computer shows no problems. Which reason best shows that this view is wrong?",
+    "options": [
+      "Computers can only be infected through the Internet, so scans are needed only after browsing the web",
+      "Viruses always show a warning message as soon as they embed, so scans are needed only after a warning",
+      "Scanning is only required once, when the antivirus program is first installed on the computer",
+      "Infections go unnoticed until they cause a problem, and some malware embeds silently until triggered"
+    ],
+    "correctAnswer": "Infections go unnoticed until they cause a problem, and some malware embeds silently until triggered",
+    "difficulty": "MEDIUM",
+    "explanation": "Infections stay undetected until they cause a problem and some malware embeds silently until triggered, so scanning regularly is needed. Infection also comes through someone else's flash disk, not only the Internet, and one scan at installation is not enough."
+  },
+  {
+    "questionText": "A business cannot switch its computers off at the end of the day because of its daily routine. What should it do instead?",
+    "options": [
+      "Leave them at full power with all programs open",
+      "Remove the CMOS battery to cut power use",
+      "Put them into a low-power or hibernation mode",
+      "Run the defragmenter overnight in place of shutting down"
+    ],
+    "correctAnswer": "Put them into a low-power or hibernation mode",
+    "difficulty": "MEDIUM",
+    "explanation": "When shutting down interferes with the routine, the computer should be put into a low-power or hibernation mode, because leaving a PC fully on prevents it from cooling. The other options neither allow cooling nor are recommended."
+  },
+  {
+    "questionText": "Why does it take the operating system longer to read a file that has been updated many times on a hard disk?",
+    "options": [
+      "The file's older data is deleted each time new data for that file is saved to the disk",
+      "New data for the file was placed in unused spaces that are not next to its older data",
+      "The file is moved to an external backup device after each update and must be copied back",
+      "The operating system must first create a system image of the file before it can read it"
+    ],
+    "correctAnswer": "New data for the file was placed in unused spaces that are not next to its older data",
+    "difficulty": "MEDIUM",
+    "explanation": "Over time, updated data is distributed to unused spaces that may not be contiguous with the older data, so the file becomes fragmented and takes longer to read. A defragmenter fixes this by reorganizing files into adjoining regions."
+  },
+  {
+    "questionText": "Which combination is suitable for removing dust from the inside of a computer?",
+    "options": [
+      "A soft cotton cloth dampened with an alcohol-free chemical cleaner",
+      "Compressed air, a low-air-flow vacuum cleaner and a small lint-free cloth",
+      "A high-air-flow vacuum cleaner, a wet cloth and a can of compressed air",
+      "A microfiber cloth with liquid screen cleaner sprayed onto the circuit boards"
+    ],
+    "correctAnswer": "Compressed air, a low-air-flow vacuum cleaner and a small lint-free cloth",
+    "difficulty": "MEDIUM",
+    "explanation": "Dust inside the case is removed with compressed air, a low-air-flow vacuum cleaner and a small lint-free cloth. A soft cotton cloth is for the outside of the case, while microfiber cloths and chemical cleaners such as alcohol-free sprays are for screens, and wet cloths or liquids are not used on internal parts."
+  },
+  {
+    "questionText": "After a complete power failure, a lab's computers, each plugged into a surge protector, shut off at once and users lose unsaved work. Which explanation is correct?",
+    "options": [
+      "A surge protector guards against too little electricity, so it should have kept the computers on, and its regulator must have failed",
+      "A voltage regulator would have kept the computers running through the outage, because it stores energy in a short-term battery",
+      "A surge protector only guards against too much electricity; a UPS would have kept the computers on long enough to save data",
+      "A stabilizer would have kept the computers running for 5-30 minutes, because it adjusts for any variation in the power supply"
+    ],
+    "correctAnswer": "A surge protector only guards against too much electricity; a UPS would have kept the computers on long enough to save data",
+    "difficulty": "HARD",
+    "explanation": "A surge protector only protects against too much electricity; protection against the complete absence of electricity comes from a UPS, a short-term battery that keeps the computer on for about 5-30 minutes. Voltage regulators and stabilizers adjust voltage and do not store power."
+  },
+  {
+    "questionText": "Which observation would MOST STRONGLY indicate that a computer lab follows a preventive maintenance program rather than only reacting to failures?",
+    "options": [
+      "A video card is reseated and then replaced after the computer gives one long and two short beeps",
+      "A CMOS battery is replaced with an identical battery after a CMOS alert message appears on screen",
+      "Memory and circuit boards are checked on a routine schedule and worn parts are replaced before failing",
+      "A RAM stick is found and replaced by removing sticks one at a time after a long, continuous beep"
+    ],
+    "correctAnswer": "Memory and circuit boards are checked on a routine schedule and worn parts are replaced before failing",
+    "difficulty": "HARD",
+    "explanation": "Preventive maintenance routinely reduces the risk of failure by diagnosing components and replacing worn ones. The other options respond to a failure or alert that has already occurred (beep codes and a CMOS alert), which is troubleshooting."
+  },
+  {
+    "questionText": "A study group concludes that a newly installed hard disk must be defragmented immediately, because every disk is already badly fragmented when new. Which statement best identifies the flaw?",
+    "options": [
+      "Fragmentation is caused by computer viruses, so a new disk stays unfragmented as long as antivirus is installed",
+      "Defragmentation is done with Resource Monitor, which cannot open a drive until files have been saved on it",
+      "A new disk stores files next to one another; fragmentation develops later as files are deleted, saved and updated",
+      "Fragmentation only affects files saved on a network drive, so a new local disk never becomes fragmented"
+    ],
+    "correctAnswer": "A new disk stores files next to one another; fragmentation develops later as files are deleted, saved and updated",
+    "difficulty": "HARD",
+    "explanation": "A new disk stores files contiguously; fragmentation appears only after old files are deleted and new or updated data is saved in unused spaces. A drive showing 0% fragmented needs no defragmentation. Viruses and network drives are unrelated, and defragmentation uses Defragment and Optimize Drives."
+  },
+  {
+    "questionText": "A PC with two RAM sticks, A and B, gives a long, continuous beep at startup. With stick A removed the computer still fails to boot, but with stick B removed it boots normally. Which conclusion is correct?",
+    "options": [
+      "Stick A has gone bad and should be replaced",
+      "Both sticks have gone bad because the beep is continuous",
+      "Stick B has gone bad and should be replaced or upgraded",
+      "The video card has failed, since a continuous beep signals a video fault"
+    ],
+    "correctAnswer": "Stick B has gone bad and should be replaced or upgraded",
+    "difficulty": "HARD",
+    "explanation": "A long, continuous beep points to bad RAM, and removing sticks one at a time identifies the culprit: the computer boots only when B is removed, so B is faulty. A video card failure gives one long and two short beeps."
+  },
+  {
+    "questionText": "A technician sees a yellow triangle with an exclamation mark beside a hardware device in Device Manager and now needs the severity, source and event ID of the failure, plus which user was logged in at the time. Which tool supplies these details?",
+    "options": [
+      "Windows Resource Monitor",
+      "The Performance tab of Task Manager",
+      "The Defragment and Optimize Drives window",
+      "Event Viewer"
+    ],
+    "correctAnswer": "Event Viewer",
+    "difficulty": "HARD",
+    "explanation": "The yellow triangle only shows that the device has a problem. Event Viewer records the problem, date and time, severity, source, event ID and logged-in user. Resource Monitor and Task Manager show resource usage, and the defragmenter handles disk optimization."
+  },
+  {
+    "questionText": "A laptop shows a CMOS alert message on screen, and its owner has no hardware troubleshooting experience. Which course of action fits best?",
+    "options": [
+      "Replace the battery personally with any battery that fits, because laptops are easier to open than desktops",
+      "Have a professional technician replace the battery with one exactly like the old one",
+      "Contact a technician to reconfigure the BIOS, since the alert means a BIOS setting problem",
+      "Reseat the video card, since the alert indicates a display failure"
+    ],
+    "correctAnswer": "Have a professional technician replace the battery with one exactly like the old one",
+    "difficulty": "HARD",
+    "explanation": "A CMOS alert means the CMOS battery needs replacing with an identical one, and because the task can be harder on laptops, an inexperienced user should leave it to a professional. A BIOS setting problem is shown by a stop after POST, and display failure is a video card beep code."
+  },
+  {
+    "questionText": "What is a backup file used for?",
+    "options": [
+      "Recovering data lost during a computer failure",
+      "Cleaning viruses from the computer system",
+      "Reorganizing scattered files into adjoining regions",
+      "Storing the BIOS configuration settings"
+    ],
+    "correctAnswer": "Recovering data lost during a computer failure",
+    "difficulty": "EASY",
+    "explanation": "Backup transfers data to external storage, and the backup file is used to recover data lost during a computer failure. Cleaning viruses is the job of antivirus software, reorganizing files is defragmentation, and BIOS settings are stored by the CMOS."
+  },
+  {
+    "questionText": "What is antivirus software used for?",
+    "options": [
+      "To prevent, detect and remove malware",
+      "To copy files to external storage so that lost data can be recovered",
+      "To diagnose the RAM and disk drives each time the computer starts",
+      "To protect the hardware against power surges and brownouts"
+    ],
+    "correctAnswer": "To prevent, detect and remove malware",
+    "difficulty": "EASY",
+    "explanation": "Antivirus, also known as anti-malware, is a program used to prevent, detect and remove malware. Copying files to external storage is backup, startup diagnosis is the POST, and power problems are handled by power protection devices."
+  },
+  {
+    "questionText": "What does a voltage regulator, also called a line conditioner, protect a computer against?",
+    "options": [
+      "Too little electricity, such as power sags or brownouts",
+      "Too much electricity, such as a sudden power surge",
+      "The complete absence of electricity during a power failure",
+      "Overheating of components when dust blocks the cooling fans"
+    ],
+    "correctAnswer": "Too little electricity, such as power sags or brownouts",
+    "difficulty": "EASY",
+    "explanation": "A voltage regulator (line conditioner) adjusts for power sags or brownouts, protecting against too little electricity. Too much electricity is handled by a surge protector, a complete power failure by a UPS, and dust-related overheating by cleaning."
+  },
+  {
+    "questionText": "In the CPU tab of Windows Resource Monitor, in which color are processes that are not responding shown?",
+    "options": [
+      "Red",
+      "Blue",
+      "Black",
+      "Yellow"
+    ],
+    "correctAnswer": "Red",
+    "difficulty": "EASY",
+    "explanation": "Resource Monitor shows running processes in black, suspended processes in blue and processes that are not responding in red. Yellow is not one of the colors used in the Processes section."
+  },
+  {
+    "questionText": "Besides starting the computer after it is powered on, what does the BIOS do?",
+    "options": [
+      "It manages data flow between the operating system and attached devices",
+      "It records system and application errors in categorized logs",
+      "It stores the time, date and hardware settings on an onboard chip",
+      "It reorganizes scattered portions of files into adjoining disk regions"
+    ],
+    "correctAnswer": "It manages data flow between the operating system and attached devices",
+    "difficulty": "EASY",
+    "explanation": "The BIOS starts the computer and also manages data flow between the operating system and devices such as the hard disk, video adapter, keyboard, mouse and printer. Error logs are kept by Event Viewer, settings are stored on the CMOS chip, and file reorganization is done by a defragmenter."
+  },
+  {
+    "questionText": "A technician fixes a program that keeps crashing by scanning it, diagnosing its errors and bugs, and resolving them. Which kind of activity is this?",
+    "options": [
+      "Software troubleshooting",
+      "Hardware troubleshooting",
+      "Hardware preventive maintenance",
+      "Disk defragmentation"
+    ],
+    "correctAnswer": "Software troubleshooting",
+    "difficulty": "MEDIUM",
+    "explanation": "Scanning, identifying, diagnosing and resolving problems, errors and bugs in software is software troubleshooting. Hardware troubleshooting deals with physical or logical problems in hardware devices, preventive maintenance reduces the risk of hardware failure, and defragmentation reorganizes disk files."
+  },
+  {
+    "questionText": "In Device Manager, a newly connected device shows a yellow question mark beside its name. What will solve this problem?",
+    "options": [
+      "Installing the appropriate driver software for the device",
+      "Replacing the CMOS battery with one exactly like the old one",
+      "Reseating the device's card firmly in its slot on the motherboard",
+      "Contacting a technician to reconfigure the BIOS settings"
+    ],
+    "correctAnswer": "Installing the appropriate driver software for the device",
+    "difficulty": "MEDIUM",
+    "explanation": "A yellow question mark means the system does not know which driver to install for the hardware, so installing the appropriate driver software solves it. Reseating a card, replacing the CMOS battery or fixing BIOS settings address other faults, not a missing driver."
+  },
+  {
+    "questionText": "A Windows computer is slow because its CPU is heavily loaded, but no single application in Task Manager shows unusually high CPU usage. Which quick fix is recommended once all files are saved?",
+    "options": [
+      "Restart the computer to remove unwanted temporary files",
+      "Create a system image backup to free the CPU's memory",
+      "Replace the CMOS battery to reset the processor's settings",
+      "Reseat the video card so it takes display work off the CPU"
+    ],
+    "correctAnswer": "Restart the computer to remove unwanted temporary files",
+    "difficulty": "MEDIUM",
+    "explanation": "A quick way of reducing CPU load in Windows is to restart the computer to remove unwanted temporary files, after saving all files; disabling an application applies only when one shows nearly 100% CPU usage. A system image, the CMOS battery and the video card do not reduce CPU load."
+  },
+  {
+    "questionText": "A student claims that a lab computer used with a projector, which gives one long and two short beeps at startup, has a bad RAM stick that should be found by removing the sticks one at a time. Which statement BEST identifies the flaw in this reasoning?",
+    "options": [
+      "That pattern means a video card failure, so the card should be reseated first because projector cables loosen it",
+      "That pattern means the power supply has gone bad, so the power supply should be replaced before any RAM is tested",
+      "That pattern means a BIOS setting problem, so a hardware technician should reconfigure the BIOS instead of testing RAM",
+      "That pattern means the CMOS battery is failing, so it should be replaced with an identical battery before testing RAM"
+    ],
+    "correctAnswer": "That pattern means a video card failure, so the card should be reseated first because projector cables loosen it",
+    "difficulty": "HARD",
+    "explanation": "Bad RAM is signalled by a long, continuous beep, while one long and two short beeps mean a video card failure; reseating the card is tried first because often-moved projector cables slowly unplug it, and it is replaced only if that fails. Power supply faults give steady beeps, a BIOS setting problem stops the computer after POST, and a CMOS problem shows an alert message."
+  },
+  {
+    "questionText": "Before troubleshooting a slow office PC, a technician learns that its only backup is a week old and the DVD holding that backup can no longer be found. What should the technician do?",
+    "options": [
+      "Take a new, up-to-date backup before starting any troubleshooting",
+      "Start troubleshooting, because a backup was taken within the last week",
+      "Start troubleshooting, because hardware troubleshooting never touches the user's data",
+      "Restore the week-old backup first and then begin the troubleshooting"
+    ],
+    "correctAnswer": "Take a new, up-to-date backup before starting any troubleshooting",
+    "difficulty": "HARD",
+    "explanation": "Backup is the first step before any troubleshooting, and the technician must check the date of the last backup and the availability of its media for restore; a week-old backup on a missing DVD cannot be relied on, so a new backup is needed. Starting without a usable backup risks losing data, and a backup whose media is missing cannot be restored."
+  }
+]

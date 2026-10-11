@@ -112,7 +112,7 @@ const MAX_QUESTION_BATCHES = 12;
  * cost 5x and the run took 60s. When the first step of the question-generation
  * chain is one of these, batches are merged up to these limits instead.
  */
-const LARGE_CONTEXT_PROVIDERS = new Set(["GEMINI", "OPENROUTER"]);
+const LARGE_CONTEXT_PROVIDERS = new Set(["GEMINI", "GEMINI_VERTEX", "OPENROUTER"]);
 const LARGE_BATCH_QUESTIONS = 10;
 /** One call's chapter text — the prompt builder's own cap, so nothing is cut. */
 const LARGE_BATCH_CHARS = QUESTION_CONTENT_CHARS;
@@ -351,7 +351,7 @@ export async function chatWithTutor(opts: {
   grade: number;
   /** Who the chat is for, so its token cost lands on that student and school. */
   actor?: UsageActor;
-}): Promise<{ response: string; provider: "gemini" | "groq" | "nvidia" }> {
+}): Promise<{ response: string; provider: "gemini" | "gemini-vertex" | "groq" | "nvidia" }> {
   // History transform shared by the OpenAI-style providers (assistant, not model).
   const chatOpts = {
     message: opts.message,
@@ -377,5 +377,5 @@ export async function chatWithTutor(opts: {
     // An empty reply is a failure a student would see as a blank bubble.
     { accept: (r) => typeof r === "string" && r.trim().length > 0 }
   );
-  return { response: value, provider: provider as "gemini" | "groq" | "nvidia" };
+  return { response: value, provider: provider as "gemini" | "gemini-vertex" | "groq" | "nvidia" };
 }

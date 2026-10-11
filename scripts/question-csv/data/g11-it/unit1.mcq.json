@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "A value such as 100 is written down with no label showing whether it is a weight or a distance. What does it represent at this stage?",
+  "options": [
+   "Information that answers a question",
+   "Knowledge about measurement",
+   "Data that has no meaning on its own",
+   "Wisdom about weights"
+  ],
+  "correctAnswer": "Data that has no meaning on its own",
+  "difficulty": "EASY",
+  "explanation": "Raw facts such as 100 cannot give meaning by themselves; 100 could be a person's weight or a distance. It becomes information only when related to other data. Information and knowledge require processing or application."
+ },
+ {
+  "questionText": "In the hierarchy that places data at the bottom, which level sits at the top as the highest level of human understanding?",
+  "options": [
+   "Data",
+   "Wisdom",
+   "Knowledge",
+   "Information"
+  ],
+  "correctAnswer": "Wisdom",
+  "difficulty": "EASY",
+  "explanation": "Wisdom is the ability to make wise decisions and judgments using knowledge and is the highest level of human understanding. Knowledge and information are lower levels in the pyramid."
+ },
+ {
+  "questionText": "Which of the following is a challenge of e-banking?",
+  "options": [
+   "Higher operating cost per unit of service for banks",
+   "Customers must queue at a branch for every transaction",
+   "Customers cannot check their account balance",
+   "Exclusion of digitally illiterate citizens from the service"
+  ],
+  "correctAnswer": "Exclusion of digitally illiterate citizens from the service",
+  "difficulty": "EASY",
+  "explanation": "Challenges of e-banking include digital theft, exclusion of the digitally illiterate, lack of IT infrastructure in remote areas and unaffordable devices. The other options contradict its benefits: lower cost per unit of service and easy balance checking."
+ },
+ {
+  "questionText": "Which of the following data is represented only by text rather than by numbers?",
+  "options": [
+   "A person's age",
+   "A weight in kilograms",
+   "A distance in metres",
+   "A person's name"
+  ],
+  "correctAnswer": "A person's name",
+  "difficulty": "EASY",
+  "explanation": "Age is better represented by numbers, while words such as name can only be represented by text. Weight and distance are numeric measurements."
+ },
+ {
+  "questionText": "Which information system do organizations set up to collect information from different sources into a single user interface, so that users can easily access the organization's electronic services?",
+  "options": [
+   "An organizational portal",
+   "A human resource information system",
+   "A teleconferencing system",
+   "A telemedicine system"
+  ],
+  "correctAnswer": "An organizational portal",
+  "difficulty": "EASY",
+  "explanation": "A portal is a web-based information system that collects information from different sources into one user interface for easy access to an organization's electronic services, such as the Ministry of Health portal. An HRIS manages employee data, teleconferencing connects remote meeting participants, and telemedicine delivers health care at a distance."
+ },
+ {
+  "questionText": "An information system is a set of interrelated components working together to perform which set of activities on information?",
+  "options": [
+   "Collect, compile, archive, and delete it",
+   "Capture, encrypt, back up, and destroy it",
+   "Input, calculate, print, and display it",
+   "Collect, process, store, and disseminate it"
+  ],
+  "correctAnswer": "Collect, process, store, and disseminate it",
+  "difficulty": "EASY",
+  "explanation": "An information system collects, processes, stores, and disseminates information to potential users. Lists that include deleting, encrypting or printing name activities that are not part of the definition."
+ },
+ {
+  "questionText": "The sequence +251********* kept on its own is data. What would turn it into information?",
+  "options": [
+   "Storing a second copy of it on another device",
+   "Printing it on paper in a larger font",
+   "Identifying it as a person's phone number",
+   "Converting it from text into an image"
+  ],
+  "correctAnswer": "Identifying it as a person's phone number",
+  "difficulty": "MEDIUM",
+  "explanation": "Data becomes information when put into context; stating that the number is a person's phone number gives it meaning. Copying, reprinting or changing the format adds no meaning."
+ },
+ {
+  "questionText": "A company wants to pay each staff member for the number of hours that person actually works. Which HRIS software component supports this?",
+  "options": [
+   "Recruitment software",
+   "Performance management software",
+   "Time and attendance software",
+   "Training and development software"
+  ],
+  "correctAnswer": "Time and attendance software",
+  "difficulty": "MEDIUM",
+  "explanation": "Time and attendance software tracks employee attendance so employees are paid based on hours worked. Performance management software handles appraisal data, recruitment software handles job postings and applications, and training software manages training programs."
+ },
+ {
+  "questionText": "A university expects attendance at its online seminar to grow from 50 to 500 people. Which benefit of teleconferencing explains why its costs will not grow much as attendance rises?",
+  "options": [
+   "Participants can join from home or from the office",
+   "It saves participants time and travel costs",
+   "Video conferences show participants' facial expressions",
+   "Each additional participant costs very little to add"
+  ],
+  "correctAnswer": "Each additional participant costs very little to add",
+  "difficulty": "MEDIUM",
+  "explanation": "Teleconferencing can accommodate more people because each additional participant does not cost much, so a larger audience barely raises costs. Joining from home or office and saving travel are benefits to participants, and facial expressions concern video quality, not how cost changes with attendance."
+ },
+ {
+  "questionText": "Why was telemedicine originally introduced?",
+  "options": [
+   "To let doctors teach medical students in remote universities",
+   "To reduce the cost of manufacturing home-use medical devices",
+   "To treat patients far from health facilities or where doctors are scarce",
+   "To let patients pay hospital fees online through their bank accounts"
+  ],
+  "correctAnswer": "To treat patients far from health facilities or where doctors are scarce",
+  "difficulty": "EASY",
+  "explanation": "Telemedicine was introduced to care for patients far from local health facilities or in areas short of medical professionals. Online fee payment and home devices came later as features, not as the original reason."
+ },
+ {
+  "questionText": "Which form of teleconference is voice-only and connects people at remote locations through telephone lines?",
+  "options": [
+   "Video conference",
+   "Audio conference",
+   "Telemedicine session",
+   "Online learning session"
+  ],
+  "correctAnswer": "Audio conference",
+  "difficulty": "EASY",
+  "explanation": "An audio conference, sometimes called a conference call, is voice-only and uses telephone lines. A video conference adds video images."
+ },
+ {
+  "questionText": "A learner studying alone through a screen rarely meets the teacher or classmates face to face. Which disadvantage of e-learning does this illustrate?",
+  "options": [
+   "Physical isolation of students from teachers and classmates",
+   "Teachers having little control over monitoring progress",
+   "Technology costs that exclude low-income families",
+   "Inflexible class schedules that prevent self-paced study"
+  ],
+  "correctAnswer": "Physical isolation of students from teachers and classmates",
+  "difficulty": "MEDIUM",
+  "explanation": "Physical isolation from teachers and other students is a listed disadvantage of e-learning. Inflexible schedules are a limitation of face-to-face education, not of e-learning."
+ },
+ {
+  "questionText": "A merchant who starts selling online reaches customers well outside the local area. Which consequence also follows from this wider reach?",
+  "options": [
+   "The merchant no longer needs to process payments through a bank",
+   "The merchant must hire more salespersons to staff physical stores",
+   "The merchant loses the ability to sell to nearby customers",
+   "The merchant competes with global rivals as well as local ones"
+  ],
+  "correctAnswer": "The merchant competes with global rivals as well as local ones",
+  "difficulty": "MEDIUM",
+  "explanation": "Global reach also creates more competition, as merchants compete with global as well as local competitors. Online payment still goes through a bank, and online sellers need no physical stores or salespersons."
+ },
+ {
+  "questionText": "Information systems are no longer viewed only as a source of information for managerial decisions. Why are they now treated as strategic assets?",
+  "options": [
+   "They have fully replaced the need for managers to make decisions in organizations",
+   "Their role in the competitive power of organizations has become very high",
+   "They remove the need for clear procedures and for trained people to run them",
+   "They cost less to build and run than every other resource an organization has"
+  ],
+  "correctAnswer": "Their role in the competitive power of organizations has become very high",
+  "difficulty": "EASY",
+  "explanation": "Because their role in the competitive power of organizations has become so high, information systems are considered strategic assets. They do not replace managers, procedures or people."
+ },
+ {
+  "questionText": "Which statement correctly describes how the RIDE service developed?",
+  "options": [
+   "It began as an Internet-based taxi service and later moved to an SMS service",
+   "It started as an SMS-based service and grew into an Internet taxi-hailing service",
+   "It started as a telemedicine mobile application and later added taxi booking",
+   "It began as an Internet cafe business and later added online taxi booking"
+  ],
+  "correctAnswer": "It started as an SMS-based service and grew into an Internet taxi-hailing service",
+  "difficulty": "EASY",
+  "explanation": "RIDE, founded by Samrawit Fikru, started as an SMS-based service and is now a popular Internet-based taxi-hailing service. Reversing the order or linking it to telemedicine or an Internet cafe misstates its history."
+ },
+ {
+  "questionText": "Two employees receive the identical monthly sales report. Employee X has years of experience and uses it to set a better selling price; Employee Y cannot use it to decide anything. Given that information is processed data used to answer questions, and that knowledge is a personal possession built by applying information, which conclusion is supported by both facts together?",
+  "options": [
+   "The report is data for Employee Y and information for Employee X",
+   "The report is knowledge for both because an information system produced it",
+   "Both receive the same information, but only Employee X has turned it into knowledge",
+   "Employee Y lacks information, so the report must be unprocessed data"
+  ],
+  "correctAnswer": "Both receive the same information, but only Employee X has turned it into knowledge",
+  "difficulty": "HARD",
+  "explanation": "The report is processed data, so it is the same information for both employees; knowledge is personal and arises only when information is applied, so only X holds it. The report does not change type with the reader, a system's output is not automatically knowledge, and Y's inability to use it does not make the report unprocessed data."
+ },
+ {
+  "questionText": "A revision note states: \"A school's information system stores quiz, assignment, and final-exam marks, so every stored mark is already information because the system is called an information system.\" Which diagnosis best identifies the flaw in this reasoning?",
+  "options": [
+   "The marks are knowledge, since the system keeps them stored for later use by the school",
+   "Marks can never become information, because only text and not numbers can carry meaning",
+   "The marks are raw data; summarizing them into averages and ranks makes information",
+   "The marks become information only after students have memorized and understood them"
+  ],
+  "correctAnswer": "The marks are raw data; summarizing them into averages and ranks makes information",
+  "difficulty": "HARD",
+  "explanation": "Captured assessment marks are data; summarizing them into averages and rankings produces information. The other diagnoses misplace knowledge, claim numbers cannot be informational, or tie information to memorization."
+ },
+ {
+  "questionText": "If the procedure component were missing from an organization whose hardware, software, and trained people were all fully available, which would be the PRIMARY consequence?",
+  "options": [
+   "The computers could not store or process data, since hardware is commanded by procedures",
+   "No policy would set what data is captured or who may access and modify it",
+   "Staff could not be trained any more, because procedures hold all of the training records",
+   "The database could not hold any data, because procedures are what create its tables"
+  ],
+  "correctAnswer": "No policy would set what data is captured or who may access and modify it",
+  "difficulty": "HARD",
+  "explanation": "Procedures are the policies and methods for using, operating and maintaining the system, clarifying what data is captured and who may access or modify it. Instructions to hardware come from software, so claims about storage, training records or database tables confuse procedure with software, people or data."
+ },
+ {
+  "questionText": "A woman in a remote village can read and use apps, but there is no Internet coverage nearby and, on her income, she cannot afford a smartphone. Which two e-banking challenges together explain why she cannot use mobile banking?",
+  "options": [
+   "Digital theft and exclusion of the digitally illiterate from e-banking",
+   "Digital theft and lack of access to IT infrastructure in remote areas",
+   "Lack of IT infrastructure in remote areas and unaffordable IT devices",
+   "Exclusion of the digitally illiterate and unaffordable cost of IT devices"
+  ],
+  "correctAnswer": "Lack of IT infrastructure in remote areas and unaffordable IT devices",
+  "difficulty": "HARD",
+  "explanation": "No coverage in a remote area is the infrastructure challenge and an unaffordable smartphone is the cost challenge. She is not digitally illiterate and no theft is involved, which rules out the other pairs."
+ },
+ {
+  "questionText": "Given that e-learning lets learners study at any time and at their own pace, and that teachers have little control to monitor students' progress, which conclusion is supported by BOTH facts together but not by either alone?",
+  "options": [
+   "Flexible timing guarantees that every learner takes part actively and makes progress",
+   "Teachers lose monitoring control only over learners who come from low-income families",
+   "E-learning is cheaper than face-to-face learning because learners spend nothing on travel",
+   "Learners control their timing and pace, but teachers cannot easily verify progress"
+  ],
+  "correctAnswer": "Learners control their timing and pace, but teachers cannot easily verify progress",
+  "difficulty": "HARD",
+  "explanation": "Learner freedom (flexibility, own pace) combined with weak teacher monitoring supports the conclusion that progress is hard to verify. The other options rely on unrelated or unsupported claims."
+ },
+ {
+  "questionText": "Which of the following belongs to a different information system component from the other three: a server computer, a laptop, a wireless network, or a DBMS?",
+  "options": [
+   "The server computer",
+   "The laptop",
+   "The wireless network",
+   "The DBMS"
+  ],
+  "correctAnswer": "The DBMS",
+  "difficulty": "MEDIUM",
+  "explanation": "A Database Management System is software, a set of instructions that commands the hardware. Server computers, laptops and the wired or wireless networks that link system parts are all hardware."
+ },
+ {
+  "questionText": "Selam has an innovative idea and only a laptop, with no money to rent a shop or buy stock. Why is an IT-based business still a realistic option for her?",
+  "options": [
+   "It does not need the large starting capital that traditional businesses need",
+   "The government supplies the starting capital for every IT-based business",
+   "It must begin as an SMS service, and SMS services cost nothing to run",
+   "Its customers, not its founder, bear most of the risks of the business"
+  ],
+  "correctAnswer": "It does not need the large starting capital that traditional businesses need",
+  "difficulty": "MEDIUM",
+  "explanation": "IT-based businesses do not require large capital to start; an entrepreneurial mind with little resource like a laptop can create a business. The entrepreneur, not the customer, bears most of the risks, and starting by SMS was only RIDE's own path."
+ },
+ {
+  "questionText": "A citizen renews an identification card through the municipality's web portal instead of going to the office in person. Which information system application is this?",
+  "options": [
+   "E-commerce",
+   "E-government",
+   "E-banking",
+   "E-learning"
+  ],
+  "correctAnswer": "E-government",
+  "difficulty": "MEDIUM",
+  "explanation": "E-government uses information systems to provide government services, such as municipal ID renewal, to citizens online. E-commerce is buying and selling goods and services, and e-banking covers banking services."
+ },
+ {
+  "questionText": "An HRIS record stores an employee's ID, date of birth, gender, department and termination date. Which category of HRIS data is this?",
+  "options": [
+   "Performance management data",
+   "Compensation and benefits data",
+   "Demographic data",
+   "Recruitment data"
+  ],
+  "correctAnswer": "Demographic data",
+  "difficulty": "MEDIUM",
+  "explanation": "Employee ID, name, date of birth, gender, position, department and termination date are demographic data. Performance data holds feedback and ratings, compensation data holds salary structure, and recruitment data holds CVs and candidate numbers."
+ },
+ {
+  "questionText": "A health office plans to start telemedicine in the rural districts of a developing country. Which limitation is it most likely to face?",
+  "options": [
+   "Patients would pay more for travel and hotels to see doctors",
+   "Remote patients would find specialized physicians harder to reach",
+   "Technical training and equipment may not be readily available",
+   "Geographical barriers to health care would become even greater"
+  ],
+  "correctAnswer": "Technical training and equipment may not be readily available",
+  "difficulty": "MEDIUM",
+  "explanation": "Telemedicine requires technical training and equipment, which may not be readily available in rural areas of developing countries. Lower travel costs, access to specialists and overcoming geographical barriers are its advantages, not limitations."
+ },
+ {
+  "questionText": "A farmer's harvest is recorded in a table as 25 Qts. Given that one quintal is a weight unit, how many kilograms does this harvest weigh?",
+  "options": [
+   "250 kg",
+   "2,500 kg",
+   "25,000 kg",
+   "2.5 kg"
+  ],
+  "correctAnswer": "2,500 kg",
+  "difficulty": "MEDIUM",
+  "explanation": "One quintal (Qts) equals 100 kilograms, so 25 Qts is 25 x 100 = 2,500 kg. 250 kg treats a quintal as 10 kg, and 25,000 kg treats it as 1,000 kg."
+ },
+ {
+  "questionText": "A digital-device company stops recording its daily sales of computers and printers. What is the most direct effect on the company?",
+  "options": [
+   "Its software can no longer command the computer hardware",
+   "It cannot monitor its performance or prepare monthly sales reports",
+   "Its staff lose the privilege to modify data in the system",
+   "Its hardware can no longer communicate over the network"
+  ],
+  "correctAnswer": "It cannot monitor its performance or prepare monthly sales reports",
+  "difficulty": "MEDIUM",
+  "explanation": "Without daily sales data a company cannot properly execute its tasks or monitor performance, and it has nothing to prepare reports such as monthly sales reports from. Commanding hardware, network communication and modify privileges belong to software, hardware and procedures."
+ },
+ {
+  "questionText": "A student claims that once hardware, software and a database are installed, the information system itself works out which new data must be captured, so the people component is optional. Which BEST identifies the flaw in this claim?",
+  "options": [
+   "Hardware decides what new data to capture, since it performs storage and processing",
+   "Trained people identify new data to capture; software only commands the hardware",
+   "The database decides what to capture, so the claim is right for a different reason",
+   "Procedures operate the technologies themselves, so people are indeed optional"
+  ],
+  "correctAnswer": "Trained people identify new data to capture; software only commands the hardware",
+  "difficulty": "HARD",
+  "explanation": "Software is a set of instructions that commands hardware, while trained people operate the technologies and identify new data that must be captured, so people are integral to an IS. Hardware stores and processes data, the database stores it, and procedures are policies, so none of them replaces people."
+ },
+ {
+  "questionText": "Given that the ability to maintain a computer counts as knowledge, and that wisdom is the ability to make wise decisions and judgments using one's knowledge, which scenario shows wisdom rather than only knowledge?",
+  "options": [
+   "A technician follows the repair steps she has learned to replace a broken screen",
+   "A technician reads the error number displayed on a customer's laptop screen",
+   "A technician uses her repair skill to decide which fix serves the owner best over time",
+   "A technician records the price of each spare part in a list for later reference"
+  ],
+  "correctAnswer": "A technician uses her repair skill to decide which fix serves the owner best over time",
+  "difficulty": "HARD",
+  "explanation": "Wisdom is using knowledge to make good judgments, as when repair skill guides a decision that serves the owner well. Applying learned repair steps is knowledge, an error number is data, and a recorded price list is information."
+ },
+ {
+  "questionText": "Given that an online order is paid for through a bank after the merchant receives it, and that e-commerce in Ethiopia still needs a more efficient transport system, which conclusion is supported by BOTH facts together?",
+  "options": [
+   "Because payment passes through a bank, transport problems cannot affect an online sale",
+   "An online sale relies on actors beyond buyer and merchant, so poor transport can stall it",
+   "Because transport is weak, online buyers must pay in cash on delivery instead of via a bank",
+   "Because the merchant receives the order first, only buyer and merchant take part in it"
+  ],
+  "correctAnswer": "An online sale relies on actors beyond buyer and merchant, so poor transport can stall it",
+  "difficulty": "HARD",
+  "explanation": "A sale needs a bank for payment and transporters for delivery, so the sale depends on more than buyer and merchant and weak transport can hold it back. Bank payment does not remove the delivery step, the facts say nothing of cash on delivery, and the bank's role disproves a two-actor transaction."
+ }
+]

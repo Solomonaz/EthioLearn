@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "In a relational database table, what does each row represent?",
+  "options": [
+   "A tuple or record",
+   "An attribute or field",
+   "A data type",
+   "A relationship"
+  ],
+  "correctAnswer": "A tuple or record",
+  "difficulty": "EASY",
+  "explanation": "Data are stored in two-dimensional tables in which each column represents an attribute (field) and each row represents a tuple or record. A field is a column, not a row."
+ },
+ {
+  "questionText": "Which SQL command category contains CREATE TABLE, ALTER TABLE and DROP TABLE?",
+  "options": [
+   "Data Definition Language (DDL)",
+   "Data Manipulation Language (DML)",
+   "Data Query Language (DQL)",
+   "Data Control Language (DCL)"
+  ],
+  "correctAnswer": "Data Definition Language (DDL)",
+  "difficulty": "EASY",
+  "explanation": "DDL is the part of SQL used to create and restructure a database, with commands CREATE TABLE, ALTER TABLE and DROP TABLE. DML holds INSERT, UPDATE and DELETE."
+ },
+ {
+  "questionText": "Which SQL command belongs to Data Query Language (DQL)?",
+  "options": [
+   "SELECT",
+   "INSERT",
+   "ALTER TABLE",
+   "DELETE"
+  ],
+  "correctAnswer": "SELECT",
+  "difficulty": "EASY",
+  "explanation": "DQL provides the SELECT command for querying all or a subset of records from one or more tables. INSERT and DELETE are DML commands, and ALTER is a DDL command."
+ },
+ {
+  "questionText": "What is the default sort order when ORDER BY is followed by a column name with no keyword after it?",
+  "options": [
+   "Ascending",
+   "Descending",
+   "Order of insertion",
+   "Random order"
+  ],
+  "correctAnswer": "Ascending",
+  "difficulty": "EASY",
+  "explanation": "ORDER BY sorts in ascending order if ASC is written or nothing is written; ascending is the default. DESC must be written to sort in descending order."
+ },
+ {
+  "questionText": "What does the asterisk (*) mean in the statement SELECT * FROM COURSE;?",
+  "options": [
+   "All columns in the table",
+   "The first column only",
+   "Only the primary key column",
+   "All rows that are not empty"
+  ],
+  "correctAnswer": "All columns in the table",
+  "difficulty": "EASY",
+  "explanation": "When SELECT is followed by the asterisk, it means all columns in the table; it is equivalent to listing every field. It does not limit the result to the primary key or the first column."
+ },
+ {
+  "questionText": "Which MS Access SQL data type is a unique sequential number assigned automatically whenever a new record is added to a table?",
+  "options": [
+   "COUNTER",
+   "INTEGER",
+   "CURRENCY",
+   "CHAR"
+  ],
+  "correctAnswer": "COUNTER",
+  "difficulty": "EASY",
+  "explanation": "COUNTER is a unique sequential (incremented by 1) or random number that Microsoft Access assigns whenever a new record is added. INTEGER stores long integers but is not assigned automatically."
+ },
+ {
+  "questionText": "Which of these is listed as an example of a popular relational database management system?",
+  "options": [
+   "PostgreSQL",
+   "Microsoft Excel",
+   "Google Sheets",
+   "Microsoft OneNote"
+  ],
+  "correctAnswer": "PostgreSQL",
+  "difficulty": "EASY",
+  "explanation": "Popular RDBMSs include Microsoft Access, Oracle, Microsoft SQL Server, MySQL, SQLite, IBM DB2 and PostgreSQL. Excel and Google Sheets are spreadsheets that store data in grids but are not relational database management systems."
+ },
+ {
+  "questionText": "Which data type is suggested for a telephone number such as +251 900 00 00 00?",
+  "options": [
+   "Text",
+   "Integer",
+   "Real or currency",
+   "Date"
+  ],
+  "correctAnswer": "Text",
+  "difficulty": "EASY",
+  "explanation": "Telephone number is given the Text data type, since it is a number that is not used in calculations (CHAR is described as suitable for numbers like phone numbers). Integer would be used for values like age."
+ },
+ {
+  "questionText": "Which keyword is written after the name of a column in CREATE TABLE to make it link to the primary key of another table?",
+  "options": [
+   "REFERENCES",
+   "CONNECT",
+   "JOIN TO",
+   "LINKS WITH"
+  ],
+  "correctAnswer": "REFERENCES",
+  "difficulty": "EASY",
+  "explanation": "To create a relationship, the foreign key column is followed by the keyword REFERENCES and the other table's name with its primary key in parentheses, for example C_Department TEXT(10) REFERENCES DEPARTMENT(D_Number)."
+ },
+ {
+  "questionText": "Which tab in MS Access holds the Relationships button used to create relationships visually?",
+  "options": [
+   "Database Tools",
+   "Create",
+   "Home ribbon",
+   "External Data"
+  ],
+  "correctAnswer": "Database Tools",
+  "difficulty": "EASY",
+  "explanation": "On the Database Tools tab, in the Relationships group, you click Relationships to create a relationship graphically. The Create tab is used to start a Query Design."
+ },
+ {
+  "questionText": "In the MarkList table, Sid appears once for every course a student took. What kind of key is Sid in MarkList?",
+  "options": [
+   "A foreign key",
+   "A primary key",
+   "A candidate key",
+   "A composite primary key"
+  ],
+  "correctAnswer": "A foreign key",
+  "difficulty": "MEDIUM",
+  "explanation": "A student with four courses has four mark records with the same Sid, so Sid is not unique in MarkList; it is a foreign key used to create a relationship with the Students table, where Sid is the primary key."
+ },
+ {
+  "questionText": "A field is defined as C_Name TEXT(20) and the value 'Introduction to Civics and Ethical Education' is inserted. What is stored?",
+  "options": [
+   "'Introduction to Civi'",
+   "'Introduction to Civics'",
+   "The full title, because TEXT has no limit",
+   "Nothing, because the insert is rejected"
+  ],
+  "correctAnswer": "'Introduction to Civi'",
+  "difficulty": "MEDIUM",
+  "explanation": "When a size is specified, only that many characters are stored and the rest is ignored, with spaces counted as characters; so only the first 20 characters, 'Introduction to Civi', are kept."
+ },
+ {
+  "questionText": "What is the maximum number of characters a CHAR field can store in MS Access when no size is given, as in Id CHAR?",
+  "options": [
+   "255",
+   "20",
+   "63,999",
+   "2,147,483,647"
+  ],
+  "correctAnswer": "255",
+  "difficulty": "MEDIUM",
+  "explanation": "If the field size is ignored (Id CHAR), the field stores up to 255 characters. 63,999 is the limit for TEXT, and 2,147,483,647 is the upper limit of INTEGER."
+ },
+ {
+  "questionText": "Which statement makes teacher_id the primary key of an existing TEACHER table?",
+  "options": [
+   "ALTER TABLE TEACHER ADD PRIMARY KEY (teacher_id)",
+   "CREATE TABLE TEACHER PRIMARY KEY (teacher_id)",
+   "UPDATE TEACHER SET PRIMARY KEY = teacher_id",
+   "INSERT INTO TEACHER PRIMARY KEY (teacher_id)"
+  ],
+  "correctAnswer": "ALTER TABLE TEACHER ADD PRIMARY KEY (teacher_id)",
+  "difficulty": "MEDIUM",
+  "explanation": "If a primary key was missed when the table was created, ALTER TABLE TEACHER ADD PRIMARY KEY (teacher_id) sets it. UPDATE changes record values, not the table structure."
+ },
+ {
+  "questionText": "What happens when DROP TABLE COURSE is run on a table that holds records?",
+  "options": [
+   "The table and its records are deleted for good",
+   "Only the records are deleted and the empty table remains",
+   "The table is hidden until the next time the database opens",
+   "Only the primary key column of the table is removed"
+  ],
+  "correctAnswer": "The table and its records are deleted for good",
+  "difficulty": "MEDIUM",
+  "explanation": "DROP TABLE deletes a table already created, and if you delete a table with records you cannot get it back. Deleting only the records while keeping the structure is what DELETE does."
+ },
+ {
+  "questionText": "In an INSERT INTO statement, what does listing column names in parentheses after the table name allow?",
+  "options": [
+   "Values are given only for the selected fields",
+   "Many records can be inserted in one statement",
+   "Field data types can be changed during the insert",
+   "Records can be inserted without a VALUES part"
+  ],
+  "correctAnswer": "Values are given only for the selected fields",
+  "difficulty": "MEDIUM",
+  "explanation": "Listing the columns after the table name lets you give values only for selected fields; fields not mentioned are left blank or get a default value. Without the column list, values must be given for all fields in order."
+ },
+ {
+  "questionText": "In INSERT INTO COURSE VALUES (3, 'Chemistry', 'Organic chemistry', '105', 'NS1421');, how is the value '105' treated?",
+  "options": [
+   "As a string",
+   "As an integer",
+   "As a currency value",
+   "As a date"
+  ],
+  "correctAnswer": "As a string",
+  "difficulty": "MEDIUM",
+  "explanation": "String values are enclosed in quotation marks, while numeric values need none; because '105' is in quotes, it is considered a string rather than a numeric value."
+ },
+ {
+  "questionText": "What does UPDATE Teacher SET T_Salary = 15000 WHERE T_Salary < 10000; do?",
+  "options": [
+   "Teachers earning below 10,000 now earn 15,000",
+   "Sets every teacher's salary to 15,000",
+   "Adds 15,000 to every salary below 10,000",
+   "Deletes teachers whose salary is below 10,000"
+  ],
+  "correctAnswer": "Teachers earning below 10,000 now earn 15,000",
+  "difficulty": "MEDIUM",
+  "explanation": "The WHERE clause selects only rows with T_Salary below 10,000, and SET changes their T_Salary to 15,000. Without the WHERE clause every teacher's salary would be changed."
+ },
+ {
+  "questionText": "Which statement deletes all records of a table while keeping its structure?",
+  "options": [
+   "DELETE FROM table_name;",
+   "DROP TABLE table_name;",
+   "ALTER TABLE table_name DROP;",
+   "UPDATE table_name SET * = NULL;"
+  ],
+  "correctAnswer": "DELETE FROM table_name;",
+  "difficulty": "MEDIUM",
+  "explanation": "DELETE does not remove the table structure; DELETE FROM table_name; (or DELETE * FROM table_name;) deletes all records. DROP TABLE removes the table itself."
+ },
+ {
+  "questionText": "Why should a DELETE statement refer to a record by its primary key?",
+  "options": [
+   "Other fields may repeat values, so extra records could go",
+   "The primary key is the only field DELETE is allowed to read",
+   "Records without a primary key can never be deleted",
+   "DELETE runs faster but gives the same result with any field"
+  ],
+  "correctAnswer": "Other fields may repeat values, so extra records could go",
+  "difficulty": "MEDIUM",
+  "explanation": "You should refer to the record by primary key because other fields can have similar values repeated, and you may lose records you did not intend to delete."
+ },
+ {
+  "questionText": "Which SELECT clauses are required?",
+  "options": [
+   "SELECT and FROM",
+   "SELECT and WHERE",
+   "FROM and ORDER BY",
+   "WHERE and ORDER BY"
+  ],
+  "correctAnswer": "SELECT and FROM",
+  "difficulty": "MEDIUM",
+  "explanation": "SELECT (the fields of interest) and FROM (the tables containing them) are required, while WHERE (criteria) and ORDER BY (sorting) are optional."
+ },
+ {
+  "questionText": "In a relationship diagram in MS Access, what does the infinity symbol beside a table show?",
+  "options": [
+   "The many side of the relationship",
+   "The one side of the relationship",
+   "That the table has no primary key",
+   "That the relationship is one-to-one"
+  ],
+  "correctAnswer": "The many side of the relationship",
+  "difficulty": "MEDIUM",
+  "explanation": "The infinity symbol describes the many side and 1 describes the one side; for example, one DEPARTMENT record links to many Teacher records. A one-to-one relationship would show 1 on both sides."
+ },
+ {
+  "questionText": "Why can C_Department CHAR(15) in COURSE not be linked to D_Number CHAR(10) in DEPARTMENT?",
+  "options": [
+   "Linked fields must share the same data type and size",
+   "A foreign key must always be longer than the primary key it refers to",
+   "CHAR fields can never take part in relationships between tables",
+   "D_Number must first be dropped and added again as INTEGER"
+  ],
+  "correctAnswer": "Linked fields must share the same data type and size",
+  "difficulty": "HARD",
+  "explanation": "The primary key and foreign key must have the same data type; a CHAR(10) and CHAR(15) mismatch causes an error, fixed with ALTER TABLE COURSE ALTER COLUMN C_Department CHAR(10)."
+ },
+ {
+  "questionText": "Before deleting a department record that is related to records in the Students, Teacher and Course tables, what must be done first?",
+  "options": [
+   "Delete the related records in the tables on the many side",
+   "Drop the DEPARTMENT table and create it again",
+   "Change the department's primary key to a new value",
+   "Delete the department record twice to remove the links"
+  ],
+  "correctAnswer": "Delete the related records in the tables on the many side",
+  "difficulty": "HARD",
+  "explanation": "When deleting a record on the one side of a one-to-many relationship, you first have to delete all related records in the tables on the many side, such as Students, Teacher and Course."
+ },
+ {
+  "questionText": "Which query returns sales made on or after May 1, 2020 with an amount greater than 12000?",
+  "options": [
+   "SELECT * FROM SALES WHERE SalesDate >= '01-05-2020' AND Amount > 12000;",
+   "SELECT * FROM SALES WHERE SalesDate >= '01-05-2020' OR Amount > 12000;",
+   "SELECT * FROM SALES WHERE SalesDate > '01-05-2020' AND Amount >= 12000;",
+   "SELECT * FROM SALES ORDER BY SalesDate, Amount > 12000;"
+  ],
+  "correctAnswer": "SELECT * FROM SALES WHERE SalesDate >= '01-05-2020' AND Amount > 12000;",
+  "difficulty": "HARD",
+  "explanation": "Both conditions must hold, so they are joined with AND; >= includes May 1 itself and > 12000 excludes exactly 12000. OR would return records meeting either condition alone."
+ },
+ {
+  "questionText": "In WHERE SalesDate BETWEEN '01-01-2020' AND '30-02-2020', are the two end dates included in the result?",
+  "options": [
+   "Yes, both end dates belong to the range",
+   "No, only dates strictly between the two values are returned",
+   "Only the start date is included and the end date is excluded",
+   "Only the end date is included and the start date is excluded"
+  ],
+  "correctAnswer": "Yes, both end dates belong to the range",
+  "difficulty": "HARD",
+  "explanation": "BETWEEN ... AND is a range condition whose start point and end point are both part of the range, so a record on either boundary date is included."
+ },
+ {
+  "questionText": "What happens if the WHERE clause is left out of UPDATE Teacher SET T_Salary = 15000?",
+  "options": [
+   "The salary of every teacher in the table is changed to 15,000",
+   "Only the first teacher's salary is changed to 15,000",
+   "The query is rejected because WHERE is required in UPDATE",
+   "A new teacher record with a salary of 15,000 is inserted"
+  ],
+  "correctAnswer": "The salary of every teacher in the table is changed to 15,000",
+  "difficulty": "HARD",
+  "explanation": "It is the WHERE clause that determines how many records are updated; without it the query changes the salary of all teachers to 15,000. UPDATE never adds new records."
+ },
+ {
+  "questionText": "When selecting records from the COURSE and CourseOffering tables in one query, why is the column written as COURSE.Course_id?",
+  "options": [
+   "It shows which table the column belongs to",
+   "It tells SQL to sort the output by the COURSE table first",
+   "It turns Course_id into the primary key of the CourseOffering table",
+   "It hides the column from the output so only the semester is shown"
+  ],
+  "correctAnswer": "It shows which table the column belongs to",
+  "difficulty": "HARD",
+  "explanation": "In a two-table SELECT, each column is described with the table that contains it (table1.column1); this is important when the same field name is found in both tables."
+ },
+ {
+  "questionText": "In a two-table SELECT on COURSE and CourseOffering, what does the condition COURSE.Course_id = CourseOffering.Course_code do?",
+  "options": [
+   "It links each course to its offerings through the shared key",
+   "It copies every Course_id value into the Course_code column",
+   "It deletes offerings whose course code is not in COURSE",
+   "It sorts both tables by the course code in ascending order"
+  ],
+  "correctAnswer": "It links each course to its offerings through the shared key",
+  "difficulty": "HARD",
+  "explanation": "Records from two tables must have some link; the WHERE condition matches the primary key Course_id in COURSE with the foreign key Course_code in CourseOffering, so each course is paired with its offerings."
+ },
+ {
+  "questionText": "Why should records not be added to tables before their relationships are set up?",
+  "options": [
+   "Existing records may break the relationship's rules",
+   "Tables cannot hold any records until a relationship diagram has been saved",
+   "Adding records first deletes the primary keys of all the related tables",
+   "Access converts every field to TEXT if records are added before relationships"
+  ],
+  "correctAnswer": "Existing records may break the relationship's rules",
+  "difficulty": "HARD",
+  "explanation": "Data should not be added until relationships are set up, because if you add records and then set up relationships where the records do not meet the requirements, you get errors."
+ }
+]

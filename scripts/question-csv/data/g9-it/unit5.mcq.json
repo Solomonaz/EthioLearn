@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What do the letters CIA stand for in computer security?",
+  "options": [
+   "Confidentiality, integrity and availability",
+   "Control, inspection and authentication",
+   "Cyber, internet and access control",
+   "Computers, information and applications"
+  ],
+  "correctAnswer": "Confidentiality, integrity and availability",
+  "difficulty": "EASY",
+  "explanation": "Computer security is mainly concerned with confidentiality, integrity and availability, abbreviated CIA and also called the security requirements triad."
+ },
+ {
+  "questionText": "Which Ethiopian federal institution was established to safeguard the country's information and information infrastructure?",
+  "options": [
+   "Information Network Security Agency (INSA)",
+   "Ethiopian Communications Authority",
+   "Ethio-telecom Security Division",
+   "Ministry of Education"
+  ],
+  "correctAnswer": "Information Network Security Agency (INSA)",
+  "difficulty": "EASY",
+  "explanation": "INSA was established to protect the national interest by safeguarding information and information infrastructures, with a mission on cyber security. Ethio-telecom is an Internet service provider."
+ },
+ {
+  "questionText": "Which type of malware locks a victim's files and threatens to delete them unless a payment is made?",
+  "options": [
+   "Ransomware",
+   "Adware",
+   "Spyware",
+   "Network worm"
+  ],
+  "correctAnswer": "Ransomware",
+  "difficulty": "EASY",
+  "explanation": "Ransomware locks the files and data on the system and threatens to delete them if the ransom is not paid. Spyware secretly tracks the user's movements instead."
+ },
+ {
+  "questionText": "Which malware records keyboard movements to steal passwords and account details?",
+  "options": [
+   "Key logger",
+   "Trojan horse",
+   "Botnet",
+   "Adware"
+  ],
+  "correctAnswer": "Key logger",
+  "difficulty": "EASY",
+  "explanation": "Key loggers work by recording movements on the keyboard and mostly steal passwords and account details. Adware shows pop-up advertisements."
+ },
+ {
+  "questionText": "Which attack sends fraudulent messages, usually by email, that appear to come from a reputable source?",
+  "options": [
+   "Phishing",
+   "Eavesdropping",
+   "SQL injection",
+   "Denial of service"
+  ],
+  "correctAnswer": "Phishing",
+  "difficulty": "EASY",
+  "explanation": "Phishing sends fraudulent communications that appear to come from a reputable source, usually by email, to steal data like card and login details or install malware."
+ },
+ {
+  "questionText": "What should you do first if a fire breaks out near your computer?",
+  "options": [
+   "Get yourself to a safe place",
+   "Unplug the computer and carry it out",
+   "Back up your files to a flash drive",
+   "Pour water over the computer"
+  ],
+  "correctAnswer": "Get yourself to a safe place",
+  "difficulty": "EASY",
+  "explanation": "Fire can melt components and smoke can damage the CPU fan, but in case of a fire you should always get yourself to a safe place before trying to rescue your computer."
+ },
+ {
+  "questionText": "What does a firewall do for a local network?",
+  "options": [
+   "It guards the link between the Internet and the LAN",
+   "It cools the computer when the temperature gets too high",
+   "It stores backup copies of all files on the network",
+   "It records the keys pressed on each keyboard"
+  ],
+  "correctAnswer": "It guards the link between the Internet and the LAN",
+  "difficulty": "EASY",
+  "explanation": "A firewall acts as a security guard between the Internet and your local area network, protecting networks from Internet-based attacks. Recording key presses is what a key logger does."
+ },
+ {
+  "questionText": "What is the minimum password length recommended for students?",
+  "options": [
+   "15 characters",
+   "6 characters",
+   "8 characters",
+   "4 characters"
+  ],
+  "correctAnswer": "15 characters",
+  "difficulty": "EASY",
+  "explanation": "Passwords should combine numbers and capital and small letters, and it is good to have at least 15 characters, with different passwords for different accounts."
+ },
+ {
+  "questionText": "Which attack is most common on open Wi-Fi networks and involves intercepting communication between people to steal data?",
+  "options": [
+   "Man in the middle",
+   "Ransomware",
+   "Brute force",
+   "Pop-up adware"
+  ],
+  "correctAnswer": "Man in the middle",
+  "difficulty": "EASY",
+  "explanation": "A man-in-the-middle attack intercepts communication between people and steals data from their conversation; open Wi-Fi networks are the most common place for it."
+ },
+ {
+  "questionText": "What are people who use the Internet to exploit younger people for sexual and other purposes called?",
+  "options": [
+   "Cyber predators",
+   "Cyber bullies",
+   "Ethical hackers",
+   "Malicious insiders"
+  ],
+  "correctAnswer": "Cyber predators",
+  "difficulty": "EASY",
+  "explanation": "Cyber predators use the Internet to exploit usually younger people for sexual and other purposes, often pretending to be someone else. Cyber bullies ridicule or humiliate others online."
+ },
+ {
+  "questionText": "Which CIA principle ensures that information is available only to its intended audience?",
+  "options": [
+   "Confidentiality",
+   "Integrity",
+   "Availability",
+   "Authenticity check"
+  ],
+  "correctAnswer": "Confidentiality",
+  "difficulty": "MEDIUM",
+  "explanation": "Confidentiality ensures information is available only to the intended audience, so only authorized users can access or modify it. Availability is about access when needed."
+ },
+ {
+  "questionText": "Which CIA principle means that data can be trusted and is kept correct, authentic and reliable?",
+  "options": [
+   "Integrity",
+   "Confidentiality",
+   "Availability",
+   "Privacy"
+  ],
+  "correctAnswer": "Integrity",
+  "difficulty": "MEDIUM",
+  "explanation": "Integrity means data can be trusted: it is kept in a correct state so it is not wrongly changed and stays correct, authentic and reliable. Privacy is related to confidentiality."
+ },
+ {
+  "questionText": "What does the 90/10 rule of computer security state?",
+  "options": [
+   "90% depends on users' good practices, 10% on technical measures",
+   "90% of attacks come from outside an organization and 10% from inside",
+   "90% of viruses are removed by antivirus software and 10% need experts",
+   "90% of data should be backed up weekly and 10% daily"
+  ],
+  "correctAnswer": "90% depends on users' good practices, 10% on technical measures",
+  "difficulty": "MEDIUM",
+  "explanation": "The 90/10 rule says 10% of security countermeasures are technical and 90% rely on you following good computer practices, which is why security awareness matters."
+ },
+ {
+  "questionText": "Which malware disguises itself as a legitimate program when it is downloaded?",
+  "options": [
+   "Trojan horse",
+   "Worm",
+   "Key logger",
+   "Pop-up adware"
+  ],
+  "correctAnswer": "Trojan horse",
+  "difficulty": "MEDIUM",
+  "explanation": "A Trojan horse is malware that downloads onto a computer disguised or masked as a legitimate program and then takes over the system. A worm is an independent program spreading through networks."
+ },
+ {
+  "questionText": "What is a botnet?",
+  "options": [
+   "Infected computers that a criminal controls remotely",
+   "A program that shows pop-up advertisements on a phone",
+   "A tool that guesses passwords from a dictionary",
+   "A firewall that blocks attacks from the Internet"
+  ],
+  "correctAnswer": "Infected computers that a criminal controls remotely",
+  "difficulty": "MEDIUM",
+  "explanation": "Botnet comes from robot and network: criminals use special Trojans to take control of many users' computers and organize them into a network of bots they manage remotely."
+ },
+ {
+  "questionText": "Which password attack is a physical observation of the user while the password is being typed?",
+  "options": [
+   "Shoulder surfing",
+   "Brute force",
+   "Dictionary attack",
+   "Rainbow table"
+  ],
+  "correctAnswer": "Shoulder surfing",
+  "difficulty": "MEDIUM",
+  "explanation": "Shoulder surfing is physically observing a user by looking over their shoulder. A dictionary attack tries passwords from a dictionary, and brute force uses trial and error."
+ },
+ {
+  "questionText": "A caller claiming to be from the mobile company says 'Your device is in danger' and gets the user to give out information without checking. What attack is this?",
+  "options": [
+   "Social engineering",
+   "Eavesdropping",
+   "SQL injection attack",
+   "Denial of service"
+  ],
+  "correctAnswer": "Social engineering",
+  "difficulty": "MEDIUM",
+  "explanation": "Social engineering creates a social situation, such as a call from the mobile company saying the device is in danger, so the user blindly trusts the caller and gives out information."
+ },
+ {
+  "questionText": "How can a denial of service (DoS) attack affect a bank?",
+  "options": [
+   "It can stop ATM and CBE Birr services by flooding them",
+   "It secretly changes the balances stored in customers' accounts",
+   "It copies the bank's database to an outside computer",
+   "It locks the bank's files until a ransom is paid"
+  ],
+  "correctAnswer": "It can stop ATM and CBE Birr services by flooding them",
+  "difficulty": "MEDIUM",
+  "explanation": "DoS attacks flood targets with requests so regular users cannot connect; an attack on bank IT infrastructure could stop services such as ATMs and CBE Birr. Locking files for a ransom is ransomware."
+ },
+ {
+  "questionText": "What is the best action when a computer has been exposed to a drastic temperature change?",
+  "options": [
+   "Let it reach room temperature before use",
+   "Switch it on at once to warm up its parts",
+   "Cover it with a cloth while it is running",
+   "Run a full antivirus scan straight away"
+  ],
+  "correctAnswer": "Let it reach room temperature before use",
+  "difficulty": "MEDIUM",
+  "explanation": "Computers are designed to work within a moderate temperature range; after drastic temperature changes it is best to let the computer return to room temperature before using it."
+ },
+ {
+  "questionText": "How can a lightning strike damage a computer even without touching it?",
+  "options": [
+   "It sends a power surge that can destroy the motherboard",
+   "It changes the data on the hard disk using magnetism alone",
+   "It infects the computer with a virus through the network",
+   "It lowers the room temperature until the parts freeze"
+  ],
+  "correctAnswer": "It sends a power surge that can destroy the motherboard",
+  "difficulty": "MEDIUM",
+  "explanation": "A lightning strike can create an electric surge or spike through the power supply, and this sudden surge can destroy crucial components including the motherboard."
+ },
+ {
+  "questionText": "What do eavesdropping attacks rely on?",
+  "options": [
+   "Unsecured, unencrypted network communication",
+   "A user clicking on a pop-up advertisement",
+   "Physical access to the victim's own keyboard",
+   "A weakness in the computer's power supply"
+  ],
+  "correctAnswer": "Unsecured, unencrypted network communication",
+  "difficulty": "MEDIUM",
+  "explanation": "Eavesdropping (sniffing or snooping) relies on unsecured network communications to access data in transit, typically when traffic is not secured or encrypted."
+ },
+ {
+  "questionText": "Who are malicious insiders?",
+  "options": [
+   "Insiders who misuse their access to the organization's data",
+   "Hackers outside a company who test their own skills",
+   "Staff who send sensitive email to the wrong address by mistake",
+   "Criminals who sell stolen data from other countries"
+  ],
+  "correctAnswer": "Insiders who misuse their access to the organization's data",
+  "difficulty": "MEDIUM",
+  "explanation": "Malicious insiders use their access to an organization's data or networks to conduct malicious activity, such as stealing sensitive information for competitors; sending email to the wrong address is an honest mistake."
+ },
+ {
+  "questionText": "A student uses the school Internet, given for educational purposes, to promote goods for sale online. Which loss due to a security attack is this?",
+  "options": [
+   "Theft of services",
+   "Disclosure of information",
+   "Elevation of privilege",
+   "Corruption of information"
+  ],
+  "correctAnswer": "Theft of services",
+  "difficulty": "HARD",
+  "explanation": "Theft of services is unauthorized use of computer or network services, such as using school Internet access granted for education for online marketing. Disclosure is spreading information to unauthorized people."
+ },
+ {
+  "questionText": "A student logs into the academic record system using a teacher's account. Which loss is this an example of?",
+  "options": [
+   "Elevation of privilege",
+   "Theft of services",
+   "Denial of use",
+   "Illegal usage of services"
+  ],
+  "correctAnswer": "Elevation of privilege",
+  "difficulty": "HARD",
+  "explanation": "Elevation of privilege occurs when someone gains rights that should not be available to them, such as a student entering with the teacher's higher-privilege account, often through guessable passwords or key logging."
+ },
+ {
+  "questionText": "Someone photographs a warning letter posted on the school noticeboard and shares it on social media. Which loss is this?",
+  "options": [
+   "Disclosure of information",
+   "Corruption of information",
+   "Theft of services",
+   "Destruction of information"
+  ],
+  "correctAnswer": "Disclosure of information",
+  "difficulty": "HARD",
+  "explanation": "Disclosure of information is dissemination to anyone not authorized; taking a picture of a notice meant for the school community and posting it online is an unethical disclosure."
+ },
+ {
+  "questionText": "Which loss describes students' marks in a school database being changed without authorization?",
+  "options": [
+   "Corruption of information",
+   "Destruction of information",
+   "Disclosure of information",
+   "Denial of use"
+  ],
+  "correctAnswer": "Corruption of information",
+  "difficulty": "HARD",
+  "explanation": "Corruption of information is unauthorized alteration of stored files, such as adding to or reducing marks in a school database. Destruction is loss of data, for example from a failed hard disk."
+ },
+ {
+  "questionText": "Which pair of CIA principles do schools usually focus on, according to the triangle model?",
+  "options": [
+   "Integrity and availability",
+   "Confidentiality and integrity",
+   "Confidentiality and availability",
+   "Availability and privacy"
+  ],
+  "correctAnswer": "Integrity and availability",
+  "difficulty": "HARD",
+  "explanation": "Achieving all three is costly, so organizations choose priorities: schools focus on making trustworthy resources available (integrity and availability), while military institutions may focus on confidentiality and integrity."
+ },
+ {
+  "questionText": "How does a worm differ from a virus?",
+  "options": [
+   "It is an independent program that spreads over networks",
+   "A worm can only be spread by inserting a USB flash drive",
+   "A worm only shows unwanted advertisements on the screen",
+   "A worm locks files until the owner pays a ransom"
+  ],
+  "correctAnswer": "It is an independent program that spreads over networks",
+  "difficulty": "HARD",
+  "explanation": "A worm is an independent program that infects computers through network devices, while a virus gets into a computer program and replicates to change its functioning."
+ },
+ {
+  "questionText": "Which attack is possible only on websites where hackers can reach the database, by putting unauthorized input into a query?",
+  "options": [
+   "SQL injection",
+   "Phishing",
+   "Eavesdropping",
+   "Botnet attack"
+  ],
+  "correctAnswer": "SQL injection",
+  "difficulty": "HARD",
+  "explanation": "SQL injection is when an attacker injects unauthorized input into the SQL statement, possible on websites where hackers can access the database. Phishing works through fraudulent messages."
+ },
+ {
+  "questionText": "Which of these is a recommended practice for keeping a computer secure?",
+  "options": [
+   "Use different passwords for different accounts",
+   "Change your password only when you forget it",
+   "Use your name and phone number for an easy password",
+   "Turn off the firewall when installing trusted software"
+  ],
+  "correctAnswer": "Use different passwords for different accounts",
+  "difficulty": "HARD",
+  "explanation": "Recommended practices include different passwords for different accounts, avoiding attachments from unknown sources, and updating software as soon as updates are available."
+ }
+]

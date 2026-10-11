@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What is a link called when a graphic or other multimedia object leads to more information about a topic?",
+  "options": [
+   "Hypermedia",
+   "Clip art library",
+   "Animation",
+   "Storyboard"
+  ],
+  "correctAnswer": "Hypermedia",
+  "difficulty": "EASY",
+  "explanation": "When a graphic or other multimedia object serves as a link to additional information about a topic, the link is called hypermedia. Clip art is ready-made drawings."
+ },
+ {
+  "questionText": "What port connects a synthesizer or musical keyboard to a computer to capture audio?",
+  "options": [
+   "MIDI",
+   "USB-C",
+   "VGA",
+   "HDMI"
+  ],
+  "correctAnswer": "MIDI",
+  "difficulty": "EASY",
+  "explanation": "Audio can be played from a synthesizer, keyboard or other musical instrument connected through a MIDI (Musical Instrument Digital Interface) port."
+ },
+ {
+  "questionText": "Which of these is listed as a video file format?",
+  "options": [
+   "AVI",
+   "WAV",
+   "TIFF",
+   "PNG"
+  ],
+  "correctAnswer": "AVI",
+  "difficulty": "EASY",
+  "explanation": "The video formats listed are AVI (Audio Video Interleave) and MPEG; WAV is a sound format and TIFF and PNG are image formats."
+ },
+ {
+  "questionText": "WAV, MIDI and WMA belong to which group of multimedia file formats?",
+  "options": [
+   "Sound file formats",
+   "Image file formats",
+   "Video file formats",
+   "Text file formats"
+  ],
+  "correctAnswer": "Sound file formats",
+  "difficulty": "EASY",
+  "explanation": "The sound file formats listed are WAV (Windows Wave Format), MIDI and WMA (Windows Media Audio); image formats include TIFF, JPEG, GIF, PNG and BMP, and video formats AVI and MPEG."
+ },
+ {
+  "questionText": "What is the best-known example of hypermedia?",
+  "options": [
+   "The World Wide Web",
+   "A printed newspaper",
+   "A radio broadcast",
+   "A television channel"
+  ],
+  "correctAnswer": "The World Wide Web",
+  "difficulty": "EASY",
+  "explanation": "Hypermedia is a non-linear form of media linked together by a hypertext program, and the best example is the World Wide Web."
+ },
+ {
+  "questionText": "Which keyboard shortcut previews an animated test movie in Macromedia Flash?",
+  "options": [
+   "Ctrl + Enter",
+   "Ctrl + S (save)",
+   "Ctrl + W",
+   "Ctrl + R"
+  ],
+  "correctAnswer": "Ctrl + Enter",
+  "difficulty": "EASY",
+  "explanation": "To preview the animated test movie you click Control, Test Movie or press Ctrl + Enter; Ctrl + S saves, Ctrl + W closes a library and Ctrl + R imports."
+ },
+ {
+  "questionText": "Which multimedia component refers to graphic images that change or move?",
+  "options": [
+   "Animation",
+   "Text captions",
+   "Audio",
+   "Clip art"
+  ],
+  "correctAnswer": "Animation",
+  "difficulty": "EASY",
+  "explanation": "Animation refers to graphic images that change or move and is common in Web advertising because movement grabs attention. Clip art is static drawings."
+ },
+ {
+  "questionText": "What is the exchange of medical information from one place to another by electronic communication called?",
+  "options": [
+   "Telemedicine",
+   "Virtual surgery",
+   "Virtual learning",
+   "Video conferencing"
+  ],
+  "correctAnswer": "Telemedicine",
+  "difficulty": "EASY",
+  "explanation": "Telemedicine is the exchange of medical information between locations using electronic communication to improve patient health. Virtual surgery simulates operations on 3D models."
+ },
+ {
+  "questionText": "Which program can trim video clips, add transitions and change a sound's play speed?",
+  "options": [
+   "Adobe Premiere Elements 9",
+   "Macromedia Flash MX",
+   "Sound Forge",
+   "CorelDraw"
+  ],
+  "correctAnswer": "Adobe Premiere Elements 9",
+  "difficulty": "EASY",
+  "explanation": "Adobe Premiere Elements 9 is used for sounds and digital movies, including transitions, trimming and Time Stretch for play speed. Sound Forge creates sound and CorelDraw processes images."
+ },
+ {
+  "questionText": "Which Flash tool fills a drawn rectangle with a color?",
+  "options": [
+   "Paint Bucket Tool",
+   "Free Transform Tool",
+   "Text Tool",
+   "Lasso Tool"
+  ],
+  "correctAnswer": "Paint Bucket Tool",
+  "difficulty": "EASY",
+  "explanation": "After drawing a rectangle with the Rectangle Tool, you click the Paint Bucket Tool, pick a color from Color Swatches and click inside to fill it."
+ },
+ {
+  "questionText": "Why are video files very large?",
+  "options": [
+   "Many images are needed to show motion",
+   "Video always includes several audio tracks",
+   "Video is stored only in uncompressed TIFF",
+   "Each frame holds a copy of the text"
+  ],
+  "correctAnswer": "Many images are needed to show motion",
+  "difficulty": "MEDIUM",
+  "explanation": "Video files are photographic images played fast enough to appear in motion, so a huge number of images are required, making the files incredibly large."
+ },
+ {
+  "questionText": "How do users of interactive multimedia differ from viewers of ordinary media?",
+  "options": [
+   "They respond to and control media elements",
+   "They receive the media without giving input",
+   "They must write the program code themselves",
+   "They can only view text and still graphics"
+  ],
+  "correctAnswer": "They respond to and control media elements",
+  "difficulty": "MEDIUM",
+  "explanation": "Interactive multimedia lets users respond directly to and control media elements, so they become active participants rather than passive recipients of the information."
+ },
+ {
+  "questionText": "Which person in multimedia production integrates all the elements using authoring programs?",
+  "options": [
+   "Multimedia architect",
+   "Content specialist",
+   "Program text editor",
+   "Production manager"
+  ],
+  "correctAnswer": "Multimedia architect",
+  "difficulty": "MEDIUM",
+  "explanation": "The multimedia architect (program authoring specialist) integrates graphics, text, audio, video, photos and animation using authoring programs. The content specialist does the research on content."
+ },
+ {
+  "questionText": "Which person in multimedia production does all necessary research on the content of the proposed application?",
+  "options": [
+   "Content specialist",
+   "Scriptwriter",
+   "Computer programmer",
+   "Audio-video specialist"
+  ],
+  "correctAnswer": "Content specialist",
+  "difficulty": "MEDIUM",
+  "explanation": "The content specialist is responsible for performing all necessary research about the content of the proposed application; the programmer writes code in the authoring language."
+ },
+ {
+  "questionText": "In which stage of multimedia authoring are storyboards created to tell the story of the project?",
+  "options": [
+   "Design",
+   "Analysis",
+   "Development",
+   "Evaluation"
+  ],
+  "correctAnswer": "Design",
+  "difficulty": "MEDIUM",
+  "explanation": "The five stages are analysis, design, development, evaluation and distribution; in design you create storyboards to tell the story of the project."
+ },
+ {
+  "questionText": "Which of these is listed as a multimedia authoring package?",
+  "options": [
+   "ImageQ",
+   "Sound Forge",
+   "3D Max",
+   "CorelDraw"
+  ],
+  "correctAnswer": "ImageQ",
+  "difficulty": "MEDIUM",
+  "explanation": "Authoring packages listed are Macromedia Authorware, Adobe Premier, Macromedia Flash, Everest Authoring System, Icon Author and ImageQ. Sound Forge, 3D Max and CorelDraw are listed as tools for sound, animation and images."
+ },
+ {
+  "questionText": "Which Flash screen element controls when things happen during playback, such as frame rate?",
+  "options": [
+   "Timeline window",
+   "Toolbox panel",
+   "Menu bar",
+   "Work area"
+  ],
+  "correctAnswer": "Timeline window",
+  "difficulty": "MEDIUM",
+  "explanation": "The Timeline window controls when things happen during playback, such as time and frame rate; the Toolbox holds drawing and selection tools."
+ },
+ {
+  "questionText": "What does Flash insert when you add a key frame after the first frame?",
+  "options": [
+   "A copy of the previous frame's contents",
+   "A blank frame with nothing on the stage",
+   "A sound file from the library",
+   "A new layer above the current one"
+  ],
+  "correctAnswer": "A copy of the previous frame's contents",
+  "difficulty": "MEDIUM",
+  "explanation": "When you add a key frame, Flash inserts a key frame that duplicates the previous frame's contents, which you then change slightly to create animation."
+ },
+ {
+  "questionText": "Which Flash tool lets you rotate, skew, scale or distort a selected image?",
+  "options": [
+   "Free Transform Tool",
+   "Paint Bucket Fill Tool",
+   "Text Tool",
+   "Oval Tool"
+  ],
+  "correctAnswer": "Free Transform Tool",
+  "difficulty": "MEDIUM",
+  "explanation": "To modify an image you select it, click the Free Transform Tool and choose Rotate and Skew, Scale, Distort or Envelope in the options panel."
+ },
+ {
+  "questionText": "How is a motion path effect created in Macromedia Flash MX?",
+  "options": [
+   "Through a motion guide layer",
+   "By importing a sound file",
+   "By trimming the video clip",
+   "By freezing a frame"
+  ],
+  "correctAnswer": "Through a motion guide layer",
+  "difficulty": "MEDIUM",
+  "explanation": "Motion is generated by creating a guide layer: right-click the layer, choose Add Motion Guide, draw the path and create a motion tween between key frames."
+ },
+ {
+  "questionText": "What is the minimum RAM listed in the hardware requirements for multimedia?",
+  "options": [
+   "1 GB",
+   "256 MB",
+   "8 GB",
+   "16 GB"
+  ],
+  "correctAnswer": "1 GB",
+  "difficulty": "MEDIUM",
+  "explanation": "The basic hardware requirements include a Pentium processor, 1 GB RAM, an SVGA monitor, video and sound cards and a CD-ROM drive."
+ },
+ {
+  "questionText": "Which software is listed for creating animations in a multimedia system?",
+  "options": [
+   "3D Max",
+   "Sound Forge",
+   "CorelDraw",
+   "Video for Windows"
+  ],
+  "correctAnswer": "3D Max",
+  "difficulty": "MEDIUM",
+  "explanation": "Animation creators listed are 3D Max and Flash; Sound Forge creates sound, CorelDraw processes images and Video for Windows handles video."
+ },
+ {
+  "questionText": "What happens to a clip's duration when its speed is increased in Adobe Premiere Elements?",
+  "options": [
+   "It gets shorter because frames are removed",
+   "It gets longer because frames are repeated twice",
+   "It stays the same while the pitch drops",
+   "It doubles because frames are copied"
+  ],
+  "correctAnswer": "It gets shorter because frames are removed",
+  "difficulty": "HARD",
+  "explanation": "Speeding up a clip removes frames and shortens its duration, while slowing it down repeats frames and adds length; changing speed also changes audio pitch."
+ },
+ {
+  "questionText": "How does a single-sided transition differ from a double-sided one?",
+  "options": [
+   "It applies to only one end of a single clip",
+   "It overlaps frames from two clips at a cut",
+   "It can only be used on audio clips",
+   "It deletes the frames that were trimmed"
+  ],
+  "correctAnswer": "It applies to only one end of a single clip",
+  "difficulty": "HARD",
+  "explanation": "Transitions placed on a cut between two clips are double-sided; one applied to just the beginning or end of a clip, such as a fade to black, is single-sided."
+ },
+ {
+  "questionText": "What happens to frames when you trim a clip in Adobe Premiere Elements?",
+  "options": [
+   "They are kept; In and Out points frame them",
+   "They are deleted from the original video file for good",
+   "They are moved into a separate clip in the library",
+   "They are converted into still images on the hard drive"
+  ],
+  "correctAnswer": "They are kept; In and Out points frame them",
+  "difficulty": "HARD",
+  "explanation": "You do not delete frames when you trim a clip; the In and Out points frame a window over the original clip, and transitions can use the trimmed frames."
+ },
+ {
+  "questionText": "How does manual smart trimming differ from automatic smart trimming?",
+  "options": [
+   "In manual mode you set the trim options",
+   "Manual mode deletes low-quality sections without asking",
+   "Automatic mode is the default mode of the program",
+   "Automatic mode can trim only one clip in the Timeline"
+  ],
+  "correctAnswer": "In manual mode you set the trim options",
+  "difficulty": "HARD",
+  "explanation": "Manual smart trimming is the default mode, where you specify the options for trimmable sections; in automatic mode Premiere Elements finds them and you choose to delete or keep them."
+ },
+ {
+  "questionText": "How does hypermedia differ from multimedia?",
+  "options": [
+   "It is non-linear, linked by hypertext",
+   "It is linear and plays in a fixed order",
+   "It uses only audio and video, never text",
+   "It needs no software to be presented"
+  ],
+  "correctAnswer": "It is non-linear, linked by hypertext",
+  "difficulty": "HARD",
+  "explanation": "Multimedia integrates text, pictures, audio, animation and video; hypermedia is a more diverse, non-linear form whose media are linked together by a hypertext program."
+ },
+ {
+  "questionText": "How can still images differ from video clips in duration?",
+  "options": [
+   "Their duration can be set to any length",
+   "They always last exactly one second",
+   "They cannot be placed on the Timeline",
+   "Their duration equals the imported video"
+  ],
+  "correctAnswer": "Their duration can be set to any length",
+  "difficulty": "HARD",
+  "explanation": "A video clip's initial duration is set when it is imported, but still images are not limited to an original clip length, so their duration can be set to any length."
+ },
+ {
+  "questionText": "What does a Freeze Frame do in Adobe Premiere Elements?",
+  "options": [
+   "It holds a still image of one frame on screen",
+   "It stops the program from accepting new clips",
+   "It removes the sound from the selected clip",
+   "It locks the Timeline so nothing can be edited"
+  ],
+  "correctAnswer": "It holds a still image of one frame on screen",
+  "difficulty": "HARD",
+  "explanation": "The Freeze Frame button creates a still image from a frame, which is inserted at that point so the video shows a still before playing, such as a character frozen mid-action."
+ },
+ {
+  "questionText": "Which keyboard shortcut adds an icon file to an open Flash library by importing it?",
+  "options": [
+   "Ctrl + R",
+   "Ctrl + W",
+   "Ctrl + Enter",
+   "Ctrl + V"
+  ],
+  "correctAnswer": "Ctrl + R",
+  "difficulty": "HARD",
+  "explanation": "To add an icon to a library you open the library file and click File, Import or press Ctrl + R; Ctrl + W closes the library."
+ }
+]

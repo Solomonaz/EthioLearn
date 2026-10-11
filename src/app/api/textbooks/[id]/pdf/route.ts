@@ -5,7 +5,7 @@ import path from "path";
 import { Readable } from "stream";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { getStudyScope } from "@/lib/grade-scope";
+import { canReadTextbook } from "@/lib/library-access";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 
 /**
@@ -25,12 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     where: { id },
     select: { readerFile: true, schoolId: true, grade: true, approvalStatus: true },
   });
-  const allowed =
-    !!tb?.readerFile &&
-    (user.role === "SUPER_ADMIN" ||
-      (tb.approvalStatus === "APPROVED" &&
-        (!tb.schoolId || tb.schoolId === user.schoolId) &&
-        (user.role !== "STUDENT" || getStudyScope(user.grade).includes(tb.grade))));
+  const allowed = !!tb?.readerFile && canReadTextbook(user, tb);
   if (!allowed || !tb?.readerFile || !/^[0-9a-f-]{36}\.pdf$/.test(tb.readerFile)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

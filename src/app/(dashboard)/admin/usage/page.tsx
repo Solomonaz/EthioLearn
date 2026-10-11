@@ -112,7 +112,8 @@ const PERIODS: { value: Period; label: string; previous: string }[] = [
 const FEATURE_ROWS = 12;
 
 const PROVIDER_LABELS: Record<string, string> = {
-  gemini: "Google Gemini",
+  gemini: "Google Gemini (AI Studio)",
+  "gemini-vertex": "Google Gemini (Agent Platform)",
   groq: "Groq",
   nvidia: "NVIDIA",
   openrouter: "OpenRouter",
