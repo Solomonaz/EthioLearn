@@ -16,12 +16,12 @@ export function siteUrl(): string {
 export const SITE_NAME = "Abugida";
 
 export const SITE_TITLE =
-  "Abugida – Ethiopian Education Online: Quizzes, National Exam Practice, AI Tutor & Battle Quiz, Grades 1–12";
+  "Abugida – Ethiopian Education Online: Quizzes, National Exam Practice, AI Tutor & Battle Quiz, Grades 9–12";
 
 export const SITE_DESCRIPTION =
   "Learn with the Ethiopian national curriculum: chapter quizzes from your textbooks, past Grade 12 national exam " +
-  "(ESSLCE / EUEE) papers, an AI tutor, adaptive practice and live battle quizzes. For students, teachers and schools, " +
-  "Grades 1–12, in English and Amharic.";
+  "(ESSLCE / EUEE) papers, an AI tutor, adaptive practice and live battle quizzes. For Grades 9–12 students, " +
+  "their teachers and schools — plus classroom tools for Grades 1–8 — in English and Amharic.";
 
 /**
  * Site-wide keywords (each topic page adds its own, see lib/seo-pages). Google
@@ -55,7 +55,7 @@ export const SITE_KEYWORDS = [
   "mathematics", "physics", "chemistry", "biology", "English", "Amharic", "history", "geography",
   "information technology", "IT textbook Grade 9", "IT textbook Grade 12",
   // Teachers and schools
-  "teacher tools", "AI teaching assistant", "homework app", "school management Ethiopia", "Grades 1–12",
+  "teacher tools", "AI teaching assistant", "homework app", "school management Ethiopia", "Grades 9–12",
   // Amharic
   "ትምህርት", "የኢትዮጵያ ትምህርት", "ሥርዓተ ትምህርት", "መማሪያ መጽሐፍ", "ብሔራዊ ፈተና", "የ12ኛ ክፍል ብሔራዊ ፈተና",
   "የመግቢያ ፈተና", "ጥያቄዎች", "ጥያቄና መልስ", "ፈተና", "ሞዴል ፈተና", "የጥያቄ ውድድር", "የAI አስተማሪ", "ተማሪ", "መምህር",
@@ -66,7 +66,7 @@ export const OG_IMAGE = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
-  alt: "Abugida – quizzes, national exam practice and an AI tutor for Ethiopian students, Grades 1–12",
+  alt: "Abugida – quizzes, national exam practice and an AI tutor for Ethiopian students, Grades 9–12",
 };
 
 /**

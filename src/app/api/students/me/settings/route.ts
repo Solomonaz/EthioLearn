@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { normalizeSection } from "@/lib/section";
+import { isSecondaryGrade } from "@/lib/teacher-band";
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -127,9 +128,11 @@ export async function PATCH(req: Request) {
 
   // Validate grade
   if (grade !== undefined && grade !== null) {
-    if (typeof grade !== "number" || grade < 1 || grade > 12) {
+    // Student accounts are for grades 9-12. An older account keeps its grade
+    // when the form re-sends it unchanged.
+    if (!isSecondaryGrade(grade) && grade !== user.grade) {
       return NextResponse.json(
-        { error: "Grade must be between 1 and 12" },
+        { error: "Grade must be between 9 and 12" },
         { status: 400 },
       );
     }

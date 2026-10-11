@@ -6,6 +6,7 @@ import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/sect
 import { safeEqual, verifyPassword } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
 import { deleteStudents } from "@/lib/delete-student";
+import { isSecondaryGrade } from "@/lib/teacher-band";
 
 export async function GET(
   _req: NextRequest,
@@ -202,7 +203,7 @@ export async function PATCH(
   // Verify the student belongs to admin's school
   const student = await db.user.findFirst({
     where: { id, role: "STUDENT", ...(schoolId ? { schoolId } : {}) },
-    select: { id: true, isActive: true },
+    select: { id: true, isActive: true, grade: true },
   });
 
   if (!student) {
@@ -244,9 +245,11 @@ export async function PATCH(
   // "Expected Int, provided String" and the whole update failed.
   if (grade !== undefined) {
     const parsed = parseInt(String(grade), 10);
-    if (Number.isNaN(parsed) || parsed < 1 || parsed > 12) {
+    // Student accounts are for grades 9-12. An older account keeps its grade
+    // when it is re-saved unchanged (e.g. only the name was edited).
+    if (!isSecondaryGrade(parsed) && parsed !== student.grade) {
       return NextResponse.json(
-        { error: "Grade must be a whole number between 1 and 12." },
+        { error: "Grade must be a whole number between 9 and 12." },
         { status: 400 },
       );
     }

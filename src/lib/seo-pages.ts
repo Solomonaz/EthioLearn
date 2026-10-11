@@ -117,7 +117,7 @@ export const TOPIC_PAGES: TopicPage[] = [
     title: "Battle Quiz – Live Quiz Battles for Students in Ethiopia",
     description:
       "Battle quiz on Abugida: challenge classmates to live quiz battles on your textbook chapters, answer fastest, " +
-      "earn points and climb the leaderboard. Fun competitive practice for Ethiopian students, Grades 1–12.",
+      "earn points and climb the leaderboard. Fun competitive practice for Ethiopian students, Grades 9–12.",
     keywords: [
       "battle quiz", "quiz battle", "live quiz battle", "quiz game", "multiplayer quiz", "quiz competition",
       "online quiz competition Ethiopia", "student quiz game", "classroom quiz game", "quiz battle app",
@@ -184,7 +184,7 @@ export const TOPIC_PAGES: TopicPage[] = [
     title: "AI Tutor for Ethiopian Students – Step-by-Step Help on Your Textbook",
     description:
       "An AI tutor that follows the Ethiopian curriculum: pick your textbook and chapter, ask any question and get " +
-      "step-by-step explanations in English or Amharic. Maths, physics, chemistry, biology and more, Grades 1–12.",
+      "step-by-step explanations in English or Amharic. Maths, physics, chemistry, biology and more, Grades 9–12.",
     keywords: [
       "AI tutor", "AI tutor Ethiopia", "AI education", "AI in education Ethiopia", "artificial intelligence learning",
       "AI homework help", "homework help Ethiopia", "AI study assistant", "ask a question get answer",
@@ -204,7 +204,7 @@ export const TOPIC_PAGES: TopicPage[] = [
         heading: "What makes it different",
         bullets: [
           "Grounded in the chapter you pick — it looks up the relevant pages of the book before answering.",
-          "Follows the Ethiopian national curriculum for Grades 1–12.",
+          "Follows the Ethiopian national curriculum for Grades 9–12.",
           "Explains step by step, and you can keep asking follow-up questions.",
           "Works in English and Amharic, on phones and computers.",
         ],
@@ -242,7 +242,7 @@ export const TOPIC_PAGES: TopicPage[] = [
       heading: "የAI አስተማሪ",
       text:
         "መማሪያ መጽሐፍዎንና ምዕራፉን ይምረጡ፣ ማንኛውንም ጥያቄ ይጠይቁ። የAI አስተማሪው ከዚያው ምዕራፍ በመነሳት ደረጃ በደረጃ ያብራራል። " +
-        "በኢትዮጵያ ሥርዓተ ትምህርት መሠረት ከ1ኛ እስከ 12ኛ ክፍል፣ በእንግሊዝኛና በአማርኛ።",
+        "በኢትዮጵያ ሥርዓተ ትምህርት መሠረት ከ9ኛ እስከ 12ኛ ክፍል፣ በእንግሊዝኛና በአማርኛ።",
     },
     schemaType: "WebPage",
   },
@@ -251,7 +251,7 @@ export const TOPIC_PAGES: TopicPage[] = [
     title: "Adaptive Learning – Personalized Practice for Every Student",
     description:
       "Adaptive learning on Abugida: quizzes adjust their difficulty to each student's level, track mastery chapter by " +
-      "chapter and point to the topics that need work. Personalized learning for Ethiopian students, Grades 1–12.",
+      "chapter and point to the topics that need work. Personalized learning for Ethiopian students, Grades 9–12.",
     keywords: [
       "adaptive learning", "adaptive learning platform", "personalized learning", "personalised learning",
       "personalized practice", "adaptive quiz", "adaptive testing", "mastery learning", "learning analytics",
@@ -304,10 +304,10 @@ export const TOPIC_PAGES: TopicPage[] = [
   },
   {
     slug: "quiz",
-    title: "Online Quizzes & Practice Questions – Ethiopian Curriculum, Grades 1–12",
+    title: "Online Quizzes & Practice Questions – Ethiopian Curriculum, Grades 9–12",
     description:
       "Thousands of practice questions and chapter quizzes from Ethiopian textbooks: multiple choice, true/false, " +
-      "fill in the blank, matching and ordering, with an explanation for every answer. Grades 1–12, free to start.",
+      "fill in the blank, matching and ordering, with an explanation for every answer. Grades 9–12, free to start.",
     keywords: [
       "online quiz", "quiz", "practice questions", "practice test", "chapter quiz", "Ethiopian quiz",
       "Ethiopian questions and answers", "questions and answers", "multiple choice questions", "MCQ",
@@ -337,7 +337,7 @@ export const TOPIC_PAGES: TopicPage[] = [
         heading: "Subjects and grades",
         paragraphs: [
           "Mathematics, Physics, Chemistry, Biology, English, Amharic, History, Geography, Information Technology and more, " +
-            "following the textbooks for Grades 1–12. Grade 12 students can also practise past national exam papers.",
+            "following the textbooks for Grades 9–12. Grade 12 students can also practise past national exam papers.",
         ],
       },
       {
@@ -359,23 +359,23 @@ export const TOPIC_PAGES: TopicPage[] = [
       },
       {
         q: "Which grades have quizzes?",
-        a: "Grades 1–12, with the most content for Grades 7–12. New textbooks and questions are added regularly.",
+        a: "Grades 9–12. Grades 1–8 are taught in class by their teachers, with classroom games on one screen. New textbooks and questions are added regularly.",
       },
     ],
     amharic: {
       heading: "የኦንላይን ጥያቄዎችና ፈተናዎች",
       text:
         "ክፍልዎን፣ የትምህርት ዓይነቱንና ምዕራፉን መርጠው ፈተና ይጀምሩ። እያንዳንዱ ጥያቄ ከኢትዮጵያ ሥርዓተ ትምህርት መማሪያ መጽሐፍ የተወሰደ ሲሆን " +
-        "ለእያንዳንዱ መልስ ማብራሪያ አለው። ከ1ኛ እስከ 12ኛ ክፍል።",
+        "ለእያንዳንዱ መልስ ማብራሪያ አለው። ከ9ኛ እስከ 12ኛ ክፍል።",
     },
     schemaType: "WebPage",
   },
   {
     slug: "ethiopian-education",
-    title: "Ethiopian Education Online – Curriculum, Textbooks & Learning for Grades 1–12",
+    title: "Ethiopian Education Online – Curriculum, Textbooks & Learning for Grades 9–12",
     description:
-      "Abugida brings Ethiopian education online: the national curriculum textbooks for Grades 1–12, chapter quizzes, " +
-      "national exam practice, an AI tutor and tools for teachers and schools — in English and Amharic.",
+      "Abugida brings Ethiopian education online: the national curriculum textbooks for Grades 9–12, chapter quizzes, " +
+      "national exam practice, an AI tutor, classroom tools for Grades 1–8 and tools for schools — in English and Amharic.",
     keywords: [
       "Ethiopia education", "Ethiopian education", "education in Ethiopia", "Ethiopian education system",
       "Ethiopian curriculum", "new Ethiopian curriculum", "Ethiopian national curriculum", "Ethiopian textbooks",
@@ -386,8 +386,8 @@ export const TOPIC_PAGES: TopicPage[] = [
       "Amharic learning", "ትምህርት", "የኢትዮጵያ ትምህርት", "ሥርዓተ ትምህርት", "መማሪያ መጽሐፍ", "ትምህርት ቤት", "ተማሪ", "መምህር",
     ],
     navLabel: "Ethiopian education",
-    summary: "The national curriculum for Grades 1–12, online for students, teachers and schools.",
-    eyebrow: "Grades 1–12 · English & Amharic",
+    summary: "The national curriculum online for Grades 9–12 students, their teachers and schools.",
+    eyebrow: "Grades 9–12 · English & Amharic",
     h1: "Ethiopian education, online — for students, teachers and schools",
     intro:
       "Abugida is an Ethiopian learning platform built around the national curriculum. Students read and practise from " +
@@ -424,7 +424,7 @@ export const TOPIC_PAGES: TopicPage[] = [
     faqs: [
       {
         q: "What is Abugida?",
-        a: "An online learning platform for Ethiopian students, teachers and schools, built on the national curriculum for Grades 1–12.",
+        a: "An online learning platform for Ethiopian students, teachers and schools, built on the national curriculum — student accounts for Grades 9–12, classroom tools for Grades 1–8.",
       },
       {
         q: "Does Abugida follow the new Ethiopian curriculum?",
@@ -443,7 +443,7 @@ export const TOPIC_PAGES: TopicPage[] = [
       heading: "የኢትዮጵያ ትምህርት በኦንላይን",
       text:
         "አቡጊዳ በኢትዮጵያ ብሔራዊ ሥርዓተ ትምህርት ላይ የተመሠረተ የመማሪያ መድረክ ነው። ተማሪዎች ከመማሪያ መጽሐፋቸው ያነባሉ፣ ይለማመዳሉ፤ " +
-        "መምህራን ትምህርት ያቀርባሉ፣ የቤት ስራ ይሰጣሉ፤ ትምህርት ቤቶች የእያንዳንዱን ክፍል እድገት ይከታተላሉ። ከ1ኛ እስከ 12ኛ ክፍል፣ " +
+        "መምህራን ትምህርት ያቀርባሉ፣ የቤት ስራ ይሰጣሉ፤ ትምህርት ቤቶች የእያንዳንዱን ክፍል እድገት ይከታተላሉ። ተማሪዎች ከ9ኛ እስከ 12ኛ ክፍል፣ " +
         "በእንግሊዝኛና በአማርኛ።",
     },
     schemaType: "AboutPage",

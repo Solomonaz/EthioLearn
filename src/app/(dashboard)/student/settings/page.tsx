@@ -36,6 +36,7 @@ import { useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
 import Link from "next/link";
+import { studentGradeOptions } from "@/lib/teacher-band";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,10 +68,6 @@ interface ActiveSession {
   isCurrent: boolean;
 }
 
-const GRADES = Array.from({ length: 12 }, (_, i) => ({
-  value: i + 1,
-  label: `Grade ${i + 1}`,
-}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -395,9 +392,10 @@ function StudentSettingsInner() {
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
               >
                 <option value="">Select grade</option>
-                {GRADES.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
+                {/* Grades 9-12, plus an older account's own grade so it still shows. */}
+                {studentGradeOptions(userData.grade).map((g) => (
+                  <option key={g} value={g}>
+                    {`Grade ${g}`}
                   </option>
                 ))}
               </select>

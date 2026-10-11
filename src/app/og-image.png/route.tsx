@@ -43,7 +43,7 @@ export function GET() {
 
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 28, color: "#fdd835", fontWeight: 600, letterSpacing: 2 }}>
-            FOR ETHIOPIAN SCHOOLS · GRADES 1–12
+            FOR ETHIOPIAN STUDENTS · GRADES 9–12
           </div>
           <div style={{ fontSize: 62, fontWeight: 700, lineHeight: 1.1, marginTop: 18, maxWidth: 1060 }}>
             Practise with your own textbook. Learn with an AI tutor.

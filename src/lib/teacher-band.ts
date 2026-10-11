@@ -35,6 +35,17 @@ export const SECONDARY_MAX_GRADE = 12;
 /** The grades a secondary teacher may be assigned to teach. */
 export const SECONDARY_GRADES: readonly number[] = [9, 10, 11, 12];
 
+/**
+ * Grades offered when setting a student's grade: 9-12 (student accounts are
+ * secondary only), plus the student's current grade if it is an older one
+ * outside that range, so the form still shows it instead of a blank.
+ */
+export function studentGradeOptions(current?: number | null): number[] {
+  const grades = [...SECONDARY_GRADES];
+  if (current != null && !grades.includes(current)) grades.unshift(current);
+  return grades;
+}
+
 /** Whether `grade` falls in the secondary band (9-12). */
 export function isSecondaryGrade(grade: unknown): grade is number {
   return (

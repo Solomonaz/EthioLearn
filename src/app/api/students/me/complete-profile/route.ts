@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isSecondaryGrade } from "@/lib/teacher-band";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -23,8 +24,9 @@ export async function POST(req: Request) {
   }
 
   const grade = body.grade;
-  if (typeof grade !== "number" || !Number.isInteger(grade) || grade < 1 || grade > 12) {
-    return NextResponse.json({ error: "Grade must be between 1 and 12" }, { status: 400 });
+  // Student accounts are for grades 9-12 (grades 1-8 have no student accounts).
+  if (!isSecondaryGrade(grade)) {
+    return NextResponse.json({ error: "Grade must be between 9 and 12" }, { status: 400 });
   }
 
   const updated = await db.user.update({

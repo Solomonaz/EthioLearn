@@ -8,7 +8,8 @@ import { Logo } from "@/components/ui/logo";
 import { useTranslations } from "next-intl";
 import { trackSignUp } from "@/components/analytics";
 
-const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// Student accounts are for grades 9-12 (grades 1-8 have no student accounts).
+const GRADES = [9, 10, 11, 12];
 
 export default function CompleteProfilePage() {
   const { data: session, update } = useSession();

@@ -31,6 +31,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 import { formatDate, scoreVariant } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { studentGradeOptions } from "@/lib/teacher-band";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -373,7 +374,8 @@ export default function AdminStudentDetailPage() {
                         className={editFieldClass}
                       >
                         <option value="">Select grade</option>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                        {/* Grades 9-12, plus an older account's own grade so it still shows. */}
+                        {studentGradeOptions(student.grade).map((g) => (
                           <option key={g} value={g}>
                             Grade {g}
                           </option>

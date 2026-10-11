@@ -131,7 +131,7 @@ export default async function HomePage() {
         description: SITE_DESCRIPTION,
         inLanguage: ["en", "am"],
         audience: { "@type": "EducationalAudience", educationalRole: ["student", "teacher"] },
-        educationalLevel: "Grades 1–12",
+        educationalLevel: "Grades 9–12",
         about: subjects,
         publisher: { "@id": `${url}/#organization` },
       },
@@ -270,7 +270,7 @@ export default async function HomePage() {
               {t("gradesLabel")}
             </p>
             <p className="lp-display mt-1 text-7xl font-semibold leading-none text-[var(--lp-green-ink)] sm:text-8xl">
-              1–12
+              9–12
             </p>
           </div>
           <div>

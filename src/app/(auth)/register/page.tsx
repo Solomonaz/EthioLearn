@@ -6,7 +6,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { homeRouteForRole } from "@/lib/teacher-band";
+import { homeRouteForRole, SECONDARY_GRADES } from "@/lib/teacher-band";
 import {
   OrDivider,
   SOCIAL_ENABLED,
@@ -198,9 +198,11 @@ function RegisterForm() {
                 disabled={isLoading}
               >
                 <option value="">{t("selectGradeOption")}</option>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {t("gradeN", { grade: i + 1 })}
+                {/* Student accounts are for grades 9-12; grades 1-8 learn on
+                    their teacher's classroom screen, without accounts. */}
+                {SECONDARY_GRADES.map((g) => (
+                  <option key={g} value={g}>
+                    {t("gradeN", { grade: g })}
                   </option>
                 ))}
               </select>

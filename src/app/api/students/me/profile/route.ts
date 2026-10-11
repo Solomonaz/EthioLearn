@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { isSecondaryGrade } from "@/lib/teacher-band";
 import { ACHIEVEMENTS } from "@/lib/achievements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { normalizeSection } from "@/lib/section";
@@ -283,8 +284,9 @@ export async function PATCH(request: Request) {
   if (name !== undefined && (typeof name !== "string" || name.trim().length < 2)) {
     return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 });
   }
-  if (grade !== undefined && (!Number.isInteger(grade) || grade < 1 || grade > 12)) {
-    return NextResponse.json({ error: "Grade must be an integer between 1 and 12" }, { status: 400 });
+  // Student accounts are for grades 9-12; an older account may re-send its own grade.
+  if (grade !== undefined && !isSecondaryGrade(grade) && grade !== user.grade) {
+    return NextResponse.json({ error: "Grade must be an integer between 9 and 12" }, { status: 400 });
   }
   if (section !== undefined && typeof section !== "string") {
     return NextResponse.json({ error: "Invalid section" }, { status: 400 });
