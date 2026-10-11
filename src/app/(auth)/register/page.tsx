@@ -15,6 +15,7 @@ import {
   primaryButtonClass,
 } from "@/components/auth/social-sign-in";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
+import { trackSignUp } from "@/components/analytics";
 
 /**
  * What to show when the server's reply carries no message of its own — a
@@ -85,6 +86,7 @@ function RegisterForm() {
         return;
       }
 
+      trackSignUp("email");
       // The account can't be used until the email is confirmed.
       setSentTo(data.email ?? email.trim().toLowerCase());
     } catch {

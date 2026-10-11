@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 import { useTranslations } from "next-intl";
+import { trackSignUp } from "@/components/analytics";
 
 const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
@@ -37,6 +38,7 @@ export default function CompleteProfilePage() {
         setError(data.error || "Failed to save. Please try again.");
         return;
       }
+      trackSignUp("social");
       await update();
       router.replace("/student");
     } catch {
