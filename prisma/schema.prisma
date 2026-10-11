@@ -417,6 +417,10 @@ model PlatformSettings {
   /// AI tutor messages each user may send per day (the day resets at
   /// midnight Addis Ababa time). Null = no daily cap. See lib/tutor-allowance.
   tutorDailyMessageLimit Int? @default(20)
+  /// Days of full access every self-registered student gets, counted from
+  /// their sign-up date — so it happens once per account, whichever way they
+  /// signed up. Null = no trial. Only applies while pricing is on.
+  studentTrialDays Int?
   updatedAt         DateTime @updatedAt
 
   @@map("platform_settings")

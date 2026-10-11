@@ -7,6 +7,8 @@
  *   • Individual students (no school) → determined by their current plan:
  *       - a plan with allowAi/allowMultiplayer flags, or
  *       - NO active plan → the free defaults (no AI, no multiplayer; solo only).
+ *       - within the sign-up free trial (PlatformSettings.studentTrialDays,
+ *         counted from account creation) → full access, whatever the plan.
  *
  * Solo quizzes/games are never gated — the "free" tier can always play solo.
  */
@@ -54,6 +56,41 @@ interface UserLike {
   id: string;
   role: string;
   schoolId: string | null;
+  /** Account creation — the trial clock. Looked up when absent. */
+  createdAt?: Date;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When a self-registered student's sign-up trial ends, or null when there is
+ * no trial (setting off). Anchored on account creation, so each account gets
+ * exactly one trial and every sign-up path (email, Google, Telegram) is covered.
+ */
+export function trialEndsAt(createdAt: Date, trialDays: number | null): Date | null {
+  if (!trialDays || trialDays <= 0) return null;
+  return new Date(createdAt.getTime() + trialDays * DAY_MS);
+}
+
+/**
+ * The sign-up trial for an independent student while pricing is on; null for
+ * everyone else (school students, staff, pricing off, trial setting off).
+ */
+export async function getStudentTrial(
+  user: UserLike | null | undefined,
+): Promise<{ endsAt: Date; active: boolean } | null> {
+  if (!user || user.role !== "STUDENT" || user.schoolId) return null;
+  const settings = await getPlatformSettings();
+  if (!settings.pricingEnabled || !settings.studentTrialDays) return null;
+  let createdAt = user.createdAt;
+  if (!createdAt) {
+    const row = await db.user.findUnique({ where: { id: user.id }, select: { createdAt: true } });
+    if (!row) return null;
+    createdAt = row.createdAt;
+  }
+  const endsAt = trialEndsAt(createdAt, settings.studentTrialDays);
+  if (!endsAt) return null;
+  return { endsAt, active: endsAt.getTime() > Date.now() };
 }
 
 /**
@@ -84,6 +121,10 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
   // Pricing turned OFF platform-wide → launch free: every individual student
   // gets the full (non-AI) feature set, no plan required.
   if (!settings.pricingEnabled) return gate(FULL_ACCESS);
+
+  // Sign-up free trial: full access until it ends, then back to the plan below.
+  const trial = await getStudentTrial(user);
+  if (trial?.active) return gate(FULL_ACCESS);
 
   // Individual student → look up their current plan. A sub counts as live only
   // while its status is live AND it hasn't passed its endDate (the paid-through

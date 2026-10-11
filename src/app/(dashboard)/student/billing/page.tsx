@@ -4,6 +4,7 @@ import { CreditCard, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StudentBillingPanel } from "@/components/student/billing-panel";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { TrialBanner } from "@/components/student/pro-promo";
 
 export default function StudentBillingPage() {
   const ent = useEntitlements();
@@ -22,6 +23,8 @@ export default function StudentBillingPage() {
           </p>
         </div>
       </div>
+
+      <TrialBanner ent={ent} />
 
       {/* School-managed students don't self-manage a plan. */}
       {ent.isSchoolStudent ? (

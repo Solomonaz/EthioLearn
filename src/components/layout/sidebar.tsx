@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { lockedNavKeys, ProBadge } from "@/components/student/pro-promo";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -73,6 +74,9 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   const pathname = usePathname();
   const t = useTranslations("nav");
   const ent = useEntitlements();
+  // Paid features a free student could buy: listed with a "Pro" lock (their page
+  // shows the upgrade screen) instead of hidden, so students know they exist.
+  const lockedKeys = lockedNavKeys(ent);
 
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
@@ -99,6 +103,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "billing",     href: "/student/billing",        icon: CreditCard },
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
   ].filter((item) => {
+    if (lockedKeys.has(item.labelKey)) return true;
     if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
     if ((item.labelKey === "grapher" || item.labelKey === "geometry") && !ent.mathTools) return false;
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
@@ -265,6 +270,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
                 >
                   <item.icon className="h-5 w-5 shrink-0" />
                   <span className={cn(collapsed && "md:hidden")}>{t(item.labelKey as any)}</span>
+                  {lockedKeys.has(item.labelKey) && (
+                    <span className={cn("ml-auto", collapsed && "md:hidden")}>
+                      <ProBadge />
+                    </span>
+                  )}
                 </Link>
               );
             })}

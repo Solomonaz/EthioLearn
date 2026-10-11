@@ -24,6 +24,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { Spinner } from "@/components/ui/spinner";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { TrialBanner, ProFeaturesCard } from "@/components/student/pro-promo";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -189,6 +190,9 @@ export default function StudentDashboardPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Free trial countdown / "trial ended" (self-registered students only) */}
+      <TrialBanner ent={ent} />
 
       {/* XP Level Progress */}
       <Card>
@@ -398,6 +402,9 @@ export default function StudentDashboardPage() {
           <QuickAction href="/student/rewards" icon={Gift} label={t("rewards")} desc={t("redeemPoints")} color="bg-orange-50 text-orange-600" />
         )}
       </div>
+
+      {/* Paid features a free student doesn't have yet */}
+      <ProFeaturesCard ent={ent} />
 
       {/* Start New Quiz Button */}
       <Link href="/student/quiz" className="block">

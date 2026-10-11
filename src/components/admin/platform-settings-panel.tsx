@@ -19,9 +19,10 @@ interface Settings {
   antiCheatEnabled: boolean;
   teacherAiDefaultMonthlyCredits: number | null;
   tutorDailyMessageLimit: number | null;
+  studentTrialDays: number | null;
 }
 
-type NumberKey = "teacherAiDefaultMonthlyCredits" | "tutorDailyMessageLimit";
+type NumberKey = "teacherAiDefaultMonthlyCredits" | "tutorDailyMessageLimit" | "studentTrialDays";
 type Key = Exclude<keyof Settings, NumberKey>;
 
 function Toggle({
@@ -92,6 +93,7 @@ function LimitRow({
   max,
   value,
   disabled,
+  placeholder = "No cap",
   onSave,
 }: {
   label: string;
@@ -99,6 +101,8 @@ function LimitRow({
   max: number;
   value: number | null;
   disabled?: boolean;
+  /** Shown when blank — what "no value" means for this setting. */
+  placeholder?: string;
   onSave: (v: number | null) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(value === null ? "" : String(value));
@@ -128,7 +132,7 @@ function LimitRow({
           value={draft}
           disabled={disabled || saving}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="No cap"
+          placeholder={placeholder}
           className={cn(
             "h-9 w-24 rounded-lg border bg-surface px-2 text-right text-sm text-text-primary",
             valid ? "border-border" : "border-error",
@@ -330,6 +334,15 @@ export function PlatformSettingsPanel() {
           desc="Off = hide all pricing/billing and give every student full (non-AI) access for free."
           checked={settings.pricingEnabled}
           onChange={(v) => update("pricingEnabled", v)}
+        />
+        <LimitRow
+          label="Free trial for new students (days)"
+          desc="Every new self-registered student gets full access (AI tutor, Battle Quiz, grapher, 3D geometry, leaderboard) for this many days from sign-up — once per account. Then they drop to their plan. Blank = no trial."
+          max={90}
+          placeholder="Off"
+          value={settings.studentTrialDays}
+          disabled={!settings.pricingEnabled}
+          onSave={(v) => saveLimit("studentTrialDays", v === 0 ? null : v, "Free trial updated.")}
         />
 
         {/* Rewards & Academic Integrity section */}
