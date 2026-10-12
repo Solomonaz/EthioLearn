@@ -594,13 +594,14 @@ export function StudentNotes() {
 
   return (
     <>
-      {/* Floating launcher — shown when the panel is closed */}
+      {/* Floating launcher — shown when the panel is closed. On phones it sits
+          above the bottom nav bar (student pages always have one below md). */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
           aria-label="Open study notes"
           title="Notes"
-          className="fixed bottom-5 right-5 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform hover:scale-105"
+          className="fixed bottom-20 right-4 z-[60] md:bottom-5 md:right-5 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform hover:scale-105"
         >
           <StickyNote className="h-5 w-5" />
         </button>
