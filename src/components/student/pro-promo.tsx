@@ -81,6 +81,18 @@ function trialDaysLeft(endsAt: string): number {
   return Math.max(1, Math.ceil((new Date(endsAt).getTime() - Date.now()) / DAY_MS));
 }
 
+/** "Free trial: N days left." or, inside the last 24 hours, "Free trial ends today at 4:30 PM." */
+function trialHeadline(endsAt: string): string {
+  const end = new Date(endsAt);
+  if (end.getTime() - Date.now() >= DAY_MS) {
+    const days = trialDaysLeft(endsAt);
+    return `Free trial: ${days} ${days === 1 ? "day" : "days"} left.`;
+  }
+  const time = end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const day = end.toDateString() === new Date().toDateString() ? "today" : "tomorrow";
+  return `Free trial ends ${day} at ${time}.`;
+}
+
 /** True for a trial that ended within the last couple of weeks. */
 function trialRecentlyEnded(ent: EntitlementsInfo): boolean {
   if (!ent.trialEndsAt || ent.trialActive) return false;
@@ -106,15 +118,12 @@ export function TrialBanner({ ent }: { ent: EntitlementsInfo }) {
   if (ent.loading || !ent.isIndependent || !ent.pricingEnabled || !ent.trialEndsAt) return null;
 
   if (ent.trialActive) {
-    const days = trialDaysLeft(ent.trialEndsAt);
     return (
       <Card className="border-secondary/60 bg-secondary/15">
         <CardContent className="flex flex-wrap items-center gap-3 py-4">
           <Clock className="h-5 w-5 shrink-0 text-secondary-dark" />
           <p className="min-w-0 flex-1 text-sm text-text-primary">
-            <span className="font-semibold">
-              Free trial: {days} {days === 1 ? "day" : "days"} left.
-            </span>{" "}
+            <span className="font-semibold">{trialHeadline(ent.trialEndsAt)}</span>{" "}
             You have every Pro feature — AI Tutor, Battle Quiz, Grapher & 3D Geometry and the Leaderboard.
           </p>
           <Link href={BILLING_HREF} className="text-sm font-semibold text-primary hover:underline">
