@@ -50,3 +50,6 @@ uploads/
 tsc*.log
 tsc_*.txt
 *.bak
+
+# Marketing videos, images and recording tooling (local only)
+docs/marketing/
