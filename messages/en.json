@@ -511,8 +511,7 @@
     "playSeePlans": "See plans",
     "playYouWin": "You win! 🎉",
     "playCpuWins": "The computer wins — try again!",
-    "playCpuThinking": "Thinking…",
-    "playCpuDone": "Good game!"
+    "playCpuThinking": "Thinking…"
   },
   "auth": {
     "noAccount": "Don't have an account?",

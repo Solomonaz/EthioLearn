@@ -7,8 +7,11 @@ import { cn } from "@/lib/utils";
 import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 import {
   correctValue,
+  CPU_KEY_MS,
   cpuAnswersCorrectly,
   cpuDelayMs,
+  cpuWrongIndex,
+  cpuWrongValue,
   drawFromDeck,
   finishByPosition,
   initialTugState,
@@ -49,8 +52,10 @@ function mmss(total: number): string {
  * the rope and loads the next question automatically (no turns, no manual
  * advance). The rope reflects the running difference in correct answers.
  *
- * With `match.cpu` one child plays alone: team 2 is the computer, which
- * answers on its own timer (see CPU_LEVELS) instead of from a pad.
+ * With `match.cpu` one child plays alone: team 2 is the computer. It plays on
+ * its own card like a person would — its question shows, it "thinks" for a
+ * while (see CPU_LEVELS), then types its answer key by key and presses ✓ (or
+ * taps an option). The child can watch it but not press its buttons.
  */
 export function TugGame({ match, onExit }: TugGameProps) {
   const t = useTranslations("games");
@@ -95,6 +100,14 @@ export function TugGame({ match, onExit }: TugGameProps) {
   const [superFlash, setSuperFlash] = useState<Team | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(config.matchSeconds);
   const [isFull, setIsFull] = useState(false);
+  // The computer's turn counter (bumped by each of its answers, which starts
+  // its next turn), and the key / option it is pressing right now.
+  const [cpuTurn, setCpuTurn] = useState(0);
+  const [cpuKey, setCpuKey] = useState<string | null>(null);
+  const [cpuPick, setCpuPick] = useState<number | null>(null);
+  // The questions as last rendered, for the computer's timers to read.
+  const qRef = useRef(q);
+  qRef.current = q;
 
   const over = state.winner !== null;
   const flashTimers = useRef<Record<Team, ReturnType<typeof setTimeout> | null>>({ 1: null, 2: null });
@@ -138,6 +151,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
       // other team is currently showing.
       setQ((prev) => ({ ...prev, [team]: draw(prev[team === 1 ? 2 : 1]) }));
       setInput((prev) => ({ ...prev, [team]: "" }));
+      if (cpuLevel && team === 2) setCpuTurn((n) => n + 1);
     },
     [config.target, draw, playSfx, cpuLevel],
   );
@@ -150,18 +164,45 @@ export function TugGame({ match, onExit }: TugGameProps) {
     answerRef.current = answer;
   }, [answer]);
 
+  // One turn: think, then type the answer key by key and press ✓ (keypad),
+  // or light up an option and tap it. Its answer starts the next turn.
   useEffect(() => {
     if (!cpuLevel || over) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const next = () => {
-      timer = setTimeout(() => {
-        answerRef.current(2, cpuAnswersCorrectly(cpuLevel));
-        next();
-      }, cpuDelayMs(cpuLevel));
+    const question = qRef.current[2];
+    const correct = cpuAnswersCorrectly(cpuLevel);
+    const total = cpuDelayMs(cpuLevel);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const at = (ms: number, fn: () => void) => timers.push(setTimeout(fn, ms));
+
+    if (mode === "keypad") {
+      const digits = (correct ? correctValue(question) : cpuWrongValue(question)).split("");
+      // Start typing so the last press (✓) lands at the end of the turn.
+      const typeFrom = Math.max(400, total - (digits.length + 1) * CPU_KEY_MS);
+      digits.forEach((d, i) =>
+        at(typeFrom + i * CPU_KEY_MS, () => {
+          setCpuKey(d);
+          setInput((p) => ({ ...p, 2: (p[2] + d).slice(0, 5) }));
+        }),
+      );
+      at(typeFrom + digits.length * CPU_KEY_MS, () => setCpuKey("ok"));
+      at(typeFrom + (digits.length + 1) * CPU_KEY_MS, () => {
+        setCpuKey(null);
+        answerRef.current(2, correct);
+      });
+    } else {
+      const pick = correct ? question.correctIndex : cpuWrongIndex(question);
+      at(Math.max(400, total - 500), () => setCpuPick(pick));
+      at(total, () => {
+        setCpuPick(null);
+        answerRef.current(2, correct);
+      });
+    }
+    return () => {
+      timers.forEach(clearTimeout);
+      setCpuKey(null);
+      setCpuPick(null);
     };
-    next();
-    return () => clearTimeout(timer);
-  }, [cpuLevel, over]);
+  }, [cpuLevel, over, cpuTurn, mode]);
 
   const submitKeypad = (team: Team) => {
     const val = input[team].trim();
@@ -279,7 +320,6 @@ export function TugGame({ match, onExit }: TugGameProps) {
           stage moves above the two pads instead of squeezing between them. */}
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)_minmax(0,1fr)]">
         <TeamPanel
-          className={cpuLevel ? "col-span-2 lg:col-span-1" : undefined}
           side={1}
           name={config.team1Name}
           score={state.correct[1]}
@@ -331,35 +371,22 @@ export function TugGame({ match, onExit }: TugGameProps) {
           </div>
         </div>
 
-        {cpuLevel ? (
-          // On phones the stage's scoreboard already shows the computer's
-          // score, so its card only appears where there is room for it.
-          <CpuPanel
-            name={config.team2Name}
-            score={state.correct[2]}
-            flash={flash[2]}
-            superFlash={superFlash === 2}
-            streak={state.streak[2]}
-            over={over}
-            t={t}
-          />
-        ) : (
-          <TeamPanel
-            side={2}
-            name={config.team2Name}
-            score={state.correct[2]}
-            question={q[2].text}
-            options={q[2].options}
-            input={input[2]}
-            flash={flash[2]}
-            superFlash={superFlash === 2}
-            streak={state.streak[2]}
-            mode={mode}
-            onKey={(k) => pressKey(2, k)}
-            onPick={(i) => pickOption(2, i)}
-            t={t}
-          />
-        )}
+        <TeamPanel
+          side={2}
+          name={config.team2Name}
+          score={state.correct[2]}
+          question={q[2].text}
+          options={q[2].options}
+          input={input[2]}
+          flash={flash[2]}
+          superFlash={superFlash === 2}
+          streak={state.streak[2]}
+          mode={mode}
+          onKey={(k) => pressKey(2, k)}
+          onPick={(i) => pickOption(2, i)}
+          t={t}
+          cpu={cpuLevel ? { key: cpuKey, pick: cpuPick } : undefined}
+        />
       </div>
 
       {/* game-over overlay */}
@@ -426,62 +453,6 @@ function ScorePill({
   );
 }
 
-// ─── The computer's card (one child playing alone) ────────────────────────
-
-function CpuPanel({
-  name,
-  score,
-  flash,
-  superFlash,
-  streak,
-  over,
-  t,
-}: {
-  name: string;
-  score: number;
-  flash: Flash;
-  superFlash: boolean;
-  streak: number;
-  over: boolean;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  return (
-    <div
-      className={cn(
-        CARD,
-        "hidden min-h-0 flex-col overflow-hidden lg:flex",
-        flash === "correct" && "ring-2 ring-success",
-        flash === "wrong" && "ring-2 ring-accent",
-      )}
-    >
-      <div className="flex shrink-0 items-center gap-2 bg-info px-3 py-2 text-white">
-        <span className="min-w-0 flex-1 truncate text-sm font-bold sm:text-base">{name}</span>
-        {streak >= 2 && (
-          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold">
-            🔥 {t("mtStreak", { n: streak })}
-          </span>
-        )}
-        {superFlash && (
-          <span className="shrink-0 animate-pulse rounded-full bg-white px-2 py-0.5 text-[11px] font-extrabold text-text-primary">
-            {t("mtSuper")}
-          </span>
-        )}
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold tabular-nums">
-          {score}
-        </span>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
-        <span className={cn("text-6xl", !over && "animate-bounce")} aria-hidden>
-          🤖
-        </span>
-        <p className="text-sm font-semibold text-text-secondary">
-          {over ? t("playCpuDone") : t("playCpuThinking")}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ─── One team's card: header + question + keypad or option buttons ────────
 
 function TeamPanel({
@@ -499,6 +470,7 @@ function TeamPanel({
   onKey,
   onPick,
   t,
+  cpu,
 }: {
   className?: string;
   side: Team;
@@ -514,15 +486,21 @@ function TeamPanel({
   onKey: (key: string) => void;
   onPick: (idx: number) => void;
   t: ReturnType<typeof useTranslations>;
+  /** Set when the computer plays this card: the key or option it is pressing
+      now. Its buttons only show its presses; the child can't press them. */
+  cpu?: { key: string | null; pick: number | null };
 }) {
   const accent = side === 1 ? "text-accent" : "text-info";
   const header = side === 1 ? "bg-accent" : "bg-info";
+  // How a key looks while the computer presses it.
+  const pressed = "scale-95 !bg-info/20 ring-2 !ring-info";
 
   return (
     <div
       className={cn(
         CARD,
         "flex min-h-0 flex-col overflow-hidden",
+        cpu && "pointer-events-none select-none",
         flash === "correct" && "ring-2 ring-success",
         flash === "wrong" && "ring-2 ring-accent",
         className,
@@ -530,7 +508,10 @@ function TeamPanel({
     >
       {/* coloured header: team name + running score, with streak/super badges */}
       <div className={cn("flex shrink-0 items-center gap-2 px-3 py-2 text-white", header)}>
-        <span className="min-w-0 flex-1 truncate text-sm font-bold sm:text-base">{name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold sm:text-base">
+          {cpu && <span aria-hidden>🤖 </span>}
+          {name}
+        </span>
         {streak >= 2 && (
           <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold">
             🔥 {t("mtStreak", { n: streak })}
@@ -559,27 +540,40 @@ function TeamPanel({
                 flash === "wrong" ? "text-accent" : "text-text-primary",
               )}
             >
-              {input || (
-                <span
-                  className="h-6 w-[3px] animate-pulse rounded-full bg-text-muted/70"
-                  aria-hidden
-                />
-              )}
+              {input ||
+                (cpu ? (
+                  // Nothing typed yet: the computer is thinking.
+                  <span className="flex gap-1" aria-label={t("playCpuThinking")}>
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-info [animation-delay:-0.3s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-info [animation-delay:-0.15s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-info" />
+                  </span>
+                ) : (
+                  <span
+                    className="h-6 w-[3px] animate-pulse rounded-full bg-text-muted/70"
+                    aria-hidden
+                  />
+                ))}
             </div>
             {/* keypad — content-sized with fixed, comfortable keys */}
             <div className="grid w-full max-w-[16rem] shrink-0 grid-cols-3 gap-2">
               {KEYS.map((k) => (
-                <KeyBtn key={k} onClick={() => onKey(k)}>{k}</KeyBtn>
+                <KeyBtn key={k} onClick={() => onKey(k)} className={cn(cpu?.key === k && pressed)}>
+                  {k}
+                </KeyBtn>
               ))}
               <KeyBtn onClick={() => onKey("back")} className="text-text-secondary">
                 <Delete className="h-5 w-5" />
               </KeyBtn>
-              <KeyBtn onClick={() => onKey("0")}>0</KeyBtn>
+              <KeyBtn onClick={() => onKey("0")} className={cn(cpu?.key === "0" && pressed)}>
+                0
+              </KeyBtn>
               <KeyBtn
                 onClick={() => onKey("ok")}
                 className={cn(
                   "text-white ring-0",
                   side === 1 ? "!bg-accent hover:!bg-accent" : "!bg-info hover:!bg-info",
+                  cpu?.key === "ok" && "scale-90 ring-4 !ring-info/40",
                 )}
               >
                 <Check className="h-6 w-6" />
@@ -595,6 +589,7 @@ function TeamPanel({
                 className={cn(
                   "flex items-center justify-center rounded-xl bg-surface px-3 py-3.5 text-lg font-bold shadow-sm ring-1 ring-black/5 transition hover:bg-background active:scale-95",
                   accent,
+                  cpu?.pick === i && pressed,
                 )}
               >
                 <MathText text={opt} />

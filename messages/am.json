@@ -511,8 +511,7 @@
     "playSeePlans": "እቅዶችን ይመልከቱ",
     "playYouWin": "አሸነፍክ! 🎉",
     "playCpuWins": "ኮምፒውተሩ አሸነፈ — እንደገና ሞክር!",
-    "playCpuThinking": "እያሰበ ነው…",
-    "playCpuDone": "ጥሩ ጨዋታ ነበር!"
+    "playCpuThinking": "እያሰበ ነው…"
   },
   "auth": {
     "noAccount": "መለያ የሎትም?",
