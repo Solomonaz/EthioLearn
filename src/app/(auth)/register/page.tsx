@@ -6,7 +6,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { homeRouteForRole, SECONDARY_GRADES } from "@/lib/teacher-band";
+import { homeRouteForRole } from "@/lib/teacher-band";
+import { GradeOptions } from "@/components/auth/grade-options";
 import {
   OrDivider,
   SOCIAL_ENABLED,
@@ -51,8 +52,8 @@ function RegisterForm() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      const role = (session?.user as { role?: string } | undefined)?.role;
-      router.replace(homeRouteForRole(role));
+      const u = session?.user as { role?: string; grade?: number | null } | undefined;
+      router.replace(homeRouteForRole(u?.role, u?.grade));
     }
   }, [status, session, router]);
 
@@ -198,14 +199,9 @@ function RegisterForm() {
                 disabled={isLoading}
               >
                 <option value="">{t("selectGradeOption")}</option>
-                {/* Student accounts are for grades 9-12; grades 1-8 learn on
-                    their teacher's classroom screen, without accounts. */}
-                {SECONDARY_GRADES.map((g) => (
-                  <option key={g} value={g}>
-                    {t("gradeN", { grade: g })}
-                  </option>
-                ))}
+                <GradeOptions />
               </select>
+              <p className="mt-1.5 text-xs text-text-secondary">{t("gradeHint")}</p>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button type="submit" disabled={isLoading} className={primaryButtonClass}>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/get-session";
+import { isElementaryStudent } from "@/lib/teacher-band";
 import { StudentNotes } from "@/components/student/student-notes";
 
 export default async function StudentLayout({
@@ -31,6 +32,11 @@ export default async function StudentLayout({
 
   if (user.role !== "STUDENT") {
     redirect("/login");
+  }
+
+  // Grades 1-8 have their own play area; this dashboard is for grades 9-12.
+  if (isElementaryStudent(user)) {
+    redirect("/play");
   }
 
   return (

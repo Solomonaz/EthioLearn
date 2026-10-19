@@ -31,7 +31,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 import { formatDate, scoreVariant } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { studentGradeOptions } from "@/lib/teacher-band";
+import { STUDENT_GRADES, studentGradeOptions } from "@/lib/teacher-band";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -374,8 +374,14 @@ export default function AdminStudentDetailPage() {
                         className={editFieldClass}
                       >
                         <option value="">Select grade</option>
-                        {/* Grades 9-12, plus an older account's own grade so it still shows. */}
-                        {studentGradeOptions(student.grade).map((g) => (
+                        {/* School students: grades 9-12, plus an older account's own
+                            grade so it still shows. The super admin may put a
+                            self-registered student in any grade (1-8 play the
+                            elementary games). */}
+                        {(isSuperAdminView && !student.school
+                          ? STUDENT_GRADES
+                          : studentGradeOptions(student.grade)
+                        ).map((g) => (
                           <option key={g} value={g}>
                             Grade {g}
                           </option>

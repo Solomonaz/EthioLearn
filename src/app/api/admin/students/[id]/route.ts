@@ -6,7 +6,7 @@ import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/sect
 import { safeEqual, verifyPassword } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
 import { deleteStudents } from "@/lib/delete-student";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { isSecondaryGrade, isStudentGrade } from "@/lib/teacher-band";
 
 export async function GET(
   _req: NextRequest,
@@ -203,7 +203,7 @@ export async function PATCH(
   // Verify the student belongs to admin's school
   const student = await db.user.findFirst({
     where: { id, role: "STUDENT", ...(schoolId ? { schoolId } : {}) },
-    select: { id: true, isActive: true, grade: true },
+    select: { id: true, isActive: true, grade: true, schoolId: true },
   });
 
   if (!student) {
@@ -245,11 +245,19 @@ export async function PATCH(
   // "Expected Int, provided String" and the whole update failed.
   if (grade !== undefined) {
     const parsed = parseInt(String(grade), 10);
-    // Student accounts are for grades 9-12. An older account keeps its grade
-    // when it is re-saved unchanged (e.g. only the name was edited).
-    if (!isSecondaryGrade(parsed) && parsed !== student.grade) {
+    // School students are grades 9-12. A self-registered student may be in
+    // any grade (1-8 play the elementary games), and only the super admin
+    // changes it. An older account keeps its grade when it is re-saved
+    // unchanged (e.g. only the name was edited).
+    const anyGrade = user.role === "SUPER_ADMIN" && !student.schoolId;
+    const allowed = anyGrade ? isStudentGrade(parsed) : isSecondaryGrade(parsed);
+    if (!allowed && parsed !== student.grade) {
       return NextResponse.json(
-        { error: "Grade must be a whole number between 9 and 12." },
+        {
+          error: anyGrade
+            ? "Grade must be a whole number between 1 and 12."
+            : "Grade must be a whole number between 9 and 12.",
+        },
         { status: 400 },
       );
     }
@@ -261,15 +269,19 @@ export async function PATCH(
   // their class roster, because the cohort query compares the two exactly.
   if (section !== undefined) {
     const normalized = normalizeSection(section);
-    if (!isValidSection(normalized)) {
+    // A self-registered student has no class, so no section to require.
+    if (!student.schoolId && normalized === null) {
+      updateData.section = null;
+    } else if (!isValidSection(normalized)) {
       return NextResponse.json(
         {
           error: `Enter the student's section (up to ${MAX_SECTION_LENGTH} characters), for example A.`,
         },
         { status: 400 },
       );
+    } else {
+      updateData.section = normalized;
     }
-    updateData.section = normalized;
   }
   if (typeof isActive === "boolean") updateData.isActive = isActive;
   if (resetStreak === true) updateData.streakDays = 0;

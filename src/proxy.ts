@@ -24,11 +24,22 @@ const SIGNED_OUT_ONLY_PATHS = ["/", ...AUTH_PATHS];
 /** Every surface that requires a session. Each is also some role's home. */
 const PROTECTED_PATHS = [
   "/student",
+  "/play",
   "/admin",
   "/school-admin",
   "/teacher",
   "/secondary-teacher",
 ];
+
+/**
+ * A student may be inside either student surface: /student (grades 9-12) or
+ * /play (grades 1-8). Which one is theirs depends on their grade, and the
+ * grade in the token can be stale (only an admin changes it, and the token is
+ * not refreshed), so the proxy never chooses between the two — the student
+ * and play layouts read the grade from the database and redirect. Choosing
+ * here too could bounce a student between two disagreeing checks forever.
+ */
+const STUDENT_SURFACES = ["/student", "/play"];
 
 /**
  * Prefix match on a path boundary. Plain `startsWith` is not safe here:
@@ -61,7 +72,8 @@ export async function proxy(request: NextRequest) {
   });
 
   const isAuthenticated = !!token;
-  const home = homeRouteForRole(token?.role as string | undefined);
+  const role = token?.role as string | undefined;
+  const home = homeRouteForRole(role, token?.grade as number | null | undefined);
 
   // `rejected=1` on the login page means a dashboard layout just refused this
   // session — the account was deactivated or removed while its JWT was still
@@ -95,7 +107,10 @@ export async function proxy(request: NextRequest) {
 
     // Signed in, but this is somebody else's surface → their own home.
     // The layouts enforce this too; doing it here just saves a render.
-    if (protectedBase !== home) {
+    const ownSurface =
+      protectedBase === home ||
+      (role === "STUDENT" && STUDENT_SURFACES.includes(protectedBase));
+    if (!ownSurface) {
       return NextResponse.redirect(new URL(home, request.url));
     }
   }
@@ -109,6 +124,7 @@ export const config = {
   matcher: [
     "/",
     "/student/:path*",
+    "/play/:path*",
     "/admin/:path*",
     "/school-admin/:path*",
     "/teacher/:path*",

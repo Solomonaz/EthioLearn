@@ -40,6 +40,7 @@ interface Plan {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  allowGames?: boolean;
 }
 
 /**
@@ -47,8 +48,15 @@ interface Plan {
  * otherwise we derive a list from what the plan unlocks, so a plan with no
  * hand-written features (e.g. Premium Student) still shows what it includes.
  */
-function planFeatures(p: Plan): string[] {
+function planFeatures(p: Plan, elementary: boolean): string[] {
   if (p.features && p.features.length > 0) return p.features;
+  // A grades 1-8 student only has the play area, so list what it unlocks.
+  if (elementary) {
+    const f: string[] = ["Find the Color & Number Memory"];
+    if (p.allowGames !== false) f.push("Every learning game: Tug of War, Find the Pair, Routing Robot");
+    if (p.allowGames !== false && p.allowAi) f.push("AI-made questions for your games");
+    return f;
+  }
   const f: string[] = ["Solo quizzes, daily challenges & solo games", "Progress tracking"];
   if (p.allowAi) f.push("AI Tutor & AI-generated quizzes");
   if (p.allowMathTools) f.push("Graphing calculator & 3D geometry lab");
@@ -80,7 +88,7 @@ const CYCLES: { value: StudentBillingInterval; label: string }[] = [
  * Self-service billing for INDEPENDENT students (no school). Renders nothing
  * for school-managed students — the API reports eligible:false for them.
  */
-export function StudentBillingPanel() {
+export function StudentBillingPanel({ elementary = false }: { elementary?: boolean } = {}) {
   const [eligible, setEligible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -321,7 +329,7 @@ export function StudentBillingPanel() {
               ? isCurrentPlan
               : !!liveCurrent && liveCurrent.plan.id === p.id && liveCurrent.billingInterval === selectedCycle;
             const cycleLabel = CYCLES.find((c) => c.value === selectedCycle)?.label ?? "";
-            const feats = planFeatures(p);
+            const feats = planFeatures(p, elementary);
             const twoColFeatures = feats.length > 4;
             const PlanIcon = isFree ? Gift : Crown;
 

@@ -27,6 +27,11 @@ export interface Entitlements {
   leaderboard: boolean;
   /** Graphing calculator & 3D geometry lab. */
   mathTools: boolean;
+  /**
+   * Every grades 1-8 game in the play area. Without it a grades 1-8 student
+   * still has the free games (see FREE_PLAY_GAMES in lib/games/play).
+   */
+  games: boolean;
   /** Anti-cheat tracking (tab-switch detection, clipboard lock). */
   antiCheat: boolean;
 }
@@ -37,6 +42,7 @@ export const FULL_ACCESS: Entitlements = {
   rewards: true,
   leaderboard: true,
   mathTools: true,
+  games: true,
   antiCheat: true,
 };
 // Individual student with no (or a free) plan: solo only — no AI, no multiplayer,
@@ -47,6 +53,7 @@ export const FREE_TIER: Entitlements = {
   rewards: false,
   leaderboard: false,
   mathTools: false,
+  games: false,
   antiCheat: false,
 };
 
@@ -144,6 +151,7 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
           allowRewards: true,
           allowLeaderboard: true,
           allowMathTools: true,
+          allowGames: true,
         },
       },
     },
@@ -156,6 +164,7 @@ export async function getEntitlements(user: UserLike | null | undefined): Promis
     rewards: sub.plan.allowRewards,
     leaderboard: sub.plan.allowLeaderboard,
     mathTools: sub.plan.allowMathTools,
+    games: sub.plan.allowGames,
     antiCheat: true,
   });
 }
@@ -167,6 +176,7 @@ export const UPGRADE_MESSAGES = {
   rewards: "Rewards aren't included in your current plan. Upgrade to a full-access plan to earn and redeem rewards.",
   leaderboard: "The leaderboard isn't included in your current plan. Upgrade to a full-access plan to see rankings.",
   mathTools: "The graphing calculator and 3D geometry lab aren't included in your current plan. Upgrade to a full-access plan to use them.",
+  games: "This game isn't included in your current plan. Upgrade to a full-access plan to play every game.",
 } as const;
 
 export type EntitlementKey = keyof Entitlements;

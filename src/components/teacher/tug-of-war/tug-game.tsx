@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { useSound, useBackgroundMusic } from "@/hooks/use-sound";
 import {
   correctValue,
+  cpuAnswersCorrectly,
+  cpuDelayMs,
   drawFromDeck,
   finishByPosition,
   initialTugState,
@@ -46,6 +48,9 @@ function mmss(total: number): string {
  * the rope scene and the scoreboard sit on a card between them. Answering pulls
  * the rope and loads the next question automatically (no turns, no manual
  * advance). The rope reflects the running difference in correct answers.
+ *
+ * With `match.cpu` one child plays alone: team 2 is the computer, which
+ * answers on its own timer (see CPU_LEVELS) instead of from a pad.
  */
 export function TugGame({ match, onExit }: TugGameProps) {
   const t = useTranslations("games");
@@ -53,6 +58,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
   const { playSfx } = useSound();
   useBackgroundMusic("tug");
   const { config, mode, band, deck } = match;
+  const cpuLevel = match.cpu?.level;
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // Draw a question, avoiding `avoid` so the two teams never show the same
@@ -74,6 +80,11 @@ export function TugGame({ match, onExit }: TugGameProps) {
   );
 
   const [state, setState] = useState<TugState>(initialTugState);
+  // The latest state, updated the moment an answer lands. Two answers can
+  // arrive before React re-renders (both teams tapping at once, or the
+  // computer answering as the child taps); reading `state` from the render
+  // would let the second answer overwrite the first.
+  const stateRef = useRef<TugState>(state);
   const [q, setQ] = useState<Record<Team, TugQuestion>>(() => {
     const first = draw();
     return { 1: first, 2: draw(first) };
@@ -94,10 +105,14 @@ export function TugGame({ match, onExit }: TugGameProps) {
   // ── Answer resolution (shared by keypad + options) ────────────────────
   const answer = useCallback(
     (team: Team, correct: boolean) => {
-      if (state.winner !== null) return;
-      const { state: nextState, superPull } = registerPull(state, team, correct, config.target);
+      const current = stateRef.current;
+      if (current.winner !== null) return;
+      const { state: nextState, superPull } = registerPull(current, team, correct, config.target);
+      stateRef.current = nextState;
       setState(nextState);
-      playSfx(correct ? "correct" : "wrong");
+      // The computer's answers are shown, not sounded: a "wrong" buzz the
+      // child didn't cause would only confuse them.
+      if (!(cpuLevel && team === 2)) playSfx(correct ? "correct" : "wrong");
 
       // lean toward the pulling side (only correct answers move the rope)
       if (correct) {
@@ -124,8 +139,29 @@ export function TugGame({ match, onExit }: TugGameProps) {
       setQ((prev) => ({ ...prev, [team]: draw(prev[team === 1 ? 2 : 1]) }));
       setInput((prev) => ({ ...prev, [team]: "" }));
     },
-    [state, config.target, draw, playSfx],
+    [config.target, draw, playSfx, cpuLevel],
   );
+
+  // ── Computer opponent ─────────────────────────────────────────────────
+  // The timer calls the newest `answer` through a ref, so a re-render (every
+  // answer causes one) never restarts the computer's countdown.
+  const answerRef = useRef(answer);
+  useEffect(() => {
+    answerRef.current = answer;
+  }, [answer]);
+
+  useEffect(() => {
+    if (!cpuLevel || over) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      timer = setTimeout(() => {
+        answerRef.current(2, cpuAnswersCorrectly(cpuLevel));
+        next();
+      }, cpuDelayMs(cpuLevel));
+    };
+    next();
+    return () => clearTimeout(timer);
+  }, [cpuLevel, over]);
 
   const submitKeypad = (team: Team) => {
     const val = input[team].trim();
@@ -158,7 +194,9 @@ export function TugGame({ match, onExit }: TugGameProps) {
       if (left <= 0) {
         clearInterval(id);
         setSecondsLeft(0);
-        setState((s) => finishByPosition(s));
+        const finished = finishByPosition(stateRef.current);
+        stateRef.current = finished;
+        setState(finished);
       } else {
         setSecondsLeft(left);
       }
@@ -180,7 +218,9 @@ export function TugGame({ match, onExit }: TugGameProps) {
 
   const restart = () => {
     playSfx("click");
-    setState(initialTugState());
+    const fresh = initialTugState();
+    stateRef.current = fresh;
+    setState(fresh);
     const first = draw();
     setQ({ 1: first, 2: draw(first) });
     setInput({ 1: "", 2: "" });
@@ -205,6 +245,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
   let winText = "";
   if (over) {
     if (state.winner === 0) winText = t("mtDraw");
+    else if (cpuLevel) winText = state.winner === 1 ? t("playYouWin") : t("playCpuWins");
     else if (state.endReason === "knockout") winText = t("mtKnockout", { team: teamName(state.winner as Team) });
     else winText = t("mtTimeUp", { team: teamName(state.winner as Team) });
   }
@@ -238,6 +279,7 @@ export function TugGame({ match, onExit }: TugGameProps) {
           stage moves above the two pads instead of squeezing between them. */}
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)_minmax(0,1fr)]">
         <TeamPanel
+          className={cpuLevel ? "col-span-2 lg:col-span-1" : undefined}
           side={1}
           name={config.team1Name}
           score={state.correct[1]}
@@ -289,21 +331,35 @@ export function TugGame({ match, onExit }: TugGameProps) {
           </div>
         </div>
 
-        <TeamPanel
-          side={2}
-          name={config.team2Name}
-          score={state.correct[2]}
-          question={q[2].text}
-          options={q[2].options}
-          input={input[2]}
-          flash={flash[2]}
-          superFlash={superFlash === 2}
-          streak={state.streak[2]}
-          mode={mode}
-          onKey={(k) => pressKey(2, k)}
-          onPick={(i) => pickOption(2, i)}
-          t={t}
-        />
+        {cpuLevel ? (
+          // On phones the stage's scoreboard already shows the computer's
+          // score, so its card only appears where there is room for it.
+          <CpuPanel
+            name={config.team2Name}
+            score={state.correct[2]}
+            flash={flash[2]}
+            superFlash={superFlash === 2}
+            streak={state.streak[2]}
+            over={over}
+            t={t}
+          />
+        ) : (
+          <TeamPanel
+            side={2}
+            name={config.team2Name}
+            score={state.correct[2]}
+            question={q[2].text}
+            options={q[2].options}
+            input={input[2]}
+            flash={flash[2]}
+            superFlash={superFlash === 2}
+            streak={state.streak[2]}
+            mode={mode}
+            onKey={(k) => pressKey(2, k)}
+            onPick={(i) => pickOption(2, i)}
+            t={t}
+          />
+        )}
       </div>
 
       {/* game-over overlay */}
@@ -370,9 +426,66 @@ function ScorePill({
   );
 }
 
+// ─── The computer's card (one child playing alone) ────────────────────────
+
+function CpuPanel({
+  name,
+  score,
+  flash,
+  superFlash,
+  streak,
+  over,
+  t,
+}: {
+  name: string;
+  score: number;
+  flash: Flash;
+  superFlash: boolean;
+  streak: number;
+  over: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div
+      className={cn(
+        CARD,
+        "hidden min-h-0 flex-col overflow-hidden lg:flex",
+        flash === "correct" && "ring-2 ring-success",
+        flash === "wrong" && "ring-2 ring-accent",
+      )}
+    >
+      <div className="flex shrink-0 items-center gap-2 bg-info px-3 py-2 text-white">
+        <span className="min-w-0 flex-1 truncate text-sm font-bold sm:text-base">{name}</span>
+        {streak >= 2 && (
+          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold">
+            🔥 {t("mtStreak", { n: streak })}
+          </span>
+        )}
+        {superFlash && (
+          <span className="shrink-0 animate-pulse rounded-full bg-white px-2 py-0.5 text-[11px] font-extrabold text-text-primary">
+            {t("mtSuper")}
+          </span>
+        )}
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-extrabold tabular-nums">
+          {score}
+        </span>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
+        <span className={cn("text-6xl", !over && "animate-bounce")} aria-hidden>
+          🤖
+        </span>
+        <p className="text-sm font-semibold text-text-secondary">
+          {over ? t("playCpuDone") : t("playCpuThinking")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── One team's card: header + question + keypad or option buttons ────────
 
 function TeamPanel({
+  className,
   side,
   name,
   score,
@@ -387,6 +500,7 @@ function TeamPanel({
   onPick,
   t,
 }: {
+  className?: string;
   side: Team;
   name: string;
   score: number;
@@ -411,6 +525,7 @@ function TeamPanel({
         "flex min-h-0 flex-col overflow-hidden",
         flash === "correct" && "ring-2 ring-success",
         flash === "wrong" && "ring-2 ring-accent",
+        className,
       )}
     >
       {/* coloured header: team name + running score, with streak/super badges */}

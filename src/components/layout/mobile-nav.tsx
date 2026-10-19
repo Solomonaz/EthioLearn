@@ -28,6 +28,8 @@ export function hasMobileBottomNav(pathname: string): boolean {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/school-admin") ||
     pathname.startsWith("/teacher") ||
+    pathname === "/play" ||
+    pathname.startsWith("/play/") ||
     pathname.startsWith("/secondary-teacher")
   );
 }

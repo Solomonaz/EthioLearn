@@ -25,7 +25,7 @@ export default function AuthRedirectPage() {
     }
 
     const user = session?.user as
-      | { profileIncomplete?: boolean; mustChangePassword?: boolean; role?: string }
+      | { profileIncomplete?: boolean; mustChangePassword?: boolean; role?: string; grade?: number | null }
       | undefined;
 
     if (user?.mustChangePassword) {
@@ -38,8 +38,7 @@ export default function AuthRedirectPage() {
       return;
     }
 
-    const role = user?.role;
-    router.replace(homeRouteForRole(role));
+    router.replace(homeRouteForRole(user?.role, user?.grade));
   }, [status, session, router]);
 
   return (

@@ -14,7 +14,9 @@ import {
   Grid2x2,
   Columns2,
   Puzzle,
+  Lock,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ import {
   type PairMode,
   type PairSource,
 } from "@/lib/games/find-pair";
+import { AI_GENERATE_URL, PLAY_BILLING_HREF, type GameAudience } from "@/lib/games/play";
 
 interface SavedSet {
   id: string;
@@ -51,11 +54,21 @@ const SOURCE_META: { key: PairSource; icon: typeof Layers; labelKey: string }[] 
 export function FindPairSetup({
   onStart,
   initialSetId,
+  audience = "teacher",
+  aiLocked = false,
 }: {
   onStart: (match: PairMatch) => void;
   initialSetId?: string;
+  /** "student": a grades 1-8 student's own device — no saved class sets, and
+      AI questions are made for the student's own grade. */
+  audience?: GameAudience;
+  /** Student only: their plan has no AI, so the AI source shows an upgrade note. */
+  aiLocked?: boolean;
 }) {
   const t = useTranslations("games");
+  const isStudent = audience === "student";
+  // Saved question sets belong to teachers.
+  const sources = isStudent ? SOURCE_META.filter((s) => s.key !== "SET") : SOURCE_META;
 
   const [source, setSource] = useState<PairSource>(initialSetId ? "SET" : "PRESET");
   const [mode, setMode] = useState<PairMode>("flip");
@@ -86,11 +99,12 @@ export function FindPairSetup({
   const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
+    if (isStudent) return;
     fetch("/api/teacher/games")
       .then((r) => (r.ok ? r.json() : { games: [] }))
       .then((d) => setSets(d.games ?? []))
       .catch(() => setSets([]));
-  }, []);
+  }, [isStudent]);
 
   const preset = PRESETS.find((p) => p.key === presetKey) ?? PRESETS[0];
 
@@ -122,13 +136,14 @@ export function FindPairSetup({
     setAiLoading(true);
     setAiRows(null);
     try {
-      const res = await fetch("/api/teacher/games/generate", {
+      // A student's questions are always for their own grade (set server-side).
+      const res = await fetch(AI_GENERATE_URL[audience], {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: aiSubject || "General",
           topic: aiTopic,
-          grade: aiGrade,
+          ...(isStudent ? {} : { grade: aiGrade }),
           language: aiLang,
           count: 10,
         }),
@@ -197,7 +212,7 @@ export function FindPairSetup({
     onStart({ config, pairs: deck });
   };
 
-  const aiDisabled = source === "AI" && (aiRows?.length ?? 0) < FP.MIN_PAIRS;
+  const aiDisabled = source === "AI" && (aiLocked || (aiRows?.length ?? 0) < FP.MIN_PAIRS);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -250,8 +265,8 @@ export function FindPairSetup({
       {/* Source picker */}
       <div>
         <p className="mb-2 text-sm font-semibold text-text-primary">{t("fpSource")}</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {SOURCE_META.map(({ key, icon: Icon, labelKey }) => (
+        <div className={cn("grid grid-cols-2 gap-2", sources.length === 4 ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
+          {sources.map(({ key, icon: Icon, labelKey }) => (
             <button
               key={key}
               onClick={() => setSource(key)}
@@ -263,7 +278,10 @@ export function FindPairSetup({
               )}
             >
               <Icon className="h-6 w-6" />
-              {t(labelKey)}
+              <span className="inline-flex items-center gap-1">
+                {t(labelKey)}
+                {key === "AI" && aiLocked && <Lock className="h-3.5 w-3.5" />}
+              </span>
             </button>
           ))}
         </div>
@@ -379,22 +397,34 @@ export function FindPairSetup({
           </div>
         )}
 
-        {source === "AI" && (
+        {source === "AI" && aiLocked && (
+          <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
+            <Lock className="h-5 w-5 shrink-0 text-primary" />
+            <p className="min-w-0 flex-1">{t("playAiLocked")}</p>
+            <Link href={PLAY_BILLING_HREF} className="font-semibold text-primary hover:underline">
+              {t("playSeePlans")}
+            </Link>
+          </div>
+        )}
+
+        {source === "AI" && !aiLocked && (
           <div className="space-y-3">
             <Input placeholder={t("mtAiSubjectPh")} value={aiSubject} onChange={(e) => setAiSubject(e.target.value)} />
             <Input placeholder={t("mtAiTopicPh")} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} />
             <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={aiGrade}
-                onChange={(e) => setAiGrade(Number(e.target.value))}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
-              >
-                {[1, 2, 3, 4, 5, 6].map((g) => (
-                  <option key={g} value={g}>
-                    {t("mtGradeN", { n: g })}
-                  </option>
-                ))}
-              </select>
+              {!isStudent && (
+                <select
+                  value={aiGrade}
+                  onChange={(e) => setAiGrade(Number(e.target.value))}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+                >
+                  {[1, 2, 3, 4, 5, 6].map((g) => (
+                    <option key={g} value={g}>
+                      {t("mtGradeN", { n: g })}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="inline-flex overflow-hidden rounded-lg border border-border">
                 {(["en", "am"] as const).map((l) => (
                   <button

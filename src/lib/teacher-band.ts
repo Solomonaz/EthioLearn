@@ -46,6 +46,33 @@ export function studentGradeOptions(current?: number | null): number[] {
   return grades;
 }
 
+/** Every grade a student account may have. */
+export const STUDENT_GRADES: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** Whether `grade` is a real grade (1-12). */
+export function isStudentGrade(grade: unknown): grade is number {
+  return Number.isInteger(grade) && (grade as number) >= 1 && (grade as number) <= SECONDARY_MAX_GRADE;
+}
+
+/** Whether `grade` falls in the elementary band (1-8). */
+export function isElementaryGrade(grade: unknown): grade is number {
+  return isStudentGrade(grade) && grade <= PRIMARY_MAX_GRADE;
+}
+
+/**
+ * A grades 1-8 student. They use the elementary play area (/play) instead of
+ * the grades 9-12 student dashboard. Only an admin can change their grade.
+ */
+export function isElementaryStudent(
+  user: { role?: string | null; grade?: number | null } | null | undefined,
+): boolean {
+  return user?.role === "STUDENT" && isElementaryGrade(user.grade);
+}
+
+/** Shown when a grades 1-8 student tries to change their own grade. */
+export const GRADE_LOCKED_MESSAGE =
+  "Your grade can only be changed by Abugida. Please contact us to change it.";
+
 /** Whether `grade` falls in the secondary band (9-12). */
 export function isSecondaryGrade(grade: unknown): grade is number {
   return (
@@ -85,11 +112,15 @@ export function isAnyTeacher(role: UserRole | string | undefined | null): boolea
 }
 
 /**
- * Where a role lands after login. Single source of truth for every redirect
- * hub (login page, /redirect, /auth/redirect) so a new role can never be
- * silently funnelled into the student dashboard by a trailing `else`.
+ * Where a role (and, for a student, a grade) lands after login. Single source
+ * of truth for every redirect hub (login page, /redirect, /auth/redirect) so a
+ * new role can never be silently funnelled into the student dashboard by a
+ * trailing `else`.
  */
-export function homeRouteForRole(role: UserRole | string | undefined | null): string {
+export function homeRouteForRole(
+  role: UserRole | string | undefined | null,
+  grade?: number | null,
+): string {
   switch (role) {
     case "SUPER_ADMIN":
       return "/admin";
@@ -100,6 +131,8 @@ export function homeRouteForRole(role: UserRole | string | undefined | null): st
     case "SECONDARY_TEACHER":
       return "/secondary-teacher";
     default:
-      return "/student";
+      // Grades 1-8 play at /play. Without a known grade this is /student,
+      // whose layout sends an elementary student on to /play.
+      return isElementaryGrade(grade) ? "/play" : "/student";
   }
 }

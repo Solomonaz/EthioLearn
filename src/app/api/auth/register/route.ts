@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { isStudentGrade } from "@/lib/teacher-band";
 import { hashPassword, passwordProblem } from "@/lib/password";
 import { emailConfigured } from "@/lib/mailer";
 import { sendVerificationEmail } from "@/lib/auth-emails";
@@ -52,10 +52,11 @@ export async function POST(request: Request) {
     if (problem) {
       return NextResponse.json({ error: problem }, { status: 400 });
     }
-    // Student accounts are for grades 9-12; grades 1-8 are taught on one
-    // classroom screen by their teachers, with no student accounts.
-    if (!isSecondaryGrade(grade)) {
-      return NextResponse.json({ error: "Choose your grade (9–12)." }, { status: 400 });
+    // Grades 1-8 get the elementary play area, grades 9-12 the student
+    // dashboard. The grade is fixed here; afterwards only an admin moves a
+    // student between the two.
+    if (!isStudentGrade(grade)) {
+      return NextResponse.json({ error: "Choose your grade (1–12)." }, { status: 400 });
     }
 
     // Without email, nobody could ever confirm — don't create dead accounts.

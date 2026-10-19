@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Calculator, FolderOpen, PencilLine, Sparkles, Plus, Trash2, Check, Play, Swords } from "lucide-react";
+import Link from "next/link";
+import { Calculator, FolderOpen, PencilLine, Sparkles, Plus, Trash2, Check, Play, Swords, Bot, Users, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,14 @@ import {
   type TugQuestion,
   type TugSource,
   type StoredMcq,
+  type CpuLevel,
 } from "@/lib/games/tug-of-war";
+import {
+  AI_GENERATE_URL,
+  PLAY_BILLING_HREF,
+  mathBandForGrade,
+  type GameAudience,
+} from "@/lib/games/play";
 
 interface SavedSet {
   id: string;
@@ -39,19 +47,43 @@ const SOURCE_META: { key: TugSource; icon: typeof Calculator; labelKey: string }
   { key: "AI", icon: Sparkles, labelKey: "mtSourceAI" },
 ];
 
+const CPU_LEVEL_KEYS: { key: CpuLevel; labelKey: string }[] = [
+  { key: "easy", labelKey: "playLevelEasy" },
+  { key: "medium", labelKey: "playLevelMedium" },
+  { key: "hard", labelKey: "playLevelHard" },
+];
+
 export function TugSetup({
   onStart,
   initialSetId,
+  audience = "teacher",
+  grade,
+  aiLocked = false,
 }: {
   onStart: (match: TugMatch) => void;
   /** When present, preselect the "Teacher's Questions" source and this set. */
   initialSetId?: string;
+  /** "student": a grades 1-8 student on their own device. They play against
+      the computer or with a friend on the same device, Quick Math follows
+      their grade, and there are no saved class sets. */
+  audience?: GameAudience;
+  /** Student only: their grade, for Quick Math. */
+  grade?: number | null;
+  /** Student only: their plan has no AI, so the AI source shows an upgrade note. */
+  aiLocked?: boolean;
 }) {
   const t = useTranslations("games");
+  const isStudent = audience === "student";
+  // Saved question sets belong to teachers.
+  const sources = isStudent ? SOURCE_META.filter((s) => s.key !== "SET") : SOURCE_META;
 
   const [source, setSource] = useState<TugSource>(initialSetId ? "SET" : "MATH");
-  const [team1, setTeam1] = useState(t("team1"));
-  const [team2, setTeam2] = useState(t("team2"));
+  // A student plays the computer or a friend sharing the device.
+  const [opponent, setOpponent] = useState<"cpu" | "friend">("cpu");
+  const [cpuLevel, setCpuLevel] = useState<CpuLevel>("easy");
+  // A student's names start blank and fall back to "You" / "Player 1" etc.
+  const [team1, setTeam1] = useState(isStudent ? "" : t("team1"));
+  const [team2, setTeam2] = useState(isStudent ? "" : t("team2"));
   // Custom, teacher-set values. Match time is entered in minutes (0 = no limit);
   // match length is the number of pulls needed to win.
   const [matchMinutes, setMatchMinutes] = useState<number>(2);
@@ -74,11 +106,12 @@ export function TugSetup({
   const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
+    if (isStudent) return;
     fetch("/api/teacher/games")
       .then((r) => (r.ok ? r.json() : { games: [] }))
       .then((d) => setSets(d.games ?? []))
       .catch(() => setSets([]));
-  }, []);
+  }, [isStudent]);
 
   // ── Manual question builder ───────────────────────────────
   const addManual = () => {
@@ -104,13 +137,14 @@ export function TugSetup({
     setAiLoading(true);
     setAiRows(null);
     try {
-      const res = await fetch("/api/teacher/games/generate", {
+      // A student's questions are always for their own grade (set server-side).
+      const res = await fetch(AI_GENERATE_URL[audience], {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: aiSubject || "General",
           topic: aiTopic,
-          grade: aiGrade,
+          ...(isStudent ? {} : { grade: aiGrade }),
           language: aiLang,
           count: 8,
         }),
@@ -167,20 +201,30 @@ export function TugSetup({
     return deck;
   };
 
+  const vsCpu = isStudent && opponent === "cpu";
+
   const start = async () => {
+    const names = !isStudent
+      ? { team1: team1.trim() || t("team1"), team2: team2.trim() || t("team2") }
+      : vsCpu
+        ? { team1: team1.trim() || t("playYou"), team2: t("playComputer") }
+        : { team1: team1.trim() || t("playPlayer1"), team2: team2.trim() || t("playPlayer2") };
     const config: TugConfig = {
-      team1Name: team1.trim() || t("team1"),
-      team2Name: team2.trim() || t("team2"),
+      team1Name: names.team1,
+      team2Name: names.team2,
       matchSeconds: Math.max(0, Math.round((Number(matchMinutes) || 0) * 60)),
       target: Math.max(2, Math.round(Number(target) || TUG.DEFAULT_TARGET)),
     };
+    const cpu = vsCpu ? { level: cpuLevel } : undefined;
     if (source === "MATH") {
-      onStart({ config, mode: "keypad", band: "mix" });
+      // The classroom mixes + − × ÷ for any grade 1-6 class; a student gets
+      // sums that fit their own grade.
+      onStart({ config, mode: "keypad", band: isStudent ? mathBandForGrade(grade) : "mix", cpu });
       return;
     }
     const deck = await buildDeck();
     if (!deck) return;
-    onStart({ config, mode: "options", deck });
+    onStart({ config, mode: "options", deck, cpu });
   };
 
   return (
@@ -202,11 +246,61 @@ export function TugSetup({
         </div>
       </div>
 
+      {/* Opponent (student only): the computer, or a friend on this device */}
+      {isStudent && (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-text-primary">{t("playOpponent")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { key: "cpu", icon: Bot, label: "playVsComputer", hint: "playVsComputerHint" },
+                { key: "friend", icon: Users, label: "playTwoPlayers", hint: "playTwoPlayersHint" },
+              ] as const
+            ).map(({ key, icon: Icon, label, hint }) => (
+              <button
+                key={key}
+                onClick={() => setOpponent(key)}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-xl border-2 px-4 py-3 text-left transition-colors",
+                  opponent === key
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-surface hover:border-primary/40",
+                )}
+              >
+                <span className="flex items-center gap-2 font-semibold text-text-primary">
+                  <Icon className="h-5 w-5 text-primary" /> {t(label)}
+                </span>
+                <span className="text-xs text-text-secondary">{t(hint)}</span>
+              </button>
+            ))}
+          </div>
+          {vsCpu && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium text-text-primary">{t("playLevel")}</span>
+              <div className="inline-flex overflow-hidden rounded-lg border border-border">
+                {CPU_LEVEL_KEYS.map(({ key, labelKey }) => (
+                  <button
+                    key={key}
+                    onClick={() => setCpuLevel(key)}
+                    className={cn(
+                      "px-4 py-2 text-sm font-semibold",
+                      cpuLevel === key ? "bg-primary text-white" : "bg-surface text-text-secondary",
+                    )}
+                  >
+                    {t(labelKey as any)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Source picker */}
       <div>
         <p className="mb-2 text-sm font-semibold text-text-primary">{t("mtSource")}</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {SOURCE_META.map(({ key, icon: Icon, labelKey }) => (
+        <div className={cn("grid grid-cols-2 gap-2", sources.length === 4 ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
+          {sources.map(({ key, icon: Icon, labelKey }) => (
             <button
               key={key}
               onClick={() => setSource(key)}
@@ -218,7 +312,10 @@ export function TugSetup({
               )}
             >
               <Icon className="h-6 w-6" />
-              {t(labelKey as any)}
+              <span className="inline-flex items-center gap-1">
+                {t(labelKey as any)}
+                {key === "AI" && aiLocked && <Lock className="h-3.5 w-3.5" />}
+              </span>
             </button>
           ))}
         </div>
@@ -229,7 +326,7 @@ export function TugSetup({
         {source === "MATH" && (
           <div className="flex items-center gap-3 text-text-secondary">
             <Calculator className="h-6 w-6 shrink-0 text-primary" />
-            <p className="text-sm">{t("mtQuickMathHint")}</p>
+            <p className="text-sm">{isStudent ? t("playQuickMathHint") : t("mtQuickMathHint")}</p>
           </div>
         )}
 
@@ -346,22 +443,34 @@ export function TugSetup({
           </div>
         )}
 
-        {source === "AI" && (
+        {source === "AI" && aiLocked && (
+          <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
+            <Lock className="h-5 w-5 shrink-0 text-primary" />
+            <p className="min-w-0 flex-1">{t("playAiLocked")}</p>
+            <Link href={PLAY_BILLING_HREF} className="font-semibold text-primary hover:underline">
+              {t("playSeePlans")}
+            </Link>
+          </div>
+        )}
+
+        {source === "AI" && !aiLocked && (
           <div className="space-y-3">
             <Input placeholder={t("mtAiSubjectPh")} value={aiSubject} onChange={(e) => setAiSubject(e.target.value)} />
             <Input placeholder={t("mtAiTopicPh")} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} />
             <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={aiGrade}
-                onChange={(e) => setAiGrade(Number(e.target.value))}
-                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
-              >
-                {[1, 2, 3, 4, 5, 6].map((g) => (
-                  <option key={g} value={g}>
-                    {t("mtGradeN", { n: g })}
-                  </option>
-                ))}
-              </select>
+              {!isStudent && (
+                <select
+                  value={aiGrade}
+                  onChange={(e) => setAiGrade(Number(e.target.value))}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+                >
+                  {[1, 2, 3, 4, 5, 6].map((g) => (
+                    <option key={g} value={g}>
+                      {t("mtGradeN", { n: g })}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="inline-flex overflow-hidden rounded-lg border border-border">
                 {(["en", "am"] as const).map((l) => (
                   <button
@@ -390,10 +499,39 @@ export function TugSetup({
       </div>
 
       {/* Match options */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label={t("team1")} value={team1} onChange={(e) => setTeam1(e.target.value)} />
-        <Input label={t("team2")} value={team2} onChange={(e) => setTeam2(e.target.value)} />
-      </div>
+      {!isStudent ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label={t("team1")} value={team1} onChange={(e) => setTeam1(e.target.value)} />
+          <Input label={t("team2")} value={team2} onChange={(e) => setTeam2(e.target.value)} />
+        </div>
+      ) : vsCpu ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label={t("playYourName")}
+            placeholder={t("playYou")}
+            value={team1}
+            maxLength={24}
+            onChange={(e) => setTeam1(e.target.value)}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label={t("playPlayer1")}
+            placeholder={t("playPlayer1")}
+            value={team1}
+            maxLength={24}
+            onChange={(e) => setTeam1(e.target.value)}
+          />
+          <Input
+            label={t("playPlayer2")}
+            placeholder={t("playPlayer2")}
+            value={team2}
+            maxLength={24}
+            onChange={(e) => setTeam2(e.target.value)}
+          />
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -422,7 +560,12 @@ export function TugSetup({
         </div>
       </div>
 
-      <Button size="lg" className="w-full" onClick={start} disabled={source === "AI" && (aiRows?.length ?? 0) < 2}>
+      <Button
+        size="lg"
+        className="w-full"
+        onClick={start}
+        disabled={source === "AI" && (aiLocked || (aiRows?.length ?? 0) < 2)}
+      >
         <Play className="h-5 w-5" /> {t("mtStart")}
       </Button>
     </div>

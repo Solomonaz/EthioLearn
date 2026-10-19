@@ -35,7 +35,8 @@ export function LandingNav({ links, signIn, getStarted, appName, menuLabel }: Pr
   const { data: session, status } = useSession();
   useEffect(() => {
     if (status === "authenticated") {
-      window.location.replace(homeRouteForRole((session?.user as { role?: string })?.role));
+      const u = session?.user as { role?: string; grade?: number | null } | undefined;
+      window.location.replace(homeRouteForRole(u?.role, u?.grade));
     }
   }, [status, session]);
 
@@ -47,7 +48,7 @@ export function LandingNav({ links, signIn, getStarted, appName, menuLabel }: Pr
       try {
         const res = await fetch("/api/auth/session", { cache: "no-store" });
         const data = await res.json();
-        if (data?.user) window.location.replace(homeRouteForRole(data.user.role));
+        if (data?.user) window.location.replace(homeRouteForRole(data.user.role, data.user.grade));
       } catch {
         /* offline: stay on the landing page */
       }

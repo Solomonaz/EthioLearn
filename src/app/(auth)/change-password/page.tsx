@@ -19,7 +19,7 @@ export default function ChangePasswordPage() {
   const tc = useTranslations("common");
   const router = useRouter();
   const { data: session, status, update } = useSession();
-  const user = session?.user as { role?: string; mustChangePassword?: boolean } | undefined;
+  const user = session?.user as { role?: string; grade?: number | null; mustChangePassword?: boolean } | undefined;
   const forced = !!user?.mustChangePassword;
 
   const [current, setCurrent] = useState("");
@@ -53,7 +53,7 @@ export default function ChangePasswordPage() {
       }
       // Refresh the session so the "must change password" gate clears.
       await update();
-      router.replace(homeRouteForRole(user?.role));
+      router.replace(homeRouteForRole(user?.role, user?.grade));
     } catch {
       setError(t("networkError"));
     } finally {

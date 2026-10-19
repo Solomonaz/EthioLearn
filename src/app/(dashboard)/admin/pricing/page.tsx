@@ -53,6 +53,7 @@ interface Plan {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  allowGames: boolean;
   quarterlyDiscountPct: number;
   yearlyDiscountPct: number;
   pricePerTeacher: number | null;
@@ -89,6 +90,7 @@ interface EditorState {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  allowGames: boolean;
   quarterlyDiscountPct: string;
   yearlyDiscountPct: string;
   // Secondary teachers (school plans). "" = teachers not charged / no cap.
@@ -115,6 +117,7 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
     allowRewards: true,
     allowLeaderboard: true,
     allowMathTools: true,
+    allowGames: true,
     quarterlyDiscountPct: "0",
     yearlyDiscountPct: "0",
     pricePerTeacher: "",
@@ -141,6 +144,7 @@ function editorFromPlan(plan: Plan): EditorState {
     allowRewards: plan.allowRewards ?? true,
     allowLeaderboard: plan.allowLeaderboard ?? true,
     allowMathTools: plan.allowMathTools ?? true,
+    allowGames: plan.allowGames ?? true,
     quarterlyDiscountPct: String(plan.quarterlyDiscountPct ?? 0),
     yearlyDiscountPct: String(plan.yearlyDiscountPct ?? 0),
     pricePerTeacher: plan.pricePerTeacher != null ? String(plan.pricePerTeacher) : "",
@@ -207,6 +211,7 @@ export default function AdminPricingPage() {
       allowRewards: editor.allowRewards,
       allowLeaderboard: editor.allowLeaderboard,
       allowMathTools: editor.allowMathTools,
+      allowGames: editor.allowGames,
       quarterlyDiscountPct: Number(editor.quarterlyDiscountPct) || 0,
       yearlyDiscountPct: Number(editor.yearlyDiscountPct) || 0,
       features: editor.features
@@ -467,6 +472,9 @@ function PlanSection({
                       </span>
                       <span className={plan.allowMathTools ? "text-success" : "text-text-muted"}>
                         {plan.allowMathTools ? "✓" : "✗"} Graphing &amp; 3D Geometry
+                      </span>
+                      <span className={plan.allowGames ? "text-success" : "text-text-muted"}>
+                        {plan.allowGames ? "✓" : "✗"} Grades 1-8 games
                       </span>
                     </div>
                   )}
@@ -809,6 +817,16 @@ function PlanEditor({
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 />
                 Graphing &amp; 3D Geometry (graphing calculator + 3D geometry lab)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={editor.allowGames}
+                  onChange={(e) => set({ allowGames: e.target.checked })}
+                  disabled={saving}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                Grades 1-8 games (all games; two stay free without a plan)
               </label>
             </div>
           </Field>

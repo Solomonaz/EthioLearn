@@ -48,8 +48,8 @@ function LoginForm() {
     // Auto-redirecting a rejected session back would loop, so show the form
     // and let them sign in again. Anyone else who is signed in leaves.
     if (status === "authenticated" && !rejected) {
-      const role = (session?.user as any)?.role;
-      router.replace(homeRouteForRole(role));
+      const u = session?.user as any;
+      router.replace(homeRouteForRole(u?.role, u?.grade));
     }
   }, [status, session, router, rejected]);
 
@@ -84,7 +84,7 @@ function LoginForm() {
 
       if (result?.ok) {
         const sess = await getSession();
-        const user = sess?.user as { role?: string; mustChangePassword?: boolean; profileIncomplete?: boolean } | undefined;
+        const user = sess?.user as { role?: string; grade?: number | null; mustChangePassword?: boolean; profileIncomplete?: boolean } | undefined;
 
         // A school-issued temporary password must be replaced first.
         if (user?.mustChangePassword) {
@@ -96,7 +96,7 @@ function LoginForm() {
           return;
         }
 
-        const home = homeRouteForRole(user?.role);
+        const home = homeRouteForRole(user?.role, user?.grade);
         if (callbackUrl) {
           const isSafeRelative = /^\/[^/]/.test(callbackUrl) && !callbackUrl.includes(":");
           // Follow a callbackUrl only when it lives under this role's own home

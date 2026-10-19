@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { GRADE_LOCKED_MESSAGE, isElementaryGrade, isSecondaryGrade } from "@/lib/teacher-band";
 import { ACHIEVEMENTS } from "@/lib/achievements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { normalizeSection } from "@/lib/section";
@@ -284,9 +284,15 @@ export async function PATCH(request: Request) {
   if (name !== undefined && (typeof name !== "string" || name.trim().length < 2)) {
     return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 });
   }
-  // Student accounts are for grades 9-12; an older account may re-send its own grade.
-  if (grade !== undefined && !isSecondaryGrade(grade) && grade !== user.grade) {
-    return NextResponse.json({ error: "Grade must be an integer between 9 and 12" }, { status: 400 });
+  // Re-sending the current grade is fine. Grades 1-8 students can't change
+  // their grade (only an admin can); grades 9-12 may move within 9-12.
+  if (grade !== undefined && grade !== user.grade) {
+    if (isElementaryGrade(user.grade)) {
+      return NextResponse.json({ error: GRADE_LOCKED_MESSAGE }, { status: 403 });
+    }
+    if (!isSecondaryGrade(grade)) {
+      return NextResponse.json({ error: "Grade must be an integer between 9 and 12" }, { status: 400 });
+    }
   }
   if (section !== undefined && typeof section !== "string") {
     return NextResponse.json({ error: "Invalid section" }, { status: 400 });

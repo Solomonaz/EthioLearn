@@ -1,7 +1,7 @@
 /**
  * Public topic pages for search: one indexable page per thing people search
  * for (national exam practice, battle quiz, AI tutor, adaptive learning,
- * quizzes, Ethiopian education). Search engines rank pages on what they say,
+ * quizzes, Ethiopian education, learning games for Grades 1-8). Search engines rank pages on what they say,
  * so each page explains the feature in plain words, answers common questions
  * (also emitted as FAQPage structured data) and repeats the terms in Amharic
  * for Amharic searches. Rendered by components/seo/topic-page.
@@ -359,7 +359,7 @@ export const TOPIC_PAGES: TopicPage[] = [
       },
       {
         q: "Which grades have quizzes?",
-        a: "Grades 9–12. Grades 1–8 are taught in class by their teachers, with classroom games on one screen. New textbooks and questions are added regularly.",
+        a: "Grades 9–12. New textbooks and questions are added regularly. Students in Grades 1–8 get learning games instead, which they play on their own device at home and their teachers use in class.",
       },
     ],
     amharic: {
@@ -372,10 +372,10 @@ export const TOPIC_PAGES: TopicPage[] = [
   },
   {
     slug: "ethiopian-education",
-    title: "Ethiopian Education Online – Curriculum, Textbooks & Learning for Grades 9–12",
+    title: "Ethiopian Education Online – Curriculum, Textbooks & Learning for Grades 1–12",
     description:
       "Abugida brings Ethiopian education online: the national curriculum textbooks for Grades 9–12, chapter quizzes, " +
-      "national exam practice, an AI tutor, classroom tools for Grades 1–8 and tools for schools — in English and Amharic.",
+      "national exam practice, an AI tutor, learning games for Grades 1–8 at home and in class, and tools for schools — in English and Amharic.",
     keywords: [
       "Ethiopia education", "Ethiopian education", "education in Ethiopia", "Ethiopian education system",
       "Ethiopian curriculum", "new Ethiopian curriculum", "Ethiopian national curriculum", "Ethiopian textbooks",
@@ -386,8 +386,8 @@ export const TOPIC_PAGES: TopicPage[] = [
       "Amharic learning", "ትምህርት", "የኢትዮጵያ ትምህርት", "ሥርዓተ ትምህርት", "መማሪያ መጽሐፍ", "ትምህርት ቤት", "ተማሪ", "መምህር",
     ],
     navLabel: "Ethiopian education",
-    summary: "The national curriculum online for Grades 9–12 students, their teachers and schools.",
-    eyebrow: "Grades 9–12 · English & Amharic",
+    summary: "The national curriculum online for Grades 1–12 students, their teachers and schools.",
+    eyebrow: "Grades 1–12 · English & Amharic",
     h1: "Ethiopian education, online — for students, teachers and schools",
     intro:
       "Abugida is an Ethiopian learning platform built around the national curriculum. Students read and practise from " +
@@ -409,6 +409,7 @@ export const TOPIC_PAGES: TopicPage[] = [
           "An AI tutor, a grapher and 3D geometry tools.",
           "Battles, a daily challenge, streaks, rankings and rewards.",
           "A library to read textbooks in the app.",
+          "Grades 1–8: learning games for their grade, played alone, against the computer or with a friend.",
         ],
       },
       {
@@ -424,7 +425,7 @@ export const TOPIC_PAGES: TopicPage[] = [
     faqs: [
       {
         q: "What is Abugida?",
-        a: "An online learning platform for Ethiopian students, teachers and schools, built on the national curriculum — student accounts for Grades 9–12, classroom tools for Grades 1–8.",
+        a: "An online learning platform for Ethiopian students, teachers and schools, built on the national curriculum — textbook practice for Grades 9–12, and learning games for Grades 1–8 at home and in class.",
       },
       {
         q: "Does Abugida follow the new Ethiopian curriculum?",
@@ -443,10 +444,85 @@ export const TOPIC_PAGES: TopicPage[] = [
       heading: "የኢትዮጵያ ትምህርት በኦንላይን",
       text:
         "አቡጊዳ በኢትዮጵያ ብሔራዊ ሥርዓተ ትምህርት ላይ የተመሠረተ የመማሪያ መድረክ ነው። ተማሪዎች ከመማሪያ መጽሐፋቸው ያነባሉ፣ ይለማመዳሉ፤ " +
-        "መምህራን ትምህርት ያቀርባሉ፣ የቤት ስራ ይሰጣሉ፤ ትምህርት ቤቶች የእያንዳንዱን ክፍል እድገት ይከታተላሉ። ተማሪዎች ከ9ኛ እስከ 12ኛ ክፍል፣ " +
-        "በእንግሊዝኛና በአማርኛ።",
+        "መምህራን ትምህርት ያቀርባሉ፣ የቤት ስራ ይሰጣሉ፤ ትምህርት ቤቶች የእያንዳንዱን ክፍል እድገት ይከታተላሉ። ከ9ኛ እስከ 12ኛ ክፍል " +
+        "የመማሪያ መጽሐፍ ልምምድ፣ ከ1ኛ እስከ 8ኛ ክፍል የመማሪያ ጨዋታዎች፣ በእንግሊዝኛና በአማርኛ።",
     },
     schemaType: "AboutPage",
+  },
+  {
+    slug: "learning-games",
+    title: "Learning Games for Kids – Grades 1–8, Play at Home or in Class",
+    description:
+      "Educational games for Ethiopian children in Grades 1–8: Tug of War maths, Find the Pair, Number Memory, Find the " +
+      "Color and a coding robot. Play alone, against the computer, or with a friend on one phone, tablet or computer.",
+    keywords: [
+      "learning games", "learning games for kids", "educational games", "educational games for kids",
+      "math games for kids", "maths games", "memory games for kids", "games for primary school",
+      "Grade 1 games", "Grade 2 games", "Grade 3 games", "Grade 4 games", "Grade 5 games", "Grade 6 games",
+      "Grade 7 games", "Grade 8 games", "Ethiopian kids learning", "kids learning app Ethiopia",
+      "elementary school Ethiopia", "coding game for kids", "tug of war math game",
+      "የልጆች ጨዋታዎች", "የመማሪያ ጨዋታዎች", "የሒሳብ ጨዋታ", "አንደኛ ደረጃ ትምህርት ቤት",
+    ],
+    navLabel: "Learning games (Grades 1–8)",
+    summary: "Maths, memory and coding games for Grades 1–8, at home or in class.",
+    eyebrow: "Grades 1–8 · Play on any device",
+    h1: "Learning games for Grades 1–8",
+    intro:
+      "Students in Grades 1–8 get a play area of learning games made for their grade. They play on their own phone, " +
+      "tablet or computer — alone, against the computer, or with a friend sharing the screen — and their teachers " +
+      "use the same games on the classroom board.",
+    sections: [
+      {
+        heading: "The games",
+        bullets: [
+          "Tug of War: answer quickly to pull the rope your way. Quick Math follows the child's grade.",
+          "Find the Pair: flip or match cards that belong together, such as countries and capitals, or questions and answers.",
+          "Routing Robot: plan the moves that take a robot to the star, then run them — a first taste of coding.",
+          "Number Memory: remember where the numbers were, then tap them in order.",
+          "Find the Color: spot the one tile in a slightly different shade; it gets harder as you go.",
+        ],
+      },
+      {
+        heading: "Play the way that suits you",
+        bullets: [
+          "Alone, against the computer, at an easy, medium or hard level.",
+          "With a brother, sister or friend on the same device, one side of the screen each.",
+          "With AI questions on a topic the child types, made for their own grade (on plans that include AI).",
+        ],
+      },
+      {
+        heading: "Getting started",
+        paragraphs: [
+          "Create a student account and choose your grade. Grades 1–8 open the learning games; Grades 9–12 open " +
+            "textbook practice and the AI tutor. Two games are always free, and a plan unlocks every game.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        q: "Which grades are the games for?",
+        a: "Grades 1 to 8. A student picks their grade when they sign up, and the games match it — for example, Quick Math is adding and taking away in Grades 1–3.",
+      },
+      {
+        q: "Can my child play alone?",
+        a: "Yes. Every game works for one player, and Tug of War has a computer opponent with three levels.",
+      },
+      {
+        q: "Can two children play on one phone?",
+        a: "Yes. Tug of War and Routing Robot have a two-player mode on one screen, one side each.",
+      },
+      {
+        q: "Is it free?",
+        a: "Find the Color and Number Memory are free. A plan unlocks every game.",
+      },
+    ],
+    amharic: {
+      heading: "ለ1ኛ–8ኛ ክፍል የመማሪያ ጨዋታዎች",
+      text:
+        "ከ1ኛ እስከ 8ኛ ክፍል ያሉ ተማሪዎች ለክፍላቸው የተዘጋጁ የመማሪያ ጨዋታዎችን በራሳቸው ስልክ፣ ታብሌት ወይም ኮምፒውተር ይጫወታሉ — " +
+        "ብቻቸውን፣ ከኮምፒውተር ጋር፣ ወይም ከጓደኛ ጋር በአንድ መሳሪያ። ገመድ መጎተት፣ ጥንዱን ፈልግ፣ ሮቦት መምራት፣ የቁጥር ማስታወስ እና ቀለም ፈልግ።",
+    },
+    schemaType: "WebPage",
   },
 ];
 

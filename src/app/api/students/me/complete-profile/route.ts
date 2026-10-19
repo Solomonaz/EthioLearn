@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { isStudentGrade } from "@/lib/teacher-band";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -23,10 +23,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // The grade is picked once. Changing it later is an admin's job, since it
+  // decides between the grades 1-8 play area and the grades 9-12 dashboard.
+  if (user.role !== "STUDENT" || user.grade != null) {
+    return NextResponse.json({ error: "Your grade is already set." }, { status: 409 });
+  }
+
   const grade = body.grade;
-  // Student accounts are for grades 9-12 (grades 1-8 have no student accounts).
-  if (!isSecondaryGrade(grade)) {
-    return NextResponse.json({ error: "Grade must be between 9 and 12" }, { status: 400 });
+  if (!isStudentGrade(grade)) {
+    return NextResponse.json({ error: "Grade must be between 1 and 12" }, { status: 400 });
   }
 
   const updated = await db.user.update({

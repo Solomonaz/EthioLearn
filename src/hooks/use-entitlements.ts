@@ -8,6 +8,8 @@ export interface EntitlementsInfo {
   rewards: boolean;
   leaderboard: boolean;
   mathTools: boolean;
+  /** Every grades 1-8 game (the free ones need no plan). */
+  games: boolean;
   /** Anti-cheat tracking (tab-switch penalties, clipboard restriction). */
   antiCheat: boolean;
   isIndependent: boolean;
@@ -36,6 +38,7 @@ const DEFAULT: EntitlementsInfo = {
   rewards: true,
   leaderboard: true,
   mathTools: true,
+  games: true,
   antiCheat: true,
   isIndependent: false,
   isSchoolStudent: false,
@@ -69,6 +72,7 @@ export function useEntitlements(): EntitlementsInfo {
             rewards: !!d.rewards,
             leaderboard: !!d.leaderboard,
             mathTools: !!d.mathTools,
+            games: !!d.games,
             antiCheat: d.antiCheat !== false,
             isIndependent: !!d.isIndependent,
             isSchoolStudent: !!d.isSchoolStudent,

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { normalizeSection } from "@/lib/section";
-import { isSecondaryGrade } from "@/lib/teacher-band";
+import { GRADE_LOCKED_MESSAGE, isElementaryGrade, isSecondaryGrade } from "@/lib/teacher-band";
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -126,11 +126,18 @@ export async function PATCH(req: Request) {
     }
   }
 
-  // Validate grade
-  if (grade !== undefined && grade !== null) {
-    // Student accounts are for grades 9-12. An older account keeps its grade
-    // when the form re-sends it unchanged.
-    if (!isSecondaryGrade(grade) && grade !== user.grade) {
+  // Validate grade. Re-sending the current grade unchanged is always fine.
+  if (grade !== undefined && grade !== user.grade) {
+    // Grades 1-8 students can't change their grade; only an admin can, since
+    // it moves them between the play area and the grades 9-12 dashboard.
+    if (isElementaryGrade(user.grade)) {
+      return NextResponse.json(
+        { error: GRADE_LOCKED_MESSAGE },
+        { status: 403 },
+      );
+    }
+    // Grades 9-12 students may move within 9-12 only.
+    if (!isSecondaryGrade(grade)) {
       return NextResponse.json(
         { error: "Grade must be between 9 and 12" },
         { status: 400 },
