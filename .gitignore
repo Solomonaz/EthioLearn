@@ -53,3 +53,14 @@ tsc_*.txt
 
 # Marketing videos, images and recording tooling (local only)
 docs/marketing/
+
+# Android TWA: signing key, its passwords and build outputs (back the key up!)
+android/*.keystore
+android/keystore.secrets
+android/local.properties
+android/*.apk
+android/*.aab
+android/*.idsig
+android/.gradle/
+android/app/build/
+android/build/
