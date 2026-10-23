@@ -314,7 +314,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Mobile app (coming soon) ── */}
+      {/* ── Mobile app: Android APK download; iOS coming soon ── */}
       <section id="app" className="scroll-mt-20 border-t border-[var(--lp-rule)] bg-[var(--lp-surface)]">
         <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 py-20 sm:px-6 md:grid-cols-[1fr_auto] md:gap-20">
           <div className="max-w-xl">
@@ -326,22 +326,27 @@ export default async function HomePage() {
             <p className="mt-4 text-lg leading-relaxed text-[var(--lp-muted)]">{t("appDesc")}</p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              {[
-                { icon: Play, store: t("appPlay") },
-                { icon: Apple, store: t("appStore") },
-              ].map(({ icon: Icon, store }) => (
-                <div
-                  key={store}
-                  aria-disabled="true"
-                  className="flex cursor-default items-center gap-3 rounded-xl border border-dashed border-[var(--lp-faint)] px-4 py-2.5 text-[var(--lp-muted)]"
-                >
-                  <Icon className="h-6 w-6" aria-hidden />
-                  <div className="leading-tight">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em]">{t("appSoon")}</p>
-                    <p className="text-sm font-semibold text-[var(--lp-ink)]">{store}</p>
-                  </div>
+              <a
+                href="/downloads/abugida.apk"
+                download="Abugida.apk"
+                className="flex items-center gap-3 rounded-xl bg-[var(--lp-green)] px-4 py-2.5 text-white transition-colors hover:bg-[#0d3b12]"
+              >
+                <Play className="h-6 w-6" aria-hidden />
+                <div className="leading-tight">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/75">{t("appApkMeta")}</p>
+                  <p className="text-sm font-semibold">{t("appAndroid")}</p>
                 </div>
-              ))}
+              </a>
+              <div
+                aria-disabled="true"
+                className="flex cursor-default items-center gap-3 rounded-xl border border-dashed border-[var(--lp-faint)] px-4 py-2.5 text-[var(--lp-muted)]"
+              >
+                <Apple className="h-6 w-6" aria-hidden />
+                <div className="leading-tight">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em]">{t("appSoon")}</p>
+                  <p className="text-sm font-semibold text-[var(--lp-ink)]">{t("appStore")}</p>
+                </div>
+              </div>
             </div>
 
             <p className="mt-6 text-sm text-[var(--lp-faint)]">{t("appNote")}</p>
