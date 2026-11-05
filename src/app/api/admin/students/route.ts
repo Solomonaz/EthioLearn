@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
-import { PRIMARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
+import { PRIMARY_MAX_GRADE, SECONDARY_MIN_GRADE, isSecondaryGrade } from "@/lib/teacher-band";
 import { generateTempPassword, generateUsername, hashPassword } from "@/lib/password";
 
 // ─── POST: create a single student ──
@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
 
   const gradeNum =
     body.grade === undefined || body.grade === "" ? null : parseInt(String(body.grade), 10);
-  if (gradeNum !== null && (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 12)) {
-    return NextResponse.json({ error: "Grade must be between 1 and 12." }, { status: 400 });
+  // Student accounts are for grades 9-12; grades 1-8 have no student accounts.
+  if (gradeNum !== null && !isSecondaryGrade(gradeNum)) {
+    return NextResponse.json({ error: "Grade must be between 9 and 12." }, { status: 400 });
   }
   // Section is required. A grade can run twenty sections, and both the class
   // rosters a teacher sees and the cohort scoping behind them are keyed on it,

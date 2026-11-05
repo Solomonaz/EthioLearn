@@ -18,7 +18,6 @@ import {
   History,
   Settings,
   HelpCircle,
-  Bell,
   TrendingUp,
   BookMarked,
   Building2,
@@ -45,6 +44,8 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
+import { lockedNavKeys, ProBadge } from "@/components/student/pro-promo";
+import { FREE_PLAY_GAMES, type PlayGameKey } from "@/lib/games/play";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -66,6 +67,8 @@ const TEACHER_COLORS: Record<string, string> = {
   findPair: "#8B5CF6",
   teacherCreate: "#F59E0B",
   randomPicker: "#10B981",
+  billing: "#F59E0B",
+  settings: "#64748B",
 };
 
 const ELEMENTARY_SCHOOL_ADMIN_KEYS = new Set(["dashboard", "teachers", "subjects", "subscription"]);
@@ -74,10 +77,16 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   const pathname = usePathname();
   const t = useTranslations("nav");
   const ent = useEntitlements();
+  // Paid features a free student could buy: listed with a "Pro" lock (their page
+  // shows the upgrade screen) instead of hidden, so students know they exist.
+  const lockedKeys = lockedNavKeys(ent);
 
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
   const isTeacher = pathname.startsWith("/teacher");
+  // Grades 1-8 students' play area: the same playful chrome as the teacher.
+  const isPlay = pathname === "/play" || pathname.startsWith("/play/");
+  const playful = isTeacher || isPlay;
   // "/secondary-teacher" does not start with "/teacher", so the grades 1-8
   // playful teacher chrome below is correctly NOT applied to this surface.
   const isSecondaryTeacher = pathname.startsWith("/secondary-teacher");
@@ -94,19 +103,21 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "battle",      href: "/student/battle",         icon: Swords },
     { labelKey: "leaderboard", href: "/student/leaderboard",    icon: Trophy },
     { labelKey: "rewards",     href: "/student/rewards",        icon: Gift },
-    { labelKey: "notifications", href: "/student/notifications", icon: Bell },
     { labelKey: "profile",     href: "/student/profile",        icon: User },
     { labelKey: "myProgress",  href: "/student/progress",       icon: TrendingUp },
     { labelKey: "quizHistory", href: "/student/history",        icon: History },
     { labelKey: "billing",     href: "/student/billing",        icon: CreditCard },
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
   ].filter((item) => {
+    if (lockedKeys.has(item.labelKey)) return true;
     if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
     if ((item.labelKey === "grapher" || item.labelKey === "geometry") && !ent.mathTools) return false;
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
     if (item.labelKey === "rewards" && !ent.rewards) return false;
     if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;
     if (item.labelKey === "billing" && !ent.pricingEnabled) return false;
+    // Homework only comes from school teachers; self-registered students have none.
+    if (item.labelKey === "myWork" && ent.isIndependent) return false;
     return true;
   });
 
@@ -156,6 +167,27 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
   ];
 
+  // A game's nav item, keyed for its colour, its href and its free/Pro status.
+  const playGames: (NavItem & { game: PlayGameKey })[] = [
+    { labelKey: "tugOfWar",     href: "/play/tug",        icon: Swords,  game: "tug" },
+    { labelKey: "findPair",     href: "/play/find-pair",  icon: Puzzle,  game: "find-pair" },
+    { labelKey: "routing",      href: "/play/routing",    icon: Bot,     game: "routing" },
+    { labelKey: "numberMemory", href: "/play/memory",     icon: Grid3x3, game: "memory" },
+    { labelKey: "findColor",    href: "/play/find-color", icon: Palette, game: "find-color" },
+  ];
+  const playNavItems: NavItem[] = [
+    { labelKey: "dashboard", href: "/play", icon: Home, exact: true },
+    ...playGames,
+    { labelKey: "billing",   href: "/play/billing",  icon: CreditCard },
+    { labelKey: "settings",  href: "/play/settings", icon: Settings },
+  ].filter((item) => item.labelKey !== "billing" || (ent.pricingEnabled && ent.isIndependent));
+  // Paid games show a Pro lock for a free account (the page offers the upgrade).
+  const playLockedKeys = new Set(
+    ent.loading || ent.games
+      ? []
+      : playGames.filter((g) => !FREE_PLAY_GAMES.has(g.game)).map((g) => g.labelKey),
+  );
+
   const secondaryTeacherNavItems: NavItem[] = [
     { labelKey: "dashboard",  href: "/secondary-teacher",            icon: LayoutDashboard, exact: true },
     { labelKey: "myClasses",  href: "/secondary-teacher/classes",    icon: Users },
@@ -181,6 +213,9 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   } else if (isTeacher) {
     navItems = teacherNavItems;
     sectionLabelKey = "sectionTeacher";
+  } else if (isPlay) {
+    navItems = playNavItems;
+    sectionLabelKey = "sectionPlay";
   }
 
   return (
@@ -193,17 +228,21 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
       <aside
         className={cn(
           "fixed z-30 transition-[transform,width] duration-200 md:translate-x-0",
-          isOpen ? "translate-x-0" : "-translate-x-full",
+          // The floating (playful) drawer sits 0.75rem in from the edge, so it
+          // must slide that much further to hide completely.
+          isOpen ? "translate-x-0" : playful ? "-translate-x-[calc(100%+1rem)]" : "-translate-x-full",
           // Collapsed rail only applies on desktop; the mobile drawer stays full width.
           collapsed ? "w-64 md:w-20" : "w-64",
-          isTeacher
+          playful
             ? "bottom-3 left-3 top-3 rounded-3xl bg-surface shadow-xl ring-1 ring-border/60"
             : "left-0 top-16 h-[calc(100vh-4rem)] border-r border-border bg-surface",
         )}
       >
-        {isTeacher ? (
+        {playful ? (
           <TeacherSidebar
             items={navItems}
+            homeHref={isPlay ? "/play" : "/teacher"}
+            lockedKeys={isPlay ? playLockedKeys : undefined}
             pathname={pathname}
             onClose={onClose}
             t={t}
@@ -265,6 +304,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
                 >
                   <item.icon className="h-5 w-5 shrink-0" />
                   <span className={cn(collapsed && "md:hidden")}>{t(item.labelKey as any)}</span>
+                  {lockedKeys.has(item.labelKey) && (
+                    <span className={cn("ml-auto", collapsed && "md:hidden")}>
+                      <ProBadge />
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -284,9 +328,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   );
 }
 
-/** Playful, colourful teacher navigation. */
+/** Playful, colourful navigation: the teacher's, and grades 1-8 students'. */
 function TeacherSidebar({
   items,
+  homeHref,
+  lockedKeys,
   pathname,
   onClose,
   t,
@@ -295,6 +341,9 @@ function TeacherSidebar({
   onToggleCollapse,
 }: {
   items: NavItem[];
+  homeHref: string;
+  /** Items to mark with a Pro lock. */
+  lockedKeys?: Set<string>;
   pathname: string;
   onClose?: () => void;
   t: ReturnType<typeof useTranslations>;
@@ -314,7 +363,7 @@ function TeacherSidebar({
         )}
       >
         <Link
-          href="/teacher"
+          href={homeHref}
           onClick={onClose}
           className={cn("block", collapsed && "md:hidden")}
           aria-label="Abugida"
@@ -378,6 +427,11 @@ function TeacherSidebar({
                 <item.icon className={cn("h-[18px] w-[18px]", isActive && "text-white")} />
               </span>
               <span className={cn(collapsed && "md:hidden")}>{t(item.labelKey as any)}</span>
+              {lockedKeys?.has(item.labelKey) && (
+                <span className={cn("ml-auto", collapsed && "md:hidden")}>
+                  <ProBadge />
+                </span>
+              )}
             </Link>
           );
         })}

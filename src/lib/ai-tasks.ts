@@ -16,14 +16,25 @@
  * `supported` is not a preference, it is what the code can actually do: a
  * provider is listed only when there is a working implementation of that task
  * for it. Vision is Gemini-only because only the Gemini path sends images.
+ *
+ * GEMINI_VERTEX (Agent Platform) is listed wherever GEMINI is: it runs the same
+ * Gemini code against Google Cloud instead of AI Studio. It sits just ahead of
+ * GEMINI in the default chains and is skipped while GEMINI_VERTEX_API_KEY is
+ * unset, so a deployment without that key behaves exactly as before.
  */
 
-export type AiProvider = "GEMINI" | "GROQ" | "NVIDIA" | "OPENROUTER" | "OLLAMA";
+export type AiProvider = "GEMINI" | "GEMINI_VERTEX" | "GROQ" | "NVIDIA" | "OPENROUTER" | "OLLAMA";
 
-export const AI_PROVIDERS: AiProvider[] = ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"];
+export const AI_PROVIDERS: AiProvider[] = ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"];
+
+/** Both Gemini backends — they share one implementation (see lib/gemini-backend). */
+export function isGeminiProvider(p: AiProvider): boolean {
+  return p === "GEMINI" || p === "GEMINI_VERTEX";
+}
 
 export const PROVIDER_LABEL: Record<AiProvider, string> = {
-  GEMINI: "Google Gemini",
+  GEMINI: "Google Gemini (AI Studio)",
+  GEMINI_VERTEX: "Google Gemini (Agent Platform)",
   GROQ: "Groq",
   NVIDIA: "NVIDIA NIM",
   OPENROUTER: "OpenRouter",
@@ -61,8 +72,8 @@ export interface TaskMeta {
   /** Providers with a working implementation of this task. */
   supported: AiProvider[];
   /**
-   * Which Gemini default a blank model resolves to. Only Gemini has two
-   * defaults (flagship / light); every other provider has one.
+   * Which Gemini default a blank model resolves to. Only Gemini (both
+   * backends) has two defaults (flagship / light); every other provider has one.
    */
   geminiSlot: "chat" | "fast";
   /** The chain used until an admin saves one. Mirrors the pre-routing code. */
@@ -78,7 +89,7 @@ export const AI_TASKS: TaskMeta[] = [
     id: "question-generation",
     label: "Question generation",
     description: "Writes quiz and question-bank questions from textbook chapters.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
     geminiSlot: "chat",
     // GPT-6 Luna first (benchmarked 2026-09-23 against Gemini 3.8-flash on the
     // same batches and judge: every answer key verified, no factual errors,
@@ -87,7 +98,7 @@ export const AI_TASKS: TaskMeta[] = [
     // Gemini follows as the fallback when OpenRouter is down or unkeyed.
     defaultChain: [
       { provider: "OPENROUTER", model: "openai/gpt-6-luna" },
-      ...["GEMINI", "GROQ", "NVIDIA", "OLLAMA"].map((p) => step(p as AiProvider)),
+      ...["GEMINI_VERTEX", "GEMINI", "GROQ", "NVIDIA", "OLLAMA"].map((p) => step(p as AiProvider)),
     ],
     note: "Groq's free tier can reject large chapter prompts (413).",
   },
@@ -95,53 +106,53 @@ export const AI_TASKS: TaskMeta[] = [
     id: "chapter-detection",
     label: "Chapter detection",
     description: "Finds the units and chapters when a textbook is uploaded.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
     geminiSlot: "chat",
     // NVIDIA last: measured inventing "UNIT 5: ???" … "UNIT 18: ???" for a
     // two-unit book, which corrupts the chapter split.
-    defaultChain: ["GEMINI", "GROQ", "OPENROUTER", "OLLAMA", "NVIDIA"].map((p) => step(p as AiProvider)),
+    defaultChain: ["GEMINI_VERTEX", "GEMINI", "GROQ", "OPENROUTER", "OLLAMA", "NVIDIA"].map((p) => step(p as AiProvider)),
   },
   {
     id: "answer-verification",
     label: "Answer verifier",
     description: "Independently re-solves each generated question to catch wrong answer keys.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
     geminiSlot: "chat",
-    defaultChain: ["GEMINI", "GROQ", "NVIDIA", "OLLAMA"].map((p) => step(p as AiProvider)),
+    defaultChain: ["GEMINI_VERTEX", "GEMINI", "GROQ", "NVIDIA", "OLLAMA"].map((p) => step(p as AiProvider)),
     note: "The provider that generated the questions is automatically moved to the end, so the check is a second opinion.",
   },
   {
     id: "vision",
     label: "Vision",
     description: "Reads graphs, handwritten equations and 3D-shape sketches from images.",
-    supported: ["GEMINI"],
+    supported: ["GEMINI", "GEMINI_VERTEX"],
     geminiSlot: "chat",
-    defaultChain: [step("GEMINI")],
-    note: "Only Gemini can read images here. Add a second Gemini step with another model as a fallback.",
+    defaultChain: [step("GEMINI_VERTEX"), step("GEMINI")],
+    note: "Only Gemini (either backend) can read images here. Add another Gemini step with a different model as a fallback.",
   },
   {
     id: "bloom-tagging",
     label: "Bloom tagging",
     description: "Labels every textbook chunk with its Bloom's taxonomy level during processing.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
     geminiSlot: "fast",
-    defaultChain: ["GEMINI", "GROQ", "OLLAMA"].map((p) => step(p as AiProvider)),
+    defaultChain: ["GEMINI_VERTEX", "GEMINI", "GROQ", "OLLAMA"].map((p) => step(p as AiProvider)),
     note: "If every step fails, a keyword heuristic tags the chunk instead.",
   },
   {
     id: "quality-check",
     label: "Quality checks",
     description: "Checks difficulty, grammar, facts, distractors and scope of generated questions.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER", "OLLAMA"],
     geminiSlot: "fast",
-    defaultChain: ["GROQ", "GEMINI", "OLLAMA"].map((p) => step(p as AiProvider)),
+    defaultChain: ["GROQ", "GEMINI_VERTEX", "GEMINI", "OLLAMA"].map((p) => step(p as AiProvider)),
   },
   {
     id: "factual-tiebreak",
     label: "Factual tie-break",
     description:
       "Decides when the answer verifier accepts a question but the quality check calls it factually wrong.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER"],
     geminiSlot: "chat",
     // DeepSeek first: a third model family (the generator is OpenAI, the
     // verifier Google), so its vote is independent of both — and with
@@ -149,6 +160,7 @@ export const AI_TASKS: TaskMeta[] = [
     // thinking budget) takes over when OpenRouter is down or unkeyed.
     defaultChain: [
       { provider: "OPENROUTER", model: "deepseek/deepseek-v4-flash" },
+      step("GEMINI_VERTEX"),
       step("GEMINI"),
       step("GROQ"),
     ],
@@ -158,42 +170,42 @@ export const AI_TASKS: TaskMeta[] = [
     id: "tutor-chat",
     label: "Tutor chat",
     description: "Answers students in the AI tutor, graph and geometry helpers.",
-    supported: ["GROQ", "GEMINI", "NVIDIA"],
+    supported: ["GROQ", "GEMINI", "GEMINI_VERTEX", "NVIDIA"],
     geminiSlot: "fast",
-    defaultChain: ["GROQ", "GEMINI", "NVIDIA"].map((p) => step(p as AiProvider)),
+    defaultChain: ["GROQ", "GEMINI_VERTEX", "GEMINI", "NVIDIA"].map((p) => step(p as AiProvider)),
     note: "Student-facing and interactive — put a fast provider first.",
   },
   {
     id: "query-rewrite",
     label: "Tutor search rewrite",
     description: "Turns a follow-up like \"why does that happen?\" into a searchable query before the tutor looks up the textbook.",
-    supported: ["GEMINI", "GROQ"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ"],
     geminiSlot: "fast",
-    defaultChain: ["GEMINI", "GROQ"].map((p) => step(p as AiProvider)),
+    defaultChain: ["GEMINI_VERTEX", "GEMINI", "GROQ"].map((p) => step(p as AiProvider)),
     note: "Runs on every follow-up message with a 2.5s total budget; on timeout the raw message is used.",
   },
   {
     id: "teacher-assistant",
     label: "Teacher assistant",
     description: "Writes long-form answers and activity content for teachers.",
-    supported: ["GEMINI", "GROQ", "NVIDIA", "OPENROUTER"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "GROQ", "NVIDIA", "OPENROUTER"],
     geminiSlot: "chat",
     // GPT-6 Luna first, as for question generation: the teacher documents are
     // the most expensive calls per request on Gemini 3.8-flash (~$0.008 each).
     // Gemini stays as the fallback when OpenRouter is down or unkeyed.
     defaultChain: [
       { provider: "OPENROUTER", model: "openai/gpt-6-luna" },
-      ...["GEMINI", "GROQ", "NVIDIA"].map((p) => step(p as AiProvider)),
+      ...["GEMINI_VERTEX", "GEMINI", "GROQ", "NVIDIA"].map((p) => step(p as AiProvider)),
     ],
   },
   {
     id: "exam-extraction",
     label: "National exam extraction",
     description: "Reads uploaded past national exam papers into questions, options and answers for admin review.",
-    supported: ["GEMINI", "OPENROUTER", "GROQ"],
+    supported: ["GEMINI", "GEMINI_VERTEX", "OPENROUTER", "GROQ"],
     geminiSlot: "chat",
     // Long, messy input (OCR'd papers): Gemini's long context first.
-    defaultChain: [step("GEMINI"), { provider: "OPENROUTER", model: "openai/gpt-6-luna" }, step("GROQ")],
+    defaultChain: [step("GEMINI_VERTEX"), step("GEMINI"), { provider: "OPENROUTER", model: "openai/gpt-6-luna" }, step("GROQ")],
     note: "Runs only when an admin uploads a paper. Every extracted question is reviewed before publishing.",
   },
 ];
@@ -256,7 +268,7 @@ export function stepStatus(
   if (!provider) return { effectiveModel: step.model, skip: "unknown provider" };
   const effectiveModel =
     step.model ??
-    (provider.id === "GEMINI" && TASK_BY_ID[task].geminiSlot === "fast"
+    (isGeminiProvider(provider.id) && TASK_BY_ID[task].geminiSlot === "fast"
       ? provider.models.fast
       : provider.models.chat);
   let skip: string | null = null;

@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Which of the following values belongs to the float data type?",
+  "options": [
+   "56",
+   "\"Hello world\"",
+   "4.5",
+   "True"
+  ],
+  "correctAnswer": "4.5",
+  "difficulty": "EASY",
+  "explanation": "A floating-point number is a number with a decimal point, so 4.5 is a float. 56 is an int, \"Hello world\" is a str because it is enclosed in quotation marks, and True is a bool."
+ },
+ {
+  "questionText": "Which concept refers to the grammatical rules that every program in a given programming language must strictly follow?",
+  "options": [
+   "Semantics",
+   "Syntax",
+   "Identifier",
+   "Data type"
+  ],
+  "correctAnswer": "Syntax",
+  "difficulty": "EASY",
+  "explanation": "Syntax is the set of rules defining the structure or grammar of a language. Semantics concerns the meaning of program elements and what they do, not the grammatical rules."
+ },
+ {
+  "questionText": "What does the acronym IDLE stand for in Python?",
+  "options": [
+   "Interactive Debugging and Language Editor",
+   "Integrated Display and Logic Engine",
+   "Integrated Development and Learning Environment",
+   "Internal Development and Loading Environment"
+  ],
+  "correctAnswer": "Integrated Development and Learning Environment",
+  "difficulty": "EASY",
+  "explanation": "IDLE is Python's free Integrated Development and Learning Environment; the other expansions are invented."
+ },
+ {
+  "questionText": "In an assignment statement such as x = 5 + 9, what must the operand on the left side of the = operator always be?",
+  "options": [
+   "A literal value",
+   "A complex expression",
+   "A string value",
+   "A variable"
+  ],
+  "correctAnswer": "A variable",
+  "difficulty": "EASY",
+  "explanation": "The left operand of the assignment operator is always a variable, while the right operand may be a literal value or any other expression. A literal, expression or string cannot appear on the left."
+ },
+ {
+  "questionText": "Which built-in function reveals what kind of value a variable such as x currently holds?",
+  "options": [
+   "type()",
+   "int()",
+   "str()",
+   "input()"
+  ],
+  "correctAnswer": "type()",
+  "difficulty": "EASY",
+  "explanation": "type(variable_name) displays the data type of a variable. int() and str() convert values to another type, and input() reads a value from the keyboard."
+ },
+ {
+  "questionText": "Which built-in Python data type can hold only the values True and False?",
+  "options": [
+   "int",
+   "bool",
+   "str",
+   "float"
+  ],
+  "correctAnswer": "bool",
+  "difficulty": "EASY",
+  "explanation": "bool represents True or False values and supports the operators and, or and not. int, str and float hold integers, strings and decimals."
+ },
+ {
+  "questionText": "What is displayed when the code a = 17 // 5; b = 17 % 5; print(a + b) is run?",
+  "options": [
+   "3.4",
+   "5.4",
+   "6",
+   "5"
+  ],
+  "correctAnswer": "5",
+  "difficulty": "MEDIUM",
+  "explanation": "17 // 5 returns only the integer part of the quotient, 3, and 17 % 5 returns the remainder, 2, so 3 + 2 = 5. 5.4 results from wrongly using exact division (3.4) and adding 2; 6 results from multiplying 3 and 2."
+ },
+ {
+  "questionText": "Given x = \"7\" and y = 3, which line displays 10 without causing an error?",
+  "options": [
+   "print(x + y)",
+   "print(x + str(y))",
+   "print(int(x) + y)",
+   "print(str(x) + y)"
+  ],
+  "correctAnswer": "print(int(x) + y)",
+  "difficulty": "MEDIUM",
+  "explanation": "int(x) explicitly converts the string \"7\" to the integer 7, so 7 + 3 gives 10. print(x + y) and print(str(x) + y) mix a string and an integer, which Python does not allow, and print(x + str(y)) concatenates two strings into 73."
+ },
+ {
+  "questionText": "Which of the following is a valid Python identifier?",
+  "options": [
+   "7count",
+   "_count7",
+   "count-7",
+   "import"
+  ],
+  "correctAnswer": "_count7",
+  "difficulty": "MEDIUM",
+  "explanation": "An identifier may start with a letter or underscore, and later characters may be letters, numbers or underscores. 7count starts with a digit, count-7 contains a disallowed hyphen, and import is a reserved keyword."
+ },
+ {
+  "questionText": "A script saved as a .py file and run in IDLE contains a = 8; b = a * 2; print(b); c = b - a; print(c). What appears on the screen?",
+  "options": [
+   "16 on one line, then 8 on the next line",
+   "Only 8, because only the last statement gives output",
+   "Nothing, because assignments hide every result",
+   "The single value 24, the sum of 16 and 8"
+  ],
+  "correctAnswer": "16 on one line, then 8 on the next line",
+  "difficulty": "MEDIUM",
+  "explanation": "Only the print() statements produce output, and each print() displays on a separate line: b is 16 and c is 16 - 8 = 8. Assignment statements do not produce output themselves, and the values are not added."
+ },
+ {
+  "questionText": "A script saved as a .py file contains only one line: 5 + 6. What is displayed when the script is run?",
+  "options": [
+   "11",
+   "A syntax error message",
+   "Nothing is displayed",
+   "5+6"
+  ],
+  "correctAnswer": "Nothing is displayed",
+  "difficulty": "MEDIUM",
+  "explanation": "In the text editor an expression is not displayed unless it is placed inside print(). The interactive interpreter would show 11 automatically, but a script does not. 5 + 6 is syntactically valid, so no error occurs."
+ },
+ {
+  "questionText": "Which statement about Python's interactive interpreter and text editor is correct?",
+  "options": [
+   "The interactive interpreter lets any number of lines be run with a single command",
+   "The text editor lets any number of lines be written and run with a single command",
+   "The text editor shows the >>> prompt before every line",
+   "The interactive interpreter saves its code in files with the .py extension"
+  ],
+  "correctAnswer": "The text editor lets any number of lines be written and run with a single command",
+  "difficulty": "MEDIUM",
+  "explanation": "The text editor handles any number of lines executed together and saves them as .py script files, and it shows no prompt. The interactive interpreter shows the >>> prompt and runs one line at a time."
+ },
+ {
+  "questionText": "Which pairing of a language and the way its programs are translated is correct?",
+  "options": [
+   "Python - translated and run a statement at a time by an interpreter",
+   "Java - translated and executed a statement at a time by an interpreter",
+   "Ruby - translated all at once by a compiler",
+   "C++ - translated one statement at a time by an interpreter"
+  ],
+  "correctAnswer": "Python - translated and run a statement at a time by an interpreter",
+  "difficulty": "MEDIUM",
+  "explanation": "Python, Perl and Ruby use interpreters that translate and execute one statement at a time, while C, C++, Java and C# use compilers that translate the whole program at once."
+ },
+ {
+  "questionText": "A student writes the one-line script Area = 5; area = 9; print(Area + area). Which number does Python show on the screen?",
+  "options": [
+   "18",
+   "10",
+   "9",
+   "14"
+  ],
+  "correctAnswer": "14",
+  "difficulty": "MEDIUM",
+  "explanation": "Identifiers are case-sensitive, so Area and area are different variables holding 5 and 9, and the sum is 14. 18, 10 and 9 come from wrongly treating them as the same variable."
+ },
+ {
+  "questionText": "A student runs x = input(\"First: \"); y = input(\"Second: \"); print(x + y), types 4 and then 6, sees 46 displayed, and claims that Python's + operator is faulty because both entered values are numbers. Which of the following BEST identifies the flaw in this reasoning?",
+  "options": [
+   "input() returns floats, so + joined the decimal values instead of adding them",
+   "input() returns every entered value as str, so + acted as concatenation on two strings",
+   "Implicit conversion changed both integers into strings before the addition",
+   "print() joins its arguments itself, so the + operator was never evaluated"
+  ],
+  "correctAnswer": "input() returns every entered value as str, so + acted as concatenation on two strings",
+  "difficulty": "HARD",
+  "explanation": "input() always returns a str regardless of what is typed, and + on strings is concatenation, giving 46. Implicit conversion only widens int to float; input() does not return floats; and the + expression is evaluated before print() displays it."
+ },
+ {
+  "questionText": "After x = 10; x = x // 4; y = x + 0.5; x = str(y) is run, which output does print(x + \"m\") produce?",
+  "options": [
+   "2m",
+   "3m",
+   "2.5m",
+   "A type error, because x was an int earlier"
+  ],
+  "correctAnswer": "2.5m",
+  "difficulty": "HARD",
+  "explanation": "x becomes 2 (floor division), y = 2 + 0.5 = 2.5 (int widened to float), x is then reassigned to the string \"2.5\" (a variable may change type), and concatenating \"m\" gives 2.5m. No error occurs because both operands are strings."
+ },
+ {
+  "questionText": "A script is meant to display the circle area 28.26 using PI = 3.14 and radius = 3. Which of the following observations would MOST STRONGLY support the conclusion that a logic error, rather than a syntax error, is present?",
+  "options": [
+   "The script runs to the end with no error message but displays 18.84",
+   "Running the script stops with an error message at the line area = PI * radius **",
+   "The script stops with an error message when it tries to add the string \"3\" to an integer",
+   "The IDLE shell reports a problem on a line that begins with the name 1x"
+  ],
+  "correctAnswer": "The script runs to the end with no error message but displays 18.84",
+  "difficulty": "HARD",
+  "explanation": "A logic error produces no message from the interpreter yet gives a wrong result: PI * radius * 2 = 3.14 * 3 * 2 = 18.84 instead of PI * radius ** 2 = 28.26. The other observations are errors that the interpreter itself reports."
+ },
+ {
+  "questionText": "A program begins with x = input(\"Number: \") and the user enters 17. Which approach, applied inside print(), displays 3, the integer part of 17 divided by 5?",
+  "options": [
+   "Divide x by 5 using floor division without any conversion",
+   "Convert x with float(), then divide by 5 using normal division",
+   "Convert x with int(), then take the remainder of dividing by 5",
+   "Convert x with int(), then divide by 5 using floor division"
+  ],
+  "correctAnswer": "Convert x with int(), then divide by 5 using floor division",
+  "difficulty": "HARD",
+  "explanation": "input() returns a str, so x must first be explicitly converted with int(); then // returns only the integer quotient, 3. Floor division on the unconverted string fails, float conversion with normal division gives 3.4, and the remainder gives 2."
+ },
+ {
+  "questionText": "A revision note says: \"Python programs need no translation to machine language because the interpreter just executes them a statement at a time, whereas high-level programs in C need a translator.\" Which correction is required?",
+  "options": [
+   "Interpreters translate the whole program at once, so Python needs the same translator as C",
+   "Python programs need an assembler, which is the translator for high-level languages",
+   "The interpreter does translate Python into machine language, but one statement at a time",
+   "Neither language needs translation because both are high-level languages"
+  ],
+  "correctAnswer": "The interpreter does translate Python into machine language, but one statement at a time",
+  "difficulty": "HARD",
+  "explanation": "Like assembly programs, all high-level programs must be translated into machine language; an interpreter does so statement by statement while a compiler translates the whole program at once. An assembler is only for assembly language."
+ },
+ {
+  "questionText": "A script saved as a .py file contains x = 5; y = x * 2; print(y + 1); y = \"done\"; print(type(y)). Which statement about running it is correct?",
+  "options": [
+   "Only one output appears, since only the last statement in a script produces output",
+   "Two outputs appear, 11 and the type str, because y changed from int to str when reassigned",
+   "A type error stops the script, since y cannot hold a string after it has held an integer",
+   "Three outputs appear, since each assignment statement in the script also displays its value"
+  ],
+  "correctAnswer": "Two outputs appear, 11 and the type str, because y changed from int to str when reassigned",
+  "difficulty": "HARD",
+  "explanation": "Only the two print() statements produce output: y is 10, so the first prints 11. Reassigning y to a string changes both its value and its data type, so type(y) shows str. Assignments produce no output and reassignment to another type is allowed."
+ },
+ {
+  "questionText": "Which type of programming language does a computer understand directly, without any need for translation?",
+  "options": [
+   "Machine language",
+   "Assembly language",
+   "High-level language",
+   "Python"
+  ],
+  "correctAnswer": "Machine language",
+  "difficulty": "EASY",
+  "explanation": "Machine language represents everything in 1s and 0s and is the only language the computer understands directly, which is why it is fast. Assembly language needs an assembler, and high-level languages such as Python need a compiler or interpreter."
+ },
+ {
+  "questionText": "What is the Python code that is kept in a file written with IDLE's text editor called?",
+  "options": [
+   "A prompt",
+   "A shell",
+   "A script",
+   "A keyword"
+  ],
+  "correctAnswer": "A script",
+  "difficulty": "EASY",
+  "explanation": "Code kept in a file made with the text editor is called a script, and the file is a script file saved with the .py extension. The prompt is the >>> sign, the shell is the interactive interface, and keywords are reserved words."
+ },
+ {
+  "questionText": "What is a variable in a computer program?",
+  "options": [
+   "A memory location used to store data",
+   "A reserved word with a predefined meaning",
+   "An instruction that the interpreter executes",
+   "A rule of the language's grammar"
+  ],
+  "correctAnswer": "A memory location used to store data",
+  "difficulty": "EASY",
+  "explanation": "Variables are computer memory locations used to store user or intermediary data. A reserved word with a predefined meaning is a keyword, an executed instruction is a statement, and grammar rules are syntax."
+ },
+ {
+  "questionText": "What are keywords in Python?",
+  "options": [
+   "Names that programmers give to variables",
+   "Values placed inside quotation marks",
+   "Reserved words that have predefined meanings",
+   "Symbols used for arithmetic operations"
+  ],
+  "correctAnswer": "Reserved words that have predefined meanings",
+  "difficulty": "EASY",
+  "explanation": "Keywords such as while, import and if are reserved words with predefined meanings, so they cannot be used as identifiers. Variable names are identifiers, quoted values are strings, and arithmetic symbols are operators."
+ },
+ {
+  "questionText": "After the code x = 3; y = 2.0; z = x + y is run, what is the data type of z?",
+  "options": [
+   "float",
+   "int",
+   "str",
+   "bool"
+  ],
+  "correctAnswer": "float",
+  "difficulty": "MEDIUM",
+  "explanation": "Through implicit conversion Python converts the smaller type int to the larger type float to avoid data loss, so z holds 5.0 of type float. Storing it as int could lose data, and nothing here is a string or a True/False value."
+ },
+ {
+  "questionText": "Which output appears on the screen when r = 2; print(\"Radius:\", r); print(\"Done\") is executed?",
+  "options": [
+   "Three lines: Radius:, 2 and Done each on its own line",
+   "One line: Radius: 2 Done all together",
+   "Two lines: Radius: 2 on the first and Done on the second",
+   "Two lines: Radius: on the first and 2 Done on the second"
+  ],
+  "correctAnswer": "Two lines: Radius: 2 on the first and Done on the second",
+  "difficulty": "MEDIUM",
+  "explanation": "Values given to one print() with comma separation appear on the same line, and each print() call starts a new line. So the first call shows Radius: 2 and the second shows Done; the comma does not split the line, and separate print() calls are not joined."
+ },
+ {
+  "questionText": "Which of the following is an expression rather than a statement?",
+  "options": [
+   "x = 4 * (y - 5)",
+   "print(x + 5)",
+   "4 * (y - 5)",
+   "y = \"Hello\""
+  ],
+  "correctAnswer": "4 * (y - 5)",
+  "difficulty": "MEDIUM",
+  "explanation": "An expression is what the interpreter evaluates to a value, such as the complex expression 4 * (y - 5) made of literals, a variable and operators. x = 4 * (y - 5) and y = \"Hello\" are assignment statements and print(x + 5) is a print() statement; each only contains an expression."
+ },
+ {
+  "questionText": "Which pair of values is shown by a = 2 ** 3; b = a % 3; print(a, b)?",
+  "options": [
+   "6 0",
+   "9 0",
+   "8 2",
+   "8 2.67"
+  ],
+  "correctAnswer": "8 2",
+  "difficulty": "MEDIUM",
+  "explanation": "** raises 2 to the power 3, giving 8, and % returns the remainder of 8 divided by 3, which is 2. 6 0 treats ** as multiplication, 9 0 computes 3 to the power 2, and 8 2.67 treats % as division."
+ },
+ {
+  "questionText": "A student claims that because assembly language uses mnemonics instead of 1s and 0s, it is a high-level language whose programs are translated by a compiler. Which of the following BEST identifies the flaw in this reasoning?",
+  "options": [
+   "Assembly stays low-level despite mnemonics, and it is translated by an assembler",
+   "Assembly is high-level, but its programs are translated by an interpreter one statement at a time",
+   "Assembly needs no translation at all, because the computer understands mnemonics directly",
+   "Assembly is low-level, but like C its programs are translated all at once by a compiler"
+  ],
+  "correctAnswer": "Assembly stays low-level despite mnemonics, and it is translated by an assembler",
+  "difficulty": "HARD",
+  "explanation": "Assembly language is a low-level language; mnemonics make it easier than binary but it stays low-level, and its special translator is the assembler. Compilers and interpreters translate high-level languages, and only machine language runs without translation."
+ },
+ {
+  "questionText": "A script runs x = input(\"Radius: \"), the user types 2, and then r = int(x); a = r * 1.5; print(type(a)) is executed. What is displayed, and why?",
+  "options": [
+   "The type str, because input() returns a string and every later value stays a string",
+   "The type int, because int() was applied to x and so the product must also be an int",
+   "The type float, since the int r was widened to float when multiplied by 1.5",
+   "A type error, because a value read with input() can never be used in arithmetic"
+  ],
+  "correctAnswer": "The type float, since the int r was widened to float when multiplied by 1.5",
+  "difficulty": "HARD",
+  "explanation": "input() returns the str \"2\", the explicit conversion int(x) makes r the int 2, and multiplying by the float 1.5 triggers implicit conversion to float (3.0). The str answer ignores the int() call, the int answer ignores implicit widening, and the error answer ignores explicit conversion."
+ }
+]

@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/student",
+          "/play",
           "/teacher",
           "/secondary-teacher",
           "/school-admin",

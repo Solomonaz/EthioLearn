@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What does IDE stand for?",
+  "options": [
+   "Integrated Development Environment",
+   "Internal Data Editor",
+   "Interactive Design Engine Suite",
+   "Installed Debugging Extension"
+  ],
+  "correctAnswer": "Integrated Development Environment",
+  "difficulty": "EASY",
+  "explanation": "An IDE is an Integrated Development Environment, an application that facilitates application development by putting all programming tasks in one application."
+ },
+ {
+  "questionText": "Which characteristic means an algorithm must not end up in an infinite loop?",
+  "options": [
+   "Finiteness",
+   "Feasibility",
+   "Language independence",
+   "Well-defined input"
+  ],
+  "correctAnswer": "Finiteness",
+  "difficulty": "EASY",
+  "explanation": "Finiteness means the algorithm must be finite and should not end up in infinite loops. Feasibility means it can run on available resources."
+ },
+ {
+  "questionText": "What are the two main ways of representing an algorithm?",
+  "options": [
+   "Flowcharts and pseudocode",
+   "Flowcharts and decision tables",
+   "Pseudocode and program code",
+   "Diagrams and natural language"
+  ],
+  "correctAnswer": "Flowcharts and pseudocode",
+  "difficulty": "EASY",
+  "explanation": "There are two main ways to represent algorithms: flowcharts and pseudocode. Natural languages are too imprecise, and program code is what the algorithm is later converted into."
+ },
+ {
+  "questionText": "Which IDE tool is used during testing to find and fix problems in a program?",
+  "options": [
+   "Debugger",
+   "Code editor",
+   "Class browser",
+   "Object browser"
+  ],
+  "correctAnswer": "Debugger",
+  "difficulty": "EASY",
+  "explanation": "The debugger is used during testing to help debug application programs; the code editor is where source code is written."
+ },
+ {
+  "questionText": "In the program that adds A and B and stores the result in C, what is C?",
+  "options": [
+   "The output",
+   "The input",
+   "The process",
+   "The loop"
+  ],
+  "correctAnswer": "The output",
+  "difficulty": "EASY",
+  "explanation": "A and B are the inputs, addition is the process and C is the output of the program."
+ },
+ {
+  "questionText": "Which of these is a multi-language IDE?",
+  "options": [
+   "Eclipse",
+   "Android Studio",
+   "DreamWeaver",
+   "HomeSite"
+  ],
+  "correctAnswer": "Eclipse",
+  "difficulty": "EASY",
+  "explanation": "Multi-language IDEs include Eclipse, NetBeans and Komodo. Android Studio is for mobile development and DreamWeaver and HomeSite are HTML IDEs."
+ },
+ {
+  "questionText": "Which tool transforms source code written in a human-readable language into a form a computer can execute?",
+  "options": [
+   "Compiler",
+   "Debugger",
+   "Text editor",
+   "Class browser"
+  ],
+  "correctAnswer": "Compiler",
+  "difficulty": "EASY",
+  "explanation": "A compiler transforms source code written in a human readable or writable language into a form executable by a computer; the debugger tests it."
+ },
+ {
+  "questionText": "What is the main benefit of using an IDE?",
+  "options": [
+   "Better developer productivity",
+   "Faster computer hardware",
+   "Smaller program files",
+   "Programs free of all bugs"
+  ],
+  "correctAnswer": "Better developer productivity",
+  "difficulty": "EASY",
+  "explanation": "The overall goal and main benefit of an IDE is improved developer productivity, through faster setup, faster tasks, continual learning and standardization."
+ },
+ {
+  "questionText": "Which IDE is named as an example of a cloud-based IDE?",
+  "options": [
+   "Nitrous",
+   "NetBeans",
+   "Komodo",
+   "FrontPage"
+  ],
+  "correctAnswer": "Nitrous",
+  "difficulty": "EASY",
+  "explanation": "Nitrous is a cloud-based development platform supporting more than 40 languages; NetBeans and Komodo are multi-language IDEs and FrontPage is an HTML IDE."
+ },
+ {
+  "questionText": "What is a program, in relation to an algorithm?",
+  "options": [
+   "An algorithm turned into runnable code",
+   "A drawing of an algorithm with boxes and arrows",
+   "An algorithm written in plain English sentences",
+   "A list of the inputs an algorithm needs"
+  ],
+  "correctAnswer": "An algorithm turned into runnable code",
+  "difficulty": "EASY",
+  "explanation": "A program is an algorithm that has been converted into program code so that it can be executed by a computer; a drawing with boxes and arrows is a flowchart."
+ },
+ {
+  "questionText": "Which characteristic means an algorithm can be implemented in any programming language with the same output?",
+  "options": [
+   "Language independence",
+   "Finiteness of steps",
+   "Feasibility",
+   "Well-defined output"
+  ],
+  "correctAnswer": "Language independence",
+  "difficulty": "MEDIUM",
+  "explanation": "Language independence means the algorithm is plain instructions that can be implemented in any language with the same expected output."
+ },
+ {
+  "questionText": "Which characteristic means an algorithm must be practical and able to run on available resources, without relying on future technology?",
+  "options": [
+   "Feasibility",
+   "Finiteness",
+   "Clarity",
+   "Language independence"
+  ],
+  "correctAnswer": "Feasibility",
+  "difficulty": "MEDIUM",
+  "explanation": "A feasible algorithm is simple, generic and practical so that it can be executed with the available resources and does not depend on future technology."
+ },
+ {
+  "questionText": "Which of these is listed as a disadvantage of algorithms?",
+  "options": [
+   "Loops and branches are hard to show",
+   "They are difficult to understand",
+   "They cannot be turned into programs",
+   "They only work in one language"
+  ],
+  "correctAnswer": "Loops and branches are hard to show",
+  "difficulty": "MEDIUM",
+  "explanation": "Disadvantages of algorithms are that writing them is time-consuming and branching and looping statements are difficult to show. Being easy to understand is an advantage."
+ },
+ {
+  "questionText": "Which part of a loop sets the variables to their starting values and sets the counter?",
+  "options": [
+   "Initialization",
+   "Computation",
+   "Test condition",
+   "Increment"
+  ],
+  "correctAnswer": "Initialization",
+  "difficulty": "MEDIUM",
+  "explanation": "A loop has four parts: initialization sets variables and the counter, computation processes, test provides the exit, and increment re-initializes for the next loop."
+ },
+ {
+  "questionText": "Why must every loop have a test part?",
+  "options": [
+   "So the program can exit the loop",
+   "So variables get starting values",
+   "So the counter grows by one",
+   "So the final result is displayed"
+  ],
+  "correctAnswer": "So the program can exit the loop",
+  "difficulty": "MEDIUM",
+  "explanation": "Every loop must have some way of exiting from it, the test, or else the program would endlessly remain in the loop."
+ },
+ {
+  "questionText": "How does pseudocode express a program's algorithm?",
+  "options": [
+   "As English-language statements",
+   "As a diagram of boxes and arrows",
+   "As machine code of ones and zeros",
+   "As a table of inputs and outputs"
+  ],
+  "correctAnswer": "As English-language statements",
+  "difficulty": "MEDIUM",
+  "explanation": "Using pseudocode, the program's algorithm is expressed as English-language statements that guide coding and document the logic; a diagram of boxes is a flowchart."
+ },
+ {
+  "questionText": "Which three tools does an IDE typically combine in one graphical user interface?",
+  "options": [
+   "Code editor, compiler and debugger",
+   "Code editor, browser and file manager",
+   "Compiler, spreadsheet and debugger",
+   "Text editor, firewall and compiler"
+  ],
+  "correctAnswer": "Code editor, compiler and debugger",
+  "difficulty": "MEDIUM",
+  "explanation": "An IDE typically contains a code editor, a compiler or interpreter, and a debugger accessed through a single graphical user interface."
+ },
+ {
+  "questionText": "How are source code editors different from ordinary text editors?",
+  "options": [
+   "They make writing and editing code easier",
+   "They can only open plain text files",
+   "They run the program as it is typed",
+   "They are used only for HTML web pages"
+  ],
+  "correctAnswer": "They make writing and editing code easier",
+  "difficulty": "MEDIUM",
+  "explanation": "Source code editors are distinguished from text editors because they enhance or simplify the writing and editing of code."
+ },
+ {
+  "questionText": "Which IDE tool lets a programmer examine the objects created in a running program?",
+  "options": [
+   "Object browser",
+   "Class browser",
+   "Code editor",
+   "Build automation tool"
+  ],
+  "correctAnswer": "Object browser",
+  "difficulty": "MEDIUM",
+  "explanation": "The object browser examines the objects instantiated in a running application; the class browser examines the properties of an object-oriented class hierarchy."
+ },
+ {
+  "questionText": "Which IDEs are named for mobile development?",
+  "options": [
+   "Android Studio and Visual Studio",
+   "DreamWeaver and FrontPage",
+   "Eclipse and Komodo Edit",
+   "Nitrous and HomeSite"
+  ],
+  "correctAnswer": "Android Studio and Visual Studio",
+  "difficulty": "MEDIUM",
+  "explanation": "IDEs used specifically for mobile development include Android Studio and Visual Studio; DreamWeaver and FrontPage are for HTML."
+ },
+ {
+  "questionText": "Why are natural languages not used directly for algorithms in programming?",
+  "options": [
+   "They are too imprecise",
+   "They are too short",
+   "They cannot describe steps",
+   "They need a compiler"
+  ],
+  "correctAnswer": "They are too imprecise",
+  "difficulty": "MEDIUM",
+  "explanation": "Natural languages are too imprecise for algorithms used in programming, which need a precise way with well-defined syntax and clear semantics, such as flowcharts and pseudocode."
+ },
+ {
+  "questionText": "How does an IDE give developers faster development tasks?",
+  "options": [
+   "Syntax is checked during editing",
+   "Programs compile without any errors",
+   "Each tool opens in its own window",
+   "Code needs less testing later"
+  ],
+  "correctAnswer": "Syntax is checked during editing",
+  "difficulty": "MEDIUM",
+  "explanation": "Tighter integration improves productivity: code can be parsed and syntax checked while being edited, giving instant feedback, and developers need not switch applications."
+ },
+ {
+  "questionText": "When solving a problem with a computer, which step comes right after the problem is analyzed thoroughly?",
+  "options": [
+   "Break the solution into small tasks",
+   "Feed the program into the computer",
+   "Write the algorithm in precise notation",
+   "Design the program in a high-level language"
+  ],
+  "correctAnswer": "Break the solution into small tasks",
+  "difficulty": "HARD",
+  "explanation": "The steps are: analyze the problem, break the solution method into a sequence of small tasks, prepare an algorithm, express it in precise notation, design the program, feed it in and execute it."
+ },
+ {
+  "questionText": "In the flowchart for the sum of the first 50 natural numbers, which condition keeps the loop running?",
+  "options": [
+   "Counter at most 50",
+   "Counter greater than 50",
+   "Sum less than 50",
+   "Sum equal to 0"
+  ],
+  "correctAnswer": "Counter at most 50",
+  "difficulty": "HARD",
+  "explanation": "Sum starts at 0 and counter at 1; while the counter is less than or equal to 50, the counter is added to the sum and increased by 1, otherwise the loop exits and the sum is written."
+ },
+ {
+  "questionText": "An algorithm reads a number, shows 'negative' if it is below 0, 'positive' if it is above 0, and otherwise something else. What does it show for an input of 0?",
+  "options": [
+   "Zero",
+   "Negative",
+   "Positive",
+   "Nothing"
+  ],
+  "correctAnswer": "Zero",
+  "difficulty": "HARD",
+  "explanation": "0 is neither less than nor greater than 0, so the 'otherwise' step runs and the algorithm displays that the entered number is zero."
+ },
+ {
+  "questionText": "How does NetBeans add support for more programming languages?",
+  "options": [
+   "By installing additional modules",
+   "By switching to the cloud version",
+   "By using the Eclipse consortium",
+   "By recompiling its source code"
+  ],
+  "correctAnswer": "By installing additional modules",
+  "difficulty": "HARD",
+  "explanation": "All NetBeans functions are provided by modules with well-defined functions, and support for other languages is added by installing additional modules; Eclipse expanded through plugins."
+ },
+ {
+  "questionText": "How does the IDE benefit of standardization help a team?",
+  "options": [
+   "New hires get up to speed faster",
+   "Each developer chooses different tools",
+   "Projects are tied to one computer",
+   "Developers see new features first"
+  ],
+  "correctAnswer": "New hires get up to speed faster",
+  "difficulty": "HARD",
+  "explanation": "The IDE interface standardizes the development process, which helps developers work together more smoothly and helps new hires get up to speed more quickly."
+ },
+ {
+  "questionText": "Why are computers described as 'dumb machines'?",
+  "options": [
+   "They do only what they are asked to do",
+   "They cannot store any kind of information",
+   "They work without electricity",
+   "They cannot follow algorithms"
+  ],
+  "correctAnswer": "They do only what they are asked to do",
+  "difficulty": "HARD",
+  "explanation": "Computers are called dumb machines because they do only what they are asked to do, which is why programs must spell out the steps to solve a problem."
+ },
+ {
+  "questionText": "Where does a flowchart focus its attention, compared with how a task is done?",
+  "options": [
+   "On where or who does what",
+   "On how each step is coded",
+   "On the speed of each step",
+   "On the programming language used"
+  ],
+  "correctAnswer": "On where or who does what",
+  "difficulty": "HARD",
+  "explanation": "A flowchart's area of concentration is on where or who does what, rather than on how it is done; it shows the major steps and the direction of flow."
+ },
+ {
+  "questionText": "Why is an algorithm easier than a full problem for a programmer to convert into a program?",
+  "options": [
+   "The problem is split into small steps",
+   "The algorithm is in a programming language",
+   "The algorithm shows every loop clearly",
+   "The algorithm needs no testing"
+  ],
+  "correctAnswer": "The problem is split into small steps",
+  "difficulty": "HARD",
+  "explanation": "In an algorithm the problem is broken down into smaller steps, so it is easier to convert into a program. Algorithms are language-independent, and showing loops and branches is listed as one of their weaknesses."
+ }
+]

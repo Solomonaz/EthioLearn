@@ -7,6 +7,7 @@ import { Navbar } from "./navbar";
 import { Sidebar } from "./sidebar";
 import { MobileNav, hasMobileBottomNav } from "./mobile-nav";
 import { TeacherTopBar } from "./teacher-topbar";
+import { PlayTopBar } from "./play-topbar";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -20,6 +21,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const isTeacher = pathname.startsWith("/teacher");
+  // Grades 1-8 students' play area shares the teacher's playful shell.
+  const isPlay = pathname === "/play" || pathname.startsWith("/play/");
   // Only pad for the bottom bar on routes that actually render one.
   const bottomBarPad = hasMobileBottomNav(pathname);
 
@@ -90,9 +93,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  // ── Teacher surface: no top navbar; a floating sidebar + a top row of
-  //    controls, matching the playful kid-friendly design. ────────────────
-  if (isTeacher) {
+  // ── Teacher surface and the grades 1-8 play area: no top navbar; a
+  //    floating sidebar + a top row of controls, matching the playful
+  //    kid-friendly design. ─────────────────────────────────────────────
+  if (isTeacher || isPlay) {
     return (
       <div className="min-h-screen bg-background">
         <Sidebar
@@ -109,7 +113,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
         >
           <div className={cn("px-3 pt-3 sm:px-5 sm:pt-5 md:pb-8 md:pr-5", bottomBarPad ? "pb-24" : "pb-6")}>
-            <TeacherTopBar onMenuToggle={() => setSidebarOpen((v) => !v)} />
+            {isPlay ? (
+              <PlayTopBar onMenuToggle={() => setSidebarOpen((v) => !v)} />
+            ) : (
+              <TeacherTopBar onMenuToggle={() => setSidebarOpen((v) => !v)} />
+            )}
             <main>{children}</main>
           </div>
         </div>

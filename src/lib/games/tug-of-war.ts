@@ -65,6 +65,58 @@ export interface TugMatch {
   band?: MathBand;
   /** Present in options mode — the pool teams draw from. */
   deck?: TugQuestion[];
+  /**
+   * Present when one child plays alone: team 2 is the computer, answering on
+   * its own at this level's pace. Absent = two teams (or two players sharing
+   * one device) on the same screen.
+   */
+  cpu?: { level: CpuLevel };
+}
+
+// ─── Computer opponent (one child playing alone) ────────────
+
+export type CpuLevel = "easy" | "medium" | "hard";
+
+/**
+ * How the computer plays: on average one answer every `meanMs`, right with
+ * probability `accuracy`. Easy is slow enough for a grade 1 child typing
+ * answers; hard pushes a confident older child.
+ */
+export const CPU_LEVELS: Record<CpuLevel, { meanMs: number; accuracy: number }> = {
+  easy: { meanMs: 7000, accuracy: 0.7 },
+  medium: { meanMs: 5000, accuracy: 0.8 },
+  hard: { meanMs: 3500, accuracy: 0.9 },
+};
+
+/** Milliseconds until the computer's next answer: its mean, give or take 30%. */
+export function cpuDelayMs(level: CpuLevel): number {
+  return Math.round(CPU_LEVELS[level].meanMs * (0.7 + Math.random() * 0.6));
+}
+
+/** Whether the computer's next answer is right. */
+export function cpuAnswersCorrectly(level: CpuLevel): boolean {
+  return Math.random() < CPU_LEVELS[level].accuracy;
+}
+
+/** Milliseconds between the computer's key presses when it types an answer. */
+export const CPU_KEY_MS = 320;
+
+/**
+ * A believable wrong number for the computer to type in keypad mode: the
+ * right answer missed by 1-3, never negative.
+ */
+export function cpuWrongValue(q: TugQuestion): string {
+  const right = Number(correctValue(q));
+  if (!Number.isFinite(right)) return "0";
+  const miss = (Math.floor(Math.random() * 3) + 1) * (Math.random() < 0.5 ? -1 : 1);
+  const wrong = right + miss >= 0 ? right + miss : right + Math.abs(miss);
+  return String(wrong);
+}
+
+/** A wrong option for the computer to tap in options mode. */
+export function cpuWrongIndex(q: TugQuestion): number {
+  const wrong = q.options.map((_, i) => i).filter((i) => i !== q.correctIndex);
+  return wrong.length > 0 ? wrong[Math.floor(Math.random() * wrong.length)] : q.correctIndex;
 }
 
 /** Tuning constants for the pull mechanics. Kept here so play/tests agree. */

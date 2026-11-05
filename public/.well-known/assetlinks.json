@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.abugidatech.app",
+      "sha256_cert_fingerprints": [
+        "2D:5A:90:55:83:74:5B:1B:9A:B7:53:25:D5:B9:48:B0:66:0F:73:0C:B2:28:64:6E:2F:FE:DA:0E:8D:03:4A:5F"
+      ]
+    }
+  }
+]

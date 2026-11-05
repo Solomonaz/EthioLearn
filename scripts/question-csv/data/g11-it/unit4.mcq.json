@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "How are the Web and the Internet related?",
+  "options": [
+   "The Internet is a service that runs on the Web, which is the network of networks",
+   "The Web and the Internet are two names for exactly the same network",
+   "The Web is one service that runs on the Internet, which is a network of networks",
+   "The Internet is a collection of websites, while the Web is the cabling that connects them"
+  ],
+  "correctAnswer": "The Web is one service that runs on the Internet, which is a network of networks",
+  "difficulty": "EASY",
+  "explanation": "The Internet is a network of networks, and the Web is its most popular service, alongside others such as email and file transfer. The other options reverse the relationship or treat the two as identical."
+ },
+ {
+  "questionText": "In which laboratory did Tim Berners-Lee invent the Web in 1989?",
+  "options": [
+   "CERN, in Switzerland",
+   "The World Health Organization, in Switzerland",
+   "Bell Laboratories, in the United States",
+   "Xerox PARC, in the United States"
+  ],
+  "correctAnswer": "CERN, in Switzerland",
+  "difficulty": "EASY",
+  "explanation": "The Web was invented in 1989 at CERN, the famous laboratory in Switzerland. The World Health Organization is also based in Switzerland but is a health agency, not where the Web was invented, and Bell Laboratories and Xerox PARC are not where it originated."
+ },
+ {
+  "questionText": "Which activity is concerned with the actual creation or building of a website, rather than with defining its layout and overall look?",
+  "options": [
+   "Website design",
+   "Web development",
+   "Web browsing",
+   "Website navigation"
+  ],
+  "correctAnswer": "Web development",
+  "difficulty": "EASY",
+  "explanation": "Web development is the actual building of websites, while website design deals with defining the layout and overall look. Navigation is one of the design guidelines, and browsing is simply viewing webpages."
+ },
+ {
+  "questionText": "Which attribute of the <video> element adds playback features such as play, pause and volume to the player?",
+  "options": [
+   "width",
+   "src",
+   "height",
+   "controls"
+  ],
+  "correctAnswer": "controls",
+  "difficulty": "EASY",
+  "explanation": "The controls attribute adds play, pause and volume controls and takes no value. width and height set the size, and src gives the file name."
+ },
+ {
+  "questionText": "Which of the following HTML elements is a void element, written without an end tag?",
+  "options": [
+   "<body>",
+   "<h1>",
+   "<hr>",
+   "<b>"
+  ],
+  "correctAnswer": "<hr>",
+  "difficulty": "EASY",
+  "explanation": "Void elements such as <br>, <img> and <hr> have no end tag. <body>, <h1> and <b> follow the start tag, content, end tag format."
+ },
+ {
+  "questionText": "A website uses a white background with one typeface on its home page, a black background with a different typeface on its products page, and yet another color scheme on its contact page. Which website design guideline is being violated?",
+  "options": [
+   "Navigation",
+   "Consistency",
+   "Accessibility",
+   "Target audience"
+  ],
+  "correctAnswer": "Consistency",
+  "difficulty": "MEDIUM",
+  "explanation": "Consistency requires a similar look and feel across pages, with the same backgrounds, colors and typefaces used throughout. The scenario varies them page by page, and says nothing about menus, disabilities or the intended audience."
+ },
+ {
+  "questionText": "A teacher wants learners to master the HTML language itself. Which statement about building webpages in a plain text editor such as Notepad, compared with a WYSIWYG tool such as Adobe Dreamweaver, is correct?",
+  "options": [
+   "It is easier than WYSIWYG software and equally effective for mastering the language",
+   "It cannot produce .html files, so only WYSIWYG software can be used for webpages",
+   "It is more effective because it writes the HTML code for the learner automatically",
+   "It is a little harder than WYSIWYG software but better for mastering the language"
+  ],
+  "correctAnswer": "It is a little harder than WYSIWYG software but better for mastering the language",
+  "difficulty": "MEDIUM",
+  "explanation": "Simple text editors are a little harder to use than WYSIWYG software but are more effective for mastering the language. Notepad can save .html files, and it is WYSIWYG software, not a text editor, that hides the code."
+ },
+ {
+  "questionText": "A page contains only this code: <b>Hello</b><i>World</i><p>Bye</p>. How does the browser display it?",
+  "options": [
+   "Hello, World and Bye each appear on their own separate line",
+   "Hello and World appear side by side on one line, and Bye appears on a new line",
+   "Hello, World and Bye all appear side by side on a single line",
+   "Hello appears alone on the first line, and World and Bye appear together on the next line"
+  ],
+  "correctAnswer": "Hello and World appear side by side on one line, and Bye appears on a new line",
+  "difficulty": "MEDIUM",
+  "explanation": "The browser starts a new line for elements like <p> and <h1> but not for <b> and <i>, so the bold and italic texts stay together and the paragraph begins on a new line."
+ },
+ {
+  "questionText": "Which markup displays a paragraph whose text is aligned to the right?",
+  "options": [
+   "<p align=\"right\">This is a paragraph</p>",
+   "<p right=\"align\">This is a paragraph</p>",
+   "<align=\"right\"><p>This is a paragraph</p>",
+   "<p>This is a paragraph align=\"right\"</p>"
+  ],
+  "correctAnswer": "<p align=\"right\">This is a paragraph</p>",
+  "difficulty": "MEDIUM",
+  "explanation": "Attributes are written inside the start tag as attribute=value pairs, so the align attribute with the value right goes inside <p>. The other options place the pair in the wrong position or reverse it."
+ },
+ {
+  "questionText": "Which anchor element makes the Google page open in a separate window or tab when clicked?",
+  "options": [
+   "<a href=\"http://www.google.com\" target=\"_self\">Google</a>",
+   "<a href=\"_blank\" target=\"http://www.google.com\">Google</a>",
+   "<a href=\"http://www.google.com\" target=\"_blank\">Google</a>",
+   "<a name=\"_blank\">http://www.google.com</a>"
+  ],
+  "correctAnswer": "<a href=\"http://www.google.com\" target=\"_blank\">Google</a>",
+  "difficulty": "MEDIUM",
+  "explanation": "href holds the destination URL and target=\"_blank\" displays the page in a separate window/tab. The value _self is the default and opens in the same window; the other options swap or misuse the attributes."
+ },
+ {
+  "questionText": "Which of the following is a relative URL?",
+  "options": [
+   "http://www.somewebsite.com/about.html",
+   "pages/about.html",
+   "https://www.ethiotelecom.et",
+   "http://www.google.com/index.html"
+  ],
+  "correctAnswer": "pages/about.html",
+  "difficulty": "MEDIUM",
+  "explanation": "A relative URL is a path given relative to the location of the current webpage. Absolute URLs such as http://www.google.com/index.html include every element, including the protocol and the hostname."
+ },
+ {
+  "questionText": "A list is created with <ol type=\"a\"> and contains three <li> items. How are the items marked?",
+  "options": [
+   "Upper-case letters A, B, C",
+   "Lower-case Roman numerals i, ii, iii",
+   "Arabic numerals 1, 2, 3",
+   "Lower-case letters a, b, c"
+  ],
+  "correctAnswer": "Lower-case letters a, b, c",
+  "difficulty": "MEDIUM",
+  "explanation": "For ordered lists, type=\"a\" gives the lower-case English alphabet. A is upper-case alphabet, i is lower-case Roman numerals, and 1 (Arabic numerals) is the default."
+ },
+ {
+  "questionText": "Consider this code: <table border=1><tr><th>Name</th><th>Age</th><th>City</th></tr><tr><td>Abel</td><td>16</td><td>Adama</td></tr><tr><td>Sara</td><td>15</td><td>Hawassa</td></tr></table>. How many rows and columns does the table have?",
+  "options": [
+   "2 rows and 3 columns",
+   "3 rows and 9 columns",
+   "3 rows and 3 columns",
+   "3 rows and 2 columns"
+  ],
+  "correctAnswer": "3 rows and 3 columns",
+  "difficulty": "MEDIUM",
+  "explanation": "The number of rows equals the number of <tr> elements (3), and the number of columns equals the cells in each row (3)."
+ },
+ {
+  "questionText": "A developer needs a bulleted list with open-circle bullets, in which the item Fruits contains a numbered sub-list using lower-case Roman numerals. Which markup achieves this?",
+  "options": [
+   "<ul type=\"circle\"><li>Fruits<ol type=\"i\"><li>Orange</li></ol></li></ul>",
+   "<ul type=\"circle\"><li>Fruits<ol type=\"a\"><li>Orange</li></ol></li></ul>",
+   "<ul type=\"i\"><li>Fruits<ol type=\"circle\"><li>Orange</li></ol></li></ul>",
+   "<ul type=\"circle\"><li>Fruits<ul type=\"i\"><li>Orange</li></ul></li></ul>"
+  ],
+  "correctAnswer": "<ul type=\"circle\"><li>Fruits<ol type=\"i\"><li>Orange</li></ol></li></ul>",
+  "difficulty": "HARD",
+  "explanation": "Unordered lists take disc, square or circle and ordered lists take 1, I, i, A or a, where i gives lower-case Roman numerals, and the <ol> sits inside the <li> of the outer <ul>. type=\"a\" gives letters, putting i on the <ul> and circle on the <ol> uses values those lists do not accept, and an inner <ul> cannot show numerals."
+ },
+ {
+  "questionText": "A study-group note claims that a picture is added to a page with <img>photo.jpg</img>, because every HTML element needs a start tag, content and an end tag. Which of the following BEST identifies the flaw in this reasoning?",
+  "options": [
+   "<img> must be placed inside a <p> element, whose content supplies the image file name",
+   "The file name must be given as the value of the align attribute inside the start tag",
+   "<img> is a void element, so it has no end tag, and it needs src to name the image file",
+   "Only the <video> element can take a src attribute, so images need a different HTML tag"
+  ],
+  "correctAnswer": "<img> is a void element, so it has no end tag, and it needs src to name the image file",
+  "difficulty": "HARD",
+  "explanation": "Void elements such as <img> have no end tag, and <img> cannot work without the src attribute giving the image's name and location. src is used by <img> as well as <video>, and align only changes alignment."
+ },
+ {
+  "questionText": "A page layout uses a table of three rows. The second row has two <td> cells (a sidebar and a content area), while the header in the first row and the footer in the last row are each a single <td> that must stretch across the full table width. Which attribute and value must the header and footer cells have?",
+  "options": [
+   "colspan=\"3\"",
+   "colspan=\"2\"",
+   "rowspan=\"2\"",
+   "width=\"100%\""
+  ],
+  "correctAnswer": "colspan=\"2\"",
+  "difficulty": "HARD",
+  "explanation": "The number of columns is set by the cells in a row (two here), and merging columns uses colspan, so colspan=\"2\" makes the header and footer span both. colspan=\"3\" counts the rows instead, rowspan merges rows rather than columns, and width=\"100%\" only makes a table fill the page width."
+ },
+ {
+  "questionText": "In a table, the first row has one empty <th>, then <th colspan=2>Cases</th>, then <th colspan=2>Deaths</th>. The next row has no merged cells and exactly one cell per column. How many cells does that next row contain?",
+  "options": [
+   "3 cells",
+   "4 cells",
+   "7 cells",
+   "5 cells"
+  ],
+  "correctAnswer": "5 cells",
+  "difficulty": "HARD",
+  "explanation": "Columns are set by the cells in a row, and colspan=2 merges two columns into one cell. The first row therefore covers 1 + 2 + 2 = 5 columns, so the next row needs 5 cells. Counting only the three <th> elements gives 3."
+ },
+ {
+  "questionText": "Which of the following observations would MOST STRONGLY support the conclusion that a hyperlink moves the reader to another part of the same page rather than to a different webpage?",
+  "options": [
+   "The mouse cursor turns into a hand symbol when it hovers over the link",
+   "Its href value is # followed by a name given to a location on the same page",
+   "Its href value is a relative path such as folder/file.html rather than a full URL",
+   "Its target attribute is set to _self, so the linked page opens in the same tab"
+  ],
+  "correctAnswer": "Its href value is # followed by a name given to a location on the same page",
+  "difficulty": "HARD",
+  "explanation": "A link to a page section names a location with the name attribute and links to it with href set to # followed by that name. The hand symbol appears for every hyperlink, a relative path points to another file, and _self only means the linked page opens in the same window/tab, which can still be a different page."
+ },
+ {
+  "questionText": "Which would be the PRIMARY consequence if the HTTP rules were permanently unavailable, even though HTML pages, a web server and a web browser were all present?",
+  "options": [
+   "The browser and server could not exchange requests and responses, so no page could be fetched",
+   "The browser could no longer interpret tags such as <h1> and <p> in any of the webpages it received",
+   "The web server would be unable to store any webpages written in HTML on the computer",
+   "HTML documents could no longer be saved on a computer with the .html file extension"
+  ],
+  "correctAnswer": "The browser and server could not exchange requests and responses, so no page could be fetched",
+  "difficulty": "HARD",
+  "explanation": "HTTP is the set of rules browsers and servers use to communicate, so without it the request-response exchange fails. Interpreting tags is the job of the browser using HTML, storing pages is the server's role, and the file extension has nothing to do with HTTP."
+ },
+ {
+  "questionText": "Which markup creates a clickable image that takes the user to Google in a separate tab?",
+  "options": [
+   "<a href=\"http://www.google.com\" target=\"_self\"><img src=\"google.png\"></a>",
+   "<a href=\"google.png\" target=\"_blank\"><img src=\"http://www.google.com\"></a>",
+   "<a href=\"http://www.google.com\" target=\"_blank\"><img src=\"google.png\"></a>",
+   "<img src=\"google.png\" href=\"http://www.google.com\" target=\"_blank\">"
+  ],
+  "correctAnswer": "<a href=\"http://www.google.com\" target=\"_blank\"><img src=\"google.png\"></a>",
+  "difficulty": "HARD",
+  "explanation": "An image becomes a link when the <img> element is embedded between <a> and </a>; href gives the destination, src the image file, and target=\"_blank\" opens a separate tab. _self keeps the page in the same tab, giving the image file to href and the URL to src reverses their roles, and an <img> with href but no anchor is not a link."
+ },
+ {
+  "questionText": "With which file extension are HTML documents saved?",
+  "options": [
+   ".html",
+   ".http",
+   ".url",
+   ".txt"
+  ],
+  "correctAnswer": ".html",
+  "difficulty": "EASY",
+  "explanation": "HTML documents written in an editor such as Notepad are saved with the .html extension, for example home.html. HTTP is the communication protocol and URL is an address, not file extensions, and .txt would save a plain text file rather than a webpage."
+ },
+ {
+  "questionText": "What bullet does an unordered list display when no type attribute is given?",
+  "options": [
+   "A filled disc",
+   "A square",
+   "An open circle",
+   "An Arabic numeral"
+  ],
+  "correctAnswer": "A filled disc",
+  "difficulty": "EASY",
+  "explanation": "The default bullet type of <ul> is disc; square and circle appear only when the type attribute sets them. Arabic numerals are the default of ordered lists, not unordered ones."
+ },
+ {
+  "questionText": "Which tag is used to add the description or definition of an item in a description list?",
+  "options": [
+   "<dd>",
+   "<dt>",
+   "<dl>",
+   "<li>"
+  ],
+  "correctAnswer": "<dd>",
+  "difficulty": "EASY",
+  "explanation": "In a description list, <dl> defines the whole list, <dt> adds the item being described, and <dd> adds its description. <li> inserts items into ordered and unordered lists."
+ },
+ {
+  "questionText": "Which foundation of the Web is software that stores webpages and responds to requests that come through browsers?",
+  "options": [
+   "Web browser",
+   "Web server",
+   "HTTP",
+   "HTML"
+  ],
+  "correctAnswer": "Web server",
+  "difficulty": "EASY",
+  "explanation": "A web server stores webpages and responds to user requests. A web browser is used to view webpages, HTTP is the set of rules the two use to communicate, and HTML is the language for creating webpages."
+ },
+ {
+  "questionText": "What is the current version of HTML?",
+  "options": [
+   "HTML5",
+   "HTML4",
+   "HTML 2.0",
+   "XHTML 1.0"
+  ],
+  "correctAnswer": "HTML5",
+  "difficulty": "EASY",
+  "explanation": "HTML has gone through several revisions since its invention in 1989, and its current version is HTML5. HTML4 and HTML 2.0 are older revisions, and XHTML 1.0 is not the current version."
+ },
+ {
+  "questionText": "A designer is choosing a color scheme and wants to follow the simplicity guideline for website design. Which plan stays within the recommended number of colors?",
+  "options": [
+   "Using six different colors",
+   "Using nine different colors",
+   "Using ten different colors",
+   "Using twelve different colors"
+  ],
+  "correctAnswer": "Using six different colors",
+  "difficulty": "MEDIUM",
+  "explanation": "The simplicity guideline recommends a maximum of five colors, plus or minus two, so up to seven colors is within range and six fits. Nine, ten and twelve all exceed seven."
+ },
+ {
+  "questionText": "In a school timetable built as an HTML table, the cell Break must cover the same column in two rows one above the other. Which attribute and value should that cell have?",
+  "options": [
+   "colspan=\"2\"",
+   "rowspan=\"2\"",
+   "height=\"2\"",
+   "rowspan=\"1\""
+  ],
+  "correctAnswer": "rowspan=\"2\"",
+  "difficulty": "MEDIUM",
+  "explanation": "rowspan merges rows, so rowspan=\"2\" makes one cell stretch down across two rows. colspan merges columns side by side, height only sets the cell's size, and rowspan=\"1\" covers just one row."
+ },
+ {
+  "questionText": "A table written as <table border=1> is changed to <table> with everything else left the same. How does the table look in the browser after the change?",
+  "options": [
+   "The same data is displayed in the same way, but without a border",
+   "The table data stays hidden until a border attribute is added back again",
+   "The headers disappear and only the <td> data cells are shown",
+   "All the cells are merged into a single row without any border"
+  ],
+  "correctAnswer": "The same data is displayed in the same way, but without a border",
+  "difficulty": "MEDIUM",
+  "explanation": "The border attribute with the value 1 only adds a border; without it the data is displayed the same way but with no border. The attribute does not hide data, remove <th> headers or merge cells, which needs colspan or rowspan."
+ },
+ {
+  "questionText": "A layout table has width=\"100%\" and its second row has two <td> cells, a sidebar with width=\"20%\" and a content cell. What width should the content cell be given so the two cells fill the whole table?",
+  "options": [
+   "width=\"20%\"",
+   "width=\"80%\"",
+   "width=\"100%\"",
+   "width=\"120%\""
+  ],
+  "correctAnswer": "width=\"80%\"",
+  "difficulty": "MEDIUM",
+  "explanation": "Widths of cells are shares of the table width, so the sidebar's 20% leaves 100% - 20% = 80% for the content cell. 100% would be the whole table, and 120% would exceed it."
+ },
+ {
+  "questionText": "A student puts all the headings, paragraphs and images of a page inside <head>...</head>, leaves <body></body> empty, and claims they will show first because the head comes first. Which of the following BEST identifies the flaw in this reasoning?",
+  "options": [
+   "Only <body> content is displayed, while <head> holds information about the page, such as its title",
+   "Content in <head> is shown, but only after everything in <body> has been displayed by the browser",
+   "Content in <head> is shown only if it is placed before the <!DOCTYPE html> line of the document",
+   "Content in <head> is shown only when every element inside it is a void element such as <img> or <hr>"
+  ],
+  "correctAnswer": "Only <body> content is displayed, while <head> holds information about the page, such as its title",
+  "difficulty": "HARD",
+  "explanation": "Everything displayed in the browser is what <body> contains, while <head> holds information about the webpage such as the title, so the page would appear empty. Head content is not shown later or under special conditions, and <!DOCTYPE html> only indicates the document type."
+ }
+]

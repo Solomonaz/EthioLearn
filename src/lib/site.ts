@@ -4,42 +4,64 @@ import type { Metadata } from "next";
  * Public identity of the site, for search engines and link previews.
  *
  * SITE_URL follows NEXTAUTH_URL (the public URL the deployment already sets),
- * so moving to abugida.et means changing .env only — canonical links, the
+ * so changing the domain means changing .env only — canonical links, the
  * sitemap and structured data all follow. Read at request time: the Docker
  * build has no .env, so anything that uses it must render dynamically.
  */
 export function siteUrl(): string {
-  const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://abugida.aderasend.com";
+  const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://abugidatech.com";
   return url.replace(/\/$/, "");
 }
 
 export const SITE_NAME = "Abugida";
 
-export const SITE_TITLE = "Abugida – Textbook Quizzes & AI Tutor for Ethiopian Students, Grades 1–12";
+export const SITE_TITLE =
+  "Abugida – Ethiopian Education Online: Quizzes, National Exam Practice, AI Tutor & Learning Games, Grades 1–12";
 
 export const SITE_DESCRIPTION =
-  "Practise with quizzes made from Ethiopian national curriculum textbooks, get step-by-step help from an AI tutor, " +
-  "and track progress. For students, teachers and schools, Grades 1–12, in English and Amharic.";
+  "Learn with the Ethiopian national curriculum: chapter quizzes from your textbooks, past Grade 12 national exam " +
+  "(ESSLCE / EUEE) papers, an AI tutor, adaptive practice and live battle quizzes for Grades 9–12, and learning " +
+  "games for Grades 1–8 that children play at home or in class. For students, teachers and schools, in English and Amharic.";
 
+/**
+ * Site-wide keywords (each topic page adds its own, see lib/seo-pages). Google
+ * ignores the keywords tag; Bing and smaller engines still read it. Ranking
+ * comes from the words on the pages themselves, which is why the topic pages exist.
+ */
 export const SITE_KEYWORDS = [
-  "Abugida",
-  "Ethiopian students",
-  "Ethiopian curriculum",
-  "Ethiopian national curriculum",
-  "Ethiopian textbooks",
-  "Ethiopia education",
-  "online learning Ethiopia",
-  "grade 12 Ethiopia",
-  "grade 9-12 practice questions",
-  "chapter quizzes",
-  "AI tutor",
-  "mathematics",
-  "physics",
-  "chemistry",
-  "biology",
-  "Amharic",
-  "school management Ethiopia",
-  "teacher tools",
+  // Brand
+  "Abugida", "Abugida education", "Abugida learning", "Abugida app", "አቡጊዳ",
+  // Ethiopian education
+  "Ethiopia education", "Ethiopian education", "education in Ethiopia", "Ethiopian education system",
+  "Ethiopian curriculum", "new Ethiopian curriculum", "Ethiopian national curriculum", "Ethiopian textbooks",
+  "Ethiopian student textbook", "Ministry of Education Ethiopia", "Ethiopian students", "Ethiopian schools",
+  "online learning Ethiopia", "e-learning Ethiopia", "edtech Ethiopia", "education app Ethiopia",
+  "learning platform Ethiopia", "Ethiopian high school", "Ethiopian secondary school", "Ethiopian primary school",
+  // National exam
+  "Ethiopian national exam", "Grade 12 national exam", "national exam practice", "ESSLCE", "EUEE",
+  "Ethiopian university entrance exam", "entrance exam Ethiopia", "national exam past papers",
+  "national exam questions and answers", "Grade 8 national exam", "matric Ethiopia", "model exam Ethiopia",
+  // Quizzes and questions
+  "quiz", "online quiz", "practice questions", "chapter quizzes", "questions and answers", "multiple choice questions",
+  "practice test", "mock exam", "exam preparation Ethiopia", "Grade 9 questions", "Grade 10 questions",
+  "Grade 11 questions", "Grade 12 questions", "Grade 7 questions", "Grade 8 questions",
+  // Battle quiz and games
+  "battle quiz", "quiz battle", "live quiz battle", "quiz game", "multiplayer quiz", "quiz competition",
+  "educational games", "classroom games", "gamified learning", "leaderboard", "daily challenge",
+  // AI and adaptive learning
+  "AI tutor", "AI education", "AI in education", "AI learning", "AI homework help", "AI study assistant",
+  "adaptive learning", "personalized learning", "adaptive quiz", "learning analytics", "student progress tracking",
+  // Subjects
+  "mathematics", "physics", "chemistry", "biology", "English", "Amharic", "history", "geography",
+  "information technology", "IT textbook Grade 9", "IT textbook Grade 12",
+  // Teachers and schools
+  "teacher tools", "AI teaching assistant", "homework app", "school management Ethiopia", "Grades 9–12",
+  // Grades 1-8
+  "Grades 1–8", "learning games for kids", "educational games Ethiopia", "math games for kids",
+  "primary school games", "የልጆች የመማሪያ ጨዋታዎች",
+  // Amharic
+  "ትምህርት", "የኢትዮጵያ ትምህርት", "ሥርዓተ ትምህርት", "መማሪያ መጽሐፍ", "ብሔራዊ ፈተና", "የ12ኛ ክፍል ብሔራዊ ፈተና",
+  "የመግቢያ ፈተና", "ጥያቄዎች", "ጥያቄና መልስ", "ፈተና", "ሞዴል ፈተና", "የጥያቄ ውድድር", "የAI አስተማሪ", "ተማሪ", "መምህር",
 ];
 
 /** Link-preview image (app/og-image.png/route.tsx), relative to metadataBase. */
@@ -47,7 +69,7 @@ export const OG_IMAGE = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
-  alt: "Abugida – textbook quizzes and an AI tutor for Ethiopian students, Grades 1–12",
+  alt: "Abugida – quizzes, national exam practice, an AI tutor and learning games for Ethiopian students, Grades 1–12",
 };
 
 /**

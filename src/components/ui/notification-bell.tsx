@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,10 +40,17 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export function NotificationBell() {
+/**
+ * `viewAllHref`: the full notifications page, linked from the dropdown's
+ * footer. The bell is the only way in — the page is not in the side menu.
+ */
+export function NotificationBell({ viewAllHref }: { viewAllHref?: string } = {}) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  // Phones: the panel is pinned to the screen edges (the bell sits mid-header,
+  // so a right-anchored panel ran off the left edge), just below the bell.
+  const [panelTop, setPanelTop] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -118,7 +125,10 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          setPanelTop(e.currentTarget.getBoundingClientRect().bottom + 8);
+          setIsOpen(!isOpen);
+        }}
         className="relative rounded-lg p-2 text-text-secondary hover:bg-gray-100"
         aria-label="Notifications"
       >
@@ -131,7 +141,10 @@ export function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-border bg-surface shadow-lg sm:w-96">
+        <div
+          style={{ "--bell-panel-top": `${panelTop}px` } as CSSProperties}
+          className="fixed inset-x-4 top-[var(--bell-panel-top)] z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96"
+        >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h3 className="text-sm font-semibold text-text-primary">
               Notifications
@@ -205,6 +218,17 @@ export function NotificationBell() {
               ))
             )}
           </div>
+          {viewAllHref && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                router.push(viewAllHref);
+              }}
+              className="block w-full border-t border-border px-4 py-2.5 text-center text-xs font-medium text-primary hover:bg-gray-50"
+            >
+              View all notifications
+            </button>
+          )}
         </div>
       )}
     </div>

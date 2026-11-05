@@ -8,6 +8,8 @@ export interface EntitlementsInfo {
   rewards: boolean;
   leaderboard: boolean;
   mathTools: boolean;
+  /** Every grades 1-8 game (the free ones need no plan). */
+  games: boolean;
   /** Anti-cheat tracking (tab-switch penalties, clipboard restriction). */
   antiCheat: boolean;
   isIndependent: boolean;
@@ -21,6 +23,10 @@ export interface EntitlementsInfo {
   aiFeatures: { aiTutor: boolean; aiQuizGen: boolean; aiAdaptive: boolean; aiMathTools: boolean };
   /** The user's school level; null when they have no school. */
   schoolLevel: "ELEMENTARY" | "SECONDARY" | null;
+  /** End of the sign-up free trial (ISO), or null when there is none. */
+  trialEndsAt: string | null;
+  /** The sign-up free trial is running now. */
+  trialActive: boolean;
   loading: boolean;
 }
 
@@ -32,6 +38,7 @@ const DEFAULT: EntitlementsInfo = {
   rewards: true,
   leaderboard: true,
   mathTools: true,
+  games: true,
   antiCheat: true,
   isIndependent: false,
   isSchoolStudent: false,
@@ -40,6 +47,8 @@ const DEFAULT: EntitlementsInfo = {
   rewardsEnabled: true,
   aiFeatures: { aiTutor: true, aiQuizGen: true, aiAdaptive: true, aiMathTools: true },
   schoolLevel: null,
+  trialEndsAt: null,
+  trialActive: false,
   loading: true,
 };
 
@@ -63,6 +72,7 @@ export function useEntitlements(): EntitlementsInfo {
             rewards: !!d.rewards,
             leaderboard: !!d.leaderboard,
             mathTools: !!d.mathTools,
+            games: !!d.games,
             antiCheat: d.antiCheat !== false,
             isIndependent: !!d.isIndependent,
             isSchoolStudent: !!d.isSchoolStudent,
@@ -76,6 +86,8 @@ export function useEntitlements(): EntitlementsInfo {
               aiMathTools: d.aiFeatures?.aiMathTools !== false,
             },
             schoolLevel: d.schoolLevel ?? null,
+            trialEndsAt: typeof d.trialEndsAt === "string" ? d.trialEndsAt : null,
+            trialActive: !!d.trialActive,
             loading: false,
           });
         } else {

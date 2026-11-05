@@ -16,6 +16,7 @@
 import { db } from "./db";
 import { getProviderSettings, withModelOverride, type ResolvedProvider } from "./ai-settings";
 import { isOllamaEnabled } from "./ollama";
+import { withGeminiBackend } from "./gemini-backend";
 import {
   TASK_BY_ID,
   sanitizeChain,
@@ -29,10 +30,11 @@ import {
 export type { AiTask, RouteStep, AiProvider };
 
 /** Lower-case provider names, as recorded in usage events and returned to callers. */
-export type ProviderName = "gemini" | "groq" | "nvidia" | "openrouter" | "ollama";
+export type ProviderName = "gemini" | "gemini-vertex" | "groq" | "nvidia" | "openrouter" | "ollama";
 
 export const PROVIDER_NAME: Record<AiProvider, ProviderName> = {
   GEMINI: "gemini",
+  GEMINI_VERTEX: "gemini-vertex",
   GROQ: "groq",
   NVIDIA: "nvidia",
   OPENROUTER: "openrouter",
@@ -111,9 +113,28 @@ export async function getTaskChain(task: AiTask): Promise<ResolvedStep[]> {
   return out;
 }
 
-/** Run one step's call with that step's model applied to its provider. */
+/**
+ * The implementation a caller supplied for `provider`.
+ *
+ * GEMINI_VERTEX runs the caller's GEMINI implementation unless it gave one of
+ * its own: the Gemini helpers serve both backends, and `runStep` points them at
+ * Agent Platform. So no call site needs a second, identical Gemini entry.
+ */
+export function implFor<F>(impl: Partial<Record<AiProvider, F>>, provider: AiProvider): F | undefined {
+  return impl[provider] ?? (provider === "GEMINI_VERTEX" ? impl.GEMINI : undefined);
+}
+
+/**
+ * Run one step's call with that step's model applied to its provider. A Gemini
+ * step also pins the backend its Gemini calls go to — Agent Platform for
+ * GEMINI_VERTEX, AI Studio for GEMINI — so a step nested inside another never
+ * inherits the outer step's backend.
+ */
 export function runStep<T>(s: RouteStep, fn: () => Promise<T>): Promise<T> {
-  return withModelOverride(s.provider, s.model, fn);
+  const call = () => withModelOverride(s.provider, s.model, fn);
+  if (s.provider === "GEMINI_VERTEX") return withGeminiBackend("vertex", call);
+  if (s.provider === "GEMINI") return withGeminiBackend("studio", call);
+  return call();
 }
 
 function describe(s: ResolvedStep): string {
@@ -139,7 +160,7 @@ export async function runTask<T>(
     reorder?: (chain: ResolvedStep[]) => ResolvedStep[];
   } = {}
 ): Promise<{ value: T; provider: ProviderName; model: string | null }> {
-  let chain = (await getTaskChain(task)).filter((s) => impl[s.provider]);
+  let chain = (await getTaskChain(task)).filter((s) => implFor(impl, s.provider));
   if (opts.reorder) chain = opts.reorder(chain);
 
   const label = TASK_BY_ID[task].label;
@@ -149,7 +170,7 @@ export async function runTask<T>(
   for (const s of chain) {
     let failure: string;
     try {
-      const value = await runStep(s, impl[s.provider]!);
+      const value = await runStep(s, implFor(impl, s.provider)!);
       if (value === null || value === undefined) {
         failure = "no response";
       } else if (opts.accept && !opts.accept(value)) {

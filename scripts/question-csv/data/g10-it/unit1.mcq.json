@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Which file extension does a Microsoft Excel spreadsheet use in newer versions?",
+  "options": [
+   ".xlsx",
+   ".docx",
+   ".pptx",
+   ".accdb file"
+  ],
+  "correctAnswer": ".xlsx",
+  "difficulty": "EASY",
+  "explanation": "An Excel spreadsheet uses .xlsx, or .xls in older versions. .docx is used by Word documents and .mdb by Microsoft Access databases."
+ },
+ {
+  "questionText": "In the file extension table, which extension marks audio files on a PC played with Real Player?",
+  "options": [
+   ".wav",
+   ".rtf",
+   ".mdb",
+   ".zip"
+  ],
+  "correctAnswer": ".wav",
+  "difficulty": "EASY",
+  "explanation": "The table lists .wav as audio files on a PC played with Real Player and .mp3 as audio for Windows Media Player; .rtf is Rich Text Format and .mdb an Access database."
+ },
+ {
+  "questionText": "What is the first or top folder in a hierarchical directory structure called?",
+  "options": [
+   "The root directory",
+   "The working directory",
+   "The subdirectory",
+   "The child directory"
+  ],
+  "correctAnswer": "The root directory",
+  "difficulty": "EASY",
+  "explanation": "The first or top folder in the structure is the root directory, such as C:\\ on the main partition. A directory inside another is a subdirectory."
+ },
+ {
+  "questionText": "Which of these is a cloud-based drive?",
+  "options": [
+   "OneDrive",
+   "C: drive",
+   "CD-ROM drive",
+   "Floppy drive"
+  ],
+  "correctAnswer": "OneDrive",
+  "difficulty": "EASY",
+  "explanation": "OneDrive and Google Drive are cloud-based drives on which files are stored on remote servers over the Internet; the C: drive is a local hard drive."
+ },
+ {
+  "questionText": "Which drive letter is assigned to a 3½-inch floppy diskette drive?",
+  "options": [
+   "A:",
+   "C:",
+   "E:",
+   "Z: (last letter)"
+  ],
+  "correctAnswer": "A:",
+  "difficulty": "EASY",
+  "explanation": "A computer with a 3½\" floppy diskette drive has drive letter A:, while the default hard drive is always C:."
+ },
+ {
+  "questionText": "What is file compression also known as?",
+  "options": [
+   "File zipping",
+   "File exporting",
+   "File restoring",
+   "File conversion"
+  ],
+  "correctAnswer": "File zipping",
+  "difficulty": "EASY",
+  "explanation": "File compression, which reduces a file's logical size to save space and speed transfer, is also known as file zipping."
+ },
+ {
+  "questionText": "Which of these is a popular file compression tool?",
+  "options": [
+   "WinRAR",
+   "Foxit PDF Editor",
+   "Windows Media Player",
+   "Real Player"
+  ],
+  "correctAnswer": "WinRAR",
+  "difficulty": "EASY",
+  "explanation": "The most popular compression tools are WinRAR, WinZip and 7zip. Foxit PDF Editor is a file converter and Windows Media Player plays audio."
+ },
+ {
+  "questionText": "Where are deleted files temporarily stored in Windows?",
+  "options": [
+   "The Recycle Bin",
+   "The root directory",
+   "The compressed folder",
+   "The working directory"
+  ],
+  "correctAnswer": "The Recycle Bin",
+  "difficulty": "EASY",
+  "explanation": "The Recycle Bin is the location where deleted files or folders are temporarily stored in all versions of Windows."
+ },
+ {
+  "questionText": "What is file conversion?",
+  "options": [
+   "Changing a file into another format",
+   "Copying a file to a second storage device",
+   "Reducing a file's size to save disk space",
+   "Moving a deleted file back to its folder"
+  ],
+  "correctAnswer": "Changing a file into another format",
+  "difficulty": "EASY",
+  "explanation": "File conversion is taking a file of one format and changing it into another, such as a Word .doc file into PDF. Reducing size is compression."
+ },
+ {
+  "questionText": "Which file extension is used by a Microsoft Access database file?",
+  "options": [
+   ".mdb",
+   ".xls",
+   ".zip",
+   ".wav audio"
+  ],
+  "correctAnswer": ".mdb",
+  "difficulty": "EASY",
+  "explanation": "The .mdb extension marks a Microsoft Access database file; .zip is a compression format and .wav an audio file."
+ },
+ {
+  "questionText": "What does an operating system use a file extension for?",
+  "options": [
+   "To pick the application that opens it",
+   "To decide how large the file can grow",
+   "To find which drive the file is stored on",
+   "To set the date the file was created"
+  ],
+  "correctAnswer": "To pick the application that opens it",
+  "difficulty": "MEDIUM",
+  "explanation": "File extensions are used by the operating system to identify which application is associated with a file type, so double-clicking awesome_picture.jpg opens the application linked to JPG files."
+ },
+ {
+  "questionText": "In which operating system is a file extension optional?",
+  "options": [
+   "Unix",
+   "Windows",
+   "Linux",
+   "DOS"
+  ],
+  "correctAnswer": "Unix",
+  "difficulty": "MEDIUM",
+  "explanation": "In the command-based Unix operating system a file extension is optional, while in Linux and Windows it is a requirement."
+ },
+ {
+  "questionText": "How many characters does DOS allow for a file extension?",
+  "options": [
+   "Three",
+   "Four",
+   "Unlimited",
+   "Two"
+  ],
+  "correctAnswer": "Three",
+  "difficulty": "MEDIUM",
+  "explanation": "DOS limits the file extension to three characters; Windows uses three or four characters and Unix-based systems allow unlimited characters."
+ },
+ {
+  "questionText": "What is an absolute pathname?",
+  "options": [
+   "The full path from the root directory down",
+   "A file's name given from the current working directory",
+   "The part of a file name after the period",
+   "The name of the drive that stores the file"
+  ],
+  "correctAnswer": "The full path from the root directory down",
+  "difficulty": "MEDIUM",
+  "explanation": "An absolute pathname is the complete name of a directory or file from the root directory downward, valid wherever you are working; a path from the working directory is relative."
+ },
+ {
+  "questionText": "The current working directory is D, and file 10 is inside D's subfolder F. Which relative pathname reaches the file?",
+  "options": [
+   "F/10",
+   "/D/F/10",
+   "D/10",
+   "10/F"
+  ],
+  "correctAnswer": "F/10",
+  "difficulty": "MEDIUM",
+  "explanation": "A relative pathname is given from the current directory, so with D as the working directory the file is reached as F/10. /D/F/10 starts from the root, which makes it an absolute pathname."
+ },
+ {
+  "questionText": "How does file import differ from file export?",
+  "options": [
+   "Import pulls file data into a program; export does the reverse",
+   "Import saves a program's data as a file; export opens a file in a program",
+   "Import compresses a file; export restores it from the Recycle Bin",
+   "Import works only with CSV files; export works only with PDF files"
+  ],
+  "correctAnswer": "Import pulls file data into a program; export does the reverse",
+  "difficulty": "MEDIUM",
+  "explanation": "When you import you bring information from a file into a program, such as a CSV file into Excel; when you export you take information from a program and put it into a file."
+ },
+ {
+  "questionText": "What is a comma-separated values (CSV) file?",
+  "options": [
+   "A text file whose values are separated by commas",
+   "A compressed folder made with WinZip",
+   "A Word document saved in Rich Text Format",
+   "A database file used by Microsoft Access"
+  ],
+  "correctAnswer": "A text file whose values are separated by commas",
+  "difficulty": "MEDIUM",
+  "explanation": "A CSV file is a delimited text file that uses a comma to separate values, with each line being a record of data; it can be imported into Excel."
+ },
+ {
+  "questionText": "How is a file zipped in Windows?",
+  "options": [
+   "Send to, then Compressed (zipped) folder",
+   "Right-click it and choose Restore this item",
+   "Double-click it and choose Extract All",
+   "Hold Shift and press Delete on the file"
+  ],
+  "correctAnswer": "Send to, then Compressed (zipped) folder",
+  "difficulty": "MEDIUM",
+  "explanation": "To zip a file you right-click it, point to Send to and select Compressed (zipped) folder; Extract All is used to unzip a zipped folder."
+ },
+ {
+  "questionText": "Why should you check a file after saving it in a different file format?",
+  "options": [
+   "Some features may not carry over correctly",
+   "The original file is overwritten by the new one",
+   "The new file is saved without its extension",
+   "The file is compressed into a zip automatically"
+  ],
+  "correctAnswer": "Some features may not carry over correctly",
+  "difficulty": "MEDIUM",
+  "explanation": "When you save a file in another format, some of the original file's features may not transfer correctly, so check the new file and always keep the original; saving in a new format does not overwrite or zip the original."
+ },
+ {
+  "questionText": "Which Windows Settings option holds the Backup feature for copying files to an external drive?",
+  "options": [
+   "Update and Security",
+   "Personalization",
+   "Devices",
+   "Network and Internet"
+  ],
+  "correctAnswer": "Update and Security",
+  "difficulty": "MEDIUM",
+  "explanation": "To back up files you open Settings, select Update and Security, then click Backup in the left column and choose the removable drive."
+ },
+ {
+  "questionText": "What is restoring in file backup and recovery?",
+  "options": [
+   "Copying backed-up data back to a device",
+   "Making a first copy of data on an external drive",
+   "Deleting old backups to free disk space",
+   "Converting a backup file into another format"
+  ],
+  "correctAnswer": "Copying backed-up data back to a device",
+  "difficulty": "MEDIUM",
+  "explanation": "Restoring is copying backed-up data from a secondary location and returning it to its original device or a new device after a primary data failure."
+ },
+ {
+  "questionText": "What is a disk drive?",
+  "options": [
+   "Hardware that reads and writes data on a storage disk",
+   "Software that lets the operating system talk to a printer",
+   "A web service that gives storage space on a remote server",
+   "A folder that holds other folders on a disk"
+  ],
+  "correctAnswer": "Hardware that reads and writes data on a storage disk",
+  "difficulty": "MEDIUM",
+  "explanation": "A disk drive enables reading, writing, deleting and modifying data on a computer storage disk and manages its input/output operations. Software that lets the OS talk to a printer is a driver."
+ },
+ {
+  "questionText": "Under which of these conditions can a deleted file NOT be restored from the Recycle Bin?",
+  "options": [
+   "It was deleted using Shift + Delete",
+   "It was deleted by pressing Delete",
+   "It was deleted from a folder on the desktop",
+   "It was deleted by dragging it to the Recycle Bin"
+  ],
+  "correctAnswer": "It was deleted using Shift + Delete",
+  "difficulty": "HARD",
+  "explanation": "A deleted file cannot be restored if it is not in the Recycle Bin, the bin has been emptied, or it was deleted with Shift + Delete; the other methods send it to the Recycle Bin."
+ },
+ {
+  "questionText": "Two files are both named ABC. Why can they exist in the same file system?",
+  "options": [
+   "They have different, unique pathnames",
+   "They are stored on cloud drives only",
+   "They have different file sizes",
+   "One of them is kept in the Recycle Bin"
+  ],
+  "correctAnswer": "They have different, unique pathnames",
+  "difficulty": "HARD",
+  "explanation": "It is acceptable to have several files with the same name as long as they have unique pathnames, such as /User_B/Draw/ABC and another ABC in a different directory."
+ },
+ {
+  "questionText": "A USB drive is plugged into a computer that already uses C:, D: and E:. Which letter is it usually given?",
+  "options": [
+   "F:",
+   "A:",
+   "C:",
+   "Z: (last letter)"
+  ],
+  "correctAnswer": "F:",
+  "difficulty": "HARD",
+  "explanation": "When a USB drive is plugged in, the operating system usually assigns the next available letter not used by another drive; after C:, D: and E: that is F:."
+ },
+ {
+  "questionText": "Why is it often wise to save a file in the program's default file format?",
+  "options": [
+   "The program is sure to store everything correctly",
+   "Default formats always make the file smaller than other formats",
+   "Other formats cannot be opened by Windows",
+   "Only default formats can be backed up to a drive"
+  ],
+  "correctAnswer": "The program is sure to store everything correctly",
+  "difficulty": "HARD",
+  "explanation": "Saving in a program's default format is wise because the program is then guaranteed to store all the information correctly; other formats may lose some features."
+ },
+ {
+  "questionText": "Where should a proper backup copy be stored?",
+  "options": [
+   "Apart from the primary data, on another medium",
+   "On the same hard disk, in a separate folder",
+   "In a zipped folder on the desktop",
+   "On the same partition as Windows"
+  ],
+  "correctAnswer": "Apart from the primary data, on another medium",
+  "difficulty": "HARD",
+  "explanation": "A proper backup is stored on a separate system or medium, such as tape, an external drive or the cloud, so a failure of the primary hardware does not destroy the backup too; a folder on the same disk would be lost with it."
+ },
+ {
+  "questionText": "Why would you combine several files into a single zipped folder before sharing them?",
+  "options": [
+   "To share the group of files more easily",
+   "To merge the files into one PDF document",
+   "To give each file a unique pathname",
+   "To restore the files from the Recycle Bin"
+  ],
+  "correctAnswer": "To share the group of files more easily",
+  "difficulty": "HARD",
+  "explanation": "Zipped files take less space and transfer more quickly, and combining several files into one zipped folder lets you share the group more easily."
+ },
+ {
+  "questionText": "Which of these is a reason given for deleting files?",
+  "options": [
+   "Making sensitive data unavailable to others",
+   "Making a file open faster in its program",
+   "Giving the file a shorter pathname",
+   "Keeping a spare copy of it in the bin"
+  ],
+  "correctAnswer": "Making sensitive data unavailable to others",
+  "difficulty": "HARD",
+  "explanation": "Reasons to delete files include freeing disk space, removing duplicated or unnecessary data, and making sensitive information unavailable to others."
+ },
+ {
+  "questionText": "What is the file name extension?",
+  "options": [
+   "The part after the period in the file name",
+   "The part of the file name to the left of the period",
+   "The drive letter at the start of the path",
+   "The folder that holds the file"
+  ],
+  "correctAnswer": "The part after the period in the file name",
+  "difficulty": "HARD",
+  "explanation": "A file name has two parts separated by a period: the main name on the left and the extension on the right, which shows the file type and the application used to open it."
+ }
+]

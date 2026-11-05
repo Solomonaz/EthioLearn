@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { getEntitlements } from "@/lib/entitlements";
+import { getEntitlements, getStudentTrial } from "@/lib/entitlements";
 import { getPlatformSettings, effectiveAiFlags } from "@/lib/platform-settings";
 
 /**
@@ -33,6 +33,10 @@ export async function GET() {
   const settings = await getPlatformSettings();
   const aiFeatures = effectiveAiFlags(settings);
 
+  // Sign-up free trial (independent students, pricing on, trial set) — for the
+  // "N days left" / "trial ended" prompts.
+  const trial = await getStudentTrial(user);
+
   return NextResponse.json({
     ...ent,
     isIndependent,
@@ -41,6 +45,8 @@ export async function GET() {
     pricingEnabled: settings.pricingEnabled,
     rewardsEnabled: settings.rewardsEnabled,
     aiFeatures,
+    trialEndsAt: trial ? trial.endsAt.toISOString() : null,
+    trialActive: trial?.active ?? false,
     // The signed-in user's school level, so the school-admin sidebar can drop
     // the student-facing sections at an elementary school.
     schoolLevel: user.school?.level ?? null,

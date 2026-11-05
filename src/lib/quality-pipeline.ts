@@ -19,7 +19,7 @@ import { nvidiaChat } from "./nvidia";
 import { openRouterChat } from "./openrouter";
 import { geminiChat, geminiFastModel } from "./gemini";
 import { extractJson } from "./question-validation";
-import { runTask, getTaskChain, runStep, type ResolvedStep, type AiProvider } from "./ai-routing";
+import { runTask, getTaskChain, runStep, implFor, type ResolvedStep, type AiProvider } from "./ai-routing";
 import type { UsageFeature } from "./usage-logger";
 import { SIMILAR, judgeRepeat, questionFacts, type QuestionLike } from "./question-similarity";
 
@@ -1051,10 +1051,14 @@ async function runVerifierChat(
   // Ollama stays behind the generating provider deliberately. When it sat ahead,
   // a failed independent verifier fell to CPU inference and took 203s where Groq
   // answers in about 10 — turning a one-minute quiz into a four-minute wait.
-  const chain = (await getTaskChain("answer-verification")).filter((s) => impl[s.provider]);
+  const chain = (await getTaskChain("answer-verification")).filter((s) => implFor(impl, s.provider));
   const isLocal = (s: ResolvedStep) => s.provider === "OLLAMA";
+  // Both Gemini backends serve the same models, so a question written by
+  // Gemini on Agent Platform is not independently checked by Gemini on AI
+  // Studio — compare them as one provider.
+  const family = (name: string | undefined) => (name === "gemini-vertex" ? "gemini" : name);
   const isGenerator = (s: ResolvedStep) =>
-    s.name === avoidProvider && (!avoidModel || s.effectiveModel === avoidModel);
+    family(s.name) === family(avoidProvider) && (!avoidModel || s.effectiveModel === avoidModel);
   const ordered = [
     ...chain.filter((s) => !isGenerator(s) && !isLocal(s)),
     ...chain.filter((s) => isGenerator(s) && !isLocal(s)),
@@ -1083,7 +1087,7 @@ async function runVerifierChat(
     for (const step of ordered) {
       try {
         const out = await runStep(step, () =>
-          impl[step.provider]!(prompt, { temperature: 0.1, maxTokens: 2400, feature: "answer-verification" })
+          implFor(impl, step.provider)!(prompt, { temperature: 0.1, maxTokens: 2400, feature: "answer-verification" })
         );
         // A non-empty string is NOT success. Accepting one was the bug: NVIDIA
         // answers this prompt with prose or a malformed object rather than the
@@ -1220,9 +1224,9 @@ async function tiebreakFactual(
           geminiChat(prompt, {
             temperature: 0.1,
             // Thinking counts against maxOutputTokens (see lib/gemini.ts), so
-            // leave room for the answer on top of the thinking budget.
+            // leave room for the answer on top of the thinking.
             maxTokens: 8192,
-            thinkingBudget: 4096,
+            thinkingLevel: "medium",
             feature: "factual-tiebreak",
             responseSchema: TIEBREAK_GEMINI_SCHEMA,
           }),

@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Which keyboard shortcut centers the selected text in Microsoft Word?",
+  "options": [
+   "Ctrl + E",
+   "Ctrl + C",
+   "Ctrl + J",
+   "Ctrl + R"
+  ],
+  "correctAnswer": "Ctrl + E",
+  "difficulty": "EASY",
+  "explanation": "Center alignment uses Ctrl + E; Ctrl + J justifies and Ctrl + R aligns right. Ctrl + C is the copy shortcut, not an alignment."
+ },
+ {
+  "questionText": "Which keyboard shortcut inserts a manual page break in Word?",
+  "options": [
+   "Ctrl + Enter",
+   "Ctrl + M",
+   "Shift + Enter",
+   "Ctrl + B"
+  ],
+  "correctAnswer": "Ctrl + Enter",
+  "difficulty": "EASY",
+  "explanation": "A page break can be inserted from Insert, Page Break or by pressing Ctrl + Enter. Ctrl + M inserts a new slide in PowerPoint."
+ },
+ {
+  "questionText": "Which keyboard shortcut inserts a new slide in PowerPoint?",
+  "options": [
+   "Ctrl + M",
+   "Ctrl + N",
+   "Ctrl + S",
+   "Ctrl + Enter"
+  ],
+  "correctAnswer": "Ctrl + M",
+  "difficulty": "EASY",
+  "explanation": "Ctrl + M inserts a new slide page in PowerPoint. Ctrl + S saves a file and Ctrl + Enter inserts a page break in Word."
+ },
+ {
+  "questionText": "How must every formula in Excel begin?",
+  "options": [
+   "With an equal sign (=)",
+   "With a dollar sign ($)",
+   "With a plus sign (+)",
+   "With a cell reference such as A1"
+  ],
+  "correctAnswer": "With an equal sign (=)",
+  "difficulty": "EASY",
+  "explanation": "To let Excel distinguish formulas from data, all formulas should begin with an equal sign (=). The dollar sign is used to make a cell reference absolute."
+ },
+ {
+  "questionText": "Which symbol is the multiplication operator in Excel formulas?",
+  "options": [
+   "* (asterisk)",
+   "x (letter x)",
+   "/ (forward slash)",
+   "% (percent sign)"
+  ],
+  "correctAnswer": "* (asterisk)",
+  "difficulty": "EASY",
+  "explanation": "Excel uses an asterisk (*) for multiplication, as in =3*3; the forward slash is division and the percent sign means percent."
+ },
+ {
+  "questionText": "What does the cell reference E4 refer to in an Excel worksheet?",
+  "options": [
+   "Column E, row 4",
+   "Row E, column 4",
+   "The fourth sheet, column E",
+   "The fourth formula in column E"
+  ],
+  "correctAnswer": "Column E, row 4",
+  "difficulty": "EASY",
+  "explanation": "A cell reference identifies a cell by its column letter and row number, so E4 refers to column E, row 4, and A1 to column A, row 1."
+ },
+ {
+  "questionText": "What is the small square at the bottom-right corner of a selected cell used to copy formulas to adjacent cells called?",
+  "options": [
+   "The fill handle",
+   "The formula bar",
+   "The name box",
+   "The insertion point"
+  ],
+  "correctAnswer": "The fill handle",
+  "difficulty": "EASY",
+  "explanation": "The fill handle is the small square at the bottom-right corner of the selected cell(s); dragging or double-clicking it copies the formula to adjacent cells."
+ },
+ {
+  "questionText": "Where does a header appear on a document page?",
+  "options": [
+   "At the top of the page",
+   "At the bottom of the page",
+   "In the left margin only",
+   "In the middle of the page"
+  ],
+  "correctAnswer": "At the top of the page",
+  "difficulty": "EASY",
+  "explanation": "A header appears at the top of a document page and a footer at the bottom; the text entered in them appears on each page."
+ },
+ {
+  "questionText": "Which of these is listed as presentation software?",
+  "options": [
+   "LibreOffice Impress",
+   "LibreOffice Writer",
+   "Corel WordPerfect Office",
+   "Microsoft Excel"
+  ],
+  "correctAnswer": "LibreOffice Impress",
+  "difficulty": "EASY",
+  "explanation": "Popular presentation software includes Microsoft PowerPoint, Google Slides and LibreOffice Impress. LibreOffice Writer and WordPerfect are word processors."
+ },
+ {
+  "questionText": "Which key closes a header or footer after you finish typing in it?",
+  "options": [
+   "Esc",
+   "F2",
+   "Tab",
+   "Delete"
+  ],
+  "correctAnswer": "Esc",
+  "difficulty": "EASY",
+  "explanation": "When you have finished, you click Close Header and Footer or press the Esc key. F2 renames files and Tab indents text."
+ },
+ {
+  "questionText": "How does a text editor such as Notepad differ from a word processor?",
+  "options": [
+   "It handles only plain, unformatted text",
+   "It can create tables and insert photographs",
+   "It checks spelling and grammar automatically",
+   "It offers templates for repetitive documents"
+  ],
+  "correctAnswer": "It handles only plain, unformatted text",
+  "difficulty": "MEDIUM",
+  "explanation": "Text editors such as Notepad only work on plain text with no formatting and are used for files like program source code; creating tables, checking spelling and templates are word processor functions."
+ },
+ {
+  "questionText": "What is a collection of related but independent programs with a common user interface, such as Microsoft Office, called?",
+  "options": [
+   "A software suite",
+   "A single program",
+   "A software driver",
+   "An operating system"
+  ],
+  "correctAnswer": "A software suite",
+  "difficulty": "MEDIUM",
+  "explanation": "Application software may include a larger collection of related but independent programs with a common user interface, called a software suite, such as Microsoft Office Suite. Notepad is an example of a single program."
+ },
+ {
+  "questionText": "Which alignment adjusts the space between words so that every line of a paragraph reaches both margins?",
+  "options": [
+   "Justified",
+   "Centered text",
+   "Left",
+   "Right"
+  ],
+  "correctAnswer": "Justified",
+  "difficulty": "MEDIUM",
+  "explanation": "Justified alignment adds space between words until all lines are equal in length, removing the jagged edge. Left alignment leaves a jagged right edge."
+ },
+ {
+  "questionText": "How far does each click of the Increase Indent command move the selected text?",
+  "options": [
+   "½ inch",
+   "1 inch",
+   "¼ inch",
+   "2 inches"
+  ],
+  "correctAnswer": "½ inch",
+  "difficulty": "MEDIUM",
+  "explanation": "The Indent commands adjust the indent in ½ inch increments. Custom amounts can be typed in the Indent boxes on the Layout tab."
+ },
+ {
+  "questionText": "While typing a bulleted list in Word, how do you return to normal formatting at the end of the list?",
+  "options": [
+   "Press Enter twice",
+   "Press Tab once",
+   "Press Shift + Tab twice",
+   "Press Ctrl + Enter"
+  ],
+  "correctAnswer": "Press Enter twice",
+  "difficulty": "MEDIUM",
+  "explanation": "Pressing Enter starts a new bulleted line, and at the end of the list you press Enter twice to return to normal formatting. Ctrl + Enter inserts a page break."
+ },
+ {
+  "questionText": "In a multilevel list, how do you decrease the level of a line?",
+  "options": [
+   "Hold Shift and press Tab",
+   "Press the Tab key twice",
+   "Press Enter twice",
+   "Hold Ctrl and press Tab"
+  ],
+  "correctAnswer": "Hold Shift and press Tab",
+  "difficulty": "MEDIUM",
+  "explanation": "Tab increases the indent level of a list item; to decrease it, place the insertion point at the start of the line, hold Shift and press Tab."
+ },
+ {
+  "questionText": "What are the default line spacing and the default space between paragraphs in a Microsoft Word document?",
+  "options": [
+   "1.15 lines and 8 points",
+   "1.0 lines and 12 points",
+   "2.0 lines and 6 points",
+   "1.5 lines and 10 points"
+  ],
+  "correctAnswer": "1.15 lines and 8 points",
+  "difficulty": "MEDIUM",
+  "explanation": "In Word the default space between lines is 1.15 and the default space between paragraphs is 8 points; these can be changed with the Line and Paragraph Spacing command."
+ },
+ {
+  "questionText": "How do you make the page breaks in a Word document visible?",
+  "options": [
+   "Click Show/Hide on the Home tab",
+   "Click Page Break on the Insert tab",
+   "Press Ctrl + Enter twice",
+   "Switch to Reading View"
+  ],
+  "correctAnswer": "Click Show/Hide on the Home tab",
+  "difficulty": "MEDIUM",
+  "explanation": "By default, breaks are invisible; clicking the Show/Hide command on the Home tab shows them. Page Break on the Insert tab inserts a new break instead."
+ },
+ {
+  "questionText": "What is the result of the Excel formula =5+3*3/2-4?",
+  "options": [
+   "5.5",
+   "8",
+   "10",
+   "2"
+  ],
+  "correctAnswer": "5.5",
+  "difficulty": "MEDIUM",
+  "explanation": "Multiplication and division are done before addition and subtraction: 3*3 = 9, 9/2 = 4.5, then 5 + 4.5 - 4 = 5.5. Working strictly left to right would give a different value."
+ },
+ {
+  "questionText": "Which PowerPoint view shows slide thumbnails and is used to reorder slides by dragging them?",
+  "options": [
+   "Slide Sorter View",
+   "Normal View",
+   "Notes Page View",
+   "Reading or Slide Show View"
+  ],
+  "correctAnswer": "Slide Sorter View",
+  "difficulty": "MEDIUM",
+  "explanation": "Slide Sorter View shows thumbnails of your slides so you can reorder them by dragging, set timings or hide slides. Notes Page View is for composing speaker notes."
+ },
+ {
+  "questionText": "What happens to a slide that is hidden in Slide Sorter View?",
+  "options": [
+   "It stays in the file but is not shown",
+   "It is deleted from the presentation file",
+   "It is moved to the end of the presentation",
+   "It is shown only in black and white"
+  ],
+  "correctAnswer": "It stays in the file but is not shown",
+  "difficulty": "MEDIUM",
+  "explanation": "Hiding a slide keeps it in the file, but it will not be shown when you display the presentation. Deleting is a different action."
+ },
+ {
+  "questionText": "Which PowerPoint graphic is designed to show relationships between things or people, such as an organizational chart?",
+  "options": [
+   "SmartArt",
+   "Chart",
+   "Table",
+   "Online Pictures"
+  ],
+  "correctAnswer": "SmartArt",
+  "difficulty": "MEDIUM",
+  "explanation": "SmartArt graphics are shapes designed to represent the relationship between things or people, used for organizational charts or timelines. Charts display numeric data."
+ },
+ {
+  "questionText": "The formula =B2+C2+D2+E2 in F2 is copied down to F3. What does it become?",
+  "options": [
+   "=B3+C3+D3+E3",
+   "=B2+C2+D2+E2",
+   "=C2+D2+E2+F2",
+   "=B3+C2+D2+E2"
+  ],
+  "correctAnswer": "=B3+C3+D3+E3",
+  "difficulty": "HARD",
+  "explanation": "New formulas use relative references by default, which change relative to where they are copied; moving one row down changes every row number from 2 to 3."
+ },
+ {
+  "questionText": "A bonus mark in B9 must stay the same in every student's total when the formula is copied down. How should B9 be written in the formula?",
+  "options": [
+   "$B$9",
+   "B9",
+   "B9$",
+   "$B9"
+  ],
+  "correctAnswer": "$B$9",
+  "difficulty": "HARD",
+  "explanation": "An absolute cell reference stays constant when copied; it is made by putting a dollar sign before the column and row ($B$9), or by pressing F4 after selecting it."
+ },
+ {
+  "questionText": "Why is it better to use cell references in a formula than to type the numbers themselves?",
+  "options": [
+   "Formulas update when referenced values change",
+   "The formula always runs faster with typed numbers removed",
+   "Cell references stop the worksheet from being edited",
+   "Typed numbers cannot be used with the plus operator"
+  ],
+  "correctAnswer": "Formulas update when referenced values change",
+  "difficulty": "HARD",
+  "explanation": "Using cell references keeps formulas accurate because if the value in a referenced cell changes, for example E1 from 10 to 18, every formula that references it updates without being rewritten."
+ },
+ {
+  "questionText": "Why is a manual page break better than pressing Enter repeatedly to push a paragraph onto the next page?",
+  "options": [
+   "Text pushed with Enter shifts after edits",
+   "Pressing Enter deletes the paragraph's formatting",
+   "Pressing Enter is not allowed in Print Layout view",
+   "A page break also adds a page number automatically"
+  ],
+  "correctAnswer": "Text pushed with Enter shifts after edits",
+  "difficulty": "HARD",
+  "explanation": "You could press Enter until the text reaches the next page, but it could easily shift when something is added or deleted elsewhere; a page break keeps the text starting on the new page."
+ },
+ {
+  "questionText": "Which of the paragraph indent methods is the quickest for indenting all existing paragraphs at once?",
+  "options": [
+   "The Ruler method",
+   "The Tab Key method",
+   "The Indent Command method",
+   "The Paragraph Dialog Box method"
+  ],
+  "correctAnswer": "The Ruler method",
+  "difficulty": "HARD",
+  "explanation": "The Tab key is the quickest way to indent a single existing paragraph, while the Ruler method, dragging the indent markers after selecting all paragraphs, is the quickest for all of them."
+ },
+ {
+  "questionText": "Which ruler marker moves both the first-line indent and the hanging indent at the same time?",
+  "options": [
+   "Left indent marker",
+   "First-line indent marker",
+   "Hanging indent marker",
+   "Right indent marker"
+  ],
+  "correctAnswer": "Left indent marker",
+  "difficulty": "HARD",
+  "explanation": "The left indent marker moves both the first-line and hanging indent markers at once, indenting all lines in a paragraph; the first-line marker adjusts only the first line."
+ },
+ {
+  "questionText": "Which font sizes are recommended for slide titles in a PowerPoint presentation?",
+  "options": [
+   "44 to 60 points",
+   "18 to 32 points",
+   "32 to 40 points",
+   "10 to 14 points"
+  ],
+  "correctAnswer": "44 to 60 points",
+  "difficulty": "HARD",
+  "explanation": "Titles in sans serif fonts like Arial or Calibri should be between 44 and 60 points, sub-headings 32 to 40 points and body text 18 to 32 points."
+ },
+ {
+  "questionText": "After choosing a fill in Format Background, which button adds it to the whole presentation rather than only the selected slide?",
+  "options": [
+   "Click Apply to All",
+   "Close",
+   "Apply to Selected",
+   "Reset Background"
+  ],
+  "correctAnswer": "Click Apply to All",
+  "difficulty": "HARD",
+  "explanation": "In Format Background, Close applies the background to the selected slide, while Apply to All adds it to all the slides in the presentation."
+ }
+]

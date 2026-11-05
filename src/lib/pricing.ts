@@ -353,6 +353,7 @@ export interface PlanInputData {
   allowRewards: boolean;
   allowLeaderboard: boolean;
   allowMathTools: boolean;
+  allowGames: boolean;
   quarterlyDiscountPct: number;
   yearlyDiscountPct: number;
   pricePerTeacher: number | null;
@@ -411,6 +412,7 @@ export function parsePlanInput(
   const allowRewards = body.allowRewards === undefined ? true : Boolean(body.allowRewards);
   const allowLeaderboard = body.allowLeaderboard === undefined ? true : Boolean(body.allowLeaderboard);
   const allowMathTools = body.allowMathTools === undefined ? true : Boolean(body.allowMathTools);
+  const allowGames = body.allowGames === undefined ? true : Boolean(body.allowGames);
   const features = Array.isArray(body.features)
     ? body.features.map((f) => String(f).trim()).filter(Boolean)
     : [];
@@ -492,6 +494,7 @@ export function parsePlanInput(
       allowRewards,
       allowLeaderboard,
       allowMathTools,
+      allowGames,
       quarterlyDiscountPct,
       yearlyDiscountPct,
       pricePerTeacher,

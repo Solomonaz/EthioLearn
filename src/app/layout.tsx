@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
+import { Analytics } from "@/components/analytics";
 import { AuthProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PWAInit } from "@/components/pwa-init";
@@ -89,6 +90,10 @@ export default async function RootLayout({
             <AuthProvider>{children}</AuthProvider>
           </ThemeProvider>
           <Toaster />
+          <Analytics
+            gaId={process.env.GA_MEASUREMENT_ID || undefined}
+            pixelId={process.env.META_PIXEL_ID || undefined}
+          />
         </NextIntlClientProvider>
       </body>
     </html>

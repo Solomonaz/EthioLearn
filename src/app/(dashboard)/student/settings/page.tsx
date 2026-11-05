@@ -32,10 +32,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { useSession } from "next-auth/react";
 import { logout } from "@/lib/logout";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn, formatDate } from "@/lib/utils";
 import { AVATAR_PRESETS } from "@/lib/avatar-presets";
 import Link from "next/link";
+import { isElementaryGrade, studentGradeOptions } from "@/lib/teacher-band";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,10 +68,6 @@ interface ActiveSession {
   isCurrent: boolean;
 }
 
-const GRADES = Array.from({ length: 12 }, (_, i) => ({
-  value: i + 1,
-  label: `Grade ${i + 1}`,
-}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,6 +97,8 @@ function StudentSettingsInner() {
   const currentSessionId = (session as typeof session & { sessionId?: string })
     ?.sessionId;
   const searchParams = useSearchParams();
+  // Also served as /play/settings for grades 1-8 students.
+  const pathname = usePathname();
 
   const [userData, setUserData] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,15 +137,15 @@ function StudentSettingsInner() {
       setTelegramLinked(true);
       toast.success("Telegram account linked!");
       // Clean the URL
-      window.history.replaceState({}, "", "/student/settings");
+      window.history.replaceState({}, "", pathname);
     } else if (linkError) {
       const msg = linkError === "network"
         ? "Network error linking Telegram. Please try again."
         : decodeURIComponent(linkError);
       toast.error(msg);
-      window.history.replaceState({}, "", "/student/settings");
+      window.history.replaceState({}, "", pathname);
     }
-  }, [searchParams]);
+  }, [searchParams, pathname]);
 
   // ── Fetch profile ────────────────────────────────────────────────────────
 
@@ -195,6 +194,9 @@ function StudentSettingsInner() {
 
   // ── Save profile ─────────────────────────────────────────────────────────
 
+  // Grades 1-8 can't change their own grade (it decides the play area).
+  const gradeLocked = isElementaryGrade(userData?.grade);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -208,7 +210,8 @@ function StudentSettingsInner() {
       // them when the student owns those fields.
       if (!schoolManaged) {
         body.name = name.trim();
-        if (grade !== "") body.grade = Number(grade);
+        // A grades 1-8 student's grade is changed by Abugida only.
+        if (grade !== "" && !gradeLocked) body.grade = Number(grade);
       }
 
       const res = await fetch("/api/students/me/settings", {
@@ -379,6 +382,15 @@ function StudentSettingsInner() {
               maxLength={50}
             />
 
+            {gradeLocked ? (
+              <div className="space-y-2 rounded-lg border border-border bg-border/20 p-4">
+                <InfoRow label="Grade" value={`Grade ${userData.grade}`} />
+                <p className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <Lock className="h-3 w-3" />
+                  Only Abugida can change your grade. Contact us if it is wrong.
+                </p>
+              </div>
+            ) : (
             <div className="w-full">
               <label
                 htmlFor="grade"
@@ -395,13 +407,15 @@ function StudentSettingsInner() {
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
               >
                 <option value="">Select grade</option>
-                {GRADES.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
+                {/* Grades 9-12, plus an older account's own grade so it still shows. */}
+                {studentGradeOptions(userData.grade).map((g) => (
+                  <option key={g} value={g}>
+                    {`Grade ${g}`}
                   </option>
                 ))}
               </select>
             </div>
+            )}
             </>
             )}
 
@@ -490,6 +504,7 @@ function StudentSettingsInner() {
                       ) : (
                         <TelegramLinkButton
                           botUsername={TELEGRAM_BOT_USERNAME}
+                          backTo={pathname}
                         />
                       )}
                     </div>

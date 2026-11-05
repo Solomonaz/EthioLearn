@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
 import { MAX_SECTION_LENGTH } from "@/lib/section";
-import { PRIMARY_MAX_GRADE, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
+import { PRIMARY_MAX_GRADE, SECONDARY_GRADES, SECONDARY_MAX_GRADE, SECONDARY_MIN_GRADE } from "@/lib/teacher-band";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -541,7 +541,7 @@ function AddStudentModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
                 <label className="text-xs font-semibold uppercase text-text-muted">Grade</label>
                 <select className={selectClass} value={grade} onChange={(e) => setGrade(e.target.value)} disabled={saving}>
                   <option value="">Select…</option>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                  {SECONDARY_GRADES.map((g) => (
                     <option key={g} value={g}>Grade {g}</option>
                   ))}
                 </select>

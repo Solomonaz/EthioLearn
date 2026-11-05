@@ -15,6 +15,8 @@ export interface PlatformSettings {
   teacherAiDefaultMonthlyCredits: number | null;
   /** AI tutor messages per user per day (Addis Ababa day); null = no cap. */
   tutorDailyMessageLimit: number | null;
+  /** Free full-access days for new self-registered students; null = no trial. */
+  studentTrialDays: number | null;
 }
 
 // Individual AI features are gated by BOTH the master switch and their own flag.
@@ -44,6 +46,7 @@ const DEFAULTS: PlatformSettings = {
   antiCheatEnabled: true,
   teacherAiDefaultMonthlyCredits: 300,
   tutorDailyMessageLimit: 20,
+  studentTrialDays: null,
 };
 
 /**
@@ -69,6 +72,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
         antiCheatEnabled: true,
         teacherAiDefaultMonthlyCredits: true,
         tutorDailyMessageLimit: true,
+        studentTrialDays: true,
       },
     });
     return row;

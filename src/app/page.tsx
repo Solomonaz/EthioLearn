@@ -29,6 +29,8 @@ import { AppPreview } from "@/components/home/app-preview";
 import { LandingNav } from "@/components/home/landing-nav";
 import { QuizSimulation } from "@/components/home/quiz-simulation";
 import { SITE_DESCRIPTION, SITE_NAME, pageMetadata, siteUrl } from "@/lib/site";
+import { TOPIC_PAGES } from "@/lib/seo-pages";
+import { TopicLinks } from "@/components/seo/topic-page";
 
 // Display face for headings only; body text stays on the app's sans stack.
 const display = Fraunces({
@@ -288,7 +290,31 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Mobile app (coming soon) ── */}
+      {/* ── Explore: links to the topic pages (what people search for) ── */}
+      <section id="explore" className="scroll-mt-20 border-t border-[var(--lp-rule)]">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <h2 className="lp-display text-3xl font-semibold sm:text-4xl">Explore Abugida</h2>
+          <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {TOPIC_PAGES.map((p) => (
+              <li key={p.slug}>
+                <Link
+                  href={`/${p.slug}`}
+                  className="group flex h-full flex-col rounded-2xl border border-[var(--lp-rule)] bg-[var(--lp-surface)] p-6 transition-colors hover:border-[var(--lp-faint)]"
+                >
+                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--lp-green-ink)]">{p.eyebrow}</span>
+                  <span className="mt-3 text-lg font-semibold">{p.navLabel}</span>
+                  <span className="mt-2 text-sm leading-relaxed text-[var(--lp-muted)]">{p.summary}</span>
+                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[var(--lp-green-ink)]">
+                    Learn more <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ── Mobile app: Android APK download; iOS coming soon ── */}
       <section id="app" className="scroll-mt-20 border-t border-[var(--lp-rule)] bg-[var(--lp-surface)]">
         <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 py-20 sm:px-6 md:grid-cols-[1fr_auto] md:gap-20">
           <div className="max-w-xl">
@@ -300,22 +326,27 @@ export default async function HomePage() {
             <p className="mt-4 text-lg leading-relaxed text-[var(--lp-muted)]">{t("appDesc")}</p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              {[
-                { icon: Play, store: t("appPlay") },
-                { icon: Apple, store: t("appStore") },
-              ].map(({ icon: Icon, store }) => (
-                <div
-                  key={store}
-                  aria-disabled="true"
-                  className="flex cursor-default items-center gap-3 rounded-xl border border-dashed border-[var(--lp-faint)] px-4 py-2.5 text-[var(--lp-muted)]"
-                >
-                  <Icon className="h-6 w-6" aria-hidden />
-                  <div className="leading-tight">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em]">{t("appSoon")}</p>
-                    <p className="text-sm font-semibold text-[var(--lp-ink)]">{store}</p>
-                  </div>
+              <a
+                href="/downloads/abugida.apk"
+                download="Abugida.apk"
+                className="flex items-center gap-3 rounded-xl bg-[var(--lp-green)] px-4 py-2.5 text-white transition-colors hover:bg-[#0d3b12]"
+              >
+                <Play className="h-6 w-6" aria-hidden />
+                <div className="leading-tight">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/75">{t("appApkMeta")}</p>
+                  <p className="text-sm font-semibold">{t("appAndroid")}</p>
                 </div>
-              ))}
+              </a>
+              <div
+                aria-disabled="true"
+                className="flex cursor-default items-center gap-3 rounded-xl border border-dashed border-[var(--lp-faint)] px-4 py-2.5 text-[var(--lp-muted)]"
+              >
+                <Apple className="h-6 w-6" aria-hidden />
+                <div className="leading-tight">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em]">{t("appSoon")}</p>
+                  <p className="text-sm font-semibold text-[var(--lp-ink)]">{t("appStore")}</p>
+                </div>
+              </div>
             </div>
 
             <p className="mt-6 text-sm text-[var(--lp-faint)]">{t("appNote")}</p>
@@ -374,6 +405,9 @@ export default async function HomePage() {
 
       {/* ── Footer ── */}
       <footer className="border-t border-[var(--lp-rule)]">
+        <div className="mx-auto max-w-6xl px-4 pt-8 text-sm text-[var(--lp-faint)] sm:px-6">
+          <TopicLinks />
+        </div>
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-[var(--lp-faint)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-center gap-3">
             <span className="dark:hidden"><Logo size="sm" /></span>

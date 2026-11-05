@@ -3,6 +3,10 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isValidSection, MAX_SECTION_LENGTH, normalizeSection } from "@/lib/section";
+import { safeEqual, verifyPassword } from "@/lib/password";
+import { rateLimit } from "@/lib/rate-limit";
+import { deleteStudents } from "@/lib/delete-student";
+import { isSecondaryGrade, isStudentGrade } from "@/lib/teacher-band";
 
 export async function GET(
   _req: NextRequest,
@@ -199,7 +203,7 @@ export async function PATCH(
   // Verify the student belongs to admin's school
   const student = await db.user.findFirst({
     where: { id, role: "STUDENT", ...(schoolId ? { schoolId } : {}) },
-    select: { id: true, isActive: true },
+    select: { id: true, isActive: true, grade: true, schoolId: true },
   });
 
   if (!student) {
@@ -241,9 +245,19 @@ export async function PATCH(
   // "Expected Int, provided String" and the whole update failed.
   if (grade !== undefined) {
     const parsed = parseInt(String(grade), 10);
-    if (Number.isNaN(parsed) || parsed < 1 || parsed > 12) {
+    // School students are grades 9-12. A self-registered student may be in
+    // any grade (1-8 play the elementary games), and only the super admin
+    // changes it. An older account keeps its grade when it is re-saved
+    // unchanged (e.g. only the name was edited).
+    const anyGrade = user.role === "SUPER_ADMIN" && !student.schoolId;
+    const allowed = anyGrade ? isStudentGrade(parsed) : isSecondaryGrade(parsed);
+    if (!allowed && parsed !== student.grade) {
       return NextResponse.json(
-        { error: "Grade must be a whole number between 1 and 12." },
+        {
+          error: anyGrade
+            ? "Grade must be a whole number between 1 and 12."
+            : "Grade must be a whole number between 9 and 12.",
+        },
         { status: 400 },
       );
     }
@@ -255,15 +269,19 @@ export async function PATCH(
   // their class roster, because the cohort query compares the two exactly.
   if (section !== undefined) {
     const normalized = normalizeSection(section);
-    if (!isValidSection(normalized)) {
+    // A self-registered student has no class, so no section to require.
+    if (!student.schoolId && normalized === null) {
+      updateData.section = null;
+    } else if (!isValidSection(normalized)) {
       return NextResponse.json(
         {
           error: `Enter the student's section (up to ${MAX_SECTION_LENGTH} characters), for example A.`,
         },
         { status: 400 },
       );
+    } else {
+      updateData.section = normalized;
     }
-    updateData.section = normalized;
   }
   if (typeof isActive === "boolean") updateData.isActive = isActive;
   if (resetStreak === true) updateData.streakDays = 0;
@@ -299,4 +317,75 @@ export async function PATCH(
   });
 
   return NextResponse.json({ student: updated });
+}
+
+/**
+ * DELETE — permanently remove a student and everything they own. Super admin
+ * only, and only after re-entering their own sign-in password: this cannot be
+ * undone, so a left-open admin session must not be enough.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const user = await getCurrentUser();
+  if (!user || user.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Only the super admin can delete students." }, { status: 403 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const password = typeof body.password === "string" ? body.password : "";
+  if (!password) {
+    return NextResponse.json({ error: "Enter your password to confirm." }, { status: 400 });
+  }
+
+  // Few guesses: this check guards a permanent action.
+  const rl = rateLimit(`admin:delete-student:${user.id}`, 5, 15 * 60 * 1000);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again in a few minutes." },
+      { status: 429 },
+    );
+  }
+
+  // The env super admin has no users row; its password lives in the environment.
+  let passwordOk: boolean;
+  if (user.id === "env_super_admin") {
+    const envPassword = process.env.SUPER_ADMIN_PASSWORD ?? "";
+    passwordOk = !!envPassword && safeEqual(password, envPassword);
+  } else {
+    if (!user.passwordHash) {
+      return NextResponse.json(
+        { error: "Your account has no password (you sign in with Google or Telegram). Set a password first." },
+        { status: 400 },
+      );
+    }
+    passwordOk = await verifyPassword(password, user.passwordHash);
+  }
+  if (!passwordOk) {
+    return NextResponse.json({ error: "Incorrect password. Nothing was deleted." }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const student = await db.user.findFirst({ where: { id, role: "STUDENT" }, select: { id: true } });
+  if (!student) {
+    return NextResponse.json({ error: "Student not found" }, { status: 404 });
+  }
+
+  try {
+    await deleteStudents([student.id]);
+  } catch (err) {
+    console.error("[admin] delete student failed:", err);
+    return NextResponse.json({ error: "Could not delete the student. Nothing was deleted." }, { status: 500 });
+  }
+  return NextResponse.json({ deleted: true });
 }

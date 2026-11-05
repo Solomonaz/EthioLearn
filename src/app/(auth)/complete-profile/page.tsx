@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 import { useTranslations } from "next-intl";
-
-const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+import { trackSignUp } from "@/components/analytics";
+import { GradeOptions } from "@/components/auth/grade-options";
+import { homeRouteForRole } from "@/lib/teacher-band";
 
 export default function CompleteProfilePage() {
   const { data: session, update } = useSession();
@@ -32,13 +33,15 @@ export default function CompleteProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grade: Number(grade), socialUser: true }),
       });
-      const data = await res.json();
-      if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      // 409: the grade was already saved (a double submit) — carry on.
+      if (!res.ok && res.status !== 409) {
         setError(data.error || "Failed to save. Please try again.");
         return;
       }
+      if (res.ok) trackSignUp("social");
       await update();
-      router.replace("/student");
+      router.replace(homeRouteForRole("STUDENT", data.user?.grade ?? null));
     } catch {
       setError("Network error. Please check your connection.");
     } finally {
@@ -73,10 +76,9 @@ export default function CompleteProfilePage() {
                 disabled={isLoading}
               >
                 <option value="">{t("selectGradeOption")}</option>
-                {GRADES.map((g) => (
-                  <option key={g} value={g}>{t("gradeN", { grade: g })}</option>
-                ))}
+                <GradeOptions />
               </select>
+              <p className="mt-1.5 text-xs text-text-secondary">{t("gradeHint")}</p>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button

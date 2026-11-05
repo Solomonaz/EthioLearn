@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { homeRouteForRole } from "@/lib/teacher-band";
+import { GradeOptions } from "@/components/auth/grade-options";
 import {
   OrDivider,
   SOCIAL_ENABLED,
@@ -15,6 +16,7 @@ import {
   primaryButtonClass,
 } from "@/components/auth/social-sign-in";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
+import { trackSignUp } from "@/components/analytics";
 
 /**
  * What to show when the server's reply carries no message of its own — a
@@ -50,8 +52,8 @@ function RegisterForm() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      const role = (session?.user as { role?: string } | undefined)?.role;
-      router.replace(homeRouteForRole(role));
+      const u = session?.user as { role?: string; grade?: number | null } | undefined;
+      router.replace(homeRouteForRole(u?.role, u?.grade));
     }
   }, [status, session, router]);
 
@@ -85,6 +87,7 @@ function RegisterForm() {
         return;
       }
 
+      trackSignUp("email");
       // The account can't be used until the email is confirmed.
       setSentTo(data.email ?? email.trim().toLowerCase());
     } catch {
@@ -196,12 +199,9 @@ function RegisterForm() {
                 disabled={isLoading}
               >
                 <option value="">{t("selectGradeOption")}</option>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {t("gradeN", { grade: i + 1 })}
-                  </option>
-                ))}
+                <GradeOptions />
               </select>
+              <p className="mt-1.5 text-xs text-text-secondary">{t("gradeHint")}</p>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button type="submit" disabled={isLoading} className={primaryButtonClass}>

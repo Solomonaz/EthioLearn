@@ -63,7 +63,9 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
               <ThemeToggle />
             </span>
             <LanguageSwitcher />
-            <NotificationBell />
+            <NotificationBell
+              viewAllHref={(session.user as { role?: string }).role === "STUDENT" ? "/student/notifications" : undefined}
+            />
             {/* Students only — XP is the student points economy, and a
                 teacher's header showed "XP Level 1". It also read a `xp`
                 field the session never carries (with `?? 0 / 100` binding

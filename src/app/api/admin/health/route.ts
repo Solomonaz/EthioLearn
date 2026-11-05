@@ -25,7 +25,8 @@ export async function GET() {
   }
 
   // AI services health
-  const hasGemini = !!process.env.GEMINI_API_KEY;
+  // Either Gemini backend counts: AI Studio or Agent Platform (Vertex).
+  const hasGemini = !!(process.env.GEMINI_API_KEY || process.env.GEMINI_VERTEX_API_KEY);
   const hasGroq = !!process.env.GROQ_API_KEY;
   let aiStatus: "operational" | "degraded" | "unavailable";
   if (hasGemini && hasGroq) {

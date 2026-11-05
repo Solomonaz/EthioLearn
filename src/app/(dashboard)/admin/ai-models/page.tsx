@@ -644,7 +644,7 @@ export default function AiModelsPage() {
             const tasks = usedBy.get(p.id) ?? [];
             const fields: { slot: Slot; label: string; help: string }[] = [
               { slot: "chat", label: "Default model", help: "Used when a task step leaves its model blank." },
-              ...(p.id === "GEMINI"
+              ...(p.slots.fast && (p.id === "GEMINI" || p.id === "GEMINI_VERTEX")
                 ? [{ slot: "fast" as Slot, label: "Default light model", help: "Blank-model default for Bloom tagging, quality checks, tutor and search rewrite." }]
                 : []),
               ...(p.slots.embedding

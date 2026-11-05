@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "What is a device driver?",
+  "options": [
+   "Software that controls a specific attached hardware device",
+   "A hardware part that reads installation discs in the optical drive",
+   "A system tool that rearranges fragmented files on the hard disk",
+   "A utility that shows the route data takes across a network"
+  ],
+  "correctAnswer": "Software that controls a specific attached hardware device",
+  "difficulty": "EASY",
+  "explanation": "A device driver is a special kind of software program that controls a specific hardware device attached to a computer. Rearranging fragmented files is the job of Disk Defragmenter."
+ },
+ {
+  "questionText": "Which key combination opens the Task Manager so a frozen application can be closed?",
+  "options": [
+   "Ctrl+Alt+Delete",
+   "Ctrl+Alt+Insert",
+   "Ctrl+Shift+Delete",
+   "Alt+F4"
+  ],
+  "correctAnswer": "Ctrl+Alt+Delete",
+  "difficulty": "EASY",
+  "explanation": "Pressing and holding Ctrl+Alt+Delete opens the Task Manager; under the Processes tab you select the frozen application and click End Task."
+ },
+ {
+  "questionText": "Which system tool deletes unused and unwanted files, including old Internet files, to free hard disk space?",
+  "options": [
+   "Disk Cleanup",
+   "Disk Defragmenter",
+   "System Restore",
+   "Check disk"
+  ],
+  "correctAnswer": "Disk Cleanup",
+  "difficulty": "EASY",
+  "explanation": "Disk Cleanup deletes unused and unwanted files, garbage and old Internet files to free disk space, and should be performed weekly. Disk Defragmenter rearranges files rather than deleting them."
+ },
+ {
+  "questionText": "Which command-line tool shows a host's IP address, subnet mask and default gateway?",
+  "options": [
+   "ipconfig",
+   "tracert",
+   "netstat",
+   "nslookup"
+  ],
+  "correctAnswer": "ipconfig",
+  "difficulty": "EASY",
+  "explanation": "ipconfig is a Windows TCP/IP utility that verifies network settings and can tell you a host's IP address, subnet mask and default gateway. tracert shows the route data takes to a destination."
+ },
+ {
+  "questionText": "Which hardware tool attaches media connectors to the ends of network cables?",
+  "options": [
+   "Wire crimper",
+   "Tone generator",
+   "Multimeter",
+   "Punch-down tool"
+  ],
+  "correctAnswer": "Wire crimper",
+  "difficulty": "EASY",
+  "explanation": "A wire crimper (cable crimper) attaches media connectors to the ends of cables and is used to make or modify network cables. A punch-down tool connects wires to a patch panel."
+ },
+ {
+  "questionText": "Which instrument measures voltage, current and resistance?",
+  "options": [
+   "Multimeter",
+   "Cable tester",
+   "Tone generator",
+   "Wire crimper"
+  ],
+  "correctAnswer": "Multimeter",
+  "difficulty": "EASY",
+  "explanation": "A multimeter is an electronic measuring instrument that takes electrical measurements such as voltage, current and resistance. A cable tester only verifies whether a cable transmits a signal."
+ },
+ {
+  "questionText": "Where is the Uninstall a Program link found when removing software on a Windows PC?",
+  "options": [
+   "In the Control Panel under Programs",
+   "In the Task Manager under Processes",
+   "In the Start menu under Accessories",
+   "In the command prompt under ipconfig"
+  ],
+  "correctAnswer": "In the Control Panel under Programs",
+  "difficulty": "EASY",
+  "explanation": "To uninstall software on a PC you open the Control Panel and click Uninstall a Program beneath the Programs heading, which opens the Programs and Features window."
+ },
+ {
+  "questionText": "What is troubleshooting?",
+  "options": [
+   "A systematic way to locate a fault and find its cause",
+   "A routine of installing updates weekly to prevent faults",
+   "A set of tools for speeding up a slow computer",
+   "Reinstalling all software after any fault appears"
+  ],
+  "correctAnswer": "A systematic way to locate a fault and find its cause",
+  "difficulty": "EASY",
+  "explanation": "Troubleshooting is a systematic approach to locating the fault and identifying the cause of the fault in a computer system, covering both hardware and software issues. Installing updates is preventive maintenance, not locating a fault."
+ },
+ {
+  "questionText": "Which command-line tool displays the IP address of a hostname, or the hostname of an IP address?",
+  "options": [
+   "nslookup",
+   "ipconfig",
+   "ping",
+   "netstat"
+  ],
+  "correctAnswer": "nslookup",
+  "difficulty": "EASY",
+  "explanation": "nslookup is a Domain Name System (DNS) utility that displays the IP address of a hostname or vice versa, which helps with DNS name resolution problems. netstat shows active connections."
+ },
+ {
+  "questionText": "Which hardware tool sends an electrical signal through one pair of UTP wires and is often used to confirm phone connectivity?",
+  "options": [
+   "Tone generator",
+   "Multimeter",
+   "Wire crimper",
+   "Punch-down tool"
+  ],
+  "correctAnswer": "Tone generator",
+  "difficulty": "EASY",
+  "explanation": "A tone generator sends an electrical signal through one pair of UTP wires to verify signals pass through them; it is often used to confirm phone connectivity."
+ },
+ {
+  "questionText": "What should you do first when an application runs slowly?",
+  "options": [
+   "Close the application and open it again",
+   "Reinstall the operating system",
+   "Run Disk Defragmenter on every drive",
+   "Replace the computer's hard disk drive"
+  ],
+  "correctAnswer": "Close the application and open it again",
+  "difficulty": "MEDIUM",
+  "explanation": "For a slow application, the first step is to close and reopen it; if the problem persists, update the application. Reinstalling the operating system is a last resort for difficult problems."
+ },
+ {
+  "questionText": "What does Disk Defragmenter do to improve a computer's performance?",
+  "options": [
+   "It stores each file's pieces together in one sequence",
+   "It deletes temporary and old Internet files to free space",
+   "It downloads the latest security updates from Microsoft",
+   "It saves a copy of the system settings as a restore point"
+  ],
+  "correctAnswer": "It stores each file's pieces together in one sequence",
+  "difficulty": "MEDIUM",
+  "explanation": "Disk Defragmenter rearranges files on the disk so each file is stored in one sequence, reducing fragmentation and making data retrieval faster. Deleting temporary files is Disk Cleanup."
+ },
+ {
+  "questionText": "When is it advisable to create a System Restore point?",
+  "options": [
+   "Whenever new software is installed",
+   "Only after the system has failed",
+   "Every time the computer is switched off",
+   "Only when the hard disk is full"
+  ],
+  "correctAnswer": "Whenever new software is installed",
+  "difficulty": "MEDIUM",
+  "explanation": "Whenever you install new software it is advisable to save the system settings as a restore point, so the system can be restored if it later malfunctions. A restore point must be made while the system works normally."
+ },
+ {
+  "questionText": "What does the Check disk tool do?",
+  "options": [
+   "It fixes errors on the computer's disk",
+   "It shows the route packets take on a network",
+   "It installs drivers for new hardware devices",
+   "It removes programs that are no longer used"
+  ],
+  "correctAnswer": "It fixes errors on the computer's disk",
+  "difficulty": "MEDIUM",
+  "explanation": "Check disk fixes errors on your computer and should be run every week, started from the C drive's Properties by selecting the Check button. Removing programs is done through Uninstall a Program."
+ },
+ {
+  "questionText": "A student's laptop loses Wi-Fi when carried to the far end of the school compound behind a concrete wall. Which network problem is this?",
+  "options": [
+   "Out of reach issue",
+   "Configuration issue",
+   "Traffic overload",
+   "Software issue"
+  ],
+  "correctAnswer": "Out of reach issue",
+  "difficulty": "MEDIUM",
+  "explanation": "An out of reach issue occurs in wireless networks when the host is too far from the access point or an object obstructs it. A configuration issue comes from wrong settings such as routing problems."
+ },
+ {
+  "questionText": "On results day, a school's single Internet link carries far more traffic than it can handle and the router starts behaving abnormally. Which network problem is this?",
+  "options": [
+   "Traffic overload",
+   "Cable problem",
+   "Connectivity problem",
+   "Out of reach issue"
+  ],
+  "correctAnswer": "Traffic overload",
+  "difficulty": "MEDIUM",
+  "explanation": "Traffic overload happens when a link is over-utilized and the traffic on a device exceeds its carrying capacity, so it behaves abnormally. A cable problem is a faulty or damaged cable."
+ },
+ {
+  "questionText": "Who should solve a network problem caused by a part of the network outside your control?",
+  "options": [
+   "Whoever runs that outside network",
+   "You, by restarting your own router",
+   "Any user who is connected to your local network",
+   "Nobody, because such problems clear themselves"
+  ],
+  "correctAnswer": "Whoever runs that outside network",
+  "difficulty": "MEDIUM",
+  "explanation": "You can solve local network problems yourself because you control that network, but outside network problems require help from whoever runs that network."
+ },
+ {
+  "questionText": "What is the first step in the basic network troubleshooting process?",
+  "options": [
+   "Identify the problem",
+   "Develop a scenario",
+   "Plan of action",
+   "Implement the solution"
+  ],
+  "correctAnswer": "Identify the problem",
+  "difficulty": "MEDIUM",
+  "explanation": "The first step in troubleshooting a network is to identify the problem by gathering information, duplicating it, asking users and identifying symptoms; developing a scenario comes next."
+ },
+ {
+  "questionText": "Which command-line tool helps find where packets are being lost by showing the route data takes to a destination?",
+  "options": [
+   "tracert",
+   "ipconfig",
+   "nslookup",
+   "netstat"
+  ],
+  "correctAnswer": "tracert",
+  "difficulty": "MEDIUM",
+  "explanation": "tracert determines the route data takes to a particular destination and can show where packets are lost in the network. ipconfig only reports the local network settings."
+ },
+ {
+  "questionText": "What does the ping command do?",
+  "options": [
+   "It sends a datagram to a host, which returns it if all is well",
+   "It lists all active network connections and running services",
+   "It displays the IP address that belongs to a domain name",
+   "It shows the subnet mask and default gateway of the host"
+  ],
+  "correctAnswer": "It sends a datagram to a host, which returns it if all is well",
+  "difficulty": "MEDIUM",
+  "explanation": "ping transmits a datagram to the host named in the command, and if the network is functioning properly the receiving host returns it. Listing active connections is netstat."
+ },
+ {
+  "questionText": "Why should apps not be downloaded to a phone from unknown sources?",
+  "options": [
+   "They can damage the phone, lose data or expose personal information",
+   "They are always older versions that lack new features",
+   "They cannot be updated once they are installed",
+   "They always use more storage than store apps"
+  ],
+  "correctAnswer": "They can damage the phone, lose data or expose personal information",
+  "difficulty": "MEDIUM",
+  "explanation": "Downloading apps from unknown sources can cause data loss, damage to the phone and hacking of personal information, so software should come from reliable and trusted sources."
+ },
+ {
+  "questionText": "What is the benefit of uninstalling unused programs from a computer?",
+  "options": [
+   "It frees hard drive space and increases computer speed",
+   "It updates the remaining programs to their newest versions",
+   "It creates a restore point for the system automatically",
+   "It removes viruses that are hidden in other programs"
+  ],
+  "correctAnswer": "It frees hard drive space and increases computer speed",
+  "difficulty": "MEDIUM",
+  "explanation": "Uninstalling unused or unwanted programs helps optimize hard drive space and increase computer speed. Updating programs and removing viruses need other tools such as updates and antivirus software."
+ },
+ {
+  "questionText": "During network troubleshooting, a technician's scenario that the router is faulty turns out to be wrong after testing. What should happen next?",
+  "options": [
+   "Return to developing a new scenario and test it",
+   "Stop troubleshooting, because the scenario test failed",
+   "Document the issue as solved and close it",
+   "Replace every cable in the network at once"
+  ],
+  "correctAnswer": "Return to developing a new scenario and test it",
+  "difficulty": "HARD",
+  "explanation": "Proving your own theory wrong does not mean you have failed; you return to step two, develop a new scenario and find a way to test it."
+ },
+ {
+  "questionText": "Why should each stage of network troubleshooting be documented?",
+  "options": [
+   "It can help other technicians later and shorten future network downtime",
+   "It is needed before the solution can be implemented on the network",
+   "It replaces the need to verify that the system works after the fix",
+   "It lets the router restore its settings to an earlier restore point"
+  ],
+  "correctAnswer": "It can help other technicians later and shorten future network downtime",
+  "difficulty": "HARD",
+  "explanation": "Documenting the symptoms, scenario, strategy and solution may help other technicians, students or users in the future and could shorten network downtime. Verifying system functionality is still a separate step."
+ },
+ {
+  "questionText": "A computer is running out of hard drive space and every program has become slow. Which pair of tools from the common solutions table suits this problem best?",
+  "options": [
+   "Disk Cleanup and Disk Defragmenter",
+   "System Restore and Check disk",
+   "Windows Update and tracert",
+   "ipconfig and ping"
+  ],
+  "correctAnswer": "Disk Cleanup and Disk Defragmenter",
+  "difficulty": "HARD",
+  "explanation": "For a slow computer, the common solutions are Disk Cleanup, Disk Defragmentation and closing programs; Disk Cleanup frees space and defragmenting speeds up file retrieval. ipconfig and ping diagnose network settings."
+ },
+ {
+  "questionText": "After a sound driver problem is found in device management, what is the suggested fix?",
+  "options": [
+   "Right-click the audio driver and choose Update Driver",
+   "Run Disk Cleanup to remove the audio driver files",
+   "Use tracert to find where the sound is being lost",
+   "Create a new restore point and switch off the speakers"
+  ],
+  "correctAnswer": "Right-click the audio driver and choose Update Driver",
+  "difficulty": "HARD",
+  "explanation": "When the sound driver is the cause, you find the audio driver, right-click it and choose Update Driver, or get the latest driver for your operating system from reputable sources."
+ },
+ {
+  "questionText": "During installation a User Account Control (UAC) warning appears. What must be done to continue?",
+  "options": [
+   "Type the administrator password or click Yes or Continue",
+   "Restart Windows and run the installer again later",
+   "Insert the next installation disc into the drive",
+   "Close the installation window and open Task Manager"
+  ],
+  "correctAnswer": "Type the administrator password or click Yes or Continue",
+  "difficulty": "HARD",
+  "explanation": "If a User Account Control warning appears, you type the administrator password or click the Yes or Continue button to proceed with the installation."
+ },
+ {
+  "questionText": "After an update leaves two computers running mismatched, incompatible versions of their networking programs, IP packets between them are interrupted. Which network problem is this?",
+  "options": [
+   "Software issue",
+   "Configuration issue",
+   "Connectivity problem",
+   "Cable problem"
+  ],
+  "correctAnswer": "Software issue",
+  "difficulty": "HARD",
+  "explanation": "A software issue is when compatibility problems and version mismatch interrupt the transmission of IP data packets. A configuration issue is caused by wrong settings such as a routing problem."
+ },
+ {
+  "questionText": "Which hardware tool connects cable wires directly to a patch panel in a wiring closet?",
+  "options": [
+   "Punch-down tool",
+   "Cable tester",
+   "Tone generator",
+   "Digital multimeter"
+  ],
+  "correctAnswer": "Punch-down tool",
+  "difficulty": "HARD",
+  "explanation": "A punch-down tool is used in a wiring closet to connect cable wires directly to a patch panel or punch-down block, which is easier than doing it by hand. A cable tester only checks for a signal."
+ },
+ {
+  "questionText": "Which command-line tool is useful for finding out what services are running on a particular system?",
+  "options": [
+   "netstat",
+   "tracert",
+   "nslookup",
+   "ipconfig"
+  ],
+  "correctAnswer": "netstat",
+  "difficulty": "HARD",
+  "explanation": "netstat shows the status of each active network connection, which is useful for finding out what services are running on a system. nslookup resolves names and IP addresses."
+ }
+]

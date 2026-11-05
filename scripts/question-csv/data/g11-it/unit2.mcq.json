@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "How do AI algorithms make online shopping more efficient and enjoyable for shoppers?",
+  "options": [
+   "By tracing patterns in shoppers' credit card transactions to block every suspicious purchase",
+   "By using shoppers' data to present items they are more likely to be interested in",
+   "By automatically translating product descriptions from one language into another",
+   "By replacing store assistants with robots that deliver the goods to every shopper"
+  ],
+  "correctAnswer": "By using shoppers' data to present items they are more likely to be interested in",
+  "difficulty": "EASY",
+  "explanation": "AI algorithms dive into massive user data to extract personalized information about shoppers and then show items they are more likely to want. Tracing credit card patterns is a banking fraud application, and translation is an NLP application, not the way AI improves shopping."
+ },
+ {
+  "questionText": "Which two developments are mainly responsible for AI becoming such a popular and powerful tool today?",
+  "options": [
+   "Programmers writing explicit instructions for every possible situation the system meets",
+   "A reduction in the amount of data so that humans can process it manually",
+   "Growth in computer capacity and the availability of a large amount of data",
+   "Replacement of all computers by robots in workplaces and in homes"
+  ],
+  "correctAnswer": "Growth in computer capacity and the availability of a large amount of data",
+  "difficulty": "EASY",
+  "explanation": "AI has become popular and powerful mainly because of significant growth in computer capacity and the availability of large amounts of data. Explicit programming of every situation is what machine learning moves away from, and data volumes have grown, not shrunk."
+ },
+ {
+  "questionText": "Which description best defines an emerging technology?",
+  "options": [
+   "A technology that has already been replaced by newer systems and is no longer in wide use",
+   "A technology that only large companies and governments are allowed to use",
+   "Any computer program that follows explicit step-by-step instructions written by programmers",
+   "A technology that is developing and evolving fast with a prominent socio-economic impact"
+  ],
+  "correctAnswer": "A technology that is developing and evolving fast with a prominent socio-economic impact",
+  "difficulty": "EASY",
+  "explanation": "An emerging technology is one that is developing and evolving fast and has a prominent socio-economic impact. The other options describe obsolete technology, restricted technology, or conventional programs."
+ },
+ {
+  "questionText": "Which set of three characteristics describes big data?",
+  "options": [
+   "Volume, validity, and visibility",
+   "Variety, velocity, and verification",
+   "Volume, variety, and velocity",
+   "Volume, value, and virtualization"
+  ],
+  "correctAnswer": "Volume, variety, and velocity",
+  "difficulty": "EASY",
+  "explanation": "Big data is characterized by large size (volume), diverse sets of information (variety), and an exponential growth rate (velocity)."
+ },
+ {
+  "questionText": "Which of the following is a healthcare application of AI?",
+  "options": [
+   "Ranking responses to a search query",
+   "Detecting suspicious behavior in a supermarket",
+   "Tracing patterns in credit card transactions",
+   "Drug development"
+  ],
+  "correctAnswer": "Drug development",
+  "difficulty": "EASY",
+  "explanation": "Disease diagnosis, drug development, and hospital care are examples of AI in healthcare. The other options are search engine, surveillance, and banking applications."
+ },
+ {
+  "questionText": "One student reasons: 'The shop is either open or closed. It is not open, so it is closed.' Another student who can patch a tyre on his own bicycle uses the same method on his sister's bicycle. Which pair correctly names the human-like abilities shown by the first and second student?",
+  "options": [
+   "Generalization; reasoning",
+   "Reasoning; reasoning",
+   "Reasoning; generalization",
+   "Generalization; generalization"
+  ],
+  "correctAnswer": "Reasoning; generalization",
+  "difficulty": "MEDIUM",
+  "explanation": "Drawing a conclusion from known statements is reasoning, while applying past experience to a current problem of a similar nature is generalization."
+ },
+ {
+  "questionText": "A company collects users' posts about its new phone from social media and wants to classify the tone of each post as negative, positive, or neutral. Which NLP application serves this purpose?",
+  "options": [
+   "Text summarization",
+   "Sentiment analysis",
+   "Machine translation",
+   "Fake news identification"
+  ],
+  "correctAnswer": "Sentiment analysis",
+  "difficulty": "MEDIUM",
+  "explanation": "Extracting and analyzing users' social media data to learn whether opinions are negative, positive, or neutral is sentiment analysis. Summarization shortens documents, translation converts languages, and fake news identification checks trustworthiness."
+ },
+ {
+  "questionText": "Which task is an example of using robots in an environment considered hazardous to human beings?",
+  "options": [
+   "Assembling cars on a manufacturing line",
+   "Cleaning floors at home with a robot vacuum cleaner",
+   "Handling radioactive waste",
+   "Helping the elderly with household chores"
+  ],
+  "correctAnswer": "Handling radioactive waste",
+  "difficulty": "MEDIUM",
+  "explanation": "Robots are used in hazardous environments such as handling radioactive wastes, underwater, and space exploration. Car assembly is routine labor replacement, while vacuuming and elderly assistance are household uses."
+ },
+ {
+  "questionText": "Which entertainment application is an example of augmented reality rather than virtual reality?",
+  "options": [
+   "A cinema where each armchair has gear and tools for aroma injection",
+   "A headset-only simulation that places the player in a fictional world",
+   "A bodysuit-based simulation that replaces the real surroundings completely",
+   "Adding computer-generated data on artifacts displayed in a museum"
+  ],
+  "correctAnswer": "Adding computer-generated data on artifacts displayed in a museum",
+  "difficulty": "MEDIUM",
+  "explanation": "AR overlays computer-generated data on real objects, as in art galleries and museums. VR cinemas, headset simulations and bodysuit simulations immerse users in a completely simulated environment."
+ },
+ {
+  "questionText": "Farmers want guidance that helps them prepare for climate change and adjust their farming activities accordingly. Which AI application in agriculture is built for this purpose?",
+  "options": [
+   "Detection of pests",
+   "Monitoring the health of soils and crops",
+   "Precision farming",
+   "AI-based agricultural advisory systems"
+  ],
+  "correctAnswer": "AI-based agricultural advisory systems",
+  "difficulty": "MEDIUM",
+  "explanation": "AI-based agricultural advisory systems are what farmers use to be climate-ready and adjust their farming activities. Pest detection, soil and crop monitoring and precision farming are other agricultural applications."
+ },
+ {
+  "questionText": "A supermarket wants a system that automatically spots suspicious behavior as it happens. Which AI application area fits this need?",
+  "options": [
+   "Customer service chatbots",
+   "Online shopping personalization",
+   "Surveillance",
+   "Search engine ranking"
+  ],
+  "correctAnswer": "Surveillance",
+  "difficulty": "MEDIUM",
+  "explanation": "AI surveillance systems can automatically detect suspicious behavior in real time in places such as supermarkets, security stations, and restricted-access areas."
+ },
+ {
+  "questionText": "A factory uses data science to forecast demand for its products. Which decision does this forecast mainly support?",
+  "options": [
+   "The quality grade assigned to each finished product",
+   "The precise amount of raw material to order",
+   "The preferred color of the packaging",
+   "The prices charged by competing factories"
+  ],
+  "correctAnswer": "The precise amount of raw material to order",
+  "difficulty": "MEDIUM",
+  "explanation": "In manufacturing, data science can forecast product demand, which is used to determine the precise amount of raw material that needs to be ordered. Quality grades, packaging color and competitors' prices are not what a demand forecast decides."
+ },
+ {
+  "questionText": "A social network personalizes content by applying data science tools to the massive data it collects from users. To satisfy strong privacy regulations, it removes personally identifiable information and groups the remaining data into broad categories such as age groups and regions. What is the MOST likely net effect?",
+  "options": [
+   "Privacy is fully resolved, and the insight the company generates from the data stays exactly the same",
+   "Insight increases, because broad categories such as age groups carry more information than individual user records",
+   "The data stops being big data, so data science tools can no longer be applied to it at all",
+   "Privacy risk is reduced, but the insight the company can extract is limited, so the tension is not fully resolved"
+  ],
+  "correctAnswer": "Privacy risk is reduced, but the insight the company can extract is limited, so the tension is not fully resolved",
+  "difficulty": "HARD",
+  "explanation": "Anonymization and generalization help protect data, but they limit the level of insight companies generate, so privacy remains a contentious issue. Insight does not increase, and the data is still large."
+ },
+ {
+  "questionText": "An expert system's inference engine works normally, but its knowledge base is incomplete and contains imprecise rules. Which would be the PRIMARY consequence?",
+  "options": [
+   "The inference engine will learn the missing rules by itself from sample data inputs, in the same way machine learning does",
+   "Recommendations shown to users will become unreliable, because the engine produces answers by referencing the knowledge base",
+   "Only the user interface will be affected, because the inference engine works without referencing the knowledge base at all",
+   "The user interface will begin to answer queries by itself, bypassing the inference engine whenever rules are missing"
+  ],
+  "correctAnswer": "Recommendations shown to users will become unreliable, because the engine produces answers by referencing the knowledge base",
+  "difficulty": "HARD",
+  "explanation": "The inference engine produces answers by referencing the knowledge base, and the completeness, accuracy and precision of that knowledge are central to performance. An expert system does not learn rules from sample data like machine learning, and the user interface only passes queries and shows results."
+ },
+ {
+  "questionText": "Which observation would MOST STRONGLY support the conclusion that a system is a machine learning application rather than a conventional rule-following program?",
+  "options": [
+   "It produces recommendations by following if-then-else rules that domain experts wrote into its knowledge base",
+   "It replaces human labor in routine and mundane tasks such as those on a car assembly line",
+   "It improves its predictions after training on sample data, without anyone programming new instructions",
+   "It automatically produces a short summary of a long academic article that a user has uploaded"
+  ],
+  "correctAnswer": "It improves its predictions after training on sample data, without anyone programming new instructions",
+  "difficulty": "HARD",
+  "explanation": "Machine learning algorithms learn from experience by training on sample data to build a model for predictions, unlike conventional algorithms with explicit instructions. Hand-written if-then-else rules indicate an expert system, assembly-line work is robotics, and summarization is listed as an NLP application."
+ },
+ {
+  "questionText": "A revision note states: 'AR and VR both give rich 3-D visuals, so they are the same technology, and a smartphone alone is enough to deliver a fully immersive VR experience.' Which diagnosis BEST identifies the flaw in this reasoning?",
+  "options": [
+   "Shared 3-D visuals do not make them identical, and VR, unlike AR, is fully immersive and requires a headset device",
+   "VR actually runs on familiar devices such as smartphones, while AR is the one that requires a headset device",
+   "AR is the fully immersive technology and VR is only partially immersive, so the note simply mislabels VR as immersive",
+   "Neither AR nor VR can display 3-D visuals, so the note is only wrong in claiming that both give rich visuals"
+  ],
+  "correctAnswer": "Shared 3-D visuals do not make them identical, and VR, unlike AR, is fully immersive and requires a headset device",
+  "difficulty": "HARD",
+  "explanation": "Both give rich 3-D visuals, but AR works in a real-world setting, is partially immersive and runs on devices like smartphones, whereas VR is fully immersive and requires a headset. Swapping the devices or the immersion levels reverses the real differences, and both technologies do give 3-D visuals."
+ },
+ {
+  "questionText": "Given that banks use AI to trace patterns in credit card transactions in order to detect fraud, and that machine learning builds a model from sample data inputs to make predictions instead of following explicit instructions, which conclusion is supported by BOTH facts together but NOT by either fact alone?",
+  "options": [
+   "A bank can detect fraud by training a model on sample transaction data instead of programming every fraud pattern",
+   "A bank must write explicit if-then-else rules for every fraud pattern, because machine learning cannot use transaction data",
+   "Fraud prevention in banking is an NLP task, because it mainly analyzes the written text contained in each transaction",
+   "Machine learning is limited to recommendation systems, so banks need robots rather than models to detect fraud"
+  ],
+  "correctAnswer": "A bank can detect fraud by training a model on sample transaction data instead of programming every fraud pattern",
+  "difficulty": "HARD",
+  "explanation": "Banks apply AI to patterns in credit card transactions, and machine learning builds a predictive model from sample data without explicit programming, so together they show fraud detection can be learned from transaction data. Hand-written rules for every pattern contradict machine learning, and fraud detection is a pattern task, not NLP text analysis or robotics."
+ },
+ {
+  "questionText": "A news report states: 'Big data and data science are the same thing, since both are the interdisciplinary field of statistics, mathematics, and computer science practiced by data scientists.' Which diagnosis BEST identifies the flaw?",
+  "options": [
+   "Data science is the huge volume of data itself, while big data is the interdisciplinary field that processes it",
+   "Big data is the huge volume of data that traditional methods cannot process, while data science is the field that processes it",
+   "Big data refers only to the data generated by social media companies, while data science covers all other kinds of data",
+   "Big data is a machine learning algorithm that data scientists build, so it is a tool rather than an interdisciplinary field"
+  ],
+  "correctAnswer": "Big data is the huge volume of data that traditional methods cannot process, while data science is the field that processes it",
+  "difficulty": "HARD",
+  "explanation": "Big data is data of huge volume, variety and velocity that traditional methods cannot process, whereas data science is the interdisciplinary field that applies mathematical, statistical and computer tools to process it. Reversing the two terms, limiting big data to social media, or calling it an algorithm all misdescribe it."
+ },
+ {
+  "questionText": "In a VR system, sensors track the user's movements and adjust views in real time, and data gloves with force-feedback devices let the user touch virtual objects. If the gloves lost their force-feedback devices while the sensors kept working, what would be the PRIMARY consequence?",
+  "options": [
+   "The view would stop adjusting to the user's movements, because the gloves are what track the user in real time",
+   "Views would still adjust in real time, but the user could no longer feel virtual objects, weakening the illusion",
+   "The system would turn into augmented reality, because the user would then see the real world blended with virtual data",
+   "The user would lose the visual 3-D environment but would still be able to touch and manipulate the virtual objects"
+  ],
+  "correctAnswer": "Views would still adjust in real time, but the user could no longer feel virtual objects, weakening the illusion",
+  "difficulty": "HARD",
+  "explanation": "Sensors are what adjust views and perspectives in real time, while force-feedback data gloves let the user touch and manipulate virtual objects. Losing only the force feedback removes the sense of touch, not view adjustment or visuals, and it does not blend the real world in as AR does."
+ },
+ {
+  "questionText": "A search engine uses NLP to understand queries and ranking algorithms to decide the order of responses. If its ranking algorithm failed while its NLP component kept working, which would be the PRIMARY consequence?",
+  "options": [
+   "Queries would still be understood, but responses would no longer be put in order by the ranking algorithm",
+   "Queries would no longer be understood, but responses would still be presented to users in the correct order",
+   "Both understanding of queries and ordering of responses would fail, because NLP and ranking are one single process",
+   "Responses would still be ordered correctly, because the NLP component also determines the order of responses"
+  ],
+  "correctAnswer": "Queries would still be understood, but responses would no longer be put in order by the ranking algorithm",
+  "difficulty": "HARD",
+  "explanation": "Search engines use NLP to better understand user search queries and separate ranking algorithms to determine the order of responses. Losing ranking therefore affects only the order, not query understanding, and NLP does not decide the order."
+ },
+ {
+  "questionText": "What does MYCIN, one of the earliest and best-known expert systems, do?",
+  "options": [
+   "It identifies bacteria that cause infections and recommends antibiotics",
+   "It analyzes rock data to guide drilling decisions in petroleum engineering",
+   "It advises investors on which stocks to buy for their financial portfolios",
+   "It operates surgical tools during tele-surgery on patients in distant hospitals"
+  ],
+  "correctAnswer": "It identifies bacteria that cause infections and recommends antibiotics",
+  "difficulty": "EASY",
+  "explanation": "MYCIN emulates infectious disease experts: it identifies bacteria causing infections and recommends antibiotics. Petroleum engineering and financial investing are other fields that use expert systems, but they are not what MYCIN does, and tele-surgery is supported by VR."
+ },
+ {
+  "questionText": "What is Robonaut, which NASA uses on the International Space Station?",
+  "options": [
+   "A robot that uses many astronaut tools and performs tasks normally done by humans",
+   "A chatbot that answers astronauts' spoken questions about mission planning",
+   "A virtual reality headset that trains astronauts for their space walks",
+   "A satellite that collects weather data to help farmers become climate-ready"
+  ],
+  "correctAnswer": "A robot that uses many astronaut tools and performs tasks normally done by humans",
+  "difficulty": "EASY",
+  "explanation": "Robonaut is a NASA robot on the International Space Station that uses many of the tools an astronaut uses and performs tasks normally done by human beings. It is not a chatbot, a VR training headset or a weather satellite."
+ },
+ {
+  "questionText": "Which description defines a chatbot used in customer service?",
+  "options": [
+   "A robot that physically delivers ordered goods to customers' homes",
+   "A system that simulates human conversation through text or voice commands",
+   "A program that traces patterns in customers' credit card transactions",
+   "A camera system that detects suspicious behavior of customers in real time"
+  ],
+  "correctAnswer": "A system that simulates human conversation through text or voice commands",
+  "difficulty": "EASY",
+  "explanation": "A chatbot simulates human conversation through text or voice commands, giving companies a fast and cheaper way to support customers. Delivery robots, fraud tracing and suspicious-behavior detection belong to robotics, banking and surveillance."
+ },
+ {
+  "questionText": "Which four components make up the hardware of augmented reality?",
+  "options": [
+   "A processor, sensors, input devices, and a display",
+   "A camera, speakers, a keyboard, and a printer",
+   "A knowledge base, an inference engine, a user interface, and sensors",
+   "A processor, data gloves, a bodysuit, and a force-feedback headset"
+  ],
+  "correctAnswer": "A processor, sensors, input devices, and a display",
+  "difficulty": "EASY",
+  "explanation": "AR hardware includes a processor, sensors, input devices and a display, all of which mobile devices have. Knowledge base, inference engine and user interface are expert system components, and gloves and bodysuits are VR devices."
+ },
+ {
+  "questionText": "In which decade was the term artificial intelligence coined?",
+  "options": [
+   "The 1940s",
+   "The 1950s",
+   "The 1960s",
+   "The 1980s"
+  ],
+  "correctAnswer": "The 1950s",
+  "difficulty": "EASY",
+  "explanation": "The history of AI goes back to the 1940s, but the term itself was coined in the 1950s. The 1940s is when the history began, not when the term appeared."
+ },
+ {
+  "questionText": "An autonomous car's cameras and radar watch all sides of the vehicle at once, so it notices a cyclist approaching from behind and a dog running alongside it. Which road-safety feature does this illustrate?",
+  "options": [
+   "The ability to exchange safety-critical information with other cars",
+   "The 360-degree view of the surroundings",
+   "The power to flag hazards on the road ahead",
+   "Autopilot that follows GPS route data alone"
+  ],
+  "correctAnswer": "The 360-degree view of the surroundings",
+  "difficulty": "MEDIUM",
+  "explanation": "Seeing every side of the car at once is the 360-degree view of the surroundings. Exchanging information requires communication with other cars, flagging hazards concerns the road ahead rather than objects behind or beside the car, and GPS alone cannot see nearby objects."
+ },
+ {
+  "questionText": "An AR app on a phone has just captured a picture of a table through the camera. What happens next, before virtual information is overlaid on the table?",
+  "options": [
+   "Software processes details such as the table's measurements and the distance of nearby objects",
+   "The phone replaces the room with a completely simulated three-dimensional environment",
+   "Data gloves send force feedback to the user so that the table can be felt in the hand",
+   "A chatbot describes the table to the user in words through text or voice commands"
+  ],
+  "correctAnswer": "Software processes details such as the table's measurements and the distance of nearby objects",
+  "difficulty": "MEDIUM",
+  "explanation": "AR first captures the real object with a camera, then software processes information such as its measurements and the relative distance of other objects, and finally overlays virtual information. Replacing the room entirely and force-feedback gloves describe VR, and a chatbot is not part of the AR process."
+ },
+ {
+  "questionText": "Before sharing a dataset, a hospital replaces each patient's exact age with an age group such as 20 to 29 and each home address with a broad region. Which privacy technique is this?",
+  "options": [
+   "Data anonymization",
+   "Data generalization",
+   "Text summarization",
+   "Sentiment analysis"
+  ],
+  "correctAnswer": "Data generalization",
+  "difficulty": "MEDIUM",
+  "explanation": "Bunching data into broad categories such as age groups and geographical areas is data generalization. Data anonymization means removing personally identifiable information, while summarization and sentiment analysis are NLP applications, not privacy techniques."
+ },
+ {
+  "questionText": "A surgeon operates on a patient who is in a hospital in another city, without being in the same room. Which technology is described as supporting this kind of tele-surgery?",
+  "options": [
+   "Augmented reality",
+   "Virtual reality",
+   "Expert systems",
+   "Natural language processing"
+  ],
+  "correctAnswer": "Virtual reality",
+  "difficulty": "MEDIUM",
+  "explanation": "Tele-surgery, where the patient and surgeon are in different locations, is supported by VR. AR instead helps surgeons on site visualize muscles, bones and organs, and expert systems and NLP are not linked to tele-surgery."
+ },
+ {
+  "questionText": "A rural school cannot afford the apparatus needed for chemistry practicals. Which benefit of AR and VR in education best addresses this problem?",
+  "options": [
+   "They let students travel in time and space to see historical events",
+   "They connect students interactively with students in other parts of the world",
+   "They offer a good alternative where physical learning resources are scarce",
+   "They let students see the different organ systems visually and interactively"
+  ],
+  "correctAnswer": "They offer a good alternative where physical learning resources are scarce",
+  "difficulty": "MEDIUM",
+  "explanation": "AR and VR are a good alternative in environments where resources such as laboratory equipment are scarce, so students can do practicals virtually. Time travel, connecting with distant students and viewing organ systems are other AR/VR benefits that do not replace missing apparatus."
+ }
+]

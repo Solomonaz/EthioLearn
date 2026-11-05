@@ -1,0 +1,362 @@
+[
+ {
+  "questionText": "Which of the 5 V's of Bigdata refers to the speed at which data is being created in real time?",
+  "options": [
+   "Velocity",
+   "Volume",
+   "Veracity",
+   "Variety"
+  ],
+  "correctAnswer": "Velocity",
+  "difficulty": "EASY",
+  "explanation": "Velocity refers to the speed at which data is being created in real time. Volume refers to the huge amount of data generated daily, not how fast it arrives."
+ },
+ {
+  "questionText": "Which characteristic of Bigdata describes whether data is structured, unstructured or semi-structured, such as emails, PDFs, photos and videos?",
+  "options": [
+   "Variety",
+   "Volume",
+   "Value",
+   "Velocity"
+  ],
+  "correctAnswer": "Variety",
+  "difficulty": "EASY",
+  "explanation": "Variety refers to the nature of data, whether structured, unstructured or semi-structured, coming in forms such as emails, PDFs, photos, videos and social media posts. Volume is the amount of data, not its kinds."
+ },
+ {
+  "questionText": "What are the four types of cloud computing deployment?",
+  "options": [
+   "Public, private, hybrid and community",
+   "Local, remote, shared and dedicated",
+   "SaaS, PaaS, IaaS and DaaS",
+   "Open, closed, mixed and national clouds"
+  ],
+  "correctAnswer": "Public, private, hybrid and community",
+  "difficulty": "EASY",
+  "explanation": "The four types of cloud computing are public, private, hybrid and community clouds. SaaS, PaaS and IaaS are cloud computing services, not deployment types."
+ },
+ {
+  "questionText": "Google Workspace, Dropbox and Microsoft Office 365 are examples of which cloud computing service?",
+  "options": [
+   "Software as a Service (SaaS)",
+   "Platform as a Service (PaaS)",
+   "Infrastructure as a Service (IaaS)",
+   "Hybrid cloud service"
+  ],
+  "correctAnswer": "Software as a Service (SaaS)",
+  "difficulty": "EASY",
+  "explanation": "Google Workspace, Dropbox, Microsoft Office 365, Slack and Cisco WebEx are SaaS examples, where applications are hosted by a provider and used over the Internet. PaaS examples include Heroku and Google App Engine."
+ },
+ {
+  "questionText": "Amazon Web Services (AWS), Cisco Metapod and Google Compute Engine are examples of which cloud service model?",
+  "options": [
+   "Infrastructure as a Service (IaaS)",
+   "Software as a Service (SaaS)",
+   "Platform as a Service (PaaS)",
+   "Shared community cloud service"
+  ],
+  "correctAnswer": "Infrastructure as a Service (IaaS)",
+  "difficulty": "EASY",
+  "explanation": "IaaS provides access to computing resources in a virtualized environment over the Internet; examples are AWS, Cisco Metapod, Microsoft Azure and Google Compute Engine. SaaS delivers finished applications such as Office 365."
+ },
+ {
+  "questionText": "What is cloud computing?",
+  "options": [
+   "Storing and accessing data and services over the Internet",
+   "Storing all data on the hard disk of a personal computer",
+   "Connecting everyday objects so that they exchange sensor data",
+   "Processing data on nodes placed close to where it is produced"
+  ],
+  "correctAnswer": "Storing and accessing data and services over the Internet",
+  "difficulty": "EASY",
+  "explanation": "Cloud computing is storing and accessing data and computing services over the Internet; it does not store data on your personal computer. Processing data on nodes near the source describes fog computing."
+ },
+ {
+  "questionText": "Which IoT advantage lets you control TV volume, thermostats and lights from a single device such as a smartphone?",
+  "options": [
+   "Technical optimization",
+   "Efficiency",
+   "Conservation",
+   "Personalization"
+  ],
+  "correctAnswer": "Technical optimization",
+  "difficulty": "EASY",
+  "explanation": "Technical optimization means you no longer operate multiple devices manually, because an IoT system lets you control TV volume, thermostats and lights from one device. Efficiency is about turning real-time data into useful information, such as asking a voice assistant."
+ },
+ {
+  "questionText": "Which Ethiopian institutions are named as having started to leverage the benefits of Bigdata?",
+  "options": [
+   "Ethiopian Airlines, Ethio Telecom and the Artificial Intelligence Center",
+   "Ethiopian Electric Power, Ethiopian Roads Authority and Addis Ababa University",
+   "The Ministry of Education, the Ethiopian Postal Service and Ethiopian Shipping Lines",
+   "The Ethiopian Investment Commission, Ethiopian Revenue Authority and Ethiopian Railways"
+  ],
+  "correctAnswer": "Ethiopian Airlines, Ethio Telecom and the Artificial Intelligence Center",
+  "difficulty": "EASY",
+  "explanation": "Ethiopian Airlines, Ethio Telecom, the Artificial Intelligence Center and some banks have started to leverage Bigdata to maximize customer services and segment customer data. The other institutions are not named in that list."
+ },
+ {
+  "questionText": "Which IoT application area covers traffic management, waste management and water distribution?",
+  "options": [
+   "Smart city",
+   "Smart home",
+   "Supply chain",
+   "Connected health"
+  ],
+  "correctAnswer": "Smart city",
+  "difficulty": "EASY",
+  "explanation": "Smart city IoT applications include traffic management, waste management and water distribution. Smart home covers devices such as smoke detectors, smart bulbs and door locks."
+ },
+ {
+  "questionText": "In which application area does IoT provide real-time goods tracking and inventory information?",
+  "options": [
+   "Supply chain",
+   "Smart home",
+   "Connected health",
+   "Smart outlets"
+  ],
+  "correctAnswer": "Supply chain",
+  "difficulty": "EASY",
+  "explanation": "Supply chain IoT applications provide real-time goods tracking and inventory information. Smart outlets turn devices on and off remotely and track their energy use."
+ },
+ {
+  "questionText": "Which specialists do companies need to manage Bigdata solutions, according to the challenge of a lack of data professionals?",
+  "options": [
+   "Data scientists, data analysts and data engineers",
+   "Web designers, graphic artists and video editors",
+   "Network cabling technicians and electricians",
+   "Accountants, auditors and bank cashiers"
+  ],
+  "correctAnswer": "Data scientists, data analysts and data engineers",
+  "difficulty": "MEDIUM",
+  "explanation": "Companies demand skilled data specialists to manage Bigdata solutions: data scientists, data analysts and data engineers skilled at using tools for huge data sets. Web designers build websites rather than manage large data sets."
+ },
+ {
+  "questionText": "Which Bigdata challenge do companies frequently postpone while they focus on understanding, storing and analyzing their data?",
+  "options": [
+   "Securing data",
+   "Managing Bigdata growth",
+   "Lack of data professionals",
+   "Integrating data from various sources"
+  ],
+  "correctAnswer": "Securing data",
+  "difficulty": "MEDIUM",
+  "explanation": "Securing data is a major Bigdata difficulty because companies frequently push data security to later phases while busy with understanding, storing and analyzing data. Managing growth is about storing the ever-increasing amounts of data."
+ },
+ {
+  "questionText": "How does Bigdata help the banking sector?",
+  "options": [
+   "It detects card fraud in real time and supports auditing",
+   "It sets each customer's interest rate from their social media posts",
+   "It replaces audits by deleting old transaction records",
+   "It shortens staff selection by evaluating job applications"
+  ],
+  "correctAnswer": "It detects card fraud in real time and supports auditing",
+  "difficulty": "MEDIUM",
+  "explanation": "Bigdata solutions can detect fraudulent behaviors such as credit or debit card misuse in real time and help banks in compliance verification, auditing and reporting. Setting interest rates from social media posts or deleting records is not described as a Bigdata benefit."
+ },
+ {
+  "questionText": "Which benefit of cloud computing follows from the pay-as-you-go model?",
+  "options": [
+   "Controlled costs",
+   "Optimized security",
+   "Accessibility and mobility",
+   "Updating and scalability"
+  ],
+  "correctAnswer": "Controlled costs",
+  "difficulty": "MEDIUM",
+  "explanation": "Under controlled costs, users pay only for what they use (pay as you go) and no longer deal with maintaining and renewing servers and computers. Updating and scalability refers to the provider handling maintenance and updates."
+ },
+ {
+  "questionText": "How does a hybrid cloud work?",
+  "options": [
+   "Public services run in a public cloud, confidential ones in a private cloud",
+   "Several organizations in one industry share the same applications on one platform",
+   "All resources are dedicated to one company's applications in its own data center",
+   "One provider's resources are split and shared across many separate clients"
+  ],
+  "correctAnswer": "Public services run in a public cloud, confidential ones in a private cloud",
+  "difficulty": "MEDIUM",
+  "explanation": "A hybrid cloud combines public and private clouds: public services are hosted in the public cloud and confidential, data-related services in the private cloud. Several organizations of one industry sharing applications describes a community cloud."
+ },
+ {
+  "questionText": "Which kinds of users frequently use a community cloud?",
+  "options": [
+   "Governmental institutions and healthcare professional communities",
+   "Individual students storing their personal photographs",
+   "A single company keeping all its servers in-house",
+   "Website owners who rent a few gigabytes of shared public storage"
+  ],
+  "correctAnswer": "Governmental institutions and healthcare professional communities",
+  "difficulty": "MEDIUM",
+  "explanation": "A community cloud is a multi-tenant platform for organizations in the same field with common security, compliance and performance concerns; governmental institutions and healthcare professional communities frequently use it. A single company keeping its own servers describes a private cloud."
+ },
+ {
+  "questionText": "In the painting analogy, what does Platform as a Service (PaaS) give a developer?",
+  "options": [
+   "Tools and an environment to build apps, like paints and brushes",
+   "A finished application that is ready to use, like a completed painting bought from a shop",
+   "Only raw virtual hardware with no development tools, like an empty classroom",
+   "A private data center owned by the developer, like a personal art studio"
+  ],
+  "correctAnswer": "Tools and an environment to build apps, like paints and brushes",
+  "difficulty": "MEDIUM",
+  "explanation": "PaaS is compared to a teacher providing paint colors, brushes and paper so you only have to draw the picture: it provides a platform and environment for developers to build applications. A finished ready-to-use application is SaaS."
+ },
+ {
+  "questionText": "Why does fog computing process data faster than sending every request to the cloud?",
+  "options": [
+   "Fog nodes sit near the data source and analyze data locally",
+   "Fog computing stores all data on one central server with more bandwidth",
+   "Fog computing compresses data so that it travels faster across the backbone",
+   "Fog nodes skip processing and forward raw data directly to end users"
+  ],
+  "correctAnswer": "Fog nodes sit near the data source and analyze data locally",
+  "difficulty": "MEDIUM",
+  "explanation": "Fog computing uses fog nodes located closer to the data source with processing and storage capability, so data can be analyzed locally at the edge instead of being sent to the cloud for centralized processing. Central storage is the cloud model that becomes congested."
+ },
+ {
+  "questionText": "Which application is given as an example where fog computing is useful because continuous data streams are large and cumbersome to transfer?",
+  "options": [
+   "Video surveillance",
+   "Email communication",
+   "Word processing",
+   "Online banking"
+  ],
+  "correctAnswer": "Video surveillance",
+  "difficulty": "MEDIUM",
+  "explanation": "Fog computing can be applied to video surveillance, where continuous video streams are large and cumbersome to transfer across networks. Email and word processing do not generate continuous large streams."
+ },
+ {
+  "questionText": "Which of these can be the 'thing' in the Internet of Things?",
+  "options": [
+   "A person with a diabetes monitor implant",
+   "Only a computer connected to the Internet",
+   "Only an appliance with a built-in screen",
+   "Only a device made by one manufacturer"
+  ],
+  "correctAnswer": "A person with a diabetes monitor implant",
+  "difficulty": "MEDIUM",
+  "explanation": "The thing in IoT can be a person with a diabetes monitor implant or an animal with a tracking device; IoT extends connectivity beyond computers and smartphones to everyday objects, from many manufacturers."
+ },
+ {
+  "questionText": "During a long power cut, a family's smart door lock and smart thermostat stop working. Which IoT limitation does this show?",
+  "options": [
+   "Connectivity and power dependence",
+   "Complexity and integration",
+   "Security and privacy",
+   "Higher deployment cost"
+  ],
+  "correctAnswer": "Connectivity and power dependence",
+  "difficulty": "MEDIUM",
+  "explanation": "Connectivity and power dependence means many devices need the Internet and constant power; when either goes down, the device and everything connected to it does too. Complexity and integration concerns design and compatibility between manufacturers."
+ },
+ {
+  "questionText": "Which cloud computing limitation reflects the fact that no provider can guarantee there will be no service interruptions?",
+  "options": [
+   "Server downtime",
+   "Inflexibility",
+   "Lack of customer support",
+   "Data ownership"
+  ],
+  "correctAnswer": "Server downtime",
+  "difficulty": "MEDIUM",
+  "explanation": "Server downtime is the limitation that no cloud provider can guarantee against service interruptions that prevent access to your data. Inflexibility is about providers requiring their own applications and formats."
+ },
+ {
+  "questionText": "A small business wants to cut the cost of buying its own servers but still run its own operating systems and software on rented virtual machines. Which service model fits best?",
+  "options": [
+   "Infrastructure as a Service (IaaS)",
+   "Software as a Service (SaaS)",
+   "Platform as a Service (PaaS)",
+   "A shared community cloud service"
+  ],
+  "correctAnswer": "Infrastructure as a Service (IaaS)",
+  "difficulty": "HARD",
+  "explanation": "IaaS provides computing resources in a virtualized environment and is described as a solution for small businesses cutting IT infrastructure costs, leaving the customer to run their own systems. SaaS would give only finished applications, not virtual machines to manage."
+ },
+ {
+  "questionText": "Compared with buying and hosting a physical server, why is publishing a website on a cloud-based hosting service cheaper and faster?",
+  "options": [
+   "The provider supplies the hardware and manages the server software",
+   "The website no longer needs a public IP address or Internet connection to be reached",
+   "Cloud hosting lets the owner skip uploading content because the provider writes it",
+   "The owner buys the server once and then never pays any further fees to anyone"
+  ],
+  "correctAnswer": "The provider supplies the hardware and manages the server software",
+  "difficulty": "HARD",
+  "explanation": "With cloud hosting you borrow server hardware for less money and the provider manages the operating system and web services; you just upload your content and it is public in minutes. Buying and hosting your own server is the slow, costly alternative."
+ },
+ {
+  "questionText": "Which IoT component would send the collected readings to the cloud using Wi-Fi, Bluetooth, cellular or satellite links?",
+  "options": [
+   "Connectivity",
+   "Sensors/devices",
+   "Data processing",
+   "User interface"
+  ],
+  "correctAnswer": "Connectivity",
+  "difficulty": "HARD",
+  "explanation": "In the four IoT components, connectivity sends the collected data to the cloud through cellular, satellite, Wi-Fi, Bluetooth or Ethernet. Data processing is the software step that acts on the data after it reaches the cloud."
+ },
+ {
+  "questionText": "An IoT home security system detects an intruder and, instead of texting the owner, automatically alerts the police according to predefined rules. Which IoT component is acting?",
+  "options": [
+   "User interface",
+   "Sensors/devices",
+   "Connectivity",
+   "Data storage"
+  ],
+  "correctAnswer": "User interface",
+  "difficulty": "HARD",
+  "explanation": "In the user interface component, information is made available to the end user through alerts, and the system can take actions automatically based on predefined rules, such as notifying relevant authorities. Sensors only collect the data from the environment."
+ },
+ {
+  "questionText": "What makes a smartphone a device rather than just a sensor in an IoT system?",
+  "options": [
+   "It bundles several sensors and does more than just sense",
+   "It has no sensors and only displays notifications sent from the cloud",
+   "It processes all IoT data itself so no cloud connection is ever needed",
+   "It can only measure one quantity, such as temperature, at a time"
+  ],
+  "correctAnswer": "It bundles several sensors and does more than just sense",
+  "difficulty": "HARD",
+  "explanation": "A smartphone is a device that may have multiple sensors (camera, accelerometer, etc.), but it is not just a sensor because it does more than sense things. Measuring only one quantity describes a single sensor."
+ },
+ {
+  "questionText": "Which Bigdata benefit uses past purchases, interaction patterns and product page viewing histories to build campaigns for individual users?",
+  "options": [
+   "Targeted advertisements",
+   "Automatic price optimization",
+   "Risk management",
+   "Product development"
+  ],
+  "correctAnswer": "Targeted advertisements",
+  "difficulty": "HARD",
+  "explanation": "Targeted advertisements use personalization data from past purchases, interaction patterns and product page viewing histories to generate compelling campaigns at individual and larger scale. Risk management identifies new risks from data patterns."
+ },
+ {
+  "questionText": "Which features set fog computing apart from cloud computing?",
+  "options": [
+   "Closer proximity to users, wider reach and better mobility",
+   "Larger central data centers and a single point of processing",
+   "Complete removal of the need for any network connection",
+   "Lower processing ability in exchange for unlimited storage"
+  ],
+  "correctAnswer": "Closer proximity to users, wider reach and better mobility",
+  "difficulty": "HARD",
+  "explanation": "Fog computing is distinguished by its closer proximity to small end users, wider consumer reach and better mobility, which reduces latency and improves quality of service. Large central data centers are the cloud model it extends."
+ },
+ {
+  "questionText": "Which cloud computing limitation describes a provider requiring a company to use only its own applications and data formats?",
+  "options": [
+   "Inflexibility",
+   "Server downtime",
+   "Lack of support",
+   "Unknown cost"
+  ],
+  "correctAnswer": "Inflexibility",
+  "difficulty": "HARD",
+  "explanation": "Inflexibility arises when providers require the use of their applications and formats, for example allowing only data developed in a specific program to be uploaded, because they control the infrastructure. Lack of support is about minimal customer assistance."
+ }
+]

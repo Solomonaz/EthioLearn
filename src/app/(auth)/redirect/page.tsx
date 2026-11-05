@@ -25,8 +25,8 @@ export default function AuthRedirectPage() {
       return;
     }
 
-    const role = (session?.user as { role?: string } | undefined)?.role;
-    router.replace(homeRouteForRole(role));
+    const u = session?.user as { role?: string; grade?: number | null } | undefined;
+    router.replace(homeRouteForRole(u?.role, u?.grade));
   }, [session, status, router]);
 
   return (

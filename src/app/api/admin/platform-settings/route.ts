@@ -78,6 +78,21 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Free trial for new self-registered students, in days: 1–90, or null for none.
+  if ("studentTrialDays" in body) {
+    const v = body.studentTrialDays;
+    if (v === null || v === 0) {
+      data.studentTrialDays = null;
+    } else if (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 90) {
+      data.studentTrialDays = v;
+    } else {
+      return NextResponse.json(
+        { error: "The free trial must be a whole number of days from 1 to 90, or empty for no trial." },
+        { status: 400 },
+      );
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No valid settings to update" }, { status: 400 });
   }
@@ -98,6 +113,7 @@ export async function PATCH(request: Request) {
       antiCheatEnabled: true,
       teacherAiDefaultMonthlyCredits: true,
       tutorDailyMessageLimit: true,
+      studentTrialDays: true,
     },
   });
 

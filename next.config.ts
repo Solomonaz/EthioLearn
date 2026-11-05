@@ -13,12 +13,12 @@ const isDev = process.env.NODE_ENV === "development";
 const cspDirectives = [
   "default-src 'self'",
   isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://oauth2.googleapis.com"
-    : "script-src 'self' 'unsafe-inline' https://telegram.org https://oauth2.googleapis.com",
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://oauth2.googleapis.com https://www.googletagmanager.com https://connect.facebook.net"
+    : "script-src 'self' 'unsafe-inline' https://telegram.org https://oauth2.googleapis.com https://www.googletagmanager.com https://connect.facebook.net",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.supabase.co https://lh3.googleusercontent.com https://graph.facebook.com",
+  "img-src 'self' data: blob: https://t.me https://*.t.me https://telegram.org https://*.supabase.co https://lh3.googleusercontent.com https://graph.facebook.com https://*.google-analytics.com https://www.googletagmanager.com https://www.facebook.com",
   "font-src 'self'",
-  "connect-src 'self' wss: ws: https://*.supabase.co",
+  "connect-src 'self' wss: ws: https://*.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net",
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSecondaryGrade } from "@/lib/teacher-band";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -97,10 +98,10 @@ export async function POST(req: NextRequest) {
       continue;
     }
     const gradeNum = parseInt(gradeStr, 10);
-    if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 12) {
+    if (!isSecondaryGrade(gradeNum)) {
       errors.push({
         row: rowNum,
-        message: `Grade must be between 1 and 12, got: ${gradeStr}`,
+        message: `Grade must be between 9 and 12, got: ${gradeStr}`,
       });
       continue;
     }

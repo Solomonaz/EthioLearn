@@ -8,7 +8,7 @@ One **OVHcloud VPS** (VPS-1: 2 vCores, 4 GB RAM, 40 GB, Ubuntu 24.04, France–G
 | `app` | Next.js + Socket.io (`server.ts`); uploads on a persistent volume |
 | `db` | Postgres 16 + pgvector; not reachable from the internet |
 
-The address for now is **`abugida.aderasend.com`**. Moving to `abugida.et` later is in step 12.
+The address is **`abugidatech.com`**. It started at `abugida.aderasend.com`; step 12 covers that move.
 
 The commands work on any Ubuntu server with 4 GB of RAM or more. On OVH you log in as the user **`ubuntu`**, which can run admin commands with `sudo`.
 
@@ -17,7 +17,7 @@ The commands work on any Ubuntu server with 4 GB of RAM or more. On OVH you log 
 ## 0. What you need before you start
 
 - The OVH **"VPS ready" email**, with the server's **IP address** and the `ubuntu` login.
-- Access to the **DNS settings of `aderasend.com`**.
+- Access to the **DNS settings of `abugidatech.com`**.
 - A **Resend** account (password-reset emails). Its free tier is enough to start.
 - The **Google Cloud** project you use for "Sign in with Google", and the **Telegram bot** you already have.
 - Access to the GitHub repository from the server (step 5).
@@ -31,13 +31,14 @@ Already ordered: OVH VPS-1, Ubuntu 24.04, France (Gravelines), with the daily au
 
 From the OVH email, write down the **IPv4 address**. Replace `SERVER_IP` with it in every command below.
 
-## 2. Point the subdomain at the server
+## 2. Point the domain at the server
 
-At the DNS provider for `aderasend.com`, add:
+At the DNS provider for `abugidatech.com`, add:
 
 | Type | Name | Value |
 |---|---|---|
-| A | `abugida` | the server's IPv4 address |
+| A | `@` | the server's IPv4 address |
+| A | `www` | the server's IPv4 address |
 
 It usually works within minutes; allow up to an hour.
 
@@ -137,13 +138,14 @@ Fill in at least:
 
 | Variable | Value |
 |---|---|
-| `DOMAIN` | `abugida.aderasend.com` |
-| `NEXTAUTH_URL` | `https://abugida.aderasend.com` |
+| `DOMAIN` | `abugidatech.com` |
+| `NEXTAUTH_URL` | `https://abugidatech.com` |
 | `POSTGRES_PASSWORD` | a long random string (see the comment in the file) |
 | `NEXTAUTH_SECRET` | a long random string (see the comment in the file) |
 | `SUPER_ADMIN_EMAIL` | your email |
 | `SUPER_ADMIN_PASSWORD` | **at least 16 characters**; keep it in a password manager |
 | `GEMINI_API_KEY` (and any other AI keys you use) | from your accounts |
+| `GEMINI_VERTEX_API_KEY` (optional) | a Google Cloud **Agent Platform** key — runs Gemini billed to your Cloud project, so Cloud credits apply. Appears as its own provider in Admin → AI Models. Embeddings still use `GEMINI_API_KEY`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXT_PUBLIC_GOOGLE_ENABLED=true` | Google sign-in |
 | `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`, `NEXT_PUBLIC_TELEGRAM_BOT_ID` | Telegram sign-in |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | after step 9 |
@@ -159,13 +161,13 @@ docker compose exec app npx prisma db push --skip-generate   # creates the table
 docker compose logs -f app         # wait for "> Ready on ..."; Ctrl+C to stop watching
 ```
 
-Open **https://abugida.aderasend.com**. The first visit can take a few seconds while Caddy gets the certificate.
+Open **https://abugidatech.com**. The first visit can take a few seconds while Caddy gets the certificate.
 
 > **Never run `npm run db:seed` on the server.** It creates a demo school, fake rewards, and a super-admin account with a known phone number.
 
 ## 8. First sign-in and setup
 
-1. Go to `https://abugida.aderasend.com/admin_abugida` and sign in with `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`.
+1. Go to `https://abugidatech.com/admin_abugida` and sign in with `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`.
 2. **Settings:** decide whether pricing is on. When it's on, teachers need their school on a plan before AI works; turn it off for a free pilot.
 3. **Subjects:** add the secondary and elementary subject lists.
 4. **Textbooks:** upload the national textbooks. Upload scanned PDFs at quiet times, since OCR uses the CPU.
@@ -176,18 +178,18 @@ Staff sign in with Google on that email, or use **"Forgot password?"** to set a 
 ## 9. Connect Google, Telegram and email
 
 **Google** (Google Cloud Console → APIs & Services → Credentials → your OAuth client):
-- Authorised JavaScript origin: `https://abugida.aderasend.com`
-- Authorised redirect URI: `https://abugida.aderasend.com/api/auth/callback/google`
+- Authorised JavaScript origin: `https://abugidatech.com`
+- Authorised redirect URI: `https://abugidatech.com/api/auth/callback/google`
 
-**Telegram:** message **@BotFather** with `/setdomain`, choose your bot, and send `abugida.aderasend.com`.
+**Telegram:** message **@BotFather** with `/setdomain`, choose your bot, and send `abugidatech.com`.
 
 **Resend (password-reset emails):**
-1. Resend → **Domains → Add domain** → `aderasend.com`.
+1. Resend → **Domains → Add domain** → `abugidatech.com`.
 2. Add the DNS records Resend shows (SPF/DKIM) at your DNS provider, and wait until it says **Verified**.
 3. Create an API key, then set these in `.env`:
    ```
    RESEND_API_KEY="re_..."
-   RESEND_FROM_EMAIL="Abugida <noreply@aderasend.com>"
+   RESEND_FROM_EMAIL="Abugida <noreply@abugidatech.com>"
    ```
 4. Apply the change:
    ```bash
@@ -235,7 +237,7 @@ It asks you to type `RESTORE` first, because it replaces the live data. Best don
 
 ## 11. Monitoring
 
-Create a free **UptimeRobot** monitor for `https://abugida.aderasend.com`, so you get an email or SMS if the site goes down.
+Create a free **UptimeRobot** monitor for `https://abugidatech.com`, so you get an email or SMS if the site goes down.
 
 Once a month:
 
@@ -257,28 +259,19 @@ docker image prune -f      # remove old image layers
 
 If `prisma db push` warns about **data loss**, stop and read the warning before adding `--accept-data-loss`.
 
-## 12. Moving to `abugida.et` later
+## 12. Moving from `abugida.aderasend.com` to `abugidatech.com`
 
-1. At the `.et` DNS provider: **A** record for `abugida.et` → the same server IP.
-2. In `.env`: `DOMAIN="abugida.et"` and `NEXTAUTH_URL="https://abugida.et"`.
-3. In `deploy/Caddyfile`, uncomment the redirect block so old links keep working.
-4. Google: add the new origin and redirect URI. Telegram: `/setdomain` → `abugida.et`.
-5. Resend: verify `abugida.et` and update `RESEND_FROM_EMAIL`, or keep sending from `aderasend.com`.
+The site first ran at `abugida.aderasend.com`. To move an existing server:
+
+1. At Namecheap, for `abugidatech.com`: **A** records for `@` and `www` → the same server IP. Keep the old `abugida` record on `aderasend.com`, so old links redirect.
+2. In `.env`: `DOMAIN="abugidatech.com"` and `NEXTAUTH_URL="https://abugidatech.com"`.
+3. `git pull` (the Caddyfile already redirects `www` and the old address to the new one).
+4. Google: add the new origin and redirect URI from step 9. Telegram: `/setdomain` → `abugidatech.com`.
+5. Resend: verify `abugidatech.com` and update `RESEND_FROM_EMAIL`, or keep sending from `aderasend.com`.
 6. Apply the change:
    ```bash
    docker compose up -d --force-recreate app caddy
    ```
+7. Google Search Console: add `abugidatech.com` and submit `https://abugidatech.com/sitemap.xml`.
 
 Everyone signs in once more; accounts and data are unchanged.
-
-## Troubleshooting
-
-| Symptom | Likely cause |
-|---|---|
-| The site doesn't load over HTTPS | DNS isn't pointing at the server yet, or ports 80/443 are blocked. Check `docker compose logs caddy`. |
-| The build is killed | Out of memory: check that swap is on (`swapon --show`). |
-| "Password reset by email is not available" | `RESEND_API_KEY` or `RESEND_FROM_EMAIL` is missing, or the app wasn't recreated after setting them. |
-| Google says "redirect_uri_mismatch" | The redirect URI in Google Cloud doesn't exactly match step 9. |
-| The Telegram button says "Bot domain invalid" | `/setdomain` wasn't done for this domain. |
-| Super-admin sign-in is refused | `SUPER_ADMIN_PASSWORD` is shorter than 16 characters. |
-| You need logs | `docker compose logs -f app` (or `db` / `caddy`). |

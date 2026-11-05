@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Trophy,
@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   KeyRound,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { SubscriptionPanel } from "@/components/admin/subscription-panel";
 import { formatDate, scoreVariant } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { STUDENT_GRADES, studentGradeOptions } from "@/lib/teacher-band";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -132,6 +134,9 @@ function actionTypeLabel(raw: string): string {
 export default function AdminStudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  // Only the super admin reaches /admin (school admins are sent to /school-admin,
+  // which renders this same page) — the permanent delete is theirs alone.
+  const isSuperAdminView = usePathname().startsWith("/admin");
 
   const [data, setData] = useState<StudentDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -369,7 +374,14 @@ export default function AdminStudentDetailPage() {
                         className={editFieldClass}
                       >
                         <option value="">Select grade</option>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                        {/* School students: grades 9-12, plus an older account's own
+                            grade so it still shows. The super admin may put a
+                            self-registered student in any grade (1-8 play the
+                            elementary games). */}
+                        {(isSuperAdminView && !student.school
+                          ? STUDENT_GRADES
+                          : studentGradeOptions(student.grade)
+                        ).map((g) => (
                           <option key={g} value={g}>
                             Grade {g}
                           </option>
@@ -938,7 +950,135 @@ export default function AdminStudentDetailPage() {
 
       {/* Subscription */}
       <SubscriptionPanel audience="STUDENT" targetId={id} />
+
+      {/* Permanent delete — super admin only (this page is shared with school admins) */}
+      {isSuperAdminView && (
+        <DeleteStudentCard
+          studentId={id}
+          studentName={student.name}
+          onDeleted={() => router.push("/admin/students")}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Permanently delete the student. Asks for the admin's own sign-in password;
+ * the server checks it again and refuses without it.
+ */
+function DeleteStudentCard({
+  studentId,
+  studentName,
+  onDeleted,
+}: {
+  studentId: string;
+  studentName: string;
+  onDeleted: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/students/${studentId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error ?? "Could not delete the student.");
+      toast.success(`${studentName} was deleted.`);
+      onDeleted();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete the student.");
+      setPassword("");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Card className="border-red-300">
+      <CardContent className="space-y-3 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-semibold text-red-700">
+              <Trash2 className="h-4 w-4" />
+              Delete student
+            </p>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Permanently removes this account and all of its quizzes, points, notifications,
+              subscriptions and payments. This cannot be undone.
+            </p>
+          </div>
+          {!open && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+              onClick={() => setOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          )}
+        </div>
+
+        {open && (
+          <form
+            className="space-y-2 rounded-lg border border-red-200 bg-red-50/60 p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (password && !deleting) confirmDelete();
+            }}
+          >
+            <label htmlFor="delete-confirm-password" className="block text-sm text-text-primary">
+              To delete <span className="font-semibold">{studentName}</span>, enter your admin password:
+            </label>
+            <input
+              id="delete-confirm-password"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={deleting}
+              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-text-primary"
+            />
+            {error && <p className="text-xs font-medium text-red-700">{error}</p>}
+            <div className="flex gap-2">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!password || deleting}
+                className="gap-1.5 bg-red-600 text-white hover:bg-red-700"
+              >
+                {deleting ? <Spinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Delete permanently
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={deleting}
+                onClick={() => {
+                  setOpen(false);
+                  setPassword("");
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
