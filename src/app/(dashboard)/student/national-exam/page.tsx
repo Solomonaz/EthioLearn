@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GraduationCap, Timer, BookOpenCheck, FileText } from "lucide-react";
+import { GraduationCap, Timer, BookOpenCheck, FileText, History } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,18 @@ interface Paper {
   questionCount: number;
   bestPercent: number | null;
   attemptCount: number;
+  /** Modes with an unfinished attempt the student can continue. */
+  inProgress: ("EXAM" | "PRACTICE")[];
+}
+
+interface PastAttempt {
+  id: string;
+  mode: "EXAM" | "PRACTICE";
+  percent: number;
+  correctCount: number;
+  totalQuestions: number;
+  completedAt: string;
+  exam: { id: string; subject: string; yearLabel: string };
 }
 
 type StreamFilter = "ALL" | "NATURAL" | "SOCIAL";
@@ -29,12 +42,17 @@ export default function NationalExamPage() {
   const [papers, setPapers] = useState<Paper[] | null>(null);
   const [error, setError] = useState(false);
   const [stream, setStream] = useState<StreamFilter>("ALL");
+  const [history, setHistory] = useState<PastAttempt[]>([]);
 
   useEffect(() => {
     fetch("/api/national-exams")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setPapers(d.exams))
       .catch(() => setError(true));
+    fetch("/api/national-exams/attempts")
+      .then((r) => (r.ok ? r.json() : { attempts: [] }))
+      .then((d) => setHistory(d.attempts ?? []))
+      .catch(() => {});
   }, []);
 
   const visible = useMemo(
@@ -96,10 +114,11 @@ export default function NationalExamPage() {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" onClick={() => router.push(`/student/national-exam/${p.id}?mode=EXAM`)}>
-                          <Timer className="mr-1 h-4 w-4" /> {t("examMode")}
+                          <Timer className="mr-1 h-4 w-4" /> {p.inProgress.includes("EXAM") ? t("continueExam") : t("examMode")}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => router.push(`/student/national-exam/${p.id}?mode=PRACTICE`)}>
-                          <BookOpenCheck className="mr-1 h-4 w-4" /> {t("practiceMode")}
+                          <BookOpenCheck className="mr-1 h-4 w-4" />{" "}
+                          {p.inProgress.includes("PRACTICE") ? t("continuePractice") : t("practiceMode")}
                         </Button>
                       </div>
                     </CardContent>
@@ -108,6 +127,38 @@ export default function NationalExamPage() {
             </div>
           </section>
         ))
+      )}
+
+      {history.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+            <History className="h-5 w-5 text-primary" /> {t("history")}
+          </h2>
+          <Card>
+            <CardContent className="divide-y divide-border py-1">
+              {history.map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/student/national-exam/result/${a.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm hover:text-primary"
+                >
+                  <span className="min-w-0">
+                    <span className="font-medium text-text-primary">
+                      {a.exam.subject} · {a.exam.yearLabel}
+                    </span>
+                    <span className="text-text-secondary">
+                      {" "}
+                      · {a.mode === "EXAM" ? t("examMode") : t("practiceMode")} · {new Date(a.completedAt).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <Badge variant={a.percent >= 50 ? "success" : "warning"}>
+                    {a.percent}% ({a.correctCount}/{a.totalQuestions})
+                  </Badge>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
       )}
     </div>
   );

@@ -86,7 +86,9 @@ export function PdfReader({ url, storageKey }: { url: string; storageKey: string
       try {
         const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
         pdfjs.GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
-        const doc = (await pdfjs.getDocument({ url, disableAutoFetch: true, rangeChunkSize: 262144 }).promise) as unknown as PdfDoc;
+        // isEvalSupported: false — the CSP has no 'unsafe-eval' in production.
+        const doc = (await pdfjs.getDocument({ url, disableAutoFetch: true, rangeChunkSize: 262144, isEvalSupported: false })
+          .promise) as unknown as PdfDoc;
         if (cancelled) {
           doc.destroy();
           return;
@@ -106,6 +108,16 @@ export function PdfReader({ url, storageKey }: { url: string; storageKey: string
       docRef.current = null;
     };
   }, [url]);
+
+  // Discourage saving and printing: Ctrl/Cmd+S and +P do nothing here, and the
+  // pages are hidden from print. This only discourages a determined user.
+  useEffect(() => {
+    const block = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "p")) e.preventDefault();
+    };
+    window.addEventListener("keydown", block);
+    return () => window.removeEventListener("keydown", block);
+  }, []);
 
   // Fit-to-width scale follows the container's width.
   useEffect(() => {
@@ -223,8 +235,8 @@ export function PdfReader({ url, storageKey }: { url: string; storageKey: string
       ref={rootRef}
       className={
         coverFs
-          ? "fixed inset-0 z-[80] flex flex-col bg-surface"
-          : "flex min-h-0 flex-1 flex-col bg-surface"
+          ? "fixed inset-0 z-[80] flex flex-col bg-surface print:hidden"
+          : "flex min-h-0 flex-1 flex-col bg-surface print:hidden"
       }
     >
       {/* Toolbar */}

@@ -31,8 +31,12 @@ interface AttemptData {
   attemptId: string;
   startedAt: string;
   mode: "EXAM" | "PRACTICE";
+  /** An unfinished attempt was picked up where it was left. */
+  resumed: boolean;
   exam: { id: string; subject: string; yearLabel: string; stream: string | null; durationMinutes: number };
   questions: Question[];
+  answers: Record<string, string>;
+  feedback: Record<string, Feedback>;
 }
 
 function formatClock(seconds: number): string {
@@ -87,9 +91,42 @@ function TakeNationalExamPage() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Could not start");
         setData(d);
+        setAnswers(d.answers ?? {});
+        setFeedback(d.feedback ?? {});
+        // Open at the first question not yet answered.
+        const firstOpen = (d.questions as Question[]).findIndex((x) => !(x.id in (d.answers ?? {})));
+        setIndex(firstOpen > 0 ? firstOpen : 0);
+        if (d.resumed) toast.info(t("resumed"));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not start"));
-  }, [id, mode]);
+  }, [id, mode, t]);
+
+  // Exam mode: save the answers a moment after each change, so a reload or a
+  // lost connection keeps them. Nothing is checked until the paper is submitted.
+  const savedAnswers = useRef<string>("");
+  useEffect(() => {
+    if (!data || data.mode !== "EXAM" || submitted.current) return;
+    const payload = JSON.stringify({ answers });
+    if (savedAnswers.current === "") {
+      savedAnswers.current = payload; // what the server already has
+      return;
+    }
+    if (payload === savedAnswers.current) return;
+    const timer = setTimeout(() => {
+      fetch(`/api/national-exams/attempts/${data.attemptId}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      })
+        .then((r) => {
+          if (r.ok) savedAnswers.current = payload;
+        })
+        .catch(() => {
+          /* retried on the next change; submit sends everything anyway */
+        });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [answers, data]);
 
   const submit = useCallback(
     async (auto = false) => {
@@ -189,6 +226,7 @@ function TakeNationalExamPage() {
 
   const questions = data.questions;
   const q = questions[index];
+  if (!q) return null;
   const fb = feedback[q.id];
   const answeredCount = Object.keys(answers).length;
   const lowTime = remaining !== null && remaining <= 300;

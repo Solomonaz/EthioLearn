@@ -222,6 +222,8 @@ export default function AdminTextbooksPage() {
     wordCount: number;
     pageCount?: number;
     fullText: string;
+    /** Stored PDF the new book keeps for the student Library. */
+    readerFile: string | null;
   } | null>(null);
   const [aiCreating, setAiCreating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -625,6 +627,7 @@ export default function AdminTextbooksPage() {
         wordCount: data.extractedContent.wordCount,
         pageCount: data.extractedContent.pageCount,
         fullText: data.extractedContent.fullText,
+        readerFile: data.readerFile ?? null,
       });
 
       setAiDetectedChapters(
@@ -668,6 +671,7 @@ export default function AdminTextbooksPage() {
           publisher: aiPublisher.trim() || undefined,
           academicYear: aiAcademicYear.trim() || undefined,
           content: aiExtractedInfo?.fullText || undefined,
+          readerFile: aiExtractedInfo?.readerFile || undefined,
           allowDuplicate: allowDuplicate || undefined,
           chapters: selected.map((ch) => ({
             title: ch.title,

@@ -955,7 +955,11 @@
     "tryAgain": "Try again",
     "filterAll": "All ({count})",
     "filterWrong": "Wrong ({count})",
-    "filterUnanswered": "Unanswered ({count})"
+    "filterUnanswered": "Unanswered ({count})",
+    "resumed": "Picked up where you left off.",
+    "continueExam": "Continue exam",
+    "continuePractice": "Continue practice",
+    "history": "Your past attempts"
   },
   "play": {
     "settingsTitle": "My settings",

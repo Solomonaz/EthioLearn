@@ -955,7 +955,11 @@
     "tryAgain": "እንደገና ሞክር",
     "filterAll": "ሁሉም ({count})",
     "filterWrong": "የተሳሳቱ ({count})",
-    "filterUnanswered": "ያልተመለሱ ({count})"
+    "filterUnanswered": "ያልተመለሱ ({count})",
+    "resumed": "ካቆሙበት ቀጥለዋል።",
+    "continueExam": "ፈተናውን ይቀጥሉ",
+    "continuePractice": "ልምምዱን ይቀጥሉ",
+    "history": "ያለፉ ሙከራዎችዎ"
   },
   "play": {
     "settingsTitle": "የእኔ ቅንብሮች",
