@@ -42,6 +42,8 @@ interface Student {
   /** School-issued sign-in name; null for students who signed up themselves. */
   username: string | null;
   email: string | null;
+  /** Has an email that was never confirmed — it cannot be used to sign in. */
+  emailUnconfirmed: boolean;
   /** Telegram's numeric user ID. Permanent, unlike the @username, which is optional and can change. */
   telegramId: string | null;
   grade: number | null;
@@ -73,7 +75,7 @@ interface StudentsResponse {
   stats: Stats;
 }
 
-type StatusFilter = "all" | "active" | "inactive" | "suspended";
+type StatusFilter = "all" | "active" | "inactive" | "suspended" | "unverified";
 
 type LevelFilter = "" | "elementary" | "secondary";
 
@@ -188,9 +190,10 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
-function getStudentStatus(student: Student): "active" | "inactive" | "suspended" {
+function getStudentStatus(student: Student): "active" | "inactive" | "suspended" | "unverified" {
   if (student.suspendedAt) return "suspended";
   if (!student.isActive) return "inactive";
+  if (student.emailUnconfirmed) return "unverified";
   return "active";
 }
 
@@ -602,6 +605,8 @@ function AdminStudentsContent() {
   const currentLevel = (searchParams.get("level") ?? "") as LevelFilter;
   const currentGrade = searchParams.get("grade") ?? "";
   const currentSection = searchParams.get("section") ?? "";
+  // Unconfirmed emails are filtered on the server so the filter covers every page.
+  const currentEmail = searchParams.get("email") ?? "";
   const currentSort = searchParams.get("sort") ?? "points";
   const currentPage = parseInt(searchParams.get("page") ?? "1", 10);
 
@@ -645,6 +650,7 @@ function AdminStudentsContent() {
     if (currentLevel) params.set("level", currentLevel);
     if (currentGrade) params.set("grade", currentGrade);
     if (currentSection) params.set("section", currentSection);
+    if (currentEmail) params.set("email", currentEmail);
     if (currentSort) params.set("sort", currentSort);
     params.set("page", String(currentPage));
     params.set("limit", "20");
@@ -661,10 +667,12 @@ function AdminStudentsContent() {
         setError(err instanceof Error ? err.message : "Something went wrong");
       })
       .finally(() => setLoading(false));
-  }, [currentSearch, currentLevel, currentGrade, currentSection, currentSort, currentPage, reloadCount]);
+  }, [currentSearch, currentLevel, currentGrade, currentSection, currentEmail, currentSort, currentPage, reloadCount]);
+
+  const effectiveStatus: StatusFilter = currentEmail === "unconfirmed" ? "unverified" : statusFilter;
 
   const filteredStudents = data
-    ? statusFilter === "all"
+    ? statusFilter === "all" || effectiveStatus === "unverified"
       ? data.students
       : data.students.filter((s) => getStudentStatus(s) === statusFilter)
     : [];
@@ -678,6 +686,12 @@ function AdminStudentsContent() {
         return <Badge variant="default">{t("statusInactive")}</Badge>;
       case "suspended":
         return <Badge variant="error">{t("statusSuspended")}</Badge>;
+      case "unverified":
+        return (
+          <Badge variant="warning" title={t("statusUnverifiedHint")}>
+            {t("statusUnverified")}
+          </Badge>
+        );
     }
   }
 
@@ -807,14 +821,24 @@ function AdminStudentsContent() {
 
         {/* Status filter */}
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          value={effectiveStatus}
+          onChange={(e) => {
+            const value = e.target.value as StatusFilter;
+            if (value === "unverified") {
+              setStatusFilter("all");
+              pushUrl({ email: "unconfirmed" });
+            } else {
+              setStatusFilter(value);
+              if (currentEmail) pushUrl({ email: undefined });
+            }
+          }}
           className="rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <option value="all">{t("allStatus")}</option>
           <option value="active">{t("statusActive")}</option>
           <option value="inactive">{t("statusInactive")}</option>
           <option value="suspended">{t("statusSuspended")}</option>
+          <option value="unverified">{t("statusUnverified")}</option>
         </select>
 
         {/* Sort */}
@@ -849,7 +873,7 @@ function AdminStudentsContent() {
               {t("noStudentsFound")}
             </p>
             <p className="text-sm text-text-secondary">
-              {currentSearch || currentLevel || currentGrade || currentSection || statusFilter !== "all"
+              {currentSearch || currentLevel || currentGrade || currentSection || currentEmail || statusFilter !== "all"
                 ? t("noStudentsFiltered")
                 : t("noStudentsEnrolled")}
             </p>

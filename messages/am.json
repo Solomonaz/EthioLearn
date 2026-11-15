@@ -684,6 +684,8 @@
     "statusActive": "ንቁ",
     "statusInactive": "ንቁ ያልሆነ",
     "statusSuspended": "ታግዷል",
+    "statusUnverified": "ያልተረጋገጠ",
+    "statusUnverifiedHint": "ኢሜይሉ አልተረጋገጠም። ይህ መለያ በኢሜይል መግባት አይችልም፤ ካልተጠቀመበት ከ7 ቀናት በኋላ ይሰረዛል።",
     "sortPoints": "ከፍተኛ ነጥቦች",
     "sortName": "ስም (ሀ-ፐ)",
     "sortRecent": "በቅርቡ ንቁ",

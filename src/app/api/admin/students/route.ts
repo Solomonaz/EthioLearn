@@ -109,6 +109,8 @@ export async function GET(req: NextRequest) {
   // grade is narrower, so it wins when both are sent.
   const level = searchParams.get("level") || "";
   const section = normalizeSection(searchParams.get("section")) ?? "";
+  // "unconfirmed": signed up with an email but never clicked the confirmation link.
+  const emailFilter = searchParams.get("email") || "";
   const sort = searchParams.get("sort") || "points";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
@@ -137,6 +139,7 @@ export async function GET(req: NextRequest) {
       ? { grade: { gte: SECONDARY_MIN_GRADE } }
       : {}),
     ...(section ? { section } : {}),
+    ...(emailFilter === "unconfirmed" ? { email: { not: null }, emailVerifiedAt: null } : {}),
   };
 
   const orderBy =
@@ -193,6 +196,9 @@ export async function GET(req: NextRequest) {
     name: s.name,
     username: s.username,
     email: s.email,
+    // An email the student never confirmed (a fake or mistyped sign-up, or a
+    // changed address not yet confirmed). Such an email cannot be used to sign in.
+    emailUnconfirmed: !!s.email && !s.emailVerifiedAt,
     telegramId: s.telegramId,
     grade: s.grade,
     section: s.section,

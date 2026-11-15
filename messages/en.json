@@ -684,6 +684,8 @@
     "statusActive": "Active",
     "statusInactive": "Inactive",
     "statusSuspended": "Suspended",
+    "statusUnverified": "Unverified",
+    "statusUnverifiedHint": "Email never confirmed. This account cannot sign in by email and is removed after 7 days if never used.",
     "sortPoints": "Top Points",
     "sortName": "Name A-Z",
     "sortRecent": "Recently Active",
