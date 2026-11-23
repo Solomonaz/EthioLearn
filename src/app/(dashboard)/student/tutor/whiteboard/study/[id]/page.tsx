@@ -353,9 +353,10 @@ export default function StudyUploadPage() {
   } else guide = menu;
 
   return (
-    // Fills the screen between the top bar and, on phones, the bottom tab bar
-    // (same sizing as Textbook Chat).
-    <div className="flex h-[calc(100dvh-11rem)] flex-col gap-3 sm:h-[calc(100dvh-12rem)] md:h-[calc(100dvh-7rem)] lg:h-[calc(100dvh-8rem)]" data-testid="study-page">
+    // Fills the window between the top bar (4rem) and, on phones, the bottom
+    // tab bar (5rem), inside the layout's thin frame for this page (p-2 / sm:p-3
+    // / lg:p-4, see dashboard-layout "tightPage").
+    <div className="flex h-[calc(100dvh-10rem)] flex-col gap-2 sm:h-[calc(100dvh-10.5rem)] md:h-[calc(100dvh-5.5rem)] lg:h-[calc(100dvh-6rem)]" data-testid="study-page">
       <div className="flex shrink-0 items-center gap-2">
         <Link href="/student/tutor/whiteboard" className="flex items-center gap-1 rounded-full px-2 py-1 text-sm text-text-secondary hover:bg-border/40 hover:text-primary">
           <ChevronLeft className="h-4 w-4" /> <span className="hidden sm:inline">{t("title")}</span>
@@ -386,7 +387,7 @@ export default function StudyUploadPage() {
         ))}
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3">
         <div
           className={cn("min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface", tab === "file" ? "flex" : "hidden lg:flex")}
           data-testid="study-file-pane"

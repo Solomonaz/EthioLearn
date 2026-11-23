@@ -25,6 +25,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const isPlay = pathname === "/play" || pathname.startsWith("/play/");
   // Only pad for the bottom bar on routes that actually render one.
   const bottomBarPad = hasMobileBottomNav(pathname);
+  // Full-screen work pages (the Whiteboard study view) size themselves to the
+  // window, so they get a thin frame instead of the usual page padding.
+  const tightPage = pathname.startsWith("/student/tutor/whiteboard/study/");
 
   // The student coach tour opens the (mobile) menu drawer while it points
   // at menu items, and closes it afterwards.
@@ -155,7 +158,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           collapsed ? "md:ml-20" : "md:ml-64",
         )}
       >
-        <div className="p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className={tightPage ? "p-2 sm:p-3 lg:p-4" : "p-4 sm:p-6 lg:p-8"}>{children}</div>
       </main>
 
       <MobileNav />
