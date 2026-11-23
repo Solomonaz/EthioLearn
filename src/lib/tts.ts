@@ -17,10 +17,13 @@ import { logUsage, type UsageActor } from "./usage-logger";
 
 export type TtsProviderId = "BROWSER" | "AZURE" | "GEMINI" | "ELEVENLABS";
 export const TTS_PROVIDERS: TtsProviderId[] = ["BROWSER", "AZURE", "GEMINI", "ELEVENLABS"];
+/** The paid services that can be put in the order (the browser voice is always last). */
+export type CloudVoiceId = Exclude<TtsProviderId, "BROWSER">;
+export const CLOUD_VOICES: CloudVoiceId[] = ["AZURE", "GEMINI", "ELEVENLABS"];
 
 export interface VoiceConfig {
-  provider: TtsProviderId;
-  fallbackProvider: TtsProviderId | null;
+  /** Services to try, first to last; the browser voice comes after all of them. */
+  voiceOrder: CloudVoiceId[];
   azureRegion: string | null;
   azureVoice: string;
   azureStyle: string | null;
@@ -32,8 +35,7 @@ export interface VoiceConfig {
 }
 
 export const VOICE_DEFAULTS: VoiceConfig = {
-  provider: "BROWSER",
-  fallbackProvider: null,
+  voiceOrder: [],
   azureRegion: null,
   azureVoice: "en-US-AvaMultilingualNeural",
   azureStyle: null,
@@ -85,21 +87,29 @@ export function keyStatus() {
   } as Record<TtsProviderId, boolean>;
 }
 
+/**
+ * The saved settings. Throws if the table can't be read (e.g. `prisma db push`
+ * not run yet) — the admin page must say so rather than show defaults.
+ */
+export async function readVoiceConfig(): Promise<VoiceConfig> {
+  const row = await db.voiceSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
+  return {
+    voiceOrder: row.voiceOrder.filter((p): p is CloudVoiceId => p !== "BROWSER"),
+    azureRegion: row.azureRegion,
+    azureVoice: row.azureVoice,
+    azureStyle: row.azureStyle,
+    geminiModel: row.geminiModel,
+    geminiVoice: row.geminiVoice,
+    geminiStyle: row.geminiStyle,
+    elevenVoiceId: row.elevenVoiceId,
+    elevenModel: row.elevenModel,
+  };
+}
+
+/** For students: never throws — if settings can't be read, the browser voice is used. */
 export async function getVoiceConfig(): Promise<VoiceConfig> {
   try {
-    const row = await db.voiceSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
-    return {
-      provider: row.provider,
-      fallbackProvider: row.fallbackProvider,
-      azureRegion: row.azureRegion,
-      azureVoice: row.azureVoice,
-      azureStyle: row.azureStyle,
-      geminiModel: row.geminiModel,
-      geminiVoice: row.geminiVoice,
-      geminiStyle: row.geminiStyle,
-      elevenVoiceId: row.elevenVoiceId,
-      elevenModel: row.elevenModel,
-    };
+    return await readVoiceConfig();
   } catch {
     return VOICE_DEFAULTS;
   }
@@ -109,8 +119,8 @@ export async function getVoiceConfig(): Promise<VoiceConfig> {
 export function cloudChain(cfg: VoiceConfig): TtsProviderId[] {
   const keys = keyStatus();
   const out: TtsProviderId[] = [];
-  for (const p of [cfg.provider, cfg.fallbackProvider]) {
-    if (p && p !== "BROWSER" && keys[p] && !out.includes(p)) out.push(p);
+  for (const p of cfg.voiceOrder) {
+    if (keys[p] && !out.includes(p)) out.push(p);
   }
   return out;
 }

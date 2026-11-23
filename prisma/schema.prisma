@@ -1587,10 +1587,11 @@ enum TtsProvider {
 }
 
 model VoiceSettings {
-  id       String      @id @default("singleton")
-  provider TtsProvider @default(BROWSER)
-  /// Tried when the main service fails; after that the browser voice.
-  fallbackProvider TtsProvider?
+  id String @id @default("singleton")
+  /// The voice services to try, in order (first that works is used). The
+  /// browser voice is always the last resort, so an empty list = browser only.
+  /// An admin reorders this from the AI Models page, e.g. day by day.
+  voiceOrder TtsProvider[] @default([])
 
   /// Azure Speech region, e.g. "eastus". Null = AZURE_SPEECH_REGION env.
   azureRegion String?
