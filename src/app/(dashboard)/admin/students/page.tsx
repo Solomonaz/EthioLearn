@@ -850,6 +850,8 @@ function AdminStudentsContent() {
           <option value="points">{t("sortPoints")}</option>
           <option value="name">{t("sortName")}</option>
           <option value="recent">{t("sortRecent")}</option>
+          <option value="newest">{t("sortNewest")}</option>
+          <option value="oldest">{t("sortOldest")}</option>
         </select>
       </div>
 

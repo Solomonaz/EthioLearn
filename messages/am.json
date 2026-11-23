@@ -699,6 +699,8 @@
     "sortPoints": "ከፍተኛ ነጥቦች",
     "sortName": "ስም (ሀ-ፐ)",
     "sortRecent": "በቅርቡ ንቁ",
+    "sortNewest": "አዲስ የተመዘገቡ",
+    "sortOldest": "ቀድመው የተመዘገቡ",
     "noStudentsFound": "ምንም ተማሪ አልተገኘም",
     "noStudentsFiltered": "ማጣሪያዎቹን ይቀይሩ።",
     "noStudentsEnrolled": "ገና ምንም ተማሪ አልተመዘገበም።",

@@ -699,6 +699,8 @@
     "sortPoints": "Top Points",
     "sortName": "Name A-Z",
     "sortRecent": "Recently Active",
+    "sortNewest": "Newest sign-ups",
+    "sortOldest": "Oldest sign-ups",
     "noStudentsFound": "No students found",
     "noStudentsFiltered": "Try adjusting your filters.",
     "noStudentsEnrolled": "No students have been enrolled yet.",

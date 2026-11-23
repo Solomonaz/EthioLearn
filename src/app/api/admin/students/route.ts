@@ -147,6 +147,10 @@ export async function GET(req: NextRequest) {
       ? { name: "asc" as const }
       : sort === "recent"
       ? { lastActiveAt: "desc" as const }
+      : sort === "newest"
+      ? { createdAt: "desc" as const } // sign-up date, newest first
+      : sort === "oldest"
+      ? { createdAt: "asc" as const }
       : { totalPoints: "desc" as const };
 
   const [students, total, activeThisWeek, avgPointsResult] = await Promise.all([
