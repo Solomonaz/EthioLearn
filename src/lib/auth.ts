@@ -181,6 +181,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId:     process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // Always ask which Google account. Without this, a browser already
+      // signed in to Google goes straight through — on a shared phone that
+      // silently signs in (or signs up) whoever used Google there last.
+      authorization: { params: { prompt: "select_account" } },
     })
   );
 }
@@ -392,11 +396,13 @@ export const authOptions: NextAuthOptions = {
       if (!user && (token.profileIncomplete || token.mustChangePassword) && token.id) {
         const dbUser = await db.user.findUnique({
           where: { id: token.id as string },
-          select: { grade: true, mustChangePassword: true },
+          select: { grade: true, mustChangePassword: true, name: true },
         });
         if (token.profileIncomplete && dbUser?.grade) {
           token.profileIncomplete = false;
           token.grade = dbUser.grade;
+          // The name may have been corrected on the complete-profile screen.
+          token.name = dbUser.name;
         }
         if (token.mustChangePassword && dbUser && !dbUser.mustChangePassword) {
           token.mustChangePassword = false;
