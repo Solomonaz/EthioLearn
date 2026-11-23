@@ -18,6 +18,7 @@ import {
 } from "@/lib/tutor-allowance";
 import { lessonFromProse, parseWhiteboardLesson, whiteboardInstructions } from "@/lib/whiteboard-lesson";
 import { lessonPayload } from "@/lib/whiteboard-voice";
+import { getVoiceConfig } from "@/lib/tts";
 
 /**
  * POST /api/ai/why-wrong — { quizId, questionId }
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unknown format" }, { status: 400 });
   }
   const whiteboard = body.format === "whiteboard";
+  const style = whiteboard ? (await getVoiceConfig()).tutorStyle : "friendly";
 
   // Only the student's own, submitted, wrong answer.
   const answer = await db.quizAnswer.findFirst({
@@ -127,7 +129,7 @@ export async function POST(req: Request) {
     q.explanation ? `Textbook explanation: ${clip(q.explanation)}` : "",
     "",
     ...(whiteboard
-      ? [whiteboardInstructions()]
+      ? [whiteboardInstructions(style)]
       : [
           "In under 150 words: first say exactly why my answer is wrong (the misunderstanding behind it),",
           "then why the correct answer is right, using one simple everyday comparison.",
@@ -162,7 +164,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ...(whiteboard
-        ? lessonPayload(user.id, parseWhiteboardLesson(result.response) ?? lessonFromProse(result.response), "mistake")
+        ? lessonPayload(user.id, parseWhiteboardLesson(result.response) ?? lessonFromProse(result.response), "mistake", style)
         : { response: result.response }),
       textbookId: chapter.textbook.id,
       chapterId: chapter.id,

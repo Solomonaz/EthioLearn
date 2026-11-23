@@ -297,6 +297,7 @@ model User {
   resources            TeacherResource[] @relation("TeacherResources")
   activityTargets      ClassActivityTarget[] @relation("ActivityTargets")
   submissionFiles      SubmissionFile[]      @relation("SubmissionOwner")
+  studyUploads         StudyUpload[]
   markedSubmissions    ClassActivityTarget[] @relation("ActivityMarker")
 
   @@map("users")
@@ -1607,6 +1608,10 @@ model VoiceSettings {
   elevenVoiceId String @default("cgSgspJ2msm6clMCkdW9")
   elevenModel   String @default("eleven_flash_v2_5")
 
+  /// How the guide talks in Whiteboard lessons: "sassy" (dramatic, funny,
+  /// study-TikTok style), "friendly" (warm and playful) or "calm" (plain and patient).
+  tutorStyle String @default("sassy")
+
   updatedAt DateTime @updatedAt
 
   @@map("voice_settings")
@@ -1625,4 +1630,30 @@ model TtsAudioCache {
 
   @@index([createdAt])
   @@map("tts_audio_cache")
+}
+
+/// A photo or small PDF a student sent to the Whiteboard. Kept for 7 days so
+/// the student can read it beside the guide and ask for more (explain another
+/// question, practice questions) without uploading again. Owner-only.
+model StudyUpload {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name  String
+  mime  String
+  data  Bytes
+  pages Int?
+
+  /// What the guide found in it: { kind, title, subject, items: [{ id, label }] }.
+  analysis Json?
+  /// Lessons and practice sets already made from it, replayed for free:
+  /// [{ key, kind: "lesson" | "practice", target, at, payload }].
+  results Json @default("[]")
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("study_uploads")
 }

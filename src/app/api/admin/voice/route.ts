@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { db } from "@/lib/db";
+import { isTutorStyle } from "@/lib/whiteboard-lesson";
 import {
   CLOUD_VOICES,
   keyStatus,
@@ -68,6 +69,7 @@ function parseConfig(raw: unknown): VoiceConfig | string {
       return "Invalid voice order";
     }
     if (new Set(r.voiceOrder).size !== r.voiceOrder.length) return "A service is listed twice in the order";
+    if (!isTutorStyle(r.tutorStyle)) return "Invalid tutor style";
     return {
       voiceOrder: r.voiceOrder,
       azureRegion: str(r.azureRegion, /^[a-z0-9-]+$/i, 40, "Azure region", true),
@@ -78,6 +80,7 @@ function parseConfig(raw: unknown): VoiceConfig | string {
       geminiStyle: str(r.geminiStyle, /^[^<>{}]*$/, 200, "Gemini speaking style", true),
       elevenVoiceId: str(r.elevenVoiceId, /^[A-Za-z0-9]+$/, 60, "ElevenLabs voice id")!,
       elevenModel: str(r.elevenModel, /^[a-z0-9_]+$/i, 60, "ElevenLabs model")!,
+      tutorStyle: r.tutorStyle,
     };
   } catch (e) {
     return e instanceof Error ? e.message : "Invalid settings";

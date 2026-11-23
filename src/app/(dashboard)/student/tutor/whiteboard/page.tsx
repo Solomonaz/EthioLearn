@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Camera, FileText, History, ImagePlus, PenLine, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,13 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { MathText } from "@/components/ui/math-text";
 import { UpgradeNotice } from "@/components/student/upgrade-notice";
 import { GuideSays } from "@/components/student/guide-mascot";
-import {
-  primeSpeech,
-  savedUploads,
-  WhiteboardTutor,
-  type LessonRequest,
-  type SavedUpload,
-} from "@/components/student/whiteboard-tutor";
+import { primeSpeech, WhiteboardTutor, type LessonRequest } from "@/components/student/whiteboard-tutor";
 import { useEntitlements } from "@/hooks/use-entitlements";
 
 interface Mistake {
@@ -28,6 +23,14 @@ interface Mistake {
   subject: string;
   grade: number;
   completedAt: string;
+}
+
+interface RecentUpload {
+  id: string;
+  name: string;
+  mime: string;
+  title: string | null;
+  createdAt: string;
 }
 
 interface Picked {
@@ -88,12 +91,13 @@ export default function WhiteboardPage() {
   const t = useTranslations("whiteboard");
   const ent = useEntitlements();
   const [mistakes, setMistakes] = useState<Mistake[] | null>(null);
-  const [uploads, setUploads] = useState<SavedUpload[]>([]);
+  const router = useRouter();
+  const [uploads, setUploads] = useState<RecentUpload[]>([]);
   const [open, setOpen] = useState<{ request: LessonRequest; studentAnswer?: string } | null>(null);
   const [picked, setPicked] = useState<Picked | null>(null);
-  const [note, setNote] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
+  const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -101,7 +105,10 @@ export default function WhiteboardPage() {
 
   useEffect(() => {
     if (ent.loading || !allowed) return;
-    setUploads(savedUploads());
+    fetch("/api/study-uploads")
+      .then((r) => (r.ok ? r.json() : { uploads: [] }))
+      .then((d) => setUploads(d.uploads ?? []))
+      .catch(() => setUploads([]));
     fetch("/api/ai/why-wrong/recent")
       .then((r) => (r.ok ? r.json() : { mistakes: [] }))
       .then((d) => setMistakes(d.mistakes ?? []))
@@ -142,22 +149,27 @@ export default function WhiteboardPage() {
   function clearPicked() {
     if (picked?.preview) URL.revokeObjectURL(picked.preview);
     setPicked(null);
-    setNote("");
   }
 
-  function explainUpload() {
-    if (!picked) return;
+  /** Store the file, then open it beside the guide, who asks what to do with it. */
+  async function sendUpload() {
+    if (!picked || sending) return;
     primeSpeech();
-    setOpen({
-      request: {
-        kind: "upload",
-        key: `upload-${Date.now().toString(36)}`,
-        file: picked.dataUrl,
-        mimeType: picked.mimeType,
-        note: note.trim(),
-      },
-    });
-    clearPicked();
+    setSending(true);
+    setFileError(null);
+    try {
+      const res = await fetch("/api/study-uploads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: picked.dataUrl, mimeType: picked.mimeType, name: picked.name }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.id) throw new Error(d.error || t("error"));
+      router.push(`/student/tutor/whiteboard/study/${d.id}`);
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : t("error"));
+      setSending(false);
+    }
   }
 
   return (
@@ -239,33 +251,23 @@ export default function WhiteboardPage() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-text-secondary">{t("noteLabel")}</span>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value.slice(0, 300))}
-                  rows={2}
-                  placeholder={t("notePlaceholder")}
-                  className="w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 text-base text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:text-sm"
-                  data-testid="wb-note"
-                />
-              </label>
               <button
                 type="button"
-                onClick={explainUpload}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary-dark"
-                data-testid="wb-upload-explain"
+                onClick={sendUpload}
+                disabled={sending}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary-dark disabled:opacity-70"
+                data-testid="wb-upload-open"
               >
-                <PenLine className="h-5 w-5" /> {t("explain")}
+                {sending ? <Spinner size="sm" /> : <PenLine className="h-5 w-5" />} {sending ? t("sending") : t("openUpload")}
               </button>
-              <p className="text-center text-xs text-text-muted">{t("usesMessage")}</p>
+              <p className="text-center text-xs text-text-muted">{t("openUploadHint")}</p>
             </div>
           )}
           {fileError && <p className="text-sm text-error" data-testid="wb-file-error">{fileError}</p>}
         </CardContent>
       </Card>
 
-      {/* ── Past uploads, replayable for free ─────────────────── */}
+      {/* ── Past uploads (kept 7 days) ─────────────────────────── */}
       {uploads.length > 0 && (
         <section className="space-y-2">
           <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-text-muted">
@@ -273,20 +275,22 @@ export default function WhiteboardPage() {
           </h2>
           <div className="flex flex-wrap gap-2">
             {uploads.map((u) => (
-              <button
-                key={u.key}
-                type="button"
-                onClick={() => {
-                  primeSpeech();
-                  setOpen({ request: { kind: "saved", key: u.key } });
-                }}
+              <Link
+                key={u.id}
+                href={`/student/tutor/whiteboard/study/${u.id}`}
                 className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-primary hover:border-primary/40 hover:bg-primary/5"
+                data-testid="wb-recent-upload"
               >
-                <PenLine className="h-3.5 w-3.5 shrink-0 text-primary" />
-                <span className="truncate">{u.title}</span>
-              </button>
+                {u.mime === "application/pdf" ? (
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-error" />
+                ) : (
+                  <ImagePlus className="h-3.5 w-3.5 shrink-0 text-primary" />
+                )}
+                <span className="truncate">{u.title || u.name}</span>
+              </Link>
             ))}
           </div>
+          <p className="text-xs text-text-muted">{t("keptDays")}</p>
         </section>
       )}
 
@@ -352,10 +356,7 @@ export default function WhiteboardPage() {
         <WhiteboardTutor
           request={open.request}
           studentAnswer={open.studentAnswer}
-          onClose={() => {
-            setOpen(null);
-            setUploads(savedUploads());
-          }}
+          onClose={() => setOpen(null)}
         />
       )}
     </div>

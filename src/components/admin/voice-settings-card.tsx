@@ -19,7 +19,27 @@ interface Config {
   geminiStyle: string | null;
   elevenVoiceId: string;
   elevenModel: string;
+  tutorStyle: TutorStyle;
 }
+
+type TutorStyle = "sassy" | "friendly" | "calm";
+const STYLES: { id: TutorStyle; name: string; sample: string }[] = [
+  {
+    id: "sassy",
+    name: "Sassy & dramatic (study-TikTok style)",
+    sample: "“WAIT. The HEART?! Bestie, no. Sit down — your heart is a delivery guy, not the factory.”",
+  },
+  {
+    id: "friendly",
+    name: "Warm & playful",
+    sample: "“Oops, not quite! Your heart pumps blood — it doesn’t make it. Let me show you.”",
+  },
+  {
+    id: "calm",
+    name: "Calm & clear",
+    sample: "“Let’s look at this together. Red blood cells are made in the bone marrow.”",
+  },
+];
 
 interface Snapshot {
   config: Config;
@@ -119,7 +139,7 @@ export function VoiceSettingsCard() {
       if (!res.ok) throw new Error(d.error || `Save failed (${res.status}).`);
       setSnap({ ...snap!, config: d.config });
       setCfg(d.config);
-      setMsg({ ok: true, text: "Saved. Students hear the new order from their next line." });
+      setMsg({ ok: true, text: "Saved. New lessons use these settings right away." });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Save failed" });
     } finally {
@@ -313,7 +333,7 @@ export function VoiceSettingsCard() {
     <section className="space-y-3" data-testid="voice-settings">
       <div className="flex items-center gap-2">
         <Volume2 className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold text-text-primary">Read-aloud voice</h2>
+        <h2 className="text-lg font-bold text-text-primary">Whiteboard voice &amp; style</h2>
       </div>
       <p className="text-sm text-text-secondary">
         The voices that read the Whiteboard Tutor to students. Students hear the <strong>first service that works</strong>,
@@ -322,7 +342,36 @@ export function VoiceSettingsCard() {
       </p>
       <Card>
         <CardContent className="space-y-3 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-text-muted">Tried in this order</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-text-muted">How the guide talks</p>
+          <div className="grid gap-2 md:grid-cols-3" role="radiogroup" aria-label="How the guide talks">
+            {STYLES.map((st) => (
+              <label
+                key={st.id}
+                className={cn(
+                  "cursor-pointer rounded-xl border p-3 transition-colors",
+                  cfg.tutorStyle === st.id ? "border-primary bg-primary/5 ring-1 ring-primary/40" : "border-border hover:bg-border/30",
+                )}
+                data-testid={`style-${st.id}`}
+              >
+                <span className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="tutor-style"
+                    checked={cfg.tutorStyle === st.id}
+                    onChange={() => set("tutorStyle", st.id)}
+                    className="h-4 w-4 accent-[var(--color-primary)]"
+                  />
+                  <span className="text-sm font-semibold text-text-primary">{st.name}</span>
+                </span>
+                <span className="mt-1 block text-xs italic text-text-secondary">{st.sample}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-text-secondary">
+            Used for every new Whiteboard lesson — quiz mistakes and uploads. Lessons already made keep their style.
+          </p>
+
+          <p className="pt-2 text-xs font-bold uppercase tracking-wide text-text-muted">Voices — tried in this order</p>
           {order.length === 0 && (
             <p className="rounded-lg border border-dashed border-border p-3 text-sm text-text-secondary">
               No service is on — students hear their browser voice. Turn one on below.

@@ -14,6 +14,7 @@
 import crypto from "node:crypto";
 import { db } from "./db";
 import { logUsage, type UsageActor } from "./usage-logger";
+import { isTutorStyle, type TutorStyle } from "./whiteboard-lesson";
 
 export type TtsProviderId = "BROWSER" | "AZURE" | "GEMINI" | "ELEVENLABS";
 export const TTS_PROVIDERS: TtsProviderId[] = ["BROWSER", "AZURE", "GEMINI", "ELEVENLABS"];
@@ -32,6 +33,8 @@ export interface VoiceConfig {
   geminiStyle: string | null;
   elevenVoiceId: string;
   elevenModel: string;
+  /** How the guide talks in Whiteboard lessons. */
+  tutorStyle: TutorStyle;
 }
 
 export const VOICE_DEFAULTS: VoiceConfig = {
@@ -44,6 +47,7 @@ export const VOICE_DEFAULTS: VoiceConfig = {
   geminiStyle: "Read this like a warm, playful, slightly sassy teacher talking to a teenager",
   elevenVoiceId: "cgSgspJ2msm6clMCkdW9",
   elevenModel: "eleven_flash_v2_5",
+  tutorStyle: "sassy",
 };
 
 /** Suggestions for the admin page (any valid id can be typed instead). */
@@ -103,6 +107,7 @@ export async function readVoiceConfig(): Promise<VoiceConfig> {
     geminiStyle: row.geminiStyle,
     elevenVoiceId: row.elevenVoiceId,
     elevenModel: row.elevenModel,
+    tutorStyle: isTutorStyle(row.tutorStyle) ? row.tutorStyle : "sassy",
   };
 }
 

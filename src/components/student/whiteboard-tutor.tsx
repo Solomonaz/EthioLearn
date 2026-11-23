@@ -9,7 +9,7 @@ import {
   Atom, BookOpen, Zap, Bone, Box, Calculator, Check, Clock, Cog, Droplet, FlaskConical, Globe, Heart,
   CircleHelp, Leaf, Lightbulb, Magnet, Microscope, MoveRight, Ruler, Scale, Star, Sun, Target, Truck, X,
   Shield, Flame, Snowflake, Eye, Brain, Coins, Car, House, Sprout, Wind, Mountain, Users, Utensils, Music,
-  Pause, Play, RotateCcw, SkipForward, Volume2, VolumeX, PenLine, MessageSquare,
+  Pause, Play, RotateCcw, SkipForward, Volume2, VolumeX, PenLine, MessageSquare, ArrowLeft,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -231,17 +231,17 @@ function cloudLine(
 /* ── Lesson cache (this browser) ────────────────────────────────── */
 
 const CACHE_INDEX = "wb-lessons";
-const UPLOADS_INDEX = "wb-uploads";
 
 /** What a lesson is about; the key identifies it in this browser. */
 export type LessonRequest =
   | { kind: "mistake"; quizId: string; questionId: string }
-  | { kind: "upload"; key: string; file: string; mimeType: string; note: string }
-  /** A lesson already in this browser (e.g. a past upload). */
-  | { kind: "saved"; key: string };
+  /** About a file the student uploaded (see /api/study-uploads/[id]/act). */
+  | { kind: "study"; uploadId: string; action: "explain" | "summarize"; target: string | null };
 
 export function requestKey(r: LessonRequest): string {
-  return r.kind === "mistake" ? `wb-lesson-${r.quizId}-${r.questionId}` : `wb-lesson-${r.key}`;
+  return r.kind === "mistake"
+    ? `wb-lesson-${r.quizId}-${r.questionId}`
+    : `wb-study-${r.uploadId}-${r.action}-${(r.target ?? "").trim().toLowerCase().slice(0, 200)}`;
 }
 
 interface Cached {
@@ -276,47 +276,23 @@ function writeCached(key: string, entry: Cached) {
   }
 }
 
-/** Past uploads, newest first, for the "replay" list. */
-export interface SavedUpload {
-  key: string;
-  title: string;
-  at: number;
-}
-export function savedUploads(): SavedUpload[] {
-  try {
-    const list = JSON.parse(localStorage.getItem(UPLOADS_INDEX) || "[]") as SavedUpload[];
-    return list.filter((u) => localStorage.getItem(`wb-lesson-${u.key}`));
-  } catch {
-    return [];
-  }
-}
-function rememberUpload(u: SavedUpload) {
-  try {
-    const list = savedUploads().filter((x) => x.key !== u.key);
-    list.unshift(u);
-    localStorage.setItem(UPLOADS_INDEX, JSON.stringify(list.slice(0, 10)));
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 /**
  * One request per lesson at a time: a second caller (React's dev double
  * mount, a double tap) shares the first request instead of spending another
  * tutor message.
  */
 const inflight = new Map<string, Promise<{ ok: boolean; json: Record<string, unknown> }>>();
-function requestLesson(r: Exclude<LessonRequest, { kind: "saved" }>) {
+function requestLesson(r: LessonRequest) {
   const key = requestKey(r);
   let p = inflight.get(key);
   if (!p) {
-    p = fetch(r.kind === "mistake" ? "/api/ai/why-wrong" : "/api/ai/whiteboard-upload", {
+    p = fetch(r.kind === "mistake" ? "/api/ai/why-wrong" : `/api/study-uploads/${encodeURIComponent(r.uploadId)}/act`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         r.kind === "mistake"
           ? { quizId: r.quizId, questionId: r.questionId, format: "whiteboard" }
-          : { file: r.file, mimeType: r.mimeType, note: r.note },
+          : { action: r.action, target: r.target },
       ),
     })
       .then(async (res) => ({ ok: res.ok, json: await res.json().catch(() => ({})) }))
@@ -398,8 +374,11 @@ export function WhiteboardTutor({
   studentAnswer,
   onClose,
   followUpHref: followUpHrefProp,
+  inline = false,
 }: {
   request: LessonRequest;
+  /** Render inside the page (the two-pane study view) instead of as an overlay. */
+  inline?: boolean;
   /** Shown as "Question N" in the header when known. */
   questionNumber?: number;
   studentAnswer?: string;
@@ -428,10 +407,10 @@ export function WhiteboardTutor({
     synth()?.getVoices();
     probeCloud().then(setCloud);
     const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    if (!inline) document.body.style.overflow = "hidden";
     const cache = audioCache.current;
     return () => {
-      document.body.style.overflow = prev;
+      if (!inline) document.body.style.overflow = prev;
       synth()?.cancel();
       cache.clear();
     };
@@ -447,11 +426,6 @@ export function WhiteboardTutor({
       setLoading(false);
       return;
     }
-    if (request.kind === "saved") {
-      setError(t("error"));
-      setLoading(false);
-      return;
-    }
     try {
       const { ok, json } = (await requestLesson(request)) as {
         ok: boolean;
@@ -463,7 +437,8 @@ export function WhiteboardTutor({
       }
       const p: LessonPayload = {
         lesson: json.lesson,
-        kind: json.kind ?? (request.kind === "upload" ? "upload" : "mistake"),
+        kind: request.kind === "study" ? "upload" : "mistake",
+        style: json.style,
         seed: json.seed ?? 0,
         tokens: Array.isArray(json.tokens) ? json.tokens : [],
       };
@@ -472,7 +447,6 @@ export function WhiteboardTutor({
           ? `/student/tutor?book=${encodeURIComponent(json.textbookId)}&chapter=${encodeURIComponent(json.chapterId)}`
           : undefined;
       writeCached(key, { payload: p, followUpHref: chat });
-      if (request.kind === "upload") rememberUpload({ key: request.key, title: p.lesson.title, at: Date.now() });
       setPayload(p);
       if (!followUpHrefProp && chat) setFollowUpHref(chat);
     } catch {
@@ -489,7 +463,7 @@ export function WhiteboardTutor({
 
   const lesson = payload?.lesson ?? null;
   const beats = useMemo<ScriptLine[]>(
-    () => (payload ? lessonScript(payload.lesson, payload.seed, payload.kind) : []),
+    () => (payload ? lessonScript(payload.lesson, payload.seed, payload.kind, payload.style) : []),
     [payload],
   );
   const beat = beats[bi];
@@ -556,8 +530,8 @@ export function WhiteboardTutor({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => {
-    if (mounted) closeRef.current?.focus();
-  }, [mounted]);
+    if (mounted && !inline) closeRef.current?.focus();
+  }, [mounted, inline]);
 
   if (!mounted) return null;
 
@@ -605,11 +579,17 @@ export function WhiteboardTutor({
         ref={closeRef}
         type="button"
         onClick={onClose}
-        className="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:bg-border/50"
-        aria-label={t("close")}
+        className="flex h-9 items-center justify-center gap-1 rounded-full px-2 text-sm font-semibold text-text-secondary hover:bg-border/50"
+        aria-label={inline ? t("backToOptions") : t("close")}
         data-testid="wb-close"
       >
-        <X className="h-5 w-5" />
+        {inline ? (
+          <>
+            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{t("backToOptions")}</span>
+          </>
+        ) : (
+          <X className="h-5 w-5" />
+        )}
       </button>
     </div>
   );
@@ -725,7 +705,7 @@ export function WhiteboardTutor({
             </Link>
           )}
           <button type="button" onClick={onClose} className="rounded-full bg-primary px-5 py-2 text-sm font-bold text-white hover:bg-primary-dark" data-testid="wb-done">
-            {t("gotIt")}
+            {inline ? t("somethingElse") : t("gotIt")}
           </button>
         </div>
       ) : (
@@ -760,6 +740,16 @@ export function WhiteboardTutor({
       )}
     </div>
   );
+
+  if (inline) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface" data-testid="whiteboard-tutor">
+        {header}
+        {body}
+        {controls}
+      </div>
+    );
+  }
 
   return createPortal(
     <div
