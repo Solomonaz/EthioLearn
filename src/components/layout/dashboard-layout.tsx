@@ -26,6 +26,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Only pad for the bottom bar on routes that actually render one.
   const bottomBarPad = hasMobileBottomNav(pathname);
 
+  // The student coach tour opens the (mobile) menu drawer while it points
+  // at menu items, and closes it afterwards.
+  useEffect(() => {
+    const onTour = (e: Event) => setSidebarOpen(!!(e as CustomEvent<{ open: boolean }>).detail?.open);
+    window.addEventListener("abugida:sidebar", onTour);
+    return () => window.removeEventListener("abugida:sidebar", onTour);
+  }, []);
+
   // Restore the sidebar collapsed preference (desktop only; default = open).
   useEffect(() => {
     try {

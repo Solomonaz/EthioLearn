@@ -213,6 +213,9 @@ export default function QuizTakingPage() {
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Set once the answers are saved: the store is cleared before the results
+  // page has loaded, and without this the gap showed "Quiz not found".
+  const [finished, setFinished] = useState(false);
 
   // Derived values (safe even when questions is empty)
   const hasQuestions = questions && questions.length > 0;
@@ -279,6 +282,7 @@ export default function QuizTakingPage() {
         JSON.stringify(results)
       );
 
+      setFinished(true);
       reset();
       router.push(`/student/quiz/${quizId}/results`);
     } catch (err) {
@@ -322,6 +326,16 @@ export default function QuizTakingPage() {
       setTimerActive(true);
     }
   }, [currentIndex, mode, questionSeconds, setTimeLeft, setTimerActive]);
+
+  // Submitted: on the way to the results page (the store is already cleared).
+  if (finished) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-4" role="status">
+        <Spinner size="lg" />
+        <p className="text-sm text-text-secondary">{t("loadingResults")}</p>
+      </div>
+    );
+  }
 
   // If no quiz loaded — render AFTER all hooks
   if (!hasQuestions || !currentQuestion) {

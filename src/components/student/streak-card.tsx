@@ -78,7 +78,7 @@ export function StreakCard({ streak, reminders }: { streak: StreakInfo; reminder
   }
 
   return (
-    <Card className={cn("overflow-hidden", streak.atRisk && "border-2 border-orange-400")}>
+    <Card className={cn("overflow-hidden", streak.atRisk && "border-2 border-orange-400")} data-tour="streak">
       <CardContent className="py-5">
         <div className="flex items-center gap-4">
           <div

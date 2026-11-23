@@ -27,7 +27,7 @@ import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { TrialBanner, ProFeaturesCard } from "@/components/student/pro-promo";
 import { StreakCard, type StreakInfo, type ReminderInfo } from "@/components/student/streak-card";
-import { WelcomeTour } from "@/components/student/welcome-tour";
+import { CoachTour } from "@/components/student/coach-tour";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -201,12 +201,11 @@ export default function StudentDashboardPage() {
         <TourFromUrl onOpen={openReplay} />
       </Suspense>
       {tour && (
-        <WelcomeTour
+        <CoachTour
           name={userName}
           grade={user.grade}
           ent={ent}
           challengeChapterId={challenge && !challenge.completed ? challenge.chapterId : null}
-          remindersReachable={!!dashboard.reminders?.reachable}
           firstRun={tour === "first"}
           onClose={() => {
             setTour(null);
@@ -264,7 +263,7 @@ export default function StudentDashboardPage() {
       {/* Daily Challenge Widget */}
       {challenge && challenge.chapterId !== null &&
         (challenge.completed ? (
-          <Card className="border border-border bg-surface">
+          <Card className="border border-border bg-surface" data-tour="daily-challenge">
             <CardContent className="py-4">
               <p className="text-base font-semibold text-text-primary">
                 {t("challengeComplete")}
@@ -275,7 +274,7 @@ export default function StudentDashboardPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="border-2 border-green-500 bg-surface">
+          <Card className="border-2 border-green-500 bg-surface" data-tour="daily-challenge">
             <CardContent className="py-4">
               <p className="text-base font-semibold text-text-primary">
                 {t("todayChallenge")}
