@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { examDeadline, finishAttempt } from "@/lib/national-exam";
+import { recordStudyActivity } from "@/lib/streak";
 
 const SUBMIT_GRACE_MS = 2 * 60_000;
 
@@ -29,5 +30,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // time counts. The grace covers the auto-submit's own network delay.
   const inTime = examDeadline(attempt.startedAt, attempt.exam.durationMinutes).getTime() + SUBMIT_GRACE_MS > Date.now();
   const score = await finishAttempt(aid, attempt.mode === "EXAM" && inTime && body.answers ? body.answers : undefined);
+  await recordStudyActivity(user.id, "national_exam");
   return NextResponse.json({ id: aid, ...score });
 }

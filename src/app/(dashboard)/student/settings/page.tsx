@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/sonner";
+import { ReminderSettingsCard } from "@/components/student/reminder-settings";
 import { useSession } from "next-auth/react";
 import { logout } from "@/lib/logout";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -515,6 +516,9 @@ function StudentSettingsInner() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Study reminders (Telegram + push) ─────────────────────────────── */}
+      <ReminderSettingsCard />
 
       {/* ── Active Sessions (§4.1.2) ──────────────────────────────────────── */}
       <Card>

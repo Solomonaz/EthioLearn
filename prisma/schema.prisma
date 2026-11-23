@@ -210,6 +210,32 @@ model User {
   // above the quality threshold — protects the prize economy from point farming.
   redeemablePoints Int       @default(0)
   streakDays       Int       @default(0)
+  // ── Study habit (lib/streak.ts) ──
+  /// Last Addis Ababa calendar day ("YYYY-MM-DD") with real study activity —
+  /// the streak's anchor. Null on accounts that predate it (lastActiveAt is the
+  /// fallback for those).
+  lastStudyDay     String?
+  longestStreak    Int       @default(0)
+  /// Banked streak freezes. One is earned every 7 days in a row (max 2) and
+  /// each covers one missed day automatically.
+  streakFreezes    Int       @default(0)
+  // ── Study reminders (lib/reminders.ts) ──
+  remindersEnabled Boolean   @default(true)
+  /// Reminders delivered since the student last studied. At the limit the
+  /// reminders pause until they study again.
+  reminderMisses   Int       @default(0)
+  remindersPausedAt DateTime?
+  lastMorningReminderDay String?
+  lastEveningReminderDay String?
+  /// Telegram refused delivery (bot blocked, chat not found). Cleared when they
+  /// sign in with or link Telegram again.
+  telegramBlockedAt DateTime?
+  // ── Welcome tour (components/student/welcome-tour.tsx) ──
+  /// When the student finished or skipped the welcome tour. Null = show it.
+  onboardingCompletedAt DateTime?
+  /// True when they closed it early; `onboardingStep` is how far they got.
+  onboardingSkipped Boolean   @default(false)
+  onboardingStep    Int?
   isActive         Boolean   @default(true)
   suspendedAt      DateTime?
   suspendReason    String?
@@ -258,6 +284,8 @@ model User {
   subscriptions        Subscription[]    @relation("StudentSubscriptions")
   createdSubscriptions Subscription[]    @relation("SubscriptionCreator")
   paymentRequests      PaymentRequest[]  @relation("StudentPayments")
+  studyDays            StudyDay[]
+  pushSubscriptions    PushSubscription[]
   reviewedPayments     PaymentRequest[]  @relation("PaymentReviewer")
   gameContents         GameContent[]     @relation("GameContentCreator")
   teachingAssignments  TeachingAssignment[] @relation("TeacherAssignments")
@@ -1045,6 +1073,44 @@ model PointLedger {
   quizId String?
 
   @@map("point_ledger")
+}
+
+/// One row per student per Addis Ababa calendar day on which they really
+/// studied (quiz, tutor, battle, national exam, class activity). Drives the
+/// streak calendar and the admin retention report.
+model StudyDay {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM-DD" in Africa/Addis_Ababa.
+  day        String
+  activities Int      @default(1)
+  /// Distinct kinds of study that day: quiz, daily_challenge, tutor, battle,
+  /// national_exam, activity.
+  sources    String[] @default([])
+  /// No study — a streak freeze covered this day.
+  frozen     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, day])
+  @@index([day])
+  @@map("study_days")
+}
+
+/// A browser/device that accepted web push for study reminders.
+model PushSubscription {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model Notification {

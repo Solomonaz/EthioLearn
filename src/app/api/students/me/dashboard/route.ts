@@ -3,6 +3,10 @@ import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { getDailyMessage } from "@/lib/motivational-messages";
 import { getStudyScope } from "@/lib/grade-scope";
+import { recentStudyCalendar, streakStateOf, viewStreak, FREEZE_EVERY, MAX_FREEZES } from "@/lib/streak";
+import { addisDayKey } from "@/lib/study-time";
+import { pushConfigured } from "@/lib/push";
+import { telegramConfigured } from "@/lib/telegram-bot";
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -243,6 +247,26 @@ export async function GET() {
   // ── Daily motivational message (SRS §4.3.1) ───────────────────────────────
   const dailyMessage = getDailyMessage();
 
+  // ── Streak card + whether any reminder can reach this student ────────────
+  const streakView = viewStreak(streakStateOf(user), addisDayKey());
+  const [calendar, reminderInfo] = await Promise.all([
+    recentStudyCalendar(user.id, 7),
+    db.user.findUnique({
+      where: { id: user.id },
+      select: {
+        remindersEnabled: true,
+        remindersPausedAt: true,
+        telegramId: true,
+        telegramBlockedAt: true,
+        onboardingCompletedAt: true,
+        _count: { select: { pushSubscriptions: true } },
+      },
+    }),
+  ]);
+  const telegramReachable =
+    telegramConfigured() && !!reminderInfo?.telegramId && !reminderInfo.telegramBlockedAt;
+  const pushOn = pushConfigured() && (reminderInfo?._count.pushSubscriptions ?? 0) > 0;
+
   return NextResponse.json({
     user: {
       id: user.id,
@@ -250,14 +274,27 @@ export async function GET() {
       grade: user.grade,
       xpLevel: user.xpLevel,
       totalPoints: user.totalPoints,
-      streakDays: user.streakDays,
+      streakDays: streakView.days,
       avatarUrl: user.avatarUrl,
     },
     stats: {
       totalQuizzes: quizStats._count,
       averageScore: Math.round(quizStats._avg.score || 0),
       totalPoints: pointsSum._sum.points || 0,
-      streakDays: user.streakDays,
+      streakDays: streakView.days,
+    },
+    streak: {
+      ...streakView,
+      calendar,
+      freezeEvery: FREEZE_EVERY,
+      maxFreezes: MAX_FREEZES,
+    },
+    // Welcome tour: shown until the student finishes or skips it once.
+    onboarding: { show: !!reminderInfo && !reminderInfo.onboardingCompletedAt },
+    reminders: {
+      enabled: !!reminderInfo?.remindersEnabled && !reminderInfo?.remindersPausedAt,
+      reachable: telegramReachable || pushOn,
+      pushAvailable: pushConfigured(),
     },
     recentQuizzes,
     availableSubjects: textbooks,

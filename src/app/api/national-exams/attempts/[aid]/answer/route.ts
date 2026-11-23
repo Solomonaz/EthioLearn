@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+import { recordStudyActivity } from "@/lib/streak";
 
 /**
  * POST /api/national-exams/attempts/[aid]/answer — practice mode only: record
@@ -34,8 +35,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const answers = { ...((attempt.answers as Record<string, string>) ?? {}) };
   if (!(q.id in answers)) {
+    // The first answer of a practice attempt counts as today's study (the
+    // student may never press "finish" on a long paper).
+    const firstAnswer = Object.keys(answers).length === 0;
     answers[q.id] = answer;
     await db.nationalExamAttempt.update({ where: { id: aid }, data: { answers } });
+    if (firstAnswer) await recordStudyActivity(user.id, "national_exam");
   }
   return NextResponse.json({
     isCorrect: answer === q.correctAnswer,

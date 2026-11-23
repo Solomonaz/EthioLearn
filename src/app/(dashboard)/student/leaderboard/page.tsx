@@ -24,9 +24,30 @@ interface LeaderboardEntry {
   isCurrentUser: boolean;
 }
 
+interface LastWeekEntry {
+  rank: number;
+  userId: string;
+  name: string;
+  points: number;
+  isCurrentUser: boolean;
+}
+
 interface LeaderboardResponse {
   leaderboard: LeaderboardEntry[];
   currentUserRank: number | null;
+  /** Weekly view only. */
+  resetsAt?: string;
+  lastWeekTop?: LastWeekEntry[];
+}
+
+function resetCountdown(resetsAt: string, now: number): string {
+  const ms = Math.max(0, new Date(resetsAt).getTime() - now);
+  const days = Math.floor(ms / 86_400_000);
+  const hours = Math.floor((ms % 86_400_000) / 3_600_000);
+  const mins = Math.floor((ms % 3_600_000) / 60_000);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
 type ScopeType = "school" | "grade" | "class";
@@ -83,7 +104,10 @@ const SCOPE_OPTIONS: { value: ScopeType; label: string; icon: React.ElementType;
 export default function LeaderboardPage() {
   const ent = useEntitlements();
   const [scope, setScope] = useState<ScopeType>("school");
-  const [period, setPeriod] = useState<"alltime" | "weekly">("alltime");
+  // This week first: a weekly race resets every Monday, so a newcomer can win
+  // it — an all-time table is a wall nobody new can climb.
+  const [period, setPeriod] = useState<"alltime" | "weekly">("weekly");
+  const [now, setNow] = useState(() => Date.now());
   const [subject, setSubject] = useState("");
   const [subjectsList, setSubjectsList] = useState<{ value: string; label: string }[]>([
     { value: "", label: "All Subjects" },
@@ -133,6 +157,12 @@ export default function LeaderboardPage() {
   useEffect(() => {
     fetchLeaderboard();
   }, [fetchLeaderboard]);
+
+  // Keep the reset countdown fresh.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Close subject dropdown when clicking outside
   useEffect(() => {
@@ -192,16 +222,6 @@ export default function LeaderboardPage() {
             {/* Period tabs */}
             <div className="flex rounded-lg border border-border bg-gray-50 p-0.5">
               <button
-                onClick={() => setPeriod("alltime")}
-                className={`flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
-                  period === "alltime"
-                    ? "bg-white text-primary shadow-sm"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                All Time
-              </button>
-              <button
                 onClick={() => setPeriod("weekly")}
                 className={`flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
                   period === "weekly"
@@ -210,6 +230,16 @@ export default function LeaderboardPage() {
                 }`}
               >
                 This Week
+              </button>
+              <button
+                onClick={() => setPeriod("alltime")}
+                className={`flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
+                  period === "alltime"
+                    ? "bg-white text-primary shadow-sm"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                All Time
               </button>
             </div>
 
@@ -249,6 +279,50 @@ export default function LeaderboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Weekly race: reset countdown + last week's champions */}
+      {period === "weekly" && data?.resetsAt && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Weekly race</p>
+                <p className="text-xs text-text-secondary">
+                  Resets every Monday at midnight. Earn points in the Daily Challenge and Battles.
+                </p>
+              </div>
+              <div className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary" data-testid="reset-countdown">
+                Resets in {resetCountdown(data.resetsAt, now)}
+              </div>
+            </div>
+            {data.lastWeekTop && data.lastWeekTop.length > 0 && (
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">
+                  Last week&apos;s champions
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {data.lastWeekTop.map((c) => (
+                    <span
+                      key={c.userId}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                        c.isCurrentUser ? "border-primary/40 bg-primary/5 text-primary" : "border-border text-text-primary"
+                      }`}
+                    >
+                      {c.rank === 1 ? (
+                        <Crown className="h-3.5 w-3.5 text-yellow-500" />
+                      ) : (
+                        <Medal className={`h-3.5 w-3.5 ${c.rank === 2 ? "text-gray-400" : "text-amber-600"}`} />
+                      )}
+                      <span className="font-medium">{c.isCurrentUser ? "You" : c.name}</span>
+                      <span className="text-text-secondary">{c.points.toLocaleString()} pts</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Top 3 podium */}
       {!loading && !error && leaderboard.length >= 3 && (
@@ -296,7 +370,7 @@ export default function LeaderboardPage() {
                 No rankings yet for this {scope} / {period === "weekly" ? "week" : "period"}
               </p>
               <p className="text-xs text-text-secondary/60">
-                Complete quizzes to appear on the leaderboard
+                Win a Battle or finish today&apos;s Daily Challenge to get on the board
               </p>
             </div>
           ) : (

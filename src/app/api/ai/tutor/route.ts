@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
 import { usageActor, type UsageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
+import { recordStudyActivity } from "@/lib/streak";
 import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
@@ -177,6 +178,7 @@ export async function POST(req: Request) {
 
     // Count only a delivered reply, so a failed call never uses up a message.
     const usedToday = capped ? await recordTutorMessage(user.id) : null;
+    if (user.role === "STUDENT") await recordStudyActivity(user.id, "tutor");
     const limit = daily?.limit ?? null;
 
     return NextResponse.json({

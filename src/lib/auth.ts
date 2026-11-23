@@ -227,6 +227,11 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
           //    who linked Telegram from their profile) → sign in ─────────────
           if (existing) {
             if (!existing.isActive || existing.suspendedAt) return null;
+            // Signing in through Telegram re-grants the bot write access
+            // (request_access=write), so study reminders may reach them again.
+            if (existing.telegramBlockedAt) {
+              await db.user.update({ where: { id: existing.id }, data: { telegramBlockedAt: null } });
+            }
             return {
               id:    existing.id,
               name:  existing.name,

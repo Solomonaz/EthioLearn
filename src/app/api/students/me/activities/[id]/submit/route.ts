@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { recordStudyActivity } from "@/lib/streak";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
 /**
@@ -112,6 +113,7 @@ export async function POST(
       completedAt: now,
     },
   });
+  await recordStudyActivity(user.id, "activity");
 
   return NextResponse.json({ ok: true, submittedAt: now });
 }

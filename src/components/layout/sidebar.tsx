@@ -28,6 +28,8 @@ import {
   Shuffle,
   Grid3x3,
   Bot,
+  Repeat,
+  Compass,
   Palette,
   Puzzle,
   LineChart,
@@ -108,6 +110,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "quizHistory", href: "/student/history",        icon: History },
     { labelKey: "billing",     href: "/student/billing",        icon: CreditCard },
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
+    // Replays the welcome tour (student dashboard opens it on ?tour=1).
+    { labelKey: "appTour",     href: "/student?tour=1",         icon: Compass },
   ].filter((item) => {
     if (lockedKeys.has(item.labelKey)) return true;
     if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
@@ -134,6 +138,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "pricing",    href: "/admin/pricing",      icon: CreditCard },
     { labelKey: "payments",   href: "/admin/payments",     icon: Receipt },
     { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
+    { labelKey: "retention",  href: "/admin/retention",    icon: Repeat },
     { labelKey: "aiUsage",    href: "/admin/usage",        icon: Coins },
     { labelKey: "aiModels",   href: "/admin/ai-models",    icon: Cpu },
     { labelKey: "settings",   href: "/admin/settings",     icon: Settings },

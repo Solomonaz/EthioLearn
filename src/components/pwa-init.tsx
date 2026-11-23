@@ -21,10 +21,18 @@ export function PWAInit() {
       return;
     }
 
-    // Development: unregister anything already installed and drop its caches.
+    // Development: unregister anything already installed and drop its caches —
+    // except the push-only worker (public/push-sw.js), which caches nothing and
+    // is what study-reminder notifications use in development.
     navigator.serviceWorker
       .getRegistrations()
-      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .then((regs) =>
+        Promise.all(
+          regs
+            .filter((r) => !(r.active ?? r.waiting ?? r.installing)?.scriptURL.endsWith("/push-sw.js"))
+            .map((r) => r.unregister()),
+        ),
+      )
       .catch(console.error);
 
     if ("caches" in window) {

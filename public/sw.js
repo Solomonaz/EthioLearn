@@ -2,6 +2,9 @@
 // the caching rules below change — v1 cached the app shell cache-first, which
 // left returning visitors on stale HTML pointing at deleted build chunks.
 const CACHE_NAME = "abugida-v1";
+
+// Study-reminder notifications (push + notificationclick).
+importScripts("/push-handlers.js");
 const OFFLINE_URL = "/offline";
 const STATIC_ASSETS = ["/offline", "/manifest.json"];
 

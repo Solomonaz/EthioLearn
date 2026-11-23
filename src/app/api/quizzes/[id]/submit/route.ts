@@ -9,6 +9,7 @@ import { checkAndAwardAchievements } from "@/lib/achievements";
 import { normalizeOption } from "@/lib/utils";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { answerKey, normalizeMathText } from "@/lib/math-notation";
+import { recordStudyActivity } from "@/lib/streak";
 
 // ── Anti-gaming constants (SRS §4.9.2) ───────────────────────────────────────
 const MAX_SCORED_QUIZZES_PER_DAY = 20;
@@ -192,28 +193,13 @@ export async function POST(
     }));
     const totalTimeTakenMs = answers.reduce((sum, a) => sum + (a.timeTakenMs ?? 0), 0);
 
-    // Calculate streak before points (need it for streak bonus)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const lastActive = user.lastActiveAt ? new Date(user.lastActiveAt) : null;
-    const lastActiveDay = lastActive
-      ? new Date(lastActive.setHours(0, 0, 0, 0))
-      : null;
-
-    let newStreak = 1;
-    if (lastActiveDay) {
-      const diffDays = Math.floor(
-        (today.getTime() - lastActiveDay.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (diffDays === 0) {
-        newStreak = user.streakDays || 1;
-      } else if (diffDays === 1) {
-        newStreak = (user.streakDays || 0) + 1;
-      } else {
-        newStreak = 1;
-      }
-    }
+    // Count today's study and advance the streak (lib/streak) before points —
+    // the streak bonus needs it. Any real study counts, not only quizzes.
+    const studied = await recordStudyActivity(
+      user.id,
+      quiz.isDailyChallenge ? "daily_challenge" : quiz.activityId ? "activity" : "quiz",
+    );
+    const newStreak = studied?.streakDays ?? Math.max(1, user.streakDays || 0);
 
     const correctCount = gradedAnswers.filter((a) => a.isCorrect).length;
     const score = Math.round((correctCount / gradedAnswers.length) * 100);
@@ -517,12 +503,6 @@ export async function POST(
         data: { xpLevel: newXPLevel },
       });
     }
-
-    // Update streak
-    await db.user.update({
-      where: { id: user.id },
-      data: { streakDays: newStreak },
-    });
 
     // Achievement counts
     const totalQuizzesDone = await db.quiz.count({

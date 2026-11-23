@@ -97,7 +97,8 @@ export async function POST(req: Request) {
 
   await db.user.update({
     where: { id: user.id },
-    data: { telegramId } as any,
+    // Linking again re-grants the bot write access, so reminders may resume.
+    data: { telegramId, telegramBlockedAt: null },
   });
 
   const displayName = data.username

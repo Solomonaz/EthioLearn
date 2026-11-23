@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -25,6 +26,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { TrialBanner, ProFeaturesCard } from "@/components/student/pro-promo";
+import { StreakCard, type StreakInfo, type ReminderInfo } from "@/components/student/streak-card";
+import { WelcomeTour } from "@/components/student/welcome-tour";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -89,6 +92,19 @@ interface DashboardData {
   weakestChapters: WeakestChapter[];
   studyRecommendations: StudyRecommendation[];
   dailyMessage: DailyMessageData;
+  streak?: StreakInfo;
+  reminders?: ReminderInfo;
+  onboarding?: { show: boolean };
+}
+
+/** Opens the tour when the URL asks for it (sidebar "App tour" → ?tour=1). */
+function TourFromUrl({ onOpen }: { onOpen: () => void }) {
+  const params = useSearchParams();
+  const wanted = params.get("tour") === "1";
+  useEffect(() => {
+    if (wanted) onOpen();
+  }, [wanted, onOpen]);
+  return null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -109,6 +125,11 @@ export default function StudentDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<ChallengeData | null>(null);
+  // Welcome tour: "first" = first run after sign-up (outcome is recorded),
+  // "replay" = opened again from the menu.
+  const [tour, setTour] = useState<"first" | "replay" | null>(null);
+  const router = useRouter();
+  const openReplay = useMemo(() => () => setTour((cur) => cur ?? "replay"), []);
 
   const locale = useMemo(() => getLocale(), []);
 
@@ -119,6 +140,7 @@ export default function StudentDashboardPage() {
         if (!res.ok) throw new Error("Failed to load dashboard");
         const data = await res.json();
         setDashboard(data);
+        if (data.onboarding?.show) setTour("first");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -175,6 +197,24 @@ export default function StudentDashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+      <Suspense fallback={null}>
+        <TourFromUrl onOpen={openReplay} />
+      </Suspense>
+      {tour && (
+        <WelcomeTour
+          name={userName}
+          grade={user.grade}
+          ent={ent}
+          challengeChapterId={challenge && !challenge.completed ? challenge.chapterId : null}
+          remindersReachable={!!dashboard.reminders?.reachable}
+          firstRun={tour === "first"}
+          onClose={() => {
+            setTour(null);
+            if (window.location.search.includes("tour=1")) router.replace("/student");
+          }}
+        />
+      )}
+
       {/* ── Rotating Motivational Welcome Banner (SRS §4.3.1) ──────────── */}
       <Card className="bg-primary text-white">
         <CardContent className="py-6">
@@ -193,6 +233,11 @@ export default function StudentDashboardPage() {
 
       {/* Free trial countdown / "trial ended" (self-registered students only) */}
       <TrialBanner ent={ent} />
+
+      {/* Study streak — the daily habit, front and centre */}
+      {dashboard.streak && dashboard.reminders && (
+        <StreakCard streak={dashboard.streak} reminders={dashboard.reminders} />
+      )}
 
       {/* XP Level Progress */}
       <Card>

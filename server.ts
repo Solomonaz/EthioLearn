@@ -8,6 +8,8 @@ import { decode } from "next-auth/jwt";
 import { checkBattleAchievements } from "./src/lib/achievements";
 import { getBattleSeconds } from "./src/lib/quiz-timing";
 import { deleteStaleUnverifiedStudents } from "./src/lib/unverified-cleanup";
+import { recordStudyActivity } from "./src/lib/streak";
+import { startReminderScheduler } from "./src/lib/reminders";
 
 // ── Fun facts pool (SRS §4.6.3) ──────────────────────────────────────────────
 const FUN_FACTS: Record<string, string[]> = {
@@ -710,6 +712,8 @@ app.prepare().then(() => {
         checkBattleAchievements(winner.userId).catch(console.error);
       }
       finalScores.forEach((player, index) => {
+        // Playing a battle (answering at least one question) is a study day.
+        if (player.answered > 0) recordStudyActivity(player.userId, "battle").catch(console.error);
         if (room.gameRoomId) {
           prisma.gamePlayer.upsert({
             where: { userId_gameRoomId: { userId: player.userId, gameRoomId: room.gameRoomId } },
@@ -745,4 +749,7 @@ app.prepare().then(() => {
       .catch((err) => console.error("[cleanup] Unconfirmed sign-up cleanup failed:", err));
   setTimeout(cleanUnverified, 60_000);
   setInterval(cleanUnverified, 12 * 60 * 60 * 1000);
+
+  // Study reminders (Telegram + web push) and nightly streak settling.
+  startReminderScheduler();
 });

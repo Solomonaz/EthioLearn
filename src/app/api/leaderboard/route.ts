@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { addisWeekStart } from "@/lib/study-time";
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -154,6 +155,54 @@ async function getAllTimeLeaderboard(
 }
 
 // ── Weekly leaderboard ────────────────────────────────────────────────────────
+// A calendar week: Monday 00:00 to Monday 00:00 Addis Ababa time, so it really
+// does reset every Monday. Ranked on points EARNED that week from the point
+// ledger — Daily Challenge, battle wins, streak bonuses and quiz points — not
+// only quiz rows (battle wins never had one). With a subject filter, only quiz
+// points can be attributed to a subject, so that view ranks quiz points.
+
+const EARNING_ACTIONS = ["QUIZ_COMPLETE", "DAILY_CHALLENGE", "BATTLE_WIN", "STREAK_BONUS"];
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+type Totals = { userId: string; points: number }[];
+
+async function weeklyTotals(
+  scopeUserIds: string[],
+  from: Date,
+  to: Date,
+  subject: string,
+  take?: number,
+): Promise<Totals> {
+  if (scopeUserIds.length === 0) return [];
+  if (subject) {
+    const rows = await db.quiz.groupBy({
+      by: ["studentId"],
+      where: {
+        completedAt: { gte: from, lt: to },
+        studentId: { in: scopeUserIds },
+        totalPointsEarned: { gt: 0 },
+        answers: { some: { question: { chapter: { textbook: { subject } } } } },
+      },
+      _sum: { totalPointsEarned: true },
+      orderBy: { _sum: { totalPointsEarned: "desc" } },
+      ...(take ? { take } : {}),
+    });
+    return rows.map((r) => ({ userId: r.studentId, points: r._sum.totalPointsEarned ?? 0 }));
+  }
+  const rows = await db.pointLedger.groupBy({
+    by: ["userId"],
+    where: {
+      createdAt: { gte: from, lt: to },
+      userId: { in: scopeUserIds },
+      actionType: { in: EARNING_ACTIONS },
+      points: { gt: 0 },
+    },
+    _sum: { points: true },
+    orderBy: { _sum: { points: "desc" } },
+    ...(take ? { take } : {}),
+  });
+  return rows.map((r) => ({ userId: r.userId, points: r._sum.points ?? 0 }));
+}
 
 async function getWeeklyLeaderboard(
   user: {
@@ -165,66 +214,33 @@ async function getWeeklyLeaderboard(
   type: string,
   subject: string
 ) {
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const weekStart = addisWeekStart();
+  const weekEnd = new Date(weekStart.getTime() + WEEK_MS);
+  const lastWeekStart = new Date(weekStart.getTime() - WEEK_MS);
 
-  // Fetch user IDs in scope
   const scopeUsers = await db.user.findMany({
     where: buildUserScopeWhere(user, type),
     select: { id: true },
   });
   const scopeUserIds = scopeUsers.map((u) => u.id);
 
-  // Build quiz where clause for weekly period
-  const quizWhere: Prisma.QuizWhereInput = {
-    completedAt: { gte: weekAgo },
-    studentId: { in: scopeUserIds },
-  };
+  const [ranked, lastWeek] = await Promise.all([
+    weeklyTotals(scopeUserIds, weekStart, weekEnd, subject, 50),
+    weeklyTotals(scopeUserIds, lastWeekStart, weekStart, "", 3),
+  ]);
 
-  if (subject) {
-    quizWhere.answers = {
-      some: {
-        question: {
-          chapter: {
-            textbook: { subject },
-          },
-        },
-      },
-    };
-  }
-
-  // Group quizzes by student, sum points earned this week
-  const weeklyPoints = await db.quiz.groupBy({
-    by: ["studentId"],
-    where: quizWhere,
-    _sum: { totalPointsEarned: true },
-    orderBy: { _sum: { totalPointsEarned: "desc" } },
-    take: 50,
-  });
-
-  if (weeklyPoints.length === 0) {
-    return NextResponse.json({ leaderboard: [], currentUserRank: null });
-  }
-
-  // Fetch user details for the ranked IDs
-  const rankedUserIds = weeklyPoints.map((w) => w.studentId);
-  const userDetails = await db.user.findMany({
-    where: { id: { in: rankedUserIds } },
-    select: {
-      id: true,
-      name: true,
-      grade: true,
-      section: true,
-      avatarUrl: true,
-      totalPoints: true,
-      xpLevel: true,
-    },
-  });
-
+  const ids = [...new Set([...ranked, ...lastWeek].map((r) => r.userId))];
+  const userDetails = ids.length
+    ? await db.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, grade: true, section: true, avatarUrl: true, xpLevel: true },
+      })
+    : [];
   const userMap = new Map(userDetails.map((u) => [u.id, u]));
 
-  const leaderboard = weeklyPoints
+  const leaderboard = ranked
     .map((w, index) => {
-      const u = userMap.get(w.studentId);
+      const u = userMap.get(w.userId);
       if (!u) return null;
       return {
         rank: index + 1,
@@ -233,7 +249,7 @@ async function getWeeklyLeaderboard(
         grade: u.grade,
         section: u.section,
         avatarUrl: u.avatarUrl,
-        totalPoints: w._sum.totalPointsEarned ?? 0,
+        totalPoints: w.points,
         xpLevel: u.xpLevel,
         isCurrentUser: u.id === user.id,
       };
@@ -242,34 +258,27 @@ async function getWeeklyLeaderboard(
 
   let currentUserRank: number | null = null;
   const currentUserEntry = leaderboard.find((e) => e.isCurrentUser);
-
   if (currentUserEntry) {
     currentUserRank = currentUserEntry.rank;
-  } else {
-    // Compute user's weekly points to determine rank outside top 50
-    const currentUserWeekly = await db.quiz.aggregate({
-      where: { studentId: user.id, completedAt: { gte: weekAgo } },
-      _sum: { totalPointsEarned: true },
-    });
-    const currentWeeklyPoints = currentUserWeekly._sum.totalPointsEarned ?? 0;
-
-    if (currentWeeklyPoints > 0) {
-      const higherScorers = await db.quiz.groupBy({
-        by: ["studentId"],
-        where: {
-          completedAt: { gte: weekAgo },
-          studentId: { in: scopeUserIds },
-        },
-        _sum: { totalPointsEarned: true },
-        having: {
-          totalPointsEarned: {
-            _sum: { gt: currentWeeklyPoints },
-          },
-        },
-      });
-      currentUserRank = higherScorers.length + 1;
-    }
+  } else if (leaderboard.length >= 50) {
+    // Outside the top 50: rank = how many in scope earned more this week.
+    const all = await weeklyTotals(scopeUserIds, weekStart, weekEnd, subject);
+    const mine = all.find((r) => r.userId === user.id)?.points ?? 0;
+    if (mine > 0) currentUserRank = all.filter((r) => r.points > mine).length + 1;
   }
 
-  return NextResponse.json({ leaderboard, currentUserRank });
+  const lastWeekTop = lastWeek
+    .map((w, i) => {
+      const u = userMap.get(w.userId);
+      return u ? { rank: i + 1, userId: u.id, name: u.name, points: w.points, isCurrentUser: u.id === user.id } : null;
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+
+  return NextResponse.json({
+    leaderboard,
+    currentUserRank,
+    weekStartsAt: weekStart.toISOString(),
+    resetsAt: weekEnd.toISOString(),
+    lastWeekTop,
+  });
 }
