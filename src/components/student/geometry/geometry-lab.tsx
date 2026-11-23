@@ -146,6 +146,20 @@ function faceTriangles(def: SolidDef, face: number[]): number[] {
   return out;
 }
 
+
+/**
+ * Where the camera starts (and "Put the camera back" returns it). Tuned for a
+ * landscape board; on a tall, narrow board (phones) the horizontal view is
+ * much narrower, so step back until solids fit the width as they do on a
+ * wide board — otherwise a cube overflows both sides of the screen.
+ */
+const HOME_CAMERA = new THREE.Vector3(3.4, 2.6, 3.8);
+const HOME_ASPECT = 1.25;
+function homeCameraPosition(aspect: number): THREE.Vector3 {
+  const k = aspect > 0 && aspect < HOME_ASPECT ? Math.min(HOME_ASPECT / aspect, 2.6) : 1;
+  return HOME_CAMERA.clone().multiplyScalar(k);
+}
+
 export function GeometryLab() {
   // The AI helpers here (sketch→3D recognition and the "Ask AI" panel) are
   // governed by the global "AI in Graphing & 3D Geometry" switch. Optimistic
@@ -406,7 +420,7 @@ export function GeometryLab() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 100);
-    camera.position.set(3.4, 2.6, 3.8);
+    camera.position.copy(homeCameraPosition(camera.aspect));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -750,7 +764,7 @@ export function GeometryLab() {
   const resetView = () => {
     const eng = engineRef.current;
     if (!eng) return;
-    eng.camera.position.set(3.4, 2.6, 3.8);
+    eng.camera.position.copy(homeCameraPosition(eng.camera.aspect));
     eng.controls.target.set(0, 0, 0);
     eng.controls.update();
   };

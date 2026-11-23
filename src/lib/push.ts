@@ -46,8 +46,15 @@ export interface PushPayload {
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<number> {
   if (!ensureConfigured()) return 0;
   const subs = await db.pushSubscription.findMany({ where: { userId } });
+  // Defence in depth: never send to anything but a browser push service, even
+  // if a row got in some other way (the subscribe route already checks this).
+  const allowed = /^https:\/\/([a-z0-9-]+\.)*(fcm\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)\//i;
   let delivered = 0;
   for (const s of subs) {
+    if (!allowed.test(s.endpoint)) {
+      await db.pushSubscription.delete({ where: { id: s.id } }).catch(() => {});
+      continue;
+    }
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },

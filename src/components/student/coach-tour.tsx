@@ -36,14 +36,22 @@ interface CoachStep {
   video?: { name: string; duration: string };
 }
 
+// Menu steps are listed in menu order, and are also sorted by their real
+// position in the menu at runtime, so the tour always walks straight down.
+const menu = (href: string) => `aside a[href="${href}"]`;
 const STEPS: CoachStep[] = [
   { id: "welcome" },
-  { id: "quiz", navKey: "quiz", target: 'aside a[href="/student/quiz"]', video: { name: "quiz", duration: "0:38" } },
-  { id: "exam", navKey: "nationalExam", target: 'aside a[href="/student/national-exam"]' },
-  { id: "tutor", navKey: "aiTutor", target: 'aside a[href="/student/tutor"]', pro: "aiTutor", video: { name: "tutor", duration: "0:37" } },
-  { id: "battle", navKey: "battle", target: 'aside a[href="/student/battle"]', pro: "battle" },
-  { id: "math", navKey: "grapher", target: 'aside a[href="/student/grapher"]', pro: "mathTools" },
-  { id: "ranks", navKey: "leaderboard", target: 'aside a[href="/student/leaderboard"]', pro: "leaderboard" },
+  { id: "quiz", navKey: "quiz", target: menu("/student/quiz"), video: { name: "quiz", duration: "0:38" } },
+  { id: "exam", navKey: "nationalExam", target: menu("/student/national-exam") },
+  { id: "library", navKey: "library", target: menu("/student/library") },
+  { id: "work", navKey: "myWork", target: menu("/student/activities") },
+  { id: "grapher", navKey: "grapher", target: menu("/student/grapher"), pro: "mathTools", video: { name: "grapher", duration: "0:27" } },
+  { id: "geometry", navKey: "geometry", target: menu("/student/geometry"), pro: "mathTools", video: { name: "geometry", duration: "0:45" } },
+  { id: "tutor", navKey: "aiTutor", target: menu("/student/tutor"), pro: "aiTutor", video: { name: "tutor", duration: "0:37" } },
+  { id: "battle", navKey: "battle", target: menu("/student/battle"), pro: "battle" },
+  { id: "ranks", navKey: "leaderboard", target: menu("/student/leaderboard"), pro: "leaderboard" },
+  { id: "rewards", navKey: "rewards", target: menu("/student/rewards") },
+  { id: "progress", navKey: "myProgress", target: menu("/student/progress") },
   // "||" = in order of preference: the challenge card, else the streak card.
   { id: "daily", target: '[data-tour="daily-challenge"]||[data-tour="streak"]' },
 ];
@@ -169,18 +177,45 @@ export function CoachTour({ name, grade, ent, challengeChapterId, firstRun, onCl
   const { w: vw, h: vh } = useViewport();
   const mobile = vw < 768;
 
-  // Only steps whose menu item exists for this student (a feature switched
-  // off platform-wide has no menu item, so its step is skipped).
-  const [steps, setSteps] = useState<CoachStep[]>(STEPS);
+  // Only steps whose menu item exists for this student, in the order the
+  // items actually sit in the menu. The menu changes after load (while the
+  // plan loads every item shows, then some disappear), so this is re-read
+  // whenever the menu changes, and the current step is tracked by id.
+  const [menuTick, setMenuTick] = useState(0);
   useEffect(() => {
-    setSteps(STEPS.filter((s) => !s.target || !isSidebar(s.target) || document.querySelector(s.target)));
+    const aside = document.querySelector("aside");
+    if (!aside) return;
+    const mo = new MutationObserver(() => setMenuTick((t) => t + 1));
+    mo.observe(aside, { childList: true, subtree: true });
+    return () => mo.disconnect();
   }, []);
+  const steps = useMemo<CoachStep[]>(() => {
+    if (typeof document === "undefined") return STEPS;
+    const menuSteps = STEPS.filter((s) => isSidebar(s.target) && document.querySelector(s.target!));
+    menuSteps.sort((a, b) => {
+      const ea = document.querySelector(a.target!)!;
+      const eb = document.querySelector(b.target!)!;
+      return ea.compareDocumentPosition(eb) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1;
+    });
+    return [STEPS[0], ...menuSteps, ...STEPS.filter((s) => s.target && !isSidebar(s.target))];
+  }, [menuTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [index, setIndex] = useState(0);
+  const [stepId, setStepId] = useState("welcome");
+  // If the current step's item disappeared, carry on with the next one.
+  let index = steps.findIndex((s) => s.id === stepId);
+  if (index < 0) {
+    const order = STEPS.findIndex((s) => s.id === stepId);
+    index = steps.findIndex((s) => STEPS.indexOf(s) > order);
+    if (index < 0) index = steps.length - 1;
+  }
+  const setIndex = (next: number | ((i: number) => number)) => {
+    const i = typeof next === "function" ? next(index) : next;
+    setStepId(steps[Math.max(0, Math.min(i, steps.length - 1))].id);
+  };
   const [video, setVideo] = useState<string | null>(null);
-  const step = steps[Math.min(index, steps.length - 1)];
+  const step = steps[index];
   const last = index >= steps.length - 1;
-  const rect = useTargetRect(step.target, index);
+  const rect = useTargetRect(step.target, STEPS.indexOf(step));
   const locked = useMemo(() => lockedProFeatures(ent), [ent]);
   const recorded = useRef(false);
   const bubbleRef = useRef<HTMLDivElement>(null);

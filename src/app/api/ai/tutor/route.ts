@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { usageActor, type UsageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { recordStudyActivity } from "@/lib/streak";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { semanticSearch } from "@/lib/embeddings";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
@@ -90,6 +91,11 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Same-site requests only: another site must not spend a student's tutor
+  // messages (and our AI budget) through their session.
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
   // Every call here spends real tokens at a paid provider, so an unmetered

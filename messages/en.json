@@ -1019,11 +1019,16 @@
     "examText": "Real past Grade 12 national exam papers. Practice mode shows the answer as you go; exam mode is timed like the real thing.",
     "tutorText": "Stuck on something? Choose a chapter and ask in your own words. The tutor explains from your textbook, step by step.",
     "battleText": "Create a room, share the code and race your friends on the same questions, live. The winner earns points.",
-    "mathText": "Draw graphs and explore 3D shapes to understand maths visually.",
     "ranksText": "A new race every Monday. Earn points in the Daily Challenge and battles to climb your grade.",
     "dailyTitle": "Start here every day",
     "dailyText": "Today's Daily Challenge: 5 quick questions. Studying a little every day keeps your streak going.",
     "startChallenge": "Start today's challenge",
-    "startQuiz": "Start a practice quiz"
+    "startQuiz": "Start a practice quiz",
+    "libraryText": "Read your textbooks right here, chapter by chapter, any time.",
+    "workText": "Homework and tests your teachers set for your class. Hand them in here.",
+    "grapherText": "Type any equation and see its graph. Trace the curve, find roots and intersections, and see a table of values.",
+    "geometryText": "Explore 3D solids from every angle. Rotate them, see faces, edges and vertices, and tap a face to see its true shape.",
+    "rewardsText": "Turn the points you earn into real rewards.",
+    "progressText": "See how you're doing in every subject, and which chapters to practise next."
   }
 }

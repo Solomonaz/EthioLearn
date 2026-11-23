@@ -12,10 +12,23 @@ import { pushConfigured } from "@/lib/push";
 
 const MAX_DEVICES = 5;
 
+// Browsers' own push services. The server later POSTs reminders to the saved
+// endpoint, so accepting any URL would let a user aim our server at an
+// arbitrary (or internal) address. Only real push services are allowed.
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/, // Chrome, Edge (Chromium), Android, the TWA app
+  /^updates\.push\.services\.mozilla\.com$/, // Firefox
+  /(^|\.)push\.services\.mozilla\.com$/,
+  /^web\.push\.apple\.com$/, // Safari / iOS
+  /(^|\.)push\.apple\.com$/,
+  /(^|\.)notify\.windows\.com$/, // legacy Edge / Windows
+];
+
 function validEndpoint(endpoint: unknown): endpoint is string {
   if (typeof endpoint !== "string" || endpoint.length > 1000) return false;
   try {
-    return new URL(endpoint).protocol === "https:";
+    const u = new URL(endpoint);
+    return u.protocol === "https:" && !u.port && PUSH_HOSTS.some((re) => re.test(u.hostname));
   } catch {
     return false;
   }
