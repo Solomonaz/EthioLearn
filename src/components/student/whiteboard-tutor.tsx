@@ -521,6 +521,12 @@ export function WhiteboardTutor({
   useEffect(() => {
     boardEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [bi]);
+  // When the lesson ends, show the whole board from the top for review.
+  const boardScroll = useRef<HTMLDivElement>(null);
+  const finished = beats.length > 0 && bi === beats.length - 1 && !playing;
+  useEffect(() => {
+    if (finished) boardScroll.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [finished]);
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -557,12 +563,88 @@ export function WhiteboardTutor({
     }
   };
 
+  const iconBtn = cn(
+    "flex shrink-0 items-center justify-center rounded-full border border-border text-text-secondary hover:bg-border/40 disabled:opacity-40",
+    inline ? "h-8 w-8" : "h-10 w-10",
+  );
+  const playback = (
+    <>
+      <button type="button" onClick={replay} className={iconBtn} aria-label={t("replay")}>
+        <RotateCcw className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setPlaying((p) => !p)}
+        className={cn("flex shrink-0 items-center justify-center rounded-full bg-primary text-white shadow hover:bg-primary-dark", inline ? "h-9 w-9" : "h-12 w-12")}
+        aria-label={playing ? t("pause") : t("play")}
+        data-testid="wb-playpause"
+      >
+        {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+      </button>
+      <button type="button" onClick={next} className={iconBtn} aria-label={t("next")} data-testid="wb-next">
+        <SkipForward className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setVoiceOn((v) => !v)}
+        disabled={!hasVoice}
+        className={iconBtn}
+        aria-label={voiceOn ? t("voiceOff") : t("voiceOn")}
+        title={hasVoice ? undefined : t("noVoice")}
+        data-testid="wb-voice"
+      >
+        {voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+      </button>
+    </>
+  );
+  const endButtons = (
+    <>
+      <button
+        type="button"
+        onClick={replay}
+        className={cn("inline-flex items-center gap-1.5 rounded-full border border-border font-semibold text-text-secondary hover:bg-border/40", inline ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm")}
+      >
+        <RotateCcw className="h-4 w-4" /> {t("replay")}
+      </button>
+      {followUpHref && (
+        <Link
+          href={followUpHref}
+          className={cn("inline-flex items-center gap-1.5 rounded-full border border-primary/40 font-semibold text-primary hover:bg-primary/5", inline ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm")}
+        >
+          <MessageSquare className="h-4 w-4" /> {t("askMore")}
+        </Link>
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        className={cn("rounded-full bg-primary font-bold text-white hover:bg-primary-dark", inline ? "px-3 py-1.5 text-xs" : "px-5 py-2 text-sm")}
+        data-testid="wb-done"
+      >
+        {inline ? t("somethingElse") : t("gotIt")}
+      </button>
+    </>
+  );
+  const subtitle = (
+    <div
+      className={cn(
+        "flex items-center justify-center text-center font-medium leading-snug text-white",
+        inline
+          ? "pointer-events-none absolute bottom-2 left-2 right-[92px] min-h-[2.75rem] rounded-xl bg-black/75 px-3 py-1.5 text-sm backdrop-blur-sm sm:right-[100px]"
+          : "min-h-[3.25rem] rounded-xl bg-black/85 px-4 py-2 text-[15px]",
+      )}
+      aria-live="polite"
+      data-testid="wb-subtitle"
+    >
+      {beat?.say}
+    </div>
+  );
+
   const header = (
-    <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+    <div className={cn("flex items-center gap-2 border-b border-border", inline ? "px-3 py-1.5" : "px-4 py-3")}>
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
         <PenLine className="h-4 w-4" />
       </span>
-      <p className="min-w-0 flex-1 truncate text-sm font-bold text-text-primary">
+      <p className={cn("min-w-0 flex-1 truncate text-sm font-bold text-text-primary", inline && "hidden sm:block")}>
         {t("title")}
         {questionNumber ? (
           <span className="font-medium text-text-secondary"> · {t("questionN", { n: questionNumber })}</span>
@@ -574,6 +656,10 @@ export function WhiteboardTutor({
         <span className="wb-talkbars flex h-4 items-center gap-0.5 text-primary" aria-label={t("speaking")}>
           <span /><span /><span /><span />
         </span>
+      )}
+      {/* Inline: the controls live in this one slim bar, leaving the pane to the board. */}
+      {inline && lesson && !error && (
+        <div className="ml-auto flex items-center gap-1.5 sm:ml-0">{finished ? endButtons : playback}</div>
       )}
       <button
         ref={closeRef}
@@ -615,7 +701,7 @@ export function WhiteboardTutor({
   } else if (!onBoard) {
     // The reaction: the guide, big, with a speech bubble.
     body = (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-4 text-center" data-testid="wb-reaction">
+      <div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-6 py-4 text-center", inline && "pb-16")} data-testid="wb-reaction">
         <div key={bi} className="wb-pop relative max-w-xs rounded-2xl border-2 border-text-primary/80 bg-surface px-5 py-3 shadow-md">
           <p className={cn(hand.className, "text-3xl font-bold leading-tight text-text-primary")}>{beat?.say}</p>
           <span className="absolute -bottom-2.5 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-text-primary/80 bg-surface" />
@@ -638,10 +724,10 @@ export function WhiteboardTutor({
     );
   } else {
     body = (
-      <div className="relative flex min-h-0 flex-1 flex-col px-3 pt-3">
+      <div className={cn("relative flex min-h-0 flex-1 flex-col", inline ? "p-2" : "px-3 pt-3")}>
         {/* the whiteboard: stays a light board in dark mode, like a real one */}
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border-[6px] border-[#C5CAD3] bg-[#FBFBF7] shadow-inner dark:border-[#59616E]">
-          <div className={cn(hand.className, "h-full overflow-y-auto px-4 pb-4 pt-4 text-[1.55rem] leading-snug text-[#263238] sm:px-6 sm:text-[1.8rem]")} data-testid="wb-board">
+        <div className={cn("relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-[#FBFBF7] shadow-inner", inline ? "border-4" : "border-[6px]", "border-[#C5CAD3] dark:border-[#59616E]")}>
+          <div ref={boardScroll} className={cn(hand.className, "h-full overflow-y-auto px-4 pb-4 pt-4 text-[1.55rem] leading-snug text-[#263238] sm:px-6 sm:text-[1.8rem]")} data-testid="wb-board">
             <h3 className="mb-3 inline-block text-[2rem] font-bold sm:text-[2.3rem]">
               <Written text={lesson.title} />
               <svg viewBox="0 0 200 10" preserveAspectRatio="none" className="wb-draw block h-2.5 w-full" aria-hidden>
@@ -677,12 +763,13 @@ export function WhiteboardTutor({
               )}
             </div>
             {/* room under the last line, so it never hides behind the guide */}
-            <div ref={boardEnd} className="h-20" />
+            <div ref={boardEnd} className={inline ? "h-24" : "h-20"} />
           </div>
           {/* the guide keeps reacting from the corner */}
           <div className="pointer-events-none absolute bottom-1 right-1 sm:bottom-2 sm:right-2" data-testid="wb-mascot">
             <GuideMascot expression={expr} talking={speaking} size={84} />
           </div>
+          {inline && subtitle}
         </div>
       </div>
     );
@@ -690,63 +777,20 @@ export function WhiteboardTutor({
 
   const controls = lesson && !error && (
     <div className="space-y-2 px-3 pb-3 pt-2">
-      {/* live subtitles */}
-      <div className="flex min-h-[3.25rem] items-center justify-center rounded-xl bg-black/85 px-4 py-2 text-center text-[15px] font-medium leading-snug text-white" aria-live="polite" data-testid="wb-subtitle">
-        {beat?.say}
-      </div>
-      {atEnd ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <button type="button" onClick={replay} className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-text-secondary hover:bg-border/40">
-            <RotateCcw className="h-4 w-4" /> {t("replay")}
-          </button>
-          {followUpHref && (
-            <Link href={followUpHref} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5">
-              <MessageSquare className="h-4 w-4" /> {t("askMore")}
-            </Link>
-          )}
-          <button type="button" onClick={onClose} className="rounded-full bg-primary px-5 py-2 text-sm font-bold text-white hover:bg-primary-dark" data-testid="wb-done">
-            {inline ? t("somethingElse") : t("gotIt")}
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center justify-center gap-2">
-          <button type="button" onClick={replay} className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-text-secondary hover:bg-border/40" aria-label={t("replay")}>
-            <RotateCcw className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setPlaying((p) => !p)}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow hover:bg-primary-dark"
-            aria-label={playing ? t("pause") : t("play")}
-            data-testid="wb-playpause"
-          >
-            {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </button>
-          <button type="button" onClick={next} className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-text-secondary hover:bg-border/40" aria-label={t("next")} data-testid="wb-next">
-            <SkipForward className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setVoiceOn((v) => !v)}
-            disabled={!hasVoice}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-text-secondary hover:bg-border/40 disabled:opacity-40"
-            aria-label={voiceOn ? t("voiceOff") : t("voiceOn")}
-            title={hasVoice ? undefined : t("noVoice")}
-            data-testid="wb-voice"
-          >
-            {voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </button>
-        </div>
-      )}
+      {subtitle}
+      <div className="flex flex-wrap items-center justify-center gap-2">{atEnd ? endButtons : playback}</div>
     </div>
   );
 
   if (inline) {
+    // Before the board appears (the reaction), subtitles float at the bottom too.
     return (
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface" data-testid="whiteboard-tutor">
         {header}
-        {body}
-        {controls}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {body}
+          {lesson && !error && !onBoard && subtitle}
+        </div>
       </div>
     );
   }
