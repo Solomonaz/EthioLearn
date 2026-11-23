@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
-import { usageActor, type UsageActor } from "@/lib/usage-logger";
+import { usageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { recordStudyActivity } from "@/lib/streak";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { semanticSearch } from "@/lib/embeddings";
+import { buildTutorContext } from "@/lib/tutor-context";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { rewriteQueryForRAG } from "@/lib/query-rewriter";
@@ -16,9 +16,6 @@ import {
   tutorLimitMessage,
   tutorLimitReached,
 } from "@/lib/tutor-allowance";
-
-// How many of the most relevant chunks to retrieve as tutor context.
-const TUTOR_RETRIEVAL_LIMIT = 8;
 
 // Cost guard. The client sends the WHOLE conversation on every message, so
 // without a cap each turn re-bills every earlier turn and a long session grows
@@ -48,44 +45,6 @@ function capHistory(raw: unknown): TutorTurn[] {
   return recent;
 }
 
-/**
- * Build the grounding content for the tutor. Prefers semantic retrieval over
- * the chapter's embedded chunks — the chunks most relevant to the student's
- * question — so the model receives focused context instead of a blindly
- * truncated prefix of a possibly-huge chapter. Falls back to the raw chapter
- * text when the chapter has not been processed into embeddings yet (or pgvector
- * is unavailable), preserving the previous behaviour in that case.
- */
-async function buildTutorContext(
-  chapterId: string,
-  message: string,
-  fallback: string,
-  actor?: UsageActor
-): Promise<string> {
-  try {
-    const hits = await semanticSearch(message, {
-      chapterId,
-      limit: TUTOR_RETRIEVAL_LIMIT,
-      // One short vector per student message — small, but it is the only
-      // embedding cost that scales with student traffic, so it is attributed
-      // to the student who caused it.
-      usage: { feature: "embedding-query", actor },
-    });
-
-    if (hits.length > 0) {
-      // Preserve the chapter's natural reading order for coherence.
-      return hits
-        .slice()
-        .sort((a, b) => a.chunkIndex - b.chunkIndex)
-        .map((h) => h.content)
-        .join("\n\n---\n\n");
-    }
-  } catch (err) {
-    console.warn("[Tutor API] Semantic retrieval failed, using raw chapter content:", err);
-  }
-
-  return fallback;
-}
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();

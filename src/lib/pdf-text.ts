@@ -210,3 +210,27 @@ export async function extractPdfTextWithLayout(
   if (text.length < 50) return null;
   return { text, pageCount: doc.numPages };
 }
+
+/**
+ * Number of pages in a PDF (used to keep student uploads small). Throws if the
+ * file can't be opened. Uses pdf.js, which is loaded outside the bundle
+ * (serverExternalPackages) — pdf-parse's old bundled pdf.js mis-reads some
+ * valid files once Next bundles it.
+ */
+export async function pdfPageCount(buffer: Buffer): Promise<number> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  try {
+    if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+      const { createRequire } = await import("module");
+      const { pathToFileURL } = await import("url");
+      const pkg = createRequire(import.meta.url).resolve("pdfjs-dist/package.json");
+      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(pkg.replace(/package\.json$/, "legacy/build/pdf.worker.mjs")).href;
+    }
+  } catch {
+    /* worker resolution is best-effort, as above */
+  }
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer), disableFontFace: true, isEvalSupported: false }).promise;
+  const n = doc.numPages;
+  await doc.destroy().catch(() => undefined);
+  return n;
+}

@@ -516,6 +516,33 @@ export async function askAboutGraph(
   });
 }
 
+/**
+ * Whiteboard Tutor lesson about a photo or PDF a student uploaded. The prompt
+ * (lib/whiteboard-lesson uploadInstructions) asks for the structured lesson
+ * JSON; callers parse it with parseWhiteboardLesson. Gemini reads both images
+ * and PDFs inline.
+ */
+export async function whiteboardFromUpload(
+  base64: string,
+  mimeType: string,
+  instructions: string,
+  actor?: UsageActor,
+): Promise<string> {
+  return runVision(async () => {
+    const client = getClient();
+    const model = client.getGenerativeModel({
+      model: geminiModel(),
+      generationConfig: withThinkingCap({ responseMimeType: "application/json" }),
+    });
+    const result = await model.generateContent([
+      { text: instructions },
+      { inlineData: { mimeType, data: base64 } },
+    ]);
+    logUsage({ feature: "vision-whiteboard", provider: geminiUsageProvider(), model: geminiModel(), usage: geminiUsage(result.response), actor });
+    return result.response.text();
+  });
+}
+
 // ─── Prompt builder ─────────────────────────────────────
 
 function buildPrompt(opts: GenerateOptions): string {

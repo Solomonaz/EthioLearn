@@ -13,9 +13,9 @@ import type { EntitlementsInfo } from "@/hooks/use-entitlements";
 export const PRO_FEATURES = [
   {
     key: "aiTutor",
-    navKeys: ["aiTutor"],
-    title: "AI Tutor",
-    desc: "Ask anything and get a clear, step-by-step answer.",
+    navKeys: ["aiTutor", "whiteboardTutor"],
+    title: "AI Study: Textbook Chat & Whiteboard",
+    desc: "Ask your textbook anything, and get your mistakes and homework photos explained out loud.",
     icon: MessageSquare,
     href: "/student/tutor",
   },
@@ -124,7 +124,7 @@ export function TrialBanner({ ent }: { ent: EntitlementsInfo }) {
           <Clock className="h-5 w-5 shrink-0 text-secondary-dark" />
           <p className="min-w-0 flex-1 text-sm text-text-primary">
             <span className="font-semibold">{trialHeadline(ent.trialEndsAt)}</span>{" "}
-            You have every Pro feature — AI Tutor, Battle Quiz, Grapher & 3D Geometry and the Leaderboard.
+            You have every Pro feature — Textbook Chat, the Whiteboard, Battle Quiz, Grapher & 3D Geometry and the Leaderboard.
           </p>
           <Link href={BILLING_HREF} className="text-sm font-semibold text-primary hover:underline">
             See plans
@@ -141,7 +141,7 @@ export function TrialBanner({ ent }: { ent: EntitlementsInfo }) {
           <Sparkles className="h-5 w-5 shrink-0 text-secondary-dark" />
           <p className="min-w-0 flex-1 text-sm text-text-primary">
             <span className="font-semibold">Your free trial has ended.</span> Upgrade to keep using the
-            AI Tutor, Battle Quiz and the other Pro features.
+            Textbook Chat, the Whiteboard, Battle Quiz and the other Pro features.
           </p>
           <Link
             href={BILLING_HREF}

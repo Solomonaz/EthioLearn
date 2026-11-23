@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import {
   MessageSquare,
   Send,
@@ -13,7 +14,9 @@ import {
   User,
   Loader2,
   Trash2,
+  PenLine,
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,6 +54,8 @@ interface Message {
 export default function TutorPage() {
   const { data: session } = useSession();
   const ent = useEntitlements();
+  const tw = useTranslations("whiteboard");
+  const tn = useTranslations("nav");
 
   // Selection state
   const [textbooks, setTextbooks] = useState<Textbook[]>([]);
@@ -73,6 +78,34 @@ export default function TutorPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Opened from "Why was I wrong?" (?book=…&chapter=…): pre-select that
+  // book and chapter once they have loaded. Read once; ignored if the book is
+  // not among this student's books.
+  const preselect = useRef<{ book: string; chapter: string } | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const book = p.get("book");
+    const chapter = p.get("chapter");
+    if (book && chapter) preselect.current = { book, chapter };
+  }, []);
+  useEffect(() => {
+    const want = preselect.current;
+    if (!want || selectedTextbook || textbooks.length === 0) return;
+    const tb = textbooks.find((x) => x.id === want.book);
+    if (tb) setSelectedTextbook(tb);
+    else preselect.current = null;
+  }, [textbooks, selectedTextbook]);
+  useEffect(() => {
+    const want = preselect.current;
+    if (!want || !selectedTextbook || selectedTextbook.id !== want.book || chapters.length === 0) return;
+    const ch = chapters.find((x) => x.id === want.chapter);
+    if (ch) {
+      setSelectedChapter(ch);
+      setPickerOpen(false);
+    }
+    preselect.current = null;
+  }, [chapters, selectedTextbook]);
 
   // Initial load: fetch the textbooks in the student's study scope — their own
   // grade plus the lower grades of the same exam cycle (see lib/grade-scope).
@@ -186,16 +219,16 @@ export default function TutorPage() {
     }
   };
 
-  // Plan gating — the AI Tutor requires an AI-enabled plan.
+  // Plan gating — Textbook Chat (the AI tutor) requires an AI-enabled plan.
   if (!ent.loading && !(ent.ai && ent.aiFeatures.aiTutor)) {
-    return <UpgradeNotice feature="AI Tutor" planName={ent.planName} />;
+    return <UpgradeNotice feature="AI Study" planName={ent.planName} />;
   }
 
   if (fetchingData) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
         <Spinner size="lg" />
-        <p className="text-text-muted animate-pulse">Initializing your AI Tutor...</p>
+        <p className="text-text-muted animate-pulse">{tn("aiTutor")}…</p>
       </div>
     );
   }
@@ -275,6 +308,14 @@ export default function TutorPage() {
                 Ch {selectedChapter.chapterNumber}: {selectedChapter.title}
               </p>
             </div>
+            <Link
+              href="/student/tutor/whiteboard"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-primary hover:bg-primary/5"
+              aria-label={tw("tabWhiteboard")}
+              title={tw("tabWhiteboard")}
+            >
+              <PenLine className="h-4 w-4" />
+            </Link>
             <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
               Change
             </Button>
@@ -293,6 +334,19 @@ export default function TutorPage() {
               <h2 className="font-bold tracking-tight">Study Context</h2>
             </div>
             {pickers}
+            <Link
+              href="/student/tutor/whiteboard"
+              className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 text-sm hover:border-primary/40 hover:bg-primary/5"
+              data-testid="tutor-whiteboard-link"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <PenLine className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-bold text-text-primary">{tw("title")}</span>
+                <span className="block text-xs text-text-secondary">{tw("tutorLinkText")}</span>
+              </span>
+            </Link>
             <div className="mt-auto space-y-4 rounded-xl bg-primary/5 p-4">
               <div className="flex items-center gap-2 text-primary">
                 <Sparkles className="h-4 w-4" />
@@ -315,7 +369,7 @@ export default function TutorPage() {
               <Bot className="h-5 w-5 lg:h-6 lg:w-6" />
             </div>
             <div>
-              <h1 className="text-sm font-bold">AI Tutor</h1>
+              <h1 className="text-sm font-bold">{tn("aiTutor")}</h1>
               <p className="flex items-center gap-1 text-[10px] font-medium text-green-500">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
                 Always ready to help

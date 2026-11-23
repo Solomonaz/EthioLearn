@@ -7,7 +7,6 @@ import { useTranslations } from "next-intl";
 import {
   CheckCircle,
   XCircle,
-  Trophy,
   RotateCcw,
   Home,
   ChevronDown,
@@ -26,6 +25,8 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { cn } from "@/lib/utils";
 import { useQuizStore } from "@/stores/quiz-store";
 import { MathText } from "@/components/ui/math-text";
+import { WhyWrong } from "@/components/student/why-wrong";
+import { GuideSays } from "@/components/student/guide-mascot";
 
 interface AnswerResultOption {
   label: string;
@@ -172,9 +173,14 @@ export default function QuizResultsPage() {
     <div className="mx-auto max-w-2xl p-4 sm:p-6">
       {/* Score Header */}
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-          <Trophy className="h-10 w-10 text-primary" />
-        </div>
+        {/* The Abugida guide reacts to the score */}
+        <GuideSays
+          expression={score >= 80 ? "proud" : score >= 50 ? "happy" : "concerned"}
+          size={88}
+          className="mx-auto mb-3 w-fit max-w-full text-left"
+        >
+          {score >= 80 ? t("guideGreat") : score >= 50 ? t("guideGood") : t("guideLow")}
+        </GuideSays>
         <h1 className="text-2xl font-bold text-text-primary">{scoreLabel}</h1>
         <p className={cn("mt-1 text-5xl font-black", scoreColor)}>{score}%</p>
         <p className="mt-1 text-sm text-text-secondary">
@@ -343,6 +349,10 @@ export default function QuizResultsPage() {
 
               {expandedQuestion === a.questionId && (
                 <div className="border-t border-border bg-gray-50 px-4 py-3">
+                  {/* The guide reacts to this answer */}
+                  <GuideSays expression={a.isCorrect ? "proud" : "shocked"} size={52} className="mb-3">
+                    {a.isCorrect ? t("guideRight") : t("guideWrong")}
+                  </GuideSays>
                   {/* Options */}
                   <div className="mb-3 space-y-2">
                     {normalizeOptions(a.options).map(
@@ -373,6 +383,16 @@ export default function QuizResultsPage() {
                       <span className="font-semibold">Explanation: </span>
                       <MathText text={a.explanation} />
                     </div>
+                  )}
+
+                  {/* "Why was I wrong?" — the AI tutor on this mistake */}
+                  {!a.isCorrect && (
+                    <WhyWrong
+                      quizId={params.id}
+                      questionId={a.questionId}
+                      questionNumber={index + 1}
+                      studentAnswer={a.studentAnswer}
+                    />
                   )}
 
                   {/* Video Explanation */}

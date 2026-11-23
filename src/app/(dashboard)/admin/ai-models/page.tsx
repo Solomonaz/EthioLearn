@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { VoiceSettingsCard } from "@/components/admin/voice-settings-card";
 import {
   Cpu,
   RefreshCw,
@@ -794,6 +795,9 @@ export default function AiModelsPage() {
           })}
         </div>
       </section>
+
+      {/* ── Read-aloud voice (Whiteboard Tutor) ─────────────────────────── */}
+      <VoiceSettingsCard />
 
       {/* ── Footer notes ───────────────────────────────────────────────── */}
       <Card>

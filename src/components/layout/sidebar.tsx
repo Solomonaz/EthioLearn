@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -7,6 +8,7 @@ import {
   Home,
   BookOpen,
   MessageSquare,
+  PenLine,
   User,
   Trophy,
   Gift,
@@ -41,6 +43,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   FileCheck2,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
@@ -57,7 +60,20 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
-type NavItem = { labelKey: string; href: string; icon: typeof Home; exact?: boolean };
+/** group: items sharing a group render together under one collapsible heading. */
+type NavItem = { labelKey: string; href: string; icon: typeof Home; exact?: boolean; group?: NavGroupId };
+
+/**
+ * Collapsible menu groups. "AI Study" gathers the study tools (Textbook Chat
+ * and the Whiteboard, which are the AI tutor, plus the 3D Geometry and
+ * Graphing labs) so the student menu stays short. Open unless the student
+ * closed it; the coach tour opens it (event "abugida:nav-groups") to point inside.
+ */
+type NavGroupId = "aiStudy";
+const NAV_GROUPS: Record<NavGroupId, { labelKey: string; icon: typeof Home }> = {
+  aiStudy: { labelKey: "aiStudy", icon: Sparkles },
+};
+const GROUPS_STORAGE = "abugida-nav-groups";
 
 /** Bright per-item colours for the playful teacher sidebar (kid-friendly). */
 const TEACHER_COLORS: Record<string, string> = {
@@ -83,6 +99,29 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   // shows the upgrade screen) instead of hidden, so students know they exist.
   const lockedKeys = lockedNavKeys(ent);
 
+  // Which menu groups the student closed (all open by default).
+  const [closedGroups, setClosedGroups] = useState<NavGroupId[]>([]);
+  useEffect(() => {
+    try {
+      setClosedGroups(JSON.parse(localStorage.getItem(GROUPS_STORAGE) || "[]"));
+    } catch {
+      /* storage unavailable */
+    }
+    const openAll = () => setClosedGroups([]);
+    window.addEventListener("abugida:nav-groups", openAll);
+    return () => window.removeEventListener("abugida:nav-groups", openAll);
+  }, []);
+  const toggleGroup = (g: NavGroupId) =>
+    setClosedGroups((prev) => {
+      const next = prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g];
+      try {
+        localStorage.setItem(GROUPS_STORAGE, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+
   const isSchoolAdmin = pathname.startsWith("/school-admin");
   const isAdmin = pathname.startsWith("/admin");
   const isTeacher = pathname.startsWith("/teacher");
@@ -99,9 +138,10 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "nationalExam", href: "/student/national-exam", icon: FileCheck2 },
     { labelKey: "library",     href: "/student/library",        icon: Library },
     { labelKey: "myWork",      href: "/student/activities",     icon: ClipboardList },
-    { labelKey: "grapher",     href: "/student/grapher",        icon: LineChart },
-    { labelKey: "geometry",    href: "/student/geometry",       icon: Boxes },
-    { labelKey: "aiTutor",     href: "/student/tutor",          icon: MessageSquare },
+    { labelKey: "aiTutor",     href: "/student/tutor",          icon: MessageSquare, group: "aiStudy" as const },
+    { labelKey: "whiteboardTutor", href: "/student/tutor/whiteboard", icon: PenLine, group: "aiStudy" as const },
+    { labelKey: "geometry",    href: "/student/geometry",       icon: Boxes,         group: "aiStudy" as const },
+    { labelKey: "grapher",     href: "/student/grapher",        icon: LineChart,     group: "aiStudy" as const },
     { labelKey: "battle",      href: "/student/battle",         icon: Swords },
     { labelKey: "leaderboard", href: "/student/leaderboard",    icon: Trophy },
     { labelKey: "rewards",     href: "/student/rewards",        icon: Gift },
@@ -114,7 +154,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "appTour",     href: "/student?tour=1",         icon: Compass },
   ].filter((item) => {
     if (lockedKeys.has(item.labelKey)) return true;
-    if (item.labelKey === "aiTutor" && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
+    if ((item.labelKey === "aiTutor" || item.labelKey === "whiteboardTutor") && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
     if ((item.labelKey === "grapher" || item.labelKey === "geometry") && !ent.mathTools) return false;
     if (item.labelKey === "battle" && !ent.multiplayer) return false;
     if (item.labelKey === "rewards" && !ent.rewards) return false;
@@ -223,6 +263,14 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     sectionLabelKey = "sectionPlay";
   }
 
+  // Arriving on a page inside a closed group opens that group.
+  const activeGroup = navItems.find(
+    (i) => i.group && (pathname === i.href || pathname.startsWith(i.href + "/")),
+  )?.group;
+  useEffect(() => {
+    if (activeGroup) setClosedGroups((prev) => (prev.includes(activeGroup) ? prev.filter((g) => g !== activeGroup) : prev));
+  }, [activeGroup, pathname]);
+
   return (
     <>
       {/* Mobile overlay */}
@@ -290,31 +338,70 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
             </div>
 
             {navItems.map((item) => {
-              const isActive = item.exact
-                ? pathname === item.href
-                : pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
+              const matches = (it: NavItem) =>
+                it.exact ? pathname === it.href : pathname === it.href || pathname.startsWith(it.href + "/");
+              // A more specific item (e.g. /student/tutor/whiteboard) takes the
+              // highlight from a shorter one (/student/tutor).
+              const isActive = (it: NavItem) =>
+                matches(it) && !navItems.some((o) => o !== it && o.href.startsWith(it.href + "/") && matches(o));
+              const link = (it: NavItem) => (
                 <Link
-                  key={item.href}
-                  href={item.href}
+                  key={it.href}
+                  href={it.href}
                   onClick={onClose}
-                  title={collapsed ? t(item.labelKey as any) : undefined}
+                  title={collapsed ? t(it.labelKey as any) : undefined}
+                  aria-current={isActive(it) ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                     collapsed && "md:justify-center md:px-0",
-                    isActive
-                      ? "bg-primary/10 font-bold text-primary"
+                    isActive(it)
+                      ? "bg-primary/10 font-bold text-primary dark:bg-primary/25 dark:text-primary-light"
                       : "text-text-secondary hover:bg-border/50 hover:text-text-primary",
                   )}
                 >
-                  <item.icon className="h-5 w-5 shrink-0" />
-                  <span className={cn(collapsed && "md:hidden")}>{t(item.labelKey as any)}</span>
-                  {lockedKeys.has(item.labelKey) && (
+                  <it.icon className="h-5 w-5 shrink-0" />
+                  <span className={cn(collapsed && "md:hidden")}>{t(it.labelKey as any)}</span>
+                  {lockedKeys.has(it.labelKey) && (
                     <span className={cn("ml-auto", collapsed && "md:hidden")}>
                       <ProBadge />
                     </span>
                   )}
                 </Link>
+              );
+              if (!item.group) return link(item);
+
+              // A group renders once, at its first item.
+              const g = item.group;
+              if (navItems.find((o) => o.group === g) !== item) return null;
+              const members = navItems.filter((o) => o.group === g);
+              const meta = NAV_GROUPS[g];
+              const open = !closedGroups.includes(g);
+              return (
+                <div
+                  key={`group-${g}`}
+                  className={cn("my-1 rounded-xl", !collapsed && "border border-primary/15 bg-primary/[0.03] p-1")}
+                  data-nav-group={g}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(g)}
+                    aria-expanded={open}
+                    data-tour="ai-study"
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm font-bold text-text-primary transition-colors hover:bg-primary/5",
+                      collapsed && "md:hidden",
+                    )}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-emerald-500 text-white shadow-sm">
+                      <meta.icon className="h-4 w-4" />
+                    </span>
+                    <span className="flex-1">{t(meta.labelKey as any)}</span>
+                    <ChevronDown className={cn("h-4 w-4 text-text-muted transition-transform", open && "rotate-180")} />
+                  </button>
+                  <div hidden={!open && !collapsed} className="mt-0.5 space-y-0.5">
+                    {members.map(link)}
+                  </div>
+                </div>
               );
             })}
 

@@ -8,7 +8,8 @@ import { PRO_FEATURES } from "@/components/student/pro-promo";
 
 /** What each gated page offers, so the lock screen sells it rather than just refusing. */
 const FEATURE_PITCH: Record<string, string> = {
-  "AI Tutor": "Ask any question from your lessons and get a clear, step-by-step explanation — like a private tutor on your phone.",
+  "AI Study":
+    "Textbook Chat answers any question from your own textbook, step by step, and the Whiteboard explains your mistakes and homework photos out loud — like a private tutor on your phone.",
   "Battle Mode": "Challenge friends to a live quiz on the same questions at the same time, and see who knows the textbook best.",
   Graphing: "Type an equation and see its graph instantly — zoom, compare functions and understand them visually.",
   "3D Geometry": "Build and rotate 3D shapes to see faces, edges and volumes for yourself.",

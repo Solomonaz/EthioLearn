@@ -1571,3 +1571,57 @@ model NationalExamAttempt {
   @@index([examId])
   @@map("national_exam_attempts")
 }
+
+// ─── Read-aloud voice (Whiteboard Tutor) ────────────────────
+//
+// Which text-to-speech service reads the Whiteboard Tutor aloud, edited in
+// Admin -> AI Models. Like the AI providers, API KEYS ARE NOT HERE: they stay
+// in the environment (AZURE_SPEECH_KEY, ELEVENLABS_API_KEY, GEMINI_API_KEY)
+// and the admin page only reports whether each is present.
+enum TtsProvider {
+  /// The student's own browser voice: free, but quality depends on the device.
+  BROWSER
+  AZURE
+  GEMINI
+  ELEVENLABS
+}
+
+model VoiceSettings {
+  id       String      @id @default("singleton")
+  provider TtsProvider @default(BROWSER)
+  /// Tried when the main service fails; after that the browser voice.
+  fallbackProvider TtsProvider?
+
+  /// Azure Speech region, e.g. "eastus". Null = AZURE_SPEECH_REGION env.
+  azureRegion String?
+  azureVoice  String  @default("en-US-AvaMultilingualNeural")
+  /// Optional speaking style (only some voices support styles), e.g. "cheerful".
+  azureStyle  String?
+
+  geminiModel String  @default("gemini-3.8-flash-tts")
+  geminiVoice String  @default("Leda")
+  /// How the line should be performed, sent ahead of the text.
+  geminiStyle String? @default("Read this like a warm, playful, slightly sassy teacher talking to a teenager")
+
+  elevenVoiceId String @default("cgSgspJ2msm6clMCkdW9")
+  elevenModel   String @default("eleven_flash_v2_5")
+
+  updatedAt DateTime @updatedAt
+
+  @@map("voice_settings")
+}
+
+/// Spoken lines already synthesised, so replaying a lesson (and the guide's
+/// stock lines every student hears) never pays the voice service twice.
+/// Keyed by a hash of provider + voice + text. Pruned after 30 days.
+model TtsAudioCache {
+  id        String   @id
+  mime      String
+  data      Bytes
+  provider  String
+  chars     Int
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("tts_audio_cache")
+}

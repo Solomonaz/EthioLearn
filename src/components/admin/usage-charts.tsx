@@ -60,6 +60,8 @@ const FEATURE_LABELS: Record<string, string> = {
   "vision-equation": "Equation reading (vision)",
   "vision-solid": "3D solid reading (vision)",
   "graph-qa": "Graph Q&A",
+  "vision-whiteboard": "Whiteboard from photo/PDF (vision)",
+  tts: "Whiteboard read-aloud (voice)",
   "embedding-ingest": "Embedding · textbook ingest",
   "embedding-dedup": "Embedding · question dedupe",
   "embedding-query": "Embedding · tutor search",

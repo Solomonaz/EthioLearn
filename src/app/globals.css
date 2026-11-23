@@ -326,3 +326,56 @@
     border-color: #999 !important;
   }
 }
+
+/* ── Guide mascot + Whiteboard Tutor (components/student/guide-mascot.tsx,
+   whiteboard-tutor.tsx). Hand-made SVG/CSS motion; all of it switches off
+   for reduced motion. ── */
+.gm-root .gm-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.gm-happy .gm-body, .gm-thinking .gm-body { animation: gm-float 2.6s ease-in-out infinite; }
+.gm-shocked .gm-body { animation: gm-jump 0.7s ease-out both, gm-shake 0.35s 0.7s ease-in-out 2; }
+.gm-sassy .gm-body { animation: gm-tilt 0.6s ease-out both; }
+.gm-concerned .gm-body { animation: gm-sway 3s ease-in-out infinite; }
+.gm-proud .gm-body { animation: gm-bounce 0.9s ease-out both, gm-float 2.6s 0.9s ease-in-out infinite; }
+.gm-blink { transform-box: fill-box; transform-origin: center; animation: gm-blink 4.2s infinite; }
+.gm-talk { transform-box: fill-box; transform-origin: center; animation: gm-talk 0.26s ease-in-out infinite alternate; }
+.gm-wave { transform-box: fill-box; transform-origin: 0% 100%; animation: gm-wave 1.6s ease-in-out infinite; }
+.gm-dot1, .gm-dot2, .gm-dot3 { animation: gm-dot 1.4s infinite; }
+.gm-dot2 { animation-delay: 0.2s; }
+.gm-dot3 { animation-delay: 0.4s; }
+.gm-spark { transform-box: fill-box; transform-origin: center; animation: gm-spark 1.2s ease-in-out infinite; }
+.gm-spark2 { animation-delay: 0.6s; }
+@keyframes gm-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes gm-jump { 0% { transform: translateY(0) scale(1, 1); } 30% { transform: translateY(-14px) scale(0.94, 1.08); } 60% { transform: translateY(0) scale(1.06, 0.94); } 100% { transform: translateY(0) scale(1, 1); } }
+@keyframes gm-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px) rotate(-3deg); } 75% { transform: translateX(3px) rotate(3deg); } }
+@keyframes gm-tilt { from { transform: rotate(0); } to { transform: rotate(-6deg); } }
+@keyframes gm-sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+@keyframes gm-bounce { 0% { transform: scale(0.9); } 40% { transform: translateY(-10px) scale(1.05); } 70% { transform: translateY(0) scale(0.98); } 100% { transform: scale(1); } }
+@keyframes gm-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes gm-talk { from { transform: scaleY(0.35); } to { transform: scaleY(1); } }
+@keyframes gm-wave { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-18deg); } }
+@keyframes gm-dot { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+@keyframes gm-spark { 0%, 100% { transform: scale(0.6); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+
+/* Whiteboard: words appear as if written; icons and marks draw in. */
+.wb-word { display: inline-block; opacity: 0; animation: wb-write 0.32s ease-out forwards; }
+.wb-draw path, .wb-draw line, .wb-draw circle, .wb-draw rect, .wb-draw polyline, .wb-draw ellipse, .wb-draw polygon {
+  stroke-dasharray: 120; stroke-dashoffset: 120; animation: wb-stroke 1s ease-out forwards;
+}
+.wb-pop { animation: wb-pop 0.35s ease-out both; }
+.wb-talkbars span { display: inline-block; width: 3px; border-radius: 2px; background: currentColor; animation: wb-bar 0.8s ease-in-out infinite; }
+.wb-talkbars span:nth-child(2) { animation-delay: 0.15s; }
+.wb-talkbars span:nth-child(3) { animation-delay: 0.3s; }
+.wb-talkbars span:nth-child(4) { animation-delay: 0.45s; }
+@keyframes wb-write { from { opacity: 0; transform: translateY(3px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes wb-stroke { to { stroke-dashoffset: 0; } }
+@keyframes wb-pop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+@keyframes wb-bar { 0%, 100% { height: 4px; } 50% { height: 14px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gm-root *, .gm-root { animation: none !important; }
+  .wb-word, .wb-pop { animation: none !important; opacity: 1 !important; }
+  .wb-draw path, .wb-draw line, .wb-draw circle, .wb-draw rect, .wb-draw polyline, .wb-draw ellipse, .wb-draw polygon {
+    animation: none !important; stroke-dashoffset: 0 !important;
+  }
+  .wb-talkbars span { animation: none !important; height: 8px; }
+}

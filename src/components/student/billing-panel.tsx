@@ -58,7 +58,7 @@ function planFeatures(p: Plan, elementary: boolean): string[] {
     return f;
   }
   const f: string[] = ["Solo quizzes, daily challenges & solo games", "Progress tracking"];
-  if (p.allowAi) f.push("AI Tutor & AI-generated quizzes");
+  if (p.allowAi) f.push("AI Study (Textbook Chat & Whiteboard) & AI-generated quizzes");
   if (p.allowMathTools) f.push("Graphing calculator & 3D geometry lab");
   if (p.allowMultiplayer) f.push("Battle mode (multiplayer)");
   if (p.allowRewards) f.push("Rewards & redemption");

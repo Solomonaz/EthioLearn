@@ -45,9 +45,12 @@ const STEPS: CoachStep[] = [
   { id: "exam", navKey: "nationalExam", target: menu("/student/national-exam") },
   { id: "library", navKey: "library", target: menu("/student/library") },
   { id: "work", navKey: "myWork", target: menu("/student/activities") },
-  { id: "grapher", navKey: "grapher", target: menu("/student/grapher"), pro: "mathTools", video: { name: "grapher", duration: "0:27" } },
-  { id: "geometry", navKey: "geometry", target: menu("/student/geometry"), pro: "mathTools", video: { name: "geometry", duration: "0:45" } },
+  // The "AI Study" group heading, then the tools inside it.
+  { id: "aiStudy", navKey: "aiStudy", target: 'aside [data-tour="ai-study"]' },
   { id: "tutor", navKey: "aiTutor", target: menu("/student/tutor"), pro: "aiTutor", video: { name: "tutor", duration: "0:37" } },
+  { id: "whiteboard", navKey: "whiteboardTutor", target: menu("/student/tutor/whiteboard"), pro: "aiTutor" },
+  { id: "geometry", navKey: "geometry", target: menu("/student/geometry"), pro: "mathTools", video: { name: "geometry", duration: "0:45" } },
+  { id: "grapher", navKey: "grapher", target: menu("/student/grapher"), pro: "mathTools", video: { name: "grapher", duration: "0:27" } },
   { id: "battle", navKey: "battle", target: menu("/student/battle"), pro: "battle" },
   { id: "ranks", navKey: "leaderboard", target: menu("/student/leaderboard"), pro: "leaderboard" },
   { id: "rewards", navKey: "rewards", target: menu("/student/rewards") },
@@ -234,6 +237,11 @@ export function CoachTour({ name, grade, ent, challengeChapterId, firstRun, onCl
   useEffect(() => {
     primaryRef.current?.querySelector<HTMLElement>("[data-primary]")?.focus({ preventScroll: true });
   }, [index, rect === null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Menu groups (AI Study) open so the items inside them can be pointed at.
+  useEffect(() => {
+    window.dispatchEvent(new Event("abugida:nav-groups"));
+  }, [step.target]);
 
   // No page scroll behind the tour (it scrolls the highlighted item into view itself).
   useEffect(() => {

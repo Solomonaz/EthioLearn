@@ -271,8 +271,8 @@ export function PlatformSettingsPanel() {
         />
         <div className="divide-y divide-border border-l-2 border-border/60 pl-4">
           <Row
-            label="AI Tutor (chat)"
-            desc="Ask-anything AI tutor for students."
+            label="AI tutor (Textbook Chat & Whiteboard)"
+            desc="Students' Textbook Chat, the Whiteboard (quiz mistakes, photo/PDF uploads, read-aloud) and “Why was I wrong?”."
             checked={settings.aiTutorEnabled}
             disabled={aiOff}
             onChange={(v) => update("aiTutorEnabled", v)}

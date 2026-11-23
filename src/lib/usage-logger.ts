@@ -65,6 +65,10 @@ export type UsageFeature =
   | "vision-equation"
   | "vision-solid"
   | "graph-qa"
+  /** Whiteboard Tutor lesson from a student's uploaded photo or PDF. */
+  | "vision-whiteboard"
+  /** Whiteboard Tutor read-aloud (Azure / ElevenLabs log characters as prompt tokens). */
+  | "tts"
   // ── Embeddings ───────────────────────────────────────────────────────────
   // Split by call site rather than lumped into one "embedding" bucket: the
   // three have completely different cost curves. Ingest is bounded by how many
