@@ -1602,8 +1602,9 @@ model VoiceSettings {
 
   geminiModel String  @default("gemini-3.8-flash-tts")
   geminiVoice String  @default("Leda")
-  /// How the line should be performed, sent ahead of the text.
-  geminiStyle String? @default("Read this like a warm, playful, slightly sassy teacher talking to a teenager")
+  /// Tone tag for the line, sent as "[tag] text" (never read aloud),
+  /// e.g. "warm, playful, slightly sassy teacher".
+  geminiStyle String? @default("warm, playful, slightly sassy teacher")
 
   elevenVoiceId String @default("cgSgspJ2msm6clMCkdW9")
   elevenModel   String @default("eleven_flash_v2_5")

@@ -217,8 +217,13 @@ export function VoiceSettingsCard() {
               {[...new Set([cfg.geminiVoice, ...snap.suggestions.gemini])].map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </Field>
-          <Field label="Speaking style">
-            <input className={INPUT} value={cfg.geminiStyle ?? ""} onChange={(e) => set("geminiStyle", e.target.value || null)} />
+          <Field label="Tone (a few words, not read aloud)">
+            <input
+              className={INPUT}
+              placeholder="warm, playful, slightly sassy teacher"
+              value={cfg.geminiStyle ?? ""}
+              onChange={(e) => set("geminiStyle", e.target.value || null)}
+            />
           </Field>
         </div>
       );

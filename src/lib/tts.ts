@@ -44,7 +44,7 @@ export const VOICE_DEFAULTS: VoiceConfig = {
   azureStyle: null,
   geminiModel: "gemini-3.8-flash-tts",
   geminiVoice: "Leda",
-  geminiStyle: "Read this like a warm, playful, slightly sassy teacher talking to a teenager",
+  geminiStyle: "warm, playful, slightly sassy teacher",
   elevenVoiceId: "cgSgspJ2msm6clMCkdW9",
   elevenModel: "eleven_flash_v2_5",
   tutorStyle: "sassy",
@@ -249,7 +249,11 @@ function pcmToWav(pcm: Buffer, rate: number): Buffer {
 
 async function gemini(text: string, cfg: VoiceConfig, actor?: UsageActor): Promise<Speech> {
   if (!/^[a-z0-9.-]+$/i.test(cfg.geminiModel)) throw new Error("Invalid Gemini model id");
-  const prompt = cfg.geminiStyle ? `${cfg.geminiStyle}:\n${text}` : text;
+  // The style goes in [brackets], which Gemini follows as a tone tag. Written
+  // as a sentence before the line ("Read this like…:"), it was READ ALOUD
+  // before every line (measured: ~9 s per line instead of ~2.5 s).
+  const tag = toneTag(cfg.geminiStyle);
+  const prompt = tag ? `[${tag}] ${text}` : text;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.geminiModel}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": process.env.GEMINI_API_KEY!, "Content-Type": "application/json" },
@@ -325,12 +329,26 @@ async function synthesizeWith(p: TtsProviderId, text: string, cfg: VoiceConfig, 
   }
 }
 
+/**
+ * The admin's speaking style as a short tone tag: no brackets or line breaks,
+ * and an old-style "Read this like a … :" sentence trimmed to its description.
+ */
+export function toneTag(style: string | null | undefined): string {
+  return (style ?? "")
+    .replace(/[\[\]\r\n]+/g, " ")
+    .replace(/^\s*(?:please\s+)?(?:read|say|speak)\s+(?:this|it|the following)?\s*(?:like|as|in)\s+(?:an?\s+)?/i, "")
+    .replace(/[:\s]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
 function voiceKey(p: TtsProviderId, cfg: VoiceConfig, text: string): string {
   const voice =
     p === "AZURE"
       ? `${cfg.azureVoice}|${cfg.azureStyle ?? ""}`
       : p === "GEMINI"
-        ? `${cfg.geminiModel}|${cfg.geminiVoice}|${cfg.geminiStyle ?? ""}`
+        ? `v2|${cfg.geminiModel}|${cfg.geminiVoice}|${toneTag(cfg.geminiStyle)}`
         : `${cfg.elevenModel}|${cfg.elevenVoiceId}`;
   return crypto.createHash("sha256").update(`${p}|${voice}|${text}`).digest("hex");
 }
