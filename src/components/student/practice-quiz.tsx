@@ -24,10 +24,11 @@ export interface PracticeResume {
  * Practice questions the guide made from an upload, one at a time — out loud.
  *
  * The guide reads each question and its choices in the lesson voice; the
- * student taps a choice or says it ("B", "option C", the answer itself). A
- * right answer gets a reaction that fits the question and moves on by itself;
- * a wrong one gets a dramatic reaction, then the guide explains that question
- * on the whiteboard (one tutor message) and comes back to the next question.
+ * student taps a choice or says it ("B", "option C", the answer itself). The
+ * guide reacts (fitting the question when right, dramatic when wrong), then
+ * waits: Next, or Explain — right or wrong, since a right answer may be a
+ * lucky guess — which works it out on the whiteboard (one tutor message) and
+ * comes back to the next question. Nothing jumps to the board by itself.
  * Every spoken line is server-signed (PracticeVoice). Nothing is saved as a
  * graded quiz — it's practice.
  */
@@ -69,8 +70,6 @@ export function PracticeQuiz({
   const speechCancel = useRef<(() => void) | null>(null);
   const listenStop = useRef<(() => void) | null>(null);
   const introDone = useRef(startIndex > 0);
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
   const q = questions[i];
   const qv = voice?.questions[i];
 
@@ -150,17 +149,13 @@ export function PracticeQuiz({
       const sc = right ? score + 1 : score;
       setScore(sc);
       setPhase("reacting");
-      phaseRef.current = "reacting";
-      // After the reaction: a right answer moves on; a wrong one goes to the
-      // board — unless the student chose to skip that meanwhile.
-      const after = right
-        ? () => phaseRef.current === "reacting" && next()
-        : () => phaseRef.current === "reacting" && explainNow(k, sc);
+      // The guide reacts, then waits: the student chooses Next, or Explain
+      // (right or wrong — a right answer may have been a lucky guess).
       const l = right ? qv?.right : qv?.wrong[k];
-      if (l) sayAll([l], () => setTimeout(after, right ? 500 : 400));
-      else setTimeout(after, 1800);
+      if (l) sayAll([l], () => setPhase("feedback"));
+      else setPhase("feedback");
     },
-    [picked, done, q, qv, score, next, sayAll, explainNow, stopListening],
+    [picked, done, q, qv, score, sayAll, stopListening],
   );
 
   // Read the question and its choices (the intro first, once).
@@ -204,7 +199,7 @@ export function PracticeQuiz({
         if (cmd === "repeat") return setReadNonce((n) => n + 1);
         if (cmd === "stop") return onBack();
         if (cmd === "next" && picked !== null) return next();
-        if (cmd === "explain" && picked !== null && picked !== q.answer) return explainNow(picked, score);
+        if (cmd === "explain" && picked !== null) return explainNow(picked, score);
         setNotHeard(true);
       },
       onEnd: (err) => {
@@ -215,9 +210,11 @@ export function PracticeQuiz({
     });
   }, [picked, q, choose, next, explainNow, onBack, score, stopListening]);
 
-  // Hands-free: once they've talked, listen after each question is read.
+  // Hands-free: once they've talked, listen after each question is read
+  // (for the answer) and after each reaction (for "next" / "explain").
   useEffect(() => {
-    if (phase === "waiting" && handsFreeVisit && canTalk && picked === null && !done) listen();
+    if (!handsFreeVisit || !canTalk || done) return;
+    if ((phase === "waiting" && picked === null) || (phase === "feedback" && picked !== null)) listen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -340,38 +337,21 @@ export function PracticeQuiz({
             <GuideSays expression={right ? "proud" : "shocked"} size={64}>
               <span data-testid="practice-reaction">{reaction}</span>
             </GuideSays>
-            {phase === "reacting" && !right && (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary" data-testid="practice-to-board">
-                <PenLine className="h-4 w-4 text-primary" /> {t("toTheBoard")}
-                <button
-                  type="button"
-                  onClick={() => {
-                    speechCancel.current?.();
-                    setPhase("feedback");
-                  }}
-                  className="ml-auto rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:bg-border/40"
-                  data-testid="practice-skip-explain"
-                >
-                  {t("skipExplain")}
-                </button>
-              </div>
-            )}
-            {(phase === "feedback" || (right && phase === "reacting")) && q.explanation && (
+            {q.explanation && (phase === "feedback" || phase === "reacting") && (
               <p className="rounded-xl bg-primary/5 px-3 py-2 text-sm text-text-primary">
                 <MathText text={q.explanation} />
               </p>
             )}
             {phase === "feedback" && (
               <div className="flex flex-wrap gap-2">
-                {!right && (
-                  <button
-                    type="button"
-                    onClick={() => explainNow(picked!, score)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5"
-                  >
-                    <PenLine className="h-4 w-4" /> {t("explainThis")}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => explainNow(picked!, score)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5"
+                  data-testid="practice-explain"
+                >
+                  <PenLine className="h-4 w-4" /> {t("explainThis")}
+                </button>
                 <button type="button" onClick={next} className="ml-auto rounded-full bg-primary px-5 py-2 text-sm font-bold text-white hover:bg-primary-dark" data-testid="practice-next">
                   {i < questions.length - 1 ? t("next") : t("seeScore")}
                 </button>
@@ -394,6 +374,8 @@ export function PracticeQuiz({
             line.say
           ) : !answered && phase === "waiting" ? (
             canTalk ? t("sayAnswer") : t("tapAnswer")
+          ) : answered && phase === "feedback" ? (
+            canTalk ? t("afterAnswerTalk") : t("afterAnswer")
           ) : null}
         </p>
         {!answered && (

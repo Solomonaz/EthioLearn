@@ -33,7 +33,8 @@ import { ownUpload, readResults, resultKey, tutorGates, withResult } from "@/lib
  *                 and its choices read aloud, a reaction to each answer),
  *                 signed for the voice service;
  *   "explainPractice" { set, index, picked } → a whiteboard lesson on a
- *                 practice question the student just got wrong. The question
+ *                 practice question the student just answered (wrong, or
+ *                 right but they want to be sure). The question
  *                 comes from the stored set (never from the page), so the
  *                 lesson knows the real answer.
  * Each new one uses one daily tutor message and keeps every tutor rule. The
@@ -88,7 +89,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const set = results.find((r) => r.key === ref.set && r.kind === "practice");
     const q = (set?.payload as { questions?: PracticeQuestion[] } | undefined)?.questions?.[ref.index];
     if (!q) return NextResponse.json({ error: "That practice question is gone." }, { status: 404 });
-    if (q.answer === ref.picked) return NextResponse.json({ error: "That answer was right." }, { status: 400 });
     missed = q;
   }
 
@@ -127,7 +127,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const raw = await whiteboardFromUpload(
         b64,
         up.mime,
-        whiteboardInstructions(style, practiceMistakeContext(missed, ref.picked)),
+        whiteboardInstructions(style, practiceMistakeContext(missed, ref.picked), missed.answer === ref.picked),
         usageActor(user),
       );
       const lesson = parseWhiteboardLesson(raw) ?? lessonFromProse(raw);
