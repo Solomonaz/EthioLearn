@@ -15,13 +15,17 @@ import {
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/ui/math-text";
 import { GuideMascot, type MascotExpression } from "@/components/student/guide-mascot";
+import { primeSpeech, probeCloud, synth, VoiceTrack } from "@/components/student/voice-player";
 import {
   lessonScript,
   type BoardColor,
   type BoardIcon,
+  type LessonKind,
   type LessonPayload,
   type ScriptLine,
 } from "@/lib/whiteboard-lesson";
+
+export { primeSpeech };
 
 const hand = Caveat({ subsets: ["latin"], weight: ["500", "700"], display: "swap" });
 
@@ -36,7 +40,8 @@ const hand = Caveat({ subsets: ["latin"], weight: ["500", "700"], display: "swap
  * Both keep every AI-tutor rule (Pro, daily allowance, rate limit, CSRF).
  *
  * Voice: the service an admin picked (Azure / Gemini / ElevenLabs, via
- * POST /api/ai/tts with the server-signed line), else the browser's own voice.
+ * POST /api/ai/tts with the server-signed line), else the browser's own voice
+ * — one voice for the whole lesson (see voice-player).
  * Lessons are kept in this browser so reopening one never spends another
  * tutor message.
  */
@@ -54,180 +59,6 @@ const INK: Record<BoardColor, string> = {
   red: "#D32F2F", green: "#2E7D32", blue: "#1565C0", orange: "#E65100", purple: "#6A1B9A", black: "#263238",
 };
 
-const MAX_TTS_CHARS = 320; // matches lib/tts
-
-/* ── Browser speech ─────────────────────────────────────────────── */
-
-function synth(): SpeechSynthesis | null {
-  return typeof window !== "undefined" && "speechSynthesis" in window ? window.speechSynthesis : null;
-}
-
-function pickVoice(): SpeechSynthesisVoice | null {
-  const s = synth();
-  if (!s) return null;
-  const en = s.getVoices().filter((v) => /^en[-_]/i.test(v.lang) || v.lang === "en");
-  // A friendly, clear voice first; device voices vary a lot.
-  const prefer = [
-    /natural/i, /google us english/i, /samantha/i, /aria|jenny|zira/i, /google uk english female/i,
-    /hazel|susan|libby|sonia|karen|moira|tessa|female/i, /en[-_]us/i,
-  ];
-  for (const re of prefer) {
-    const v = en.find((x) => re.test(x.name) || re.test(x.lang));
-    if (v) return v;
-  }
-  return en[0] ?? null;
-}
-
-/* Cloud-voice audio plays through Web Audio, not an <audio> element: it
-   decodes MP3 and WAV everywhere (some embedded browsers can't play <audio>
-   at all), and phones allow it once the context is resumed inside a tap. */
-let ctxSingleton: AudioContext | null = null;
-function audioCtx(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  if (!ctxSingleton) {
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return null;
-    ctxSingleton = new AC();
-  }
-  return ctxSingleton;
-}
-
-/**
- * Call from the click that opens the whiteboard: mobile browsers only let a
- * page speak or play sound after it has done so once inside a tap.
- */
-export function primeSpeech() {
-  try {
-    const s = synth();
-    if (s) {
-      const u = new SpeechSynthesisUtterance(" ");
-      u.volume = 0;
-      s.speak(u);
-    }
-    audioCtx()?.resume().catch(() => {});
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Read a line with the browser voice (or just wait as long as it would take). */
-function browserLine(text: string, voiceOn: boolean, onDone: () => void): () => void {
-  const words = text.split(/\s+/).filter(Boolean).length;
-  const estimate = Math.max(1700, words * 390);
-  let finished = false;
-  const timers: ReturnType<typeof setTimeout>[] = [];
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    timers.forEach(clearTimeout);
-    onDone();
-  };
-  const s = synth();
-  if (!voiceOn || !s || !text.trim()) {
-    timers.push(setTimeout(finish, estimate));
-  } else {
-    s.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const v = pickVoice();
-    if (v) u.voice = v;
-    u.lang = v?.lang ?? "en-US";
-    u.rate = 1;
-    u.pitch = 1.15;
-    u.onend = finish;
-    u.onerror = finish;
-    // Chrome sometimes drops an utterance queued right after cancel().
-    timers.push(setTimeout(() => !finished && s.speak(u), 60));
-    // Some engines never fire onend; never get stuck on a line.
-    timers.push(setTimeout(finish, estimate * 2.5 + 3000));
-  }
-  return () => {
-    finished = true;
-    timers.forEach(clearTimeout);
-    if (voiceOn) synth()?.cancel();
-  };
-}
-
-/* ── Cloud voice (admin-chosen service) ─────────────────────────── */
-
-/** Audio for each line of the current lesson, fetched (and decoded) ahead of time. */
-type AudioCache = Map<number, Promise<AudioBuffer | null>>;
-
-/** Lines already fetched this visit (by token), so a replay doesn't ask again. */
-const lineAudio = new Map<string, Promise<AudioBuffer | null>>();
-
-function fetchLineAudio(text: string, token: string): Promise<AudioBuffer | null> {
-  const ctx = audioCtx();
-  if (!ctx) return Promise.resolve(null);
-  const hit = lineAudio.get(token);
-  if (hit) return hit;
-  const p = fetch("/api/ai/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: text.slice(0, MAX_TTS_CHARS), token }),
-  })
-    .then(async (res) => (res.status === 200 ? ctx.decodeAudioData(await res.arrayBuffer()) : null))
-    .catch(() => null)
-    .then((buf) => {
-      if (!buf) lineAudio.delete(token); // let a later play try again
-      return buf;
-    });
-  lineAudio.set(token, p);
-  // Keep memory bounded: forget the oldest lines.
-  while (lineAudio.size > 80) lineAudio.delete(lineAudio.keys().next().value!);
-  return p;
-}
-
-/**
- * Play a line with the cloud voice when its audio arrived, else hand over to
- * the browser voice (`onFallback`). Returns a cancel.
- */
-function cloudLine(
-  audioP: Promise<AudioBuffer | null>,
-  onDone: () => void,
-  onFallback: () => () => void,
-): () => void {
-  let cancelled = false;
-  let fallbackCancel: (() => void) | null = null;
-  let safety: ReturnType<typeof setTimeout> | undefined;
-  let node: AudioBufferSourceNode | null = null;
-  const finish = () => {
-    if (cancelled) return;
-    cancelled = true;
-    if (safety) clearTimeout(safety);
-    onDone();
-  };
-  audioP.then(async (buf) => {
-    if (cancelled) return;
-    const ctx = audioCtx();
-    if (ctx && ctx.state !== "running") await ctx.resume().catch(() => {});
-    if (cancelled) return;
-    if (!buf || !ctx || ctx.state !== "running") {
-      fallbackCancel = onFallback();
-      return;
-    }
-    node = ctx.createBufferSource();
-    node.buffer = buf;
-    node.connect(ctx.destination);
-    node.onended = finish;
-    node.start();
-    // Never get stuck on a line if "ended" doesn't arrive.
-    safety = setTimeout(finish, buf.duration * 1000 + 3000);
-  });
-  return () => {
-    cancelled = true;
-    if (safety) clearTimeout(safety);
-    if (node) {
-      node.onended = null;
-      try {
-        node.stop();
-      } catch {
-        /* already stopped */
-      }
-    }
-    fallbackCancel?.();
-  };
-}
-
 /* ── Lesson cache (this browser) ────────────────────────────────── */
 
 const CACHE_INDEX = "wb-lessons";
@@ -236,12 +67,14 @@ const CACHE_INDEX = "wb-lessons";
 export type LessonRequest =
   | { kind: "mistake"; quizId: string; questionId: string }
   /** About a file the student uploaded (see /api/study-uploads/[id]/act). */
-  | { kind: "study"; uploadId: string; action: "explain" | "summarize"; target: string | null };
+  | { kind: "study"; uploadId: string; action: "explain" | "summarize"; target: string | null }
+  /** A practice question from that file the student just got wrong. */
+  | { kind: "practice"; uploadId: string; set: string; index: number; picked: number };
 
 export function requestKey(r: LessonRequest): string {
-  return r.kind === "mistake"
-    ? `wb-lesson-${r.quizId}-${r.questionId}`
-    : `wb-study-${r.uploadId}-${r.action}-${(r.target ?? "").trim().toLowerCase().slice(0, 200)}`;
+  if (r.kind === "mistake") return `wb-lesson-${r.quizId}-${r.questionId}`;
+  if (r.kind === "practice") return `wb-practice-${r.uploadId}-${r.set}-${r.index}-${r.picked}`;
+  return `wb-study-${r.uploadId}-${r.action}-${(r.target ?? "").trim().toLowerCase().slice(0, 200)}`;
 }
 
 interface Cached {
@@ -292,7 +125,9 @@ function requestLesson(r: LessonRequest) {
       body: JSON.stringify(
         r.kind === "mistake"
           ? { quizId: r.quizId, questionId: r.questionId, format: "whiteboard" }
-          : { action: r.action, target: r.target },
+          : r.kind === "practice"
+            ? { action: "explainPractice", set: r.set, index: r.index, picked: r.picked }
+            : { action: r.action, target: r.target },
       ),
     })
       .then(async (res) => ({ ok: res.ok, json: await res.json().catch(() => ({})) }))
@@ -300,6 +135,25 @@ function requestLesson(r: LessonRequest) {
     inflight.set(key, p);
   }
   return p;
+}
+
+const LESSON_KINDS: LessonKind[] = ["mistake", "upload", "practice"];
+
+function toPayload(r: LessonRequest, json: Record<string, unknown>): LessonPayload {
+  const kind = LESSON_KINDS.includes(json.kind as LessonKind)
+    ? (json.kind as LessonKind)
+    : r.kind === "study"
+      ? "upload"
+      : r.kind === "practice"
+        ? "practice"
+        : "mistake";
+  return {
+    lesson: json.lesson as LessonPayload["lesson"],
+    kind,
+    style: json.style as LessonPayload["style"],
+    seed: typeof json.seed === "number" ? json.seed : 0,
+    tokens: Array.isArray(json.tokens) ? (json.tokens as string[]) : [],
+  };
 }
 
 /* ── Board pieces ───────────────────────────────────────────────── */
@@ -358,16 +212,6 @@ function Mark({ kind }: { kind: "wrong" | "right" | "note" }) {
 
 /* ── The overlay ────────────────────────────────────────────────── */
 
-/** Whether the admin set up a voice service (asked once per page load). */
-let cloudProbe: Promise<boolean> | null = null;
-function probeCloud(): Promise<boolean> {
-  cloudProbe ??= fetch("/api/ai/tts")
-    .then((r) => (r.ok ? r.json() : { cloud: false }))
-    .then((d) => !!d.cloud)
-    .catch(() => false);
-  return cloudProbe;
-}
-
 export function WhiteboardTutor({
   request,
   questionNumber,
@@ -375,7 +219,10 @@ export function WhiteboardTutor({
   onClose,
   followUpHref: followUpHrefProp,
   inline = false,
+  closeLabel,
 }: {
+  /** Inline: the label of the way back (defaults to "Back to options" / "Something else"). */
+  closeLabel?: string;
   request: LessonRequest;
   /** Render inside the page (the two-pane study view) instead of as an overlay. */
   inline?: boolean;
@@ -396,7 +243,8 @@ export function WhiteboardTutor({
   const [speaking, setSpeaking] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
   const [cloud, setCloud] = useState<boolean | null>(null);
-  const audioCache = useRef<AudioCache>(new Map());
+  /** This lesson's one voice (settled by its first line). */
+  const track = useRef(new VoiceTrack());
   const boardEnd = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const key = requestKey(request);
@@ -408,11 +256,9 @@ export function WhiteboardTutor({
     probeCloud().then(setCloud);
     const prev = document.body.style.overflow;
     if (!inline) document.body.style.overflow = "hidden";
-    const cache = audioCache.current;
     return () => {
       if (!inline) document.body.style.overflow = prev;
       synth()?.cancel();
-      cache.clear();
     };
   }, []);
 
@@ -435,13 +281,7 @@ export function WhiteboardTutor({
         setError(json.error || t("error"));
         return;
       }
-      const p: LessonPayload = {
-        lesson: json.lesson,
-        kind: request.kind === "study" ? "upload" : "mistake",
-        style: json.style,
-        seed: json.seed ?? 0,
-        tokens: Array.isArray(json.tokens) ? json.tokens : [],
-      };
+      const p = toPayload(request, json as Record<string, unknown>);
       const chat =
         json.textbookId && json.chapterId
           ? `/student/tutor?book=${encodeURIComponent(json.textbookId)}&chapter=${encodeURIComponent(json.chapterId)}`
@@ -469,29 +309,19 @@ export function WhiteboardTutor({
   const beat = beats[bi];
   const atEnd = beats.length > 0 && bi === beats.length - 1 && !playing;
 
-  // Fetch a line's audio ahead of time, so lines follow each other without a gap.
-  const prefetch = useCallback(
-    (i: number) => {
-      const token = payload?.tokens[i];
-      const line = beats[i];
-      if (!token || !line || audioCache.current.has(i)) return;
-      audioCache.current.set(i, fetchLineAudio(line.say, token));
-    },
-    [payload, beats],
-  );
-
-  // With a voice service, fetch every line as soon as the lesson arrives:
-  // each takes a few seconds to make, so lines then follow without pauses.
+  // With a voice service, settle the lesson's voice on its first line, then
+  // fetch every other line in that voice: each takes a few seconds to make,
+  // so lines then follow without pauses.
   useEffect(() => {
-    if (!cloud || !voiceOn) return;
-    beats.forEach((_, i) => prefetch(i));
-  }, [cloud, voiceOn, beats, prefetch]);
+    if (!cloud || !voiceOn || !payload || beats.length === 0) return;
+    track.current.start(beats[0].say, payload.tokens[0]);
+    beats.forEach((b, i) => track.current.prefetch(b.say, payload.tokens[i]));
+  }, [cloud, voiceOn, beats, payload]);
 
   // The runner: speak the current line, then move on.
   useEffect(() => {
     if (!beat || !playing) return;
-    const useCloud = voiceOn && !!payload?.tokens[bi];
-    if (useCloud && cloud === null) return; // still asking whether a voice service is set up
+    if (voiceOn && cloud === null) return; // still asking whether a voice service is set up
     setSpeaking(true);
     let gap: ReturnType<typeof setTimeout> | undefined;
     const done = () => {
@@ -501,21 +331,15 @@ export function WhiteboardTutor({
         else setPlaying(false);
       }, beat.kind === "react" ? 300 : 550);
     };
-    let cancel: () => void;
-    if (useCloud && cloud) {
-      prefetch(bi);
-      prefetch(bi + 1);
-      prefetch(bi + 2);
-      cancel = cloudLine(audioCache.current.get(bi)!, done, () => browserLine(beat.say, true, done));
-    } else {
-      cancel = browserLine(beat.say, voiceOn, done);
-    }
+    // The lesson's voice settles on its FIRST line, even when playback starts later on.
+    if (voiceOn && cloud && payload) track.current.start(beats[0].say, payload.tokens[0]);
+    const cancel = track.current.say(beat.say, payload?.tokens[bi], voiceOn, done);
     return () => {
       cancel();
       if (gap) clearTimeout(gap);
       setSpeaking(false);
     };
-  }, [beat, bi, beats.length, playing, voiceOn, cloud, payload, prefetch]);
+  }, [beat, bi, beats, playing, voiceOn, cloud, payload]);
 
   // Keep the newest line in view.
   useEffect(() => {
@@ -620,7 +444,7 @@ export function WhiteboardTutor({
         className={cn("rounded-full bg-primary font-bold text-white hover:bg-primary-dark", inline ? "px-3 py-1.5 text-xs" : "px-5 py-2 text-sm")}
         data-testid="wb-done"
       >
-        {inline ? t("somethingElse") : t("gotIt")}
+        {inline ? closeLabel ?? t("somethingElse") : t("gotIt")}
       </button>
     </>
   );
@@ -648,6 +472,8 @@ export function WhiteboardTutor({
         {t("title")}
         {questionNumber ? (
           <span className="font-medium text-text-secondary"> · {t("questionN", { n: questionNumber })}</span>
+        ) : request.kind === "practice" ? (
+          <span className="font-medium text-text-secondary"> · {t("practiceQuestionN", { n: request.index + 1 })}</span>
         ) : request.kind !== "mistake" ? (
           <span className="font-medium text-text-secondary"> · {t("yourUpload")}</span>
         ) : null}
@@ -666,12 +492,12 @@ export function WhiteboardTutor({
         type="button"
         onClick={onClose}
         className="flex h-9 items-center justify-center gap-1 rounded-full px-2 text-sm font-semibold text-text-secondary hover:bg-border/50"
-        aria-label={inline ? t("backToOptions") : t("close")}
+        aria-label={inline ? closeLabel ?? t("backToOptions") : t("close")}
         data-testid="wb-close"
       >
         {inline ? (
           <>
-            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{t("backToOptions")}</span>
+            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{closeLabel ?? t("backToOptions")}</span>
           </>
         ) : (
           <X className="h-5 w-5" />

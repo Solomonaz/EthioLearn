@@ -44,10 +44,10 @@ export const VOICE_DEFAULTS: VoiceConfig = {
   azureStyle: null,
   geminiModel: "gemini-3.8-flash-tts",
   geminiVoice: "Leda",
-  geminiStyle: "warm, playful, slightly sassy teacher",
+  geminiStyle: "confident, clear, energetic teacher",
   elevenVoiceId: "cgSgspJ2msm6clMCkdW9",
   elevenModel: "eleven_flash_v2_5",
-  tutorStyle: "sassy",
+  tutorStyle: "bold",
 };
 
 /** Suggestions for the admin page (any valid id can be typed instead). */
@@ -79,8 +79,11 @@ export const VOICE_SUGGESTIONS = {
   elevenModels: ["eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_multilingual_v2"],
 };
 
-/** Longest line the service will speak (lesson lines are far shorter). */
-export const MAX_TTS_CHARS = 320;
+/**
+ * Longest line the service will speak. Lesson lines are under 300; a practice
+ * question's choices read together can reach ~560.
+ */
+export const MAX_TTS_CHARS = 600;
 
 export function keyStatus() {
   return {
@@ -107,7 +110,7 @@ export async function readVoiceConfig(): Promise<VoiceConfig> {
     geminiStyle: row.geminiStyle,
     elevenVoiceId: row.elevenVoiceId,
     elevenModel: row.elevenModel,
-    tutorStyle: isTutorStyle(row.tutorStyle) ? row.tutorStyle : "sassy",
+    tutorStyle: isTutorStyle(row.tutorStyle) ? row.tutorStyle : "bold",
   };
 }
 
@@ -207,26 +210,81 @@ async function elevenlabs(text: string, cfg: VoiceConfig): Promise<Speech> {
 }
 
 /**
- * Gemini's WAV header can state a shorter data length than it sends, and
- * players stop at the stated length (clipping the last word). Point the RIFF
- * and data sizes at the real end when "data" is the last chunk.
+ * A clean WAV: only the "fmt " and "data" chunks, with short fades.
+ *
+ * Gemini's WAV carries a "C2PA" content-credentials chunk AFTER the audio.
+ * An earlier fix (for headers that understated the data length) stretched the
+ * data chunk to the end of the file, so players read that metadata as sound —
+ * a ~150 ms burst of loud static at the end of every line. Here the stated
+ * length is trusted when a real chunk follows it, and only stretched when the
+ * bytes after it are not a chunk. Fades of a few ms stop any click where a
+ * clip starts or ends off zero. Safe to run twice (cached lines are cleaned
+ * on the way out too; a second pass only fades again).
  */
-function fixWavSizes(wav: Buffer): Buffer {
-  if (wav.length < 44 || wav.subarray(0, 4).toString("latin1") !== "RIFF") return wav;
+export function cleanWav(wav: Buffer): Buffer {
+  if (wav.length < 44 || wav.subarray(0, 4).toString("latin1") !== "RIFF" || wav.subarray(8, 12).toString("latin1") !== "WAVE") {
+    return wav;
+  }
+  const isChunkId = (o: number) => o + 8 <= wav.length && /^[ -~]{4}$/.test(wav.subarray(o, o + 4).toString("latin1"));
+  let fmt: Buffer | null = null;
+  let pcm: Buffer | null = null;
   let off = 12;
   while (off + 8 <= wav.length) {
     const id = wav.subarray(off, off + 4).toString("latin1");
     const size = wav.readUInt32LE(off + 4);
+    const bodyStart = off + 8;
+    if (id === "fmt ") fmt = wav.subarray(bodyStart, Math.min(wav.length, bodyStart + size));
     if (id === "data") {
-      const out = Buffer.from(wav);
-      const real = (out.length - off - 8) & ~1;
-      if (real > size) out.writeUInt32LE(real, off + 4);
-      out.writeUInt32LE(out.length - 8, 4);
-      return out;
+      const next = bodyStart + size + (size & 1);
+      const avail = wav.length - bodyStart;
+      // Understated length with no chunk after it: the audio runs to the end.
+      const len = size > avail ? avail : next < wav.length && !isChunkId(next) ? avail : size;
+      pcm = wav.subarray(bodyStart, bodyStart + (len & ~1));
+      // Lines cached before this fix have the metadata chunk swallowed into
+      // the data: cut it where a known chunk runs to the very end.
+      for (const tag of ["C2PA", "LIST", "id3 ", "JUNK"]) {
+        for (let q = pcm.indexOf(tag, 0, "latin1"); q >= 0 && q + 8 <= pcm.length; q = pcm.indexOf(tag, q + 1, "latin1")) {
+          if (Math.abs(q + 8 + pcm.readUInt32LE(q + 4) - pcm.length) <= 1) {
+            pcm = pcm.subarray(0, q & ~1);
+            break;
+          }
+        }
+      }
+      break;
     }
-    off += 8 + size + (size & 1);
+    off = bodyStart + size + (size & 1);
   }
-  return wav;
+  if (!fmt || fmt.length < 16 || !pcm) return wav;
+  const format = fmt.readUInt16LE(0);
+  const channels = fmt.readUInt16LE(2) || 1;
+  const rate = fmt.readUInt32LE(4);
+  const bits = fmt.readUInt16LE(14);
+  const data = Buffer.from(pcm);
+  if (format === 1 && bits === 16 && rate > 0) fade16(data, channels, rate);
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(36 + data.length, 4);
+  h.write("WAVEfmt ", 8);
+  h.writeUInt32LE(16, 16);
+  fmt.copy(h, 20, 0, 16);
+  h.write("data", 36);
+  h.writeUInt32LE(data.length, 40);
+  return Buffer.concat([h, data]);
+}
+
+/** Fade 16-bit PCM in and out over ~8 ms (in place). */
+function fade16(data: Buffer, channels: number, rate: number) {
+  const frames = Math.floor(data.length / (2 * channels));
+  const n = Math.min(Math.floor(rate * 0.008), Math.floor(frames / 4));
+  for (let i = 0; i < n; i++) {
+    const g = i / n;
+    for (let c = 0; c < channels; c++) {
+      const a = (i * channels + c) * 2;
+      const b = ((frames - 1 - i) * channels + c) * 2;
+      data.writeInt16LE(Math.round(data.readInt16LE(a) * g), a);
+      data.writeInt16LE(Math.round(data.readInt16LE(b) * g), b);
+    }
+  }
 }
 
 /** Raw 16-bit mono PCM → a playable WAV file. */
@@ -292,9 +350,9 @@ async function gemini(text: string, cfg: VoiceConfig, actor?: UsageActor): Promi
   if (!mime.includes("wav") && data.subarray(0, 4).toString() !== "RIFF") {
     // audio/L16;rate=24000 (raw PCM)
     const rate = Number(/rate=(\d+)/.exec(mime)?.[1]) || 24000;
-    data = pcmToWav(data, rate);
+    data = cleanWav(pcmToWav(data, rate));
   } else {
-    data = fixWavSizes(data);
+    data = cleanWav(data);
   }
   return { data, mime: "audio/wav", provider: "GEMINI" };
 }
@@ -357,18 +415,25 @@ function voiceKey(p: TtsProviderId, cfg: VoiceConfig, text: string): string {
  * Speak `text` with the configured service (then the fallback), using the
  * cache first. Returns null when no cloud voice is configured or every
  * service failed — the page then uses the browser voice.
+ *
+ * `only`: use just this service (the one a lesson started with), so a lesson
+ * never switches voice halfway; null if it isn't configured or fails.
  */
 export async function speak(
   text: string,
-  opts: { actor?: UsageActor; config?: VoiceConfig; useCache?: boolean } = {},
+  opts: { actor?: UsageActor; config?: VoiceConfig; useCache?: boolean; only?: CloudVoiceId } = {},
 ): Promise<(Speech & { cached: boolean }) | null> {
   const cfg = opts.config ?? (await getVoiceConfig());
   const useCache = opts.useCache !== false;
-  for (const p of cloudChain(cfg)) {
+  const chain = cloudChain(cfg).filter((p) => !opts.only || p === opts.only);
+  for (const p of chain) {
     const id = voiceKey(p, cfg, text);
     if (useCache) {
       const hit = await db.ttsAudioCache.findUnique({ where: { id } }).catch(() => null);
-      if (hit) return { data: Buffer.from(hit.data), mime: hit.mime, provider: p, cached: true };
+      if (hit) {
+        const data = hit.mime.includes("wav") ? cleanWav(Buffer.from(hit.data)) : Buffer.from(hit.data);
+        return { data, mime: hit.mime, provider: p, cached: true };
+      }
     }
     try {
       const s = await synthesizeWith(p, text, cfg, opts.actor);

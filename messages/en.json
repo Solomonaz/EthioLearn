@@ -1050,6 +1050,18 @@
     "whiteboardText": "Snap a photo of a question or your homework, or pick a quiz mistake. Your guide explains it out loud on a whiteboard."
   },
   "whiteboard": {
+    "talk": "Talk to the guide",
+    "talkHint": "Tap the mic and say it: \"give me questions\", \"explain question 2\", \"summarize\" — or ask anything.",
+    "listening": "Listening…",
+    "stopListening": "Stop listening",
+    "didntCatch": "I didn't catch that — tap the mic and try again.",
+    "sayAnswer": "Say A, B, C or D — or tap it.",
+    "tapAnswer": "Tap your answer.",
+    "readAgain": "Read it again",
+    "toTheBoard": "Going to the board…",
+    "skipExplain": "Skip, next question",
+    "backToQuestions": "Back to the questions",
+    "practiceQuestionN": "Practice question {n}",
     "title": "Whiteboard",
     "questionN": "Question {n}",
     "speaking": "Speaking",

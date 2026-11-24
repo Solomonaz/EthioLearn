@@ -1,21 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
-  BookOpenText, ChevronLeft, FileText, ListChecks, MessageCircleQuestion, PenLine, Sparkles, Trash2, ZoomIn, ZoomOut,
+  BookOpenText, ChevronLeft, FileText, ListChecks, MessageCircleQuestion, Mic, MicOff, PenLine, Sparkles, Trash2, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { UpgradeNotice } from "@/components/student/upgrade-notice";
 import { GuideSays } from "@/components/student/guide-mascot";
 import { PdfReader } from "@/components/student/pdf-reader";
-import { PracticeQuiz } from "@/components/student/practice-quiz";
+import { PracticeQuiz, type PracticeResume } from "@/components/student/practice-quiz";
 import { primeSpeech, WhiteboardTutor } from "@/components/student/whiteboard-tutor";
+import { listenOnce, parseGuideRequest, speechInputSupported } from "@/components/student/speech-input";
 import { useEntitlements } from "@/hooks/use-entitlements";
-import type { PracticeQuestion, UploadAnalysis } from "@/lib/whiteboard-lesson";
+import type { PracticeQuestion, PracticeVoice, UploadAnalysis } from "@/lib/whiteboard-lesson";
 
 interface StoredResult {
   key: string;
@@ -35,10 +36,19 @@ interface UploadInfo {
   results: StoredResult[];
 }
 
+interface PracticeSet {
+  questions: PracticeQuestion[];
+  voice: PracticeVoice | null;
+  /** The stored set (for explaining a missed question from it). */
+  key: string | null;
+}
+
 type View =
   | { mode: "menu" }
   | { mode: "lesson"; action: "explain" | "summarize"; target: string | null }
-  | { mode: "practice"; questions: PracticeQuestion[] };
+  | { mode: "practice"; set: PracticeSet; resume: PracticeResume }
+  /** A missed practice question on the board; then back to the round at `resume`. */
+  | { mode: "missed"; set: PracticeSet; index: number; picked: number; resume: PracticeResume };
 
 /** A photo, zoomable, scrolling inside its pane. */
 function ImageViewer({ src, alt }: { src: string; alt: string }) {
@@ -83,7 +93,16 @@ export default function StudyUploadPage() {
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [actError, setActError] = useState<string | null>(null);
+  const [canTalk, setCanTalk] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [heardNothing, setHeardNothing] = useState(false);
+  const stopListen = useRef<(() => void) | null>(null);
   const allowed = ent.ai && ent.aiFeatures.aiTutor;
+
+  useEffect(() => {
+    setCanTalk(speechInputSupported());
+    return () => stopListen.current?.();
+  }, []);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/study-uploads/${encodeURIComponent(id)}`);
@@ -154,7 +173,8 @@ export default function StudyUploadPage() {
     setView({ mode: "lesson", action, target });
   };
 
-  const startPractice = async (count: 5 | 10) => {
+  const startPractice = async (count: 5 | 10, target: string | null = null) => {
+    primeSpeech();
     setBusy(true);
     setActError(null);
     setTab("guide");
@@ -162,11 +182,15 @@ export default function StudyUploadPage() {
       const res = await fetch(`/api/study-uploads/${encodeURIComponent(info.id)}/act`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "practice", count }),
+        body: JSON.stringify({ action: "practice", count, ...(target ? { target } : {}) }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !Array.isArray(d.questions)) throw new Error(d.error || t("error"));
-      setView({ mode: "practice", questions: d.questions });
+      setView({
+        mode: "practice",
+        set: { questions: d.questions, voice: d.voice ?? null, key: typeof d.key === "string" ? d.key : null },
+        resume: { index: 0, score: 0 },
+      });
       load();
     } catch (e) {
       setActError(e instanceof Error ? e.message : t("error"));
@@ -178,6 +202,39 @@ export default function StudyUploadPage() {
   const backToMenu = () => {
     setView({ mode: "menu" });
     load();
+  };
+
+  /** The student talked to the guide on the options page. */
+  const talk = () => {
+    if (listening) {
+      stopListen.current?.();
+      return;
+    }
+    primeSpeech();
+    setHeardNothing(false);
+    setListening(true);
+    let handled = false;
+    stopListen.current = listenOnce({
+      onText: (text, final) => {
+        setAsk(text.slice(0, 200));
+        if (!final || handled) return;
+        handled = true;
+        const r = parseGuideRequest(text, questions.map((x) => x.id));
+        if (!r) return;
+        if (r.kind === "practice") startPractice(r.count);
+        else if (r.kind === "summarize") startLesson("summarize", null);
+        else if (r.kind === "explainAll") startLesson("explain", null);
+        else if (r.kind === "explainItem") {
+          const item = questions.find((x) => x.id === r.id)!;
+          startLesson("explain", `Question ${item.id}: ${item.label}`.slice(0, 200));
+        } else startLesson("explain", r.text);
+      },
+      onEnd: () => {
+        stopListen.current = null;
+        setListening(false);
+        if (!handled) setHeardNothing(true);
+      },
+    });
   };
 
   const remove = async () => {
@@ -296,27 +353,47 @@ export default function StudyUploadPage() {
               className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-base text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:text-sm"
               data-testid="study-ask"
             />
+            {canTalk && (
+              <button
+                type="button"
+                onClick={talk}
+                className={cn(
+                  "flex w-11 shrink-0 items-center justify-center rounded-xl text-white",
+                  listening ? "animate-pulse bg-error" : "bg-primary/90 hover:bg-primary-dark",
+                )}
+                aria-label={listening ? t("stopListening") : t("talk")}
+                aria-pressed={listening}
+                title={t("talkHint")}
+                data-testid="study-mic"
+              >
+                {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
+            )}
             <button type="submit" disabled={!ask.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-dark disabled:opacity-50">
-              <MessageCircleQuestion className="h-4 w-4" /> {t("askGo")}
+              <MessageCircleQuestion className="h-4 w-4" /> <span className="hidden sm:inline">{t("askGo")}</span>
             </button>
           </form>
-          <p className="text-xs text-text-muted">{t("usesMessage")}</p>
+          <p className="text-xs text-text-muted" data-testid="study-talk-hint">
+            {listening ? t("listening") : heardNothing ? t("didntCatch") : canTalk ? t("talkHint") : null}
+            {canTalk ? " " : ""}
+            {t("usesMessage")}
+          </p>
         </section>
 
         {/* Done before: replay for free */}
-        {info.results.length > 0 && (
+        {info.results.some((r) => r.action !== "explainPractice") && (
           <section className="space-y-2" data-testid="study-done">
             <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-text-muted">
               <Sparkles className="h-3.5 w-3.5" /> {t("doneBefore")}
             </p>
             <div className="flex flex-wrap gap-2">
-              {info.results.map((r) => (
+              {info.results.filter((r) => r.action !== "explainPractice").map((r) => (
                 <button
                   key={r.key}
                   type="button"
                   onClick={() =>
-                    r.kind === "practice" && r.payload.questions
-                      ? setView({ mode: "practice", questions: r.payload.questions })
+                    r.kind === "practice"
+                      ? startPractice(/:10$/.test(r.key) ? 10 : 5, r.target)
                       : startLesson(r.action === "summarize" ? "summarize" : "explain", r.target)
                   }
                   className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-primary hover:border-primary/40 hover:bg-primary/5"
@@ -343,11 +420,35 @@ export default function StudyUploadPage() {
       />
     );
   } else if (view.mode === "practice") {
+    const { set } = view;
     guide = (
       <PracticeQuiz
-        questions={view.questions}
+        key={`${set.key}:${view.resume.index}`}
+        questions={set.questions}
+        voice={set.voice}
+        startIndex={view.resume.index}
+        startScore={view.resume.score}
         onBack={backToMenu}
         onExplain={(question) => startLesson("explain", question.slice(0, 200))}
+        onExplainMissed={
+          set.key
+            ? (index, picked, resume) => {
+                primeSpeech();
+                setView({ mode: "missed", set, index, picked, resume });
+              }
+            : undefined
+        }
+      />
+    );
+  } else if (view.mode === "missed") {
+    const { set, index, picked, resume } = view;
+    guide = (
+      <WhiteboardTutor
+        key={`missed:${set.key}:${index}:${picked}`}
+        inline
+        request={{ kind: "practice", uploadId: info.id, set: set.key!, index, picked }}
+        onClose={() => setView({ mode: "practice", set, resume })}
+        closeLabel={resume.index < set.questions.length ? t("backToQuestions") : t("seeScore")}
       />
     );
   } else guide = menu;

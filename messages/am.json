@@ -1050,6 +1050,18 @@
     "whiteboardText": "የጥያቄ ወይም የቤት ስራህን ፎቶ አንሳ፣ ወይም የፈተና ስህተት ምረጥ። መሪህ በነጭ ሰሌዳ ላይ በድምፅ ያብራራዋል።"
   },
   "whiteboard": {
+    "talk": "ከመሪው ጋር ይነጋገሩ",
+    "talkHint": "ማይኩን ይንኩና ይናገሩ፦ \"give me questions\"፣ \"explain question 2\"፣ \"summarize\" — ወይም ማንኛውንም ይጠይቁ።",
+    "listening": "እያዳመጠ ነው…",
+    "stopListening": "ማዳመጥ አቁም",
+    "didntCatch": "አልሰማሁትም — ማይኩን ይንኩና እንደገና ይሞክሩ።",
+    "sayAnswer": "A፣ B፣ C ወይም D ይበሉ — ወይም ይንኩት።",
+    "tapAnswer": "መልስዎን ይንኩ።",
+    "readAgain": "እንደገና አንብብ",
+    "toTheBoard": "ወደ ሰሌዳው እየሄድን ነው…",
+    "skipExplain": "ዝለል፣ ቀጣይ ጥያቄ",
+    "backToQuestions": "ወደ ጥያቄዎቹ ተመለስ",
+    "practiceQuestionN": "የልምምድ ጥያቄ {n}",
     "title": "ነጭ ሰሌዳ",
     "questionN": "ጥያቄ {n}",
     "speaking": "እየተናገረ ነው",

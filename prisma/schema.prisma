@@ -1604,14 +1604,15 @@ model VoiceSettings {
   geminiVoice String  @default("Leda")
   /// Tone tag for the line, sent as "[tag] text" (never read aloud),
   /// e.g. "warm, playful, slightly sassy teacher".
-  geminiStyle String? @default("warm, playful, slightly sassy teacher")
+  geminiStyle String? @default("confident, clear, energetic teacher")
 
   elevenVoiceId String @default("cgSgspJ2msm6clMCkdW9")
   elevenModel   String @default("eleven_flash_v2_5")
 
-  /// How the guide talks in Whiteboard lessons: "sassy" (dramatic, funny,
+  /// How the guide talks in Whiteboard lessons: "bold" (confident Grade 9-12
+  /// teacher, drama only on a wrong answer), "sassy" (dramatic, funny,
   /// study-TikTok style), "friendly" (warm and playful) or "calm" (plain and patient).
-  tutorStyle String @default("sassy")
+  tutorStyle String @default("bold")
 
   updatedAt DateTime @updatedAt
 

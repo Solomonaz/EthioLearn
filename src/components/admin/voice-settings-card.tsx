@@ -22,8 +22,13 @@ interface Config {
   tutorStyle: TutorStyle;
 }
 
-type TutorStyle = "sassy" | "friendly" | "calm";
+type TutorStyle = "bold" | "sassy" | "friendly" | "calm";
 const STYLES: { id: TutorStyle; name: string; sample: string }[] = [
+  {
+    id: "bold",
+    name: "Bold teacher (recommended for Grade 9-12)",
+    sample: "“The HEART?! No. Your heart pumps blood — it’s made in the bone marrow, the same place a transplant draws from.”",
+  },
   {
     id: "sassy",
     name: "Sassy & dramatic (study-TikTok style)",
@@ -220,7 +225,7 @@ export function VoiceSettingsCard() {
           <Field label="Tone (a few words, not read aloud)">
             <input
               className={INPUT}
-              placeholder="warm, playful, slightly sassy teacher"
+              placeholder="confident, clear, energetic teacher"
               value={cfg.geminiStyle ?? ""}
               onChange={(e) => set("geminiStyle", e.target.value || null)}
             />
@@ -348,7 +353,7 @@ export function VoiceSettingsCard() {
       <Card>
         <CardContent className="space-y-3 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-text-muted">How the guide talks</p>
-          <div className="grid gap-2 md:grid-cols-3" role="radiogroup" aria-label="How the guide talks">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="How the guide talks">
             {STYLES.map((st) => (
               <label
                 key={st.id}
@@ -373,7 +378,8 @@ export function VoiceSettingsCard() {
             ))}
           </div>
           <p className="text-xs text-text-secondary">
-            Used for every new Whiteboard lesson — quiz mistakes and uploads. Lessons already made keep their style.
+            Used for every new Whiteboard lesson and practice round — quiz mistakes and uploads. Bold teacher: confident,
+            practical, real-world examples, and a dramatic reaction only on a wrong answer. Lessons already made keep their style.
           </p>
 
           <p className="pt-2 text-xs font-bold uppercase tracking-wide text-text-muted">Voices — tried in this order</p>

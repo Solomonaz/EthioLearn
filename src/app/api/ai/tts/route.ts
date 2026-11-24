@@ -5,20 +5,24 @@ import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
 import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
 import { isAiFeatureEnabled } from "@/lib/platform-settings";
-import { cloudChain, getVoiceConfig, MAX_TTS_CHARS, speak, verifyLine } from "@/lib/tts";
+import { CLOUD_VOICES, cloudChain, getVoiceConfig, MAX_TTS_CHARS, speak, verifyLine, type CloudVoiceId } from "@/lib/tts";
 
 /**
  * Read-aloud for the Whiteboard Tutor.
  *
  * GET  → { cloud: boolean } — whether an admin-chosen voice service is set up
  *        (false = the page uses the browser's own voice).
- * POST { text, token } → audio for ONE lesson line. The token is the server's
+ * POST { text, token, provider? } → audio for ONE lesson line. The token is the server's
  *        signature on (this user, this exact text), handed out with the lesson
  *        (lib/whiteboard-voice), so only lines the server wrote for this
  *        student can be spoken — never free text. Same gates as the AI tutor
  *        (Pro, the aiTutor switch, CSRF) plus its own rate limit. It does not
  *        use a tutor message: the lesson already did.
  *        204 = no voice service available; use the browser voice.
+ *        `provider` pins the service the lesson started with (the page reads
+ *        it from X-Voice-Provider on the first line), so one lesson never
+ *        mixes voices: if that service fails, 503 — the page retries it
+ *        rather than switching to another voice.
  */
 
 type User = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
   const refused = await refusal(user);
   if (refused) return refused;
 
-  const body = (await req.json().catch(() => ({}))) as { text?: unknown; token?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { text?: unknown; token?: unknown; provider?: unknown };
   if (typeof body.text !== "string" || !body.text.trim() || body.text.length > MAX_TTS_CHARS) {
     return NextResponse.json({ error: "Invalid text" }, { status: 400 });
   }
@@ -71,8 +75,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This line can't be read aloud." }, { status: 403 });
   }
 
-  const speech = await speak(body.text, { actor: usageActor(user) });
-  if (!speech) return new NextResponse(null, { status: 204 });
+  let only: CloudVoiceId | undefined;
+  if (body.provider !== undefined && body.provider !== null) {
+    if (!(CLOUD_VOICES as unknown[]).includes(body.provider)) {
+      return NextResponse.json({ error: "Invalid voice" }, { status: 400 });
+    }
+    only = body.provider as CloudVoiceId;
+  }
+
+  const speech = await speak(body.text, { actor: usageActor(user), only });
+  if (!speech) {
+    return only
+      ? NextResponse.json({ error: "That voice is busy. Try again.", code: "VOICE_BUSY" }, { status: 503, headers: { "Retry-After": "2" } })
+      : new NextResponse(null, { status: 204 });
+  }
 
   return new NextResponse(new Uint8Array(speech.data), {
     status: 200,
