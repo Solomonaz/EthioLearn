@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { rateLimit } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import { sendMail } from "@/lib/mailer";
 import { LEGAL_CONTACT_EMAIL } from "@/components/legal/legal-page";
 import {
   cleanSupportText,
   isSupportTopic,
+  SUPPORT_BURST_LIMIT,
+  SUPPORT_BURST_WINDOW_MS,
   SUPPORT_DAILY_LIMIT,
   SUPPORT_MAX_CHARS,
   SUPPORT_MIN_CHARS,
@@ -19,7 +20,8 @@ import {
  *
  * GET  → the signed-in user's own messages (newest first) with any reply.
  * POST { topic, body } → send one to the Abugida team. Same-site only, a
- *      burst limit and a daily cap; the super admin hears about it in-app and
+ *      burst limit (5 in 10 minutes) and a daily cap (10), both counting
+ *      saved messages; the super admin hears about it in-app and
  *      by email. Super admins don't write here — they answer in Admin → Messages.
  */
 
@@ -63,18 +65,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Keep it under ${SUPPORT_MAX_CHARS} characters.`, code: "TOO_LONG" }, { status: 400 });
   }
 
-  // Counted only for messages that would be sent, so a rejected try never locks anyone out.
-  const rl = rateLimit(`support:${user.id}`, 3, 10 * 60_000);
-  if (!rl.success) {
+  // Limits count messages actually saved, so a failed or rejected try never
+  // uses them up (an earlier in-memory counter did, and locked users out).
+  const now = Date.now();
+  const [recent, today] = await Promise.all([
+    db.supportMessage.count({ where: { userId: user.id, createdAt: { gte: new Date(now - SUPPORT_BURST_WINDOW_MS) } } }),
+    db.supportMessage.count({ where: { userId: user.id, createdAt: { gte: new Date(now - 86_400_000) } } }),
+  ]);
+  if (recent >= SUPPORT_BURST_LIMIT) {
     return NextResponse.json(
       { error: "You've sent a few messages just now. Please wait a few minutes.", code: "RATE_LIMITED" },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+      { status: 429, headers: { "Retry-After": "300" } },
     );
   }
-
-  const today = await db.supportMessage.count({
-    where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 86_400_000) } },
-  });
   if (today >= SUPPORT_DAILY_LIMIT) {
     return NextResponse.json(
       { error: "You've sent the most messages for today. We'll get back to you.", code: "DAILY_LIMIT" },

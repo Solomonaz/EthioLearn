@@ -21,8 +21,10 @@ export const isSupportStatus = (v: unknown): v is SupportStatus =>
 export const SUPPORT_MIN_CHARS = 10;
 export const SUPPORT_MAX_CHARS = 1000;
 export const SUPPORT_REPLY_MAX_CHARS = 2000;
-/** Messages one user may send per day (a burst limit applies too). */
+/** Messages one user may send per day, and in a short burst (counted from saved messages). */
 export const SUPPORT_DAILY_LIMIT = 10;
+export const SUPPORT_BURST_LIMIT = 5;
+export const SUPPORT_BURST_WINDOW_MS = 10 * 60_000;
 
 /** Plain text: no control characters (keeps line breaks), trimmed. */
 export function cleanSupportText(v: unknown, max: number): string {
