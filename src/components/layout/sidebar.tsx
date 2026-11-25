@@ -134,6 +134,8 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   // "/secondary-teacher" does not start with "/teacher", so the grades 1-8
   // playful teacher chrome below is correctly NOT applied to this surface.
   const isSecondaryTeacher = pathname.startsWith("/secondary-teacher");
+  // A student's own areas (/student, /play): the theme is in Settings there.
+  const isStudentSurface = !isSchoolAdmin && !isAdmin && !isTeacher && !isSecondaryTeacher;
 
   const studentNavItems: NavItem[] = [
     { labelKey: "dashboard",   href: "/student",                icon: Home,          exact: true },
@@ -414,14 +416,18 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
               );
             })}
 
-            {/* Theme control lives here on phones, where the top bar has no
-                room for it. Hidden from md up, where the navbar shows it. */}
-            <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4 md:hidden">
+            {/* Theme control. Students (both areas) choose it in Settings →
+                Preferences, so not here. Admins, school admins and 9-12
+                teachers have no preferences page: here at every size. The
+                grades 1-8 teacher's top bar has it from md up. */}
+            {!isStudentSurface && (
+            <div className={cn("mt-auto flex items-center justify-between gap-3 border-t border-border pt-4", isTeacher && "md:hidden")}>
               <span className="px-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
                 {t("theme" as any)}
               </span>
               <ThemeToggle />
             </div>
+            )}
           </nav>
         )}
       </aside>

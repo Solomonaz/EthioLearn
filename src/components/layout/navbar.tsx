@@ -55,13 +55,10 @@ export function Navbar({ onMenuToggle, isSidebarOpen }: NavbarProps) {
 
         {status === "loading" ? null : session ? (
           <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-            {/* The 3-way theme control is ~84px, which a 375px row cannot
-                spare. It moves into the drawer on phones (see Sidebar) and
-                comes back here from sm up. The language switcher stays: an
+            {/* No theme control here once signed in: students choose it in
+                Settings → Preferences; admins, school admins and teachers at
+                the bottom of the side menu. The language switcher stays: an
                 EN/አማ audience needs it one tap away, not two. */}
-            <span className="hidden sm:inline-flex">
-              <ThemeToggle />
-            </span>
             <LanguageSwitcher />
             <NotificationBell
               viewAllHref={(session.user as { role?: string }).role === "STUDENT" ? "/student/notifications" : undefined}

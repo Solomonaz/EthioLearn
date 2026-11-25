@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Menu } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { SoundToggle } from "@/components/audio/sound-toggle";
@@ -32,9 +31,6 @@ export function PlayTopBar({ onMenuToggle }: { onMenuToggle?: () => void }) {
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <span className="inline-flex rounded-2xl bg-surface p-1 shadow-sm ring-1 ring-border">
           <SoundToggle />
-        </span>
-        <span className="hidden rounded-2xl bg-surface p-1 shadow-sm ring-1 ring-border sm:inline-flex">
-          <ThemeToggle />
         </span>
         <span className="hidden rounded-2xl bg-surface p-1 shadow-sm ring-1 ring-border sm:inline-flex">
           <LanguageSwitcher />

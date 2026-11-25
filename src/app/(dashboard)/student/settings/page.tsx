@@ -9,6 +9,7 @@ import {
   Lock,
   LogOut,
   Moon,
+  Sun,
   Monitor,
   Smartphone,
   Globe,
@@ -25,6 +26,7 @@ const TelegramLinkButton = dynamic(
 );
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useTheme } from "@/components/providers/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
@@ -117,8 +119,8 @@ function StudentSettingsInner() {
   // Language toggle
   const [isPending, startTransition] = useTransition();
 
-  // Dark mode placeholder
-  const [darkMode, setDarkMode] = useState(false);
+  // Appearance (light / dark / follow the device) — the top bar no longer has it.
+  const { theme, setTheme } = useTheme();
 
   // Telegram link state
   const [telegramLinked, setTelegramLinked] = useState(false);
@@ -668,31 +670,36 @@ function StudentSettingsInner() {
               </div>
             </div>
 
-            {/* Dark mode (placeholder) */}
-            <div className="flex items-center justify-between">
+            {/* Appearance */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-text-primary">
-                    Dark Mode
-                  </p>
-                  <Badge variant="default">Coming Soon</Badge>
-                </div>
-                <p className="text-xs text-text-secondary">Toggle dark theme</p>
+                <p className="text-sm font-medium text-text-primary">Dark Mode</p>
+                <p className="text-xs text-text-secondary">Light, dark, or follow your device</p>
               </div>
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  darkMode ? "bg-primary" : "bg-gray-300"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white transition-transform ${
-                    darkMode ? "translate-x-5" : "translate-x-0"
-                  }`}
-                >
-                  <Moon className="h-3 w-3 text-text-secondary" />
-                </span>
-              </button>
+              <div className="flex w-full rounded-lg border border-border p-1 sm:w-auto" role="radiogroup" aria-label="Theme" data-testid="settings-theme">
+                {(
+                  [
+                    { value: "light", label: "Light", Icon: Sun },
+                    { value: "dark", label: "Dark", Icon: Moon },
+                    { value: "system", label: "Device", Icon: Monitor },
+                  ] as const
+                ).map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={theme === value}
+                    onClick={() => setTheme(value)}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-3",
+                      theme === value ? "bg-primary text-white" : "text-text-secondary hover:bg-primary/10",
+                    )}
+                    data-testid={`settings-theme-${value}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </CardContent>
