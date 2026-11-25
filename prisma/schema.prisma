@@ -210,6 +210,9 @@ model User {
   // above the quality threshold — protects the prize economy from point farming.
   redeemablePoints Int       @default(0)
   streakDays       Int       @default(0)
+  /// The subject the student chose for the daily challenge (a textbook
+  /// subject, e.g. "Physics"). Null = any subject for their grade.
+  dailyChallengeSubject String?
   // ── Study habit (lib/streak.ts) ──
   /// Last Addis Ababa calendar day ("YYYY-MM-DD") with real study activity —
   /// the streak's anchor. Null on accounts that predate it (lastActiveAt is the
@@ -450,6 +453,11 @@ model PlatformSettings {
   /// AI tutor messages each user may send per day (the day resets at
   /// midnight Addis Ababa time). Null = no daily cap. See lib/tutor-allowance.
   tutorDailyMessageLimit Int? @default(20)
+  /// Whiteboard lessons each user may get per day — every new lesson, practice
+  /// set or practice "Explain" (quiz-mistake lessons too). Its own allowance,
+  /// separate from tutorDailyMessageLimit, because a read-aloud lesson costs
+  /// several times a chat reply. Null = no daily cap. See lib/tutor-allowance.
+  whiteboardDailyLimit Int? @default(5)
   /// Days of full access every self-registered student gets, counted from
   /// their sign-up date — so it happens once per account, whichever way they
   /// signed up. Null = no trial. Only applies while pricing is on.
@@ -468,6 +476,8 @@ model TutorDailyUse {
   /// Calendar day in Addis Ababa time (UTC+3), stored as a date.
   day    DateTime @db.Date
   count  Int      @default(0)
+  /// Whiteboard lessons that day (PlatformSettings.whiteboardDailyLimit).
+  whiteboard Int    @default(0)
 
   @@id([userId, day])
   @@map("tutor_daily_uses")

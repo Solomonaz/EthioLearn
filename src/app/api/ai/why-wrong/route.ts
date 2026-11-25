@@ -65,15 +65,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "The AI tutor is currently turned off.", code: "AI_DISABLED" }, { status: 503 });
   }
 
-  const capped = user.role !== "SUPER_ADMIN";
-  const daily = capped ? await getTutorDailyStatus(user.id) : null;
-  if (daily && tutorLimitReached(daily)) {
-    return NextResponse.json(
-      { error: tutorLimitMessage(daily.limit!), code: "DAILY_LIMIT", remainingToday: 0 },
-      { status: 429 },
-    );
-  }
-
   const body = (await req.json().catch(() => ({}))) as { quizId?: unknown; questionId?: unknown; format?: unknown };
   if (typeof body.quizId !== "string" || typeof body.questionId !== "string") {
     return NextResponse.json({ error: "quizId and questionId are required" }, { status: 400 });
@@ -82,6 +73,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unknown format" }, { status: 400 });
   }
   const whiteboard = body.format === "whiteboard";
+  // A whiteboard lesson uses the Whiteboard allowance; a text answer, a tutor message.
+  const kind = whiteboard ? "whiteboard" : "tutor";
+
+  const capped = user.role !== "SUPER_ADMIN";
+  const daily = capped ? await getTutorDailyStatus(user.id, kind) : null;
+  if (daily && tutorLimitReached(daily)) {
+    return NextResponse.json(
+      { error: tutorLimitMessage(daily.limit!, kind), code: "DAILY_LIMIT", remainingToday: 0 },
+      { status: 429 },
+    );
+  }
   const style = whiteboard ? (await getVoiceConfig()).tutorStyle : "friendly";
 
   // Only the student's own, submitted, wrong answer.
@@ -158,7 +160,7 @@ export async function POST(req: Request) {
     });
 
     // Count only a delivered reply, like the tutor chat.
-    const usedToday = capped ? await recordTutorMessage(user.id) : null;
+    const usedToday = capped ? await recordTutorMessage(user.id, kind) : null;
     if (user.role === "STUDENT") await recordStudyActivity(user.id, "tutor");
     const limit = daily?.limit ?? null;
 

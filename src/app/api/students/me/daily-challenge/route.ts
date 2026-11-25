@@ -1,7 +1,21 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
+
+/**
+ * The daily challenge: 5 questions from one chapter of the student's grade.
+ *
+ * The student chooses the subject (saved on their account, so a Natural
+ * science student never gets Economics unless they pick it); null = any
+ * subject. The chapter is picked from that subject by a hash of the student,
+ * the day and the subject, so reloading the page doesn't reshuffle it.
+ *
+ * GET   → { completed } or { chapterId, chapterTitle, subject, subjects, chosenSubject }
+ * PATCH { subject: string | null } → save the subject choice.
+ * POST  → record today's challenge as done (bonus points).
+ */
 
 function getTodayRange() {
   const today = new Date();
@@ -9,6 +23,22 @@ function getTodayRange() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   return { today, tomorrow };
+}
+
+/** The grade's chapters that have questions, with their subject. */
+async function challengeChapters(grade: number | null) {
+  return db.chapter.findMany({
+    where: {
+      questionCount: { gt: 0 },
+      textbook: { processingStatus: "COMPLETED", grade: grade ?? undefined },
+    },
+    select: { id: true, title: true, textbook: { select: { subject: true } } },
+    orderBy: { id: "asc" },
+  });
+}
+
+function subjectsOf(chapters: { textbook: { subject: string } }[]): string[] {
+  return [...new Set(chapters.map((c) => c.textbook.subject))].sort((a, b) => a.localeCompare(b));
 }
 
 export async function GET() {
@@ -31,36 +61,50 @@ export async function GET() {
     return NextResponse.json({ completed: true, pointsEarned: 50 });
   }
 
-  // Pick a random chapter from completed textbooks that have questions
-  const chapters = await db.chapter.findMany({
-    where: {
-      questionCount: { gt: 0 },
-      textbook: { 
-        processingStatus: "COMPLETED",
-        grade: user.grade ?? undefined
-      },
-    },
-    select: {
-      id: true,
-      title: true,
-      questionCount: true,
-      textbook: { select: { subject: true } },
-    },
-  });
-
+  const [chapters, me] = await Promise.all([
+    challengeChapters(user.grade ?? null),
+    db.user.findUnique({ where: { id: user.id }, select: { dailyChallengeSubject: true } }),
+  ]);
   if (chapters.length === 0) {
     return NextResponse.json({ completed: false, chapterId: null });
   }
 
-  const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
+  const subjects = subjectsOf(chapters);
+  // A saved subject that no longer has questions falls back to any subject.
+  const chosen = me?.dailyChallengeSubject && subjects.includes(me.dailyChallengeSubject) ? me.dailyChallengeSubject : null;
+  const pool = chosen ? chapters.filter((c) => c.textbook.subject === chosen) : chapters;
+  const dayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+  const hash = crypto.createHash("sha256").update(`${user.id}|${dayKey}|${chosen ?? "*"}`).digest();
+  const chapter = pool[hash.readUInt32BE(0) % pool.length];
 
   return NextResponse.json({
     completed: false,
-    chapterId: randomChapter.id,
-    chapterTitle: randomChapter.title,
-    subject: randomChapter.textbook.subject,
+    chapterId: chapter.id,
+    chapterTitle: chapter.title,
+    subject: chapter.textbook.subject,
+    subjects,
+    chosenSubject: chosen,
     questionCount: 5,
   });
+}
+
+export async function PATCH(request: Request) {
+  const user = await requireCompleteProfile();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+  const body = (await request.json().catch(() => null)) as { subject?: unknown } | null;
+  const subject = body?.subject;
+  if (subject !== null && (typeof subject !== "string" || subject.length > 100)) {
+    return NextResponse.json({ error: "Choose a subject." }, { status: 400 });
+  }
+  if (subject !== null && !subjectsOf(await challengeChapters(user.grade ?? null)).includes(subject)) {
+    return NextResponse.json({ error: "That subject has no challenge questions for your grade." }, { status: 400 });
+  }
+  if (user.id === "env_super_admin") return NextResponse.json({ subject });
+  await db.user.update({ where: { id: user.id }, data: { dailyChallengeSubject: subject } });
+  return NextResponse.json({ subject });
 }
 
 export async function POST(request: Request) {

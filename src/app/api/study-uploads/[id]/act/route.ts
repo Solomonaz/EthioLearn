@@ -37,7 +37,8 @@ import { ownUpload, readResults, resultKey, tutorGates, withResult } from "@/lib
  *                 right but they want to be sure). The question
  *                 comes from the stored set (never from the page), so the
  *                 lesson knows the real answer.
- * Each new one uses one daily tutor message and keeps every tutor rule. The
+ * Each new one uses one of today's Whiteboard lessons (its own daily
+ * allowance, see lib/tutor-allowance) and keeps every tutor rule. The
  * result is saved on the upload, so asking for the same thing again replays it
  * without spending another message.
  */
@@ -143,7 +144,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
 
     const daily = gate.daily;
-    const usedToday = daily ? await recordTutorMessage(user.id) : null;
+    const usedToday = daily ? await recordTutorMessage(user.id, "whiteboard") : null;
     if (user.role === "STUDENT") await recordStudyActivity(user.id, "tutor");
     await db.studyUpload.update({
       where: { id: up.id },

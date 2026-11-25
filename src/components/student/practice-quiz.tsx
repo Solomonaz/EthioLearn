@@ -27,7 +27,7 @@ export interface PracticeResume {
  * student taps a choice or says it ("B", "option C", the answer itself). The
  * guide reacts (fitting the question when right, dramatic when wrong), then
  * waits: Next, or Explain — right or wrong, since a right answer may be a
- * lucky guess — which works it out on the whiteboard (one tutor message) and
+ * lucky guess — which works it out on the whiteboard (one of the day's Whiteboard lessons) and
  * comes back to the next question. Nothing jumps to the board by itself.
  * Every spoken line is server-signed (PracticeVoice). Nothing is saved as a
  * graded quiz — it's practice.

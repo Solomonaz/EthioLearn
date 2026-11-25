@@ -35,9 +35,9 @@ const refuse = (status: number, error: string, code?: string, extra?: Record<str
 
 /**
  * The AI-tutor gates for a study-upload request. Returns a refusal response,
- * or the daily-allowance status (null when uncapped) to record usage against.
- * `needsMessage`: the action will use one tutor message, so refuse when none
- * are left today.
+ * or the daily Whiteboard allowance status (null when uncapped) to record
+ * usage against. `needsMessage`: the action will use one Whiteboard lesson
+ * from today's allowance, so refuse when none are left.
  */
 export async function tutorGates(
   req: Request,
@@ -58,9 +58,9 @@ export async function tutorGates(
   if (!ent.ai) return { refusal: refuse(403, UPGRADE_MESSAGES.ai, "UPGRADE_REQUIRED") };
   if (!(await isAiFeatureEnabled("aiTutor"))) return { refusal: refuse(503, "The AI tutor is currently turned off.", "AI_DISABLED") };
   const capped = user.role !== "SUPER_ADMIN";
-  const daily = capped ? await getTutorDailyStatus(user.id) : null;
+  const daily = capped ? await getTutorDailyStatus(user.id, "whiteboard") : null;
   if (needsMessage && daily && tutorLimitReached(daily)) {
-    return { refusal: refuse(429, tutorLimitMessage(daily.limit!), "DAILY_LIMIT", { remainingToday: 0 }) };
+    return { refusal: refuse(429, tutorLimitMessage(daily.limit!, "whiteboard"), "DAILY_LIMIT", { remainingToday: 0 }) };
   }
   return { daily };
 }

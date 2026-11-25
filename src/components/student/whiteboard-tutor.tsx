@@ -43,7 +43,7 @@ const hand = Caveat({ subsets: ["latin"], weight: ["500", "700"], display: "swap
  * POST /api/ai/tts with the server-signed line), else the browser's own voice
  * — one voice for the whole lesson (see voice-player).
  * Lessons are kept in this browser so reopening one never spends another
- * tutor message.
+ * Whiteboard lesson from the daily allowance.
  */
 
 const ICONS: Record<BoardIcon, LucideIcon> = {
@@ -112,7 +112,7 @@ function writeCached(key: string, entry: Cached) {
 /**
  * One request per lesson at a time: a second caller (React's dev double
  * mount, a double tap) shares the first request instead of spending another
- * tutor message.
+ * Whiteboard lesson from the daily allowance.
  */
 const inflight = new Map<string, Promise<{ ok: boolean; json: Record<string, unknown> }>>();
 function requestLesson(r: LessonRequest) {

@@ -13,6 +13,12 @@
  * midnight. Only replies actually delivered count, so a failed call never
  * uses up a message.
  *
+ * The Whiteboard has its own, smaller allowance
+ * (`PlatformSettings.whiteboardDailyLimit`, counted in the same row's
+ * `whiteboard` column): a new lesson, practice set or practice "Explain" —
+ * read aloud by a paid voice — costs several times a chat reply, so it is
+ * capped on its own instead of sharing the tutor's messages.
+ *
  * Check-then-record is not atomic, so two requests racing on the last message
  * can both pass. The per-minute rate limit bounds that to one or two messages,
  * which is not worth a lock.
@@ -35,36 +41,48 @@ function addisDay(now = new Date()): Date {
   return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
 }
 
-export async function getTutorDailyStatus(userId: string): Promise<TutorDailyStatus> {
+/** Which daily allowance: tutor messages (chat, "Why was I wrong?") or Whiteboard lessons. */
+export type AllowanceKind = "tutor" | "whiteboard";
+
+export async function getTutorDailyStatus(userId: string, kind: AllowanceKind = "tutor"): Promise<TutorDailyStatus> {
   const [settings, row] = await Promise.all([
     getPlatformSettings(),
     db.tutorDailyUse.findUnique({
       where: { userId_day: { userId, day: addisDay() } },
-      select: { count: true },
+      select: { count: true, whiteboard: true },
     }),
   ]);
-  return { used: row?.count ?? 0, limit: settings.tutorDailyMessageLimit };
+  return kind === "whiteboard"
+    ? { used: row?.whiteboard ?? 0, limit: settings.whiteboardDailyLimit }
+    : { used: row?.count ?? 0, limit: settings.tutorDailyMessageLimit };
 }
 
 export function tutorLimitReached(status: TutorDailyStatus): boolean {
   return status.limit !== null && status.used >= status.limit;
 }
 
-export function tutorLimitMessage(limit: number): string {
+export function tutorLimitMessage(limit: number, kind: AllowanceKind = "tutor"): string {
+  if (kind === "whiteboard") {
+    return (
+      `You have used all ${limit} Whiteboard lessons for today. ` +
+      "They renew at midnight. Lessons you already made replay for free, and Textbook Chat still works."
+    );
+  }
   return (
     `You have used all ${limit} AI tutor messages for today. ` +
     "They renew at midnight. Your quizzes, games and other tools still work."
   );
 }
 
-/** Count one delivered tutor reply. Returns the new total for today. */
-export async function recordTutorMessage(userId: string): Promise<number> {
+/** Count one delivered tutor reply (or Whiteboard lesson). Returns the new total for today. */
+export async function recordTutorMessage(userId: string, kind: AllowanceKind = "tutor"): Promise<number> {
   const day = addisDay();
+  const field = kind === "whiteboard" ? "whiteboard" : "count";
   const row = await db.tutorDailyUse.upsert({
     where: { userId_day: { userId, day } },
-    create: { userId, day, count: 1 },
-    update: { count: { increment: 1 } },
-    select: { count: true },
+    create: { userId, day, [field]: 1 },
+    update: { [field]: { increment: 1 } },
+    select: { count: true, whiteboard: true },
   });
-  return row.count;
+  return kind === "whiteboard" ? row.whiteboard : row.count;
 }

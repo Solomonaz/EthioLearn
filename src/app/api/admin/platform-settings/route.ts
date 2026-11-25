@@ -63,6 +63,21 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Whiteboard lessons per user per day: a whole number, or null for no cap.
+  if ("whiteboardDailyLimit" in body) {
+    const v = body.whiteboardDailyLimit;
+    if (v === null) {
+      data.whiteboardDailyLimit = null;
+    } else if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 10_000) {
+      data.whiteboardDailyLimit = v;
+    } else {
+      return NextResponse.json(
+        { error: "Daily Whiteboard lessons must be a whole number from 0 to 10000, or empty for no cap." },
+        { status: 400 },
+      );
+    }
+  }
+
   // Tutor messages per user per day: a whole number, or null for no cap.
   if ("tutorDailyMessageLimit" in body) {
     const v = body.tutorDailyMessageLimit;
@@ -113,6 +128,7 @@ export async function PATCH(request: Request) {
       antiCheatEnabled: true,
       teacherAiDefaultMonthlyCredits: true,
       tutorDailyMessageLimit: true,
+      whiteboardDailyLimit: true,
       studentTrialDays: true,
     },
   });

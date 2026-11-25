@@ -19,10 +19,11 @@ interface Settings {
   antiCheatEnabled: boolean;
   teacherAiDefaultMonthlyCredits: number | null;
   tutorDailyMessageLimit: number | null;
+  whiteboardDailyLimit: number | null;
   studentTrialDays: number | null;
 }
 
-type NumberKey = "teacherAiDefaultMonthlyCredits" | "tutorDailyMessageLimit" | "studentTrialDays";
+type NumberKey = "teacherAiDefaultMonthlyCredits" | "tutorDailyMessageLimit" | "whiteboardDailyLimit" | "studentTrialDays";
 type Key = Exclude<keyof Settings, NumberKey>;
 
 function Toggle({
@@ -279,11 +280,19 @@ export function PlatformSettingsPanel() {
           />
           <LimitRow
             label="Tutor messages per student / day"
-            desc="Each student's AI tutor replies per day. Renews at midnight, Addis Ababa time. Blank = no cap."
+            desc="Textbook Chat replies and “Why was I wrong?” per student per day. Renews at midnight, Addis Ababa time. Blank = no cap."
             max={10000}
             value={settings.tutorDailyMessageLimit}
             disabled={aiOff || !settings.aiTutorEnabled}
             onSave={(v) => saveLimit("tutorDailyMessageLimit", v, "Daily tutor limit updated.")}
+          />
+          <LimitRow
+            label="Whiteboard lessons per student / day"
+            desc="New Whiteboard lessons, practice sets and practice “Explain” per student per day — their own allowance, since a read-aloud lesson costs several times a chat reply (about $0.01–0.04 each with a cloud voice). Replays are free. Blank = no cap."
+            max={10000}
+            value={settings.whiteboardDailyLimit}
+            disabled={aiOff || !settings.aiTutorEnabled}
+            onSave={(v) => saveLimit("whiteboardDailyLimit", v, "Daily Whiteboard limit updated.")}
           />
           <Row
             label="AI Question / Quiz Generation"

@@ -63,7 +63,29 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
   // Free tiers / local — no cost to this account today.
   "openai/gpt-oss-20b": { inputPerMillion: 0, outputPerMillion: 0, billed: false },
   "nvidia/nemotron-3-super-120b-a12b": { inputPerMillion: 0, outputPerMillion: 0, billed: false },
+
+  // Read-aloud (Whiteboard voice). Gemini TTS bills tokens: the text in, the
+  // audio out (about 25 audio tokens per second). List price of Gemini Flash
+  // TTS: $0.50 / $10 per 1M. Azure and ElevenLabs bill characters — see
+  // TTS_CHAR_PRICING below.
+  "gemini-3.8-flash-tts": { inputPerMillion: 0.5, outputPerMillion: 10, billed: true },
+  "gemini-3.8-flash-lite-tts": { inputPerMillion: 0.5, outputPerMillion: 10, billed: true },
+  "gemini-2.5-flash-preview-tts": { inputPerMillion: 0.5, outputPerMillion: 10, billed: true },
 };
+
+/**
+ * Character-billed voices, by model-id prefix. lib/tts logs "azure-tts:<voice>"
+ * and "elevenlabs:<model>" with the characters as prompt tokens, so a "per
+ * million tokens" rate here is per million characters.
+ *  - Azure neural voices: $15 per 1M characters (pay-as-you-go list price).
+ *  - ElevenLabs: free on the free plan (10,000 characters a month). On a paid
+ *    plan set the real rate — e.g. Creator is about $0.11 per 1,000 Flash
+ *    characters, so inputPerMillion: 110, billed: true.
+ */
+const TTS_CHAR_PRICING: [prefix: string, price: ModelPrice][] = [
+  ["azure-tts:", { inputPerMillion: 15, outputPerMillion: 0, billed: true }],
+  ["elevenlabs:", { inputPerMillion: 0, outputPerMillion: 0, billed: false }],
+];
 
 const FREE: ModelPrice = { inputPerMillion: 0, outputPerMillion: 0, billed: false };
 
@@ -72,6 +94,7 @@ export function priceFor(model: string): ModelPrice | null {
   if (exact) return exact;
   // OpenRouter ":free" variants cost nothing, whatever the base model.
   if (model.endsWith(":free")) return FREE;
+  for (const [prefix, price] of TTS_CHAR_PRICING) if (model.startsWith(prefix)) return price;
   return null;
 }
 

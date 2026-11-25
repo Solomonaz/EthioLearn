@@ -37,6 +37,10 @@ interface ChallengeData {
   chapterId: string | null;
   chapterTitle?: string;
   subject?: string;
+  /** Subjects the student can choose for the challenge (their grade's). */
+  subjects?: string[];
+  /** The subject they chose; null = any subject. */
+  chosenSubject?: string | null;
   questionCount?: number;
   pointsEarned?: number;
 }
@@ -125,6 +129,7 @@ export default function StudentDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<ChallengeData | null>(null);
+  const [challengeSaving, setChallengeSaving] = useState(false);
   // Welcome tour: "first" = first run after sign-up (outcome is recorded),
   // "replay" = opened again from the menu.
   const [tour, setTour] = useState<"first" | "replay" | null>(null);
@@ -147,20 +152,36 @@ export default function StudentDashboardPage() {
         setLoading(false);
       }
     }
-    async function fetchChallenge() {
-      try {
-        const res = await fetch("/api/students/me/daily-challenge");
-        if (res.ok) {
-          const data = await res.json();
-          setChallenge(data);
-        }
-      } catch {
-        // Challenge widget is non-critical; silently ignore errors
-      }
-    }
     fetchDashboard();
     fetchChallenge();
   }, []);
+
+  async function fetchChallenge() {
+    try {
+      const res = await fetch("/api/students/me/daily-challenge");
+      if (res.ok) {
+        const data = await res.json();
+        setChallenge(data);
+      }
+    } catch {
+      // Challenge widget is non-critical; silently ignore errors
+    }
+  }
+
+  /** The student picks the challenge subject (saved on their account). */
+  async function chooseChallengeSubject(subject: string | null) {
+    setChallengeSaving(true);
+    try {
+      const res = await fetch("/api/students/me/daily-challenge", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject }),
+      });
+      if (res.ok) await fetchChallenge();
+    } finally {
+      setChallengeSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -282,6 +303,25 @@ export default function StudentDashboardPage() {
               <p className="mt-1 text-sm text-text-secondary">
                 {t("challengeDetails", { subject: challenge.subject ?? "" })}
               </p>
+              {challenge.subjects && challenge.subjects.length > 1 && (
+                <label className="mt-3 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+                  <span className="font-medium">{t("challengeSubject")}</span>
+                  <select
+                    value={challenge.chosenSubject ?? ""}
+                    onChange={(e) => chooseChallengeSubject(e.target.value || null)}
+                    disabled={challengeSaving}
+                    className="min-w-0 max-w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                    data-testid="challenge-subject"
+                  >
+                    <option value="">{t("challengeAnySubject")}</option>
+                    {challenge.subjects.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <div className="mt-3">
                 <Link
                   href={`/student/quiz?challenge=true&chapterId=${challenge.chapterId}&count=5`}
