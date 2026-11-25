@@ -6,8 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { buildTutorContext } from "@/lib/tutor-context";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { featureDenial } from "@/lib/entitlements";
 import { recordStudyActivity } from "@/lib/streak";
 import { normalizeOption } from "@/lib/utils";
 import {
@@ -57,14 +56,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.ai) {
-    return NextResponse.json({ error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" }, { status: 403 });
-  }
-  if (!(await isAiFeatureEnabled("aiTutor"))) {
-    return NextResponse.json({ error: "The AI tutor is currently turned off.", code: "AI_DISABLED" }, { status: 503 });
-  }
-
   const body = (await req.json().catch(() => ({}))) as { quizId?: unknown; questionId?: unknown; format?: unknown };
   if (typeof body.quizId !== "string" || typeof body.questionId !== "string") {
     return NextResponse.json({ error: "quizId and questionId are required" }, { status: 400 });
@@ -73,11 +64,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unknown format" }, { status: 400 });
   }
   const whiteboard = body.format === "whiteboard";
+  // A whiteboard lesson is the Whiteboard feature; a text answer, "Why was I wrong?".
+  const denied = await featureDenial(user, whiteboard ? "whiteboard" : "whyWrong");
+  if (denied) return denied;
   // A whiteboard lesson uses the Whiteboard allowance; a text answer, a tutor message.
   const kind = whiteboard ? "whiteboard" : "tutor";
 
   const capped = user.role !== "SUPER_ADMIN";
-  const daily = capped ? await getTutorDailyStatus(user.id, kind) : null;
+  const daily = capped ? await getTutorDailyStatus(user, kind) : null;
   if (daily && tutorLimitReached(daily)) {
     return NextResponse.json(
       { error: tutorLimitMessage(daily.limit!, kind), code: "DAILY_LIMIT", remainingToday: 0 },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { examDeadline, finishAttempt } from "@/lib/national-exam";
 import { recordStudyActivity } from "@/lib/streak";
@@ -15,6 +16,8 @@ const SUBMIT_GRACE_MS = 2 * 60_000;
 export async function POST(request: NextRequest, { params }: { params: Promise<{ aid: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "nationalExam");
+  if (featureRefusal) return featureRefusal;
   if (!validateCsrfOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   const { aid } = await params;
   const body = (await request.json().catch(() => ({}))) as { answers?: unknown };

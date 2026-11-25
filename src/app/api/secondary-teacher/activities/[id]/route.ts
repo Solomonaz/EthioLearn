@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { takeBackActivity } from "@/lib/activity-send";
 
@@ -27,6 +28,8 @@ export async function GET(
 ) {
   const user = await getTeacher();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const { id } = await params;
 
@@ -260,6 +263,8 @@ export async function PATCH(
 
   const user = await getTeacher();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const { id } = await params;
 
@@ -433,6 +438,8 @@ export async function DELETE(
 
   const user = await getTeacher();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const { id } = await params;
   const result = await takeBackActivity(user.id, id, {

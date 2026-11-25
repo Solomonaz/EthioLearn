@@ -3,8 +3,7 @@ import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { featureDenial } from "@/lib/entitlements";
 import { CLOUD_VOICES, cloudChain, getVoiceConfig, MAX_TTS_CHARS, speak, verifyLine, type CloudVoiceId } from "@/lib/tts";
 
 /**
@@ -27,16 +26,12 @@ import { CLOUD_VOICES, cloudChain, getVoiceConfig, MAX_TTS_CHARS, speak, verifyL
 
 type User = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
 
-/** Pro + the tutor switch, like every AI-tutor call. Returns a refusal or null. */
+/**
+ * The plan's cloud-voice feature + the tutor switch. A refusal makes the page
+ * fall back to the browser's own (free) voice.
+ */
 async function refusal(user: User) {
-  const ent = await getEntitlements(user);
-  if (!ent.ai) {
-    return NextResponse.json({ error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" }, { status: 403 });
-  }
-  if (!(await isAiFeatureEnabled("aiTutor"))) {
-    return NextResponse.json({ error: "The AI tutor is currently turned off.", code: "AI_DISABLED" }, { status: 503 });
-  }
-  return null;
+  return featureDenial(user, "whiteboardVoice");
 }
 
 export async function GET() {

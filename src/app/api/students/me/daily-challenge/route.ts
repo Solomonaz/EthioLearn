@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
 /**
@@ -46,6 +47,8 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const featureRefusal = await featureDenial(user, "dailyChallenge");
+  if (featureRefusal) return featureRefusal;
 
   const { today, tomorrow } = getTodayRange();
 
@@ -91,6 +94,8 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const user = await requireCompleteProfile();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "dailyChallenge");
+  if (featureRefusal) return featureRefusal;
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
@@ -112,6 +117,8 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const featureRefusal = await featureDenial(user, "dailyChallenge");
+  if (featureRefusal) return featureRefusal;
 
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });

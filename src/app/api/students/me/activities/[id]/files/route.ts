@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
 import {
@@ -42,6 +43,8 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   // Uploads are the most expensive thing a student can do to this server, so
   // they are bounded well below the general API limit.

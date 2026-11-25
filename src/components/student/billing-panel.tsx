@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+import { FEATURES, type FeatureDef, type FeatureKey } from "@/lib/features";
 import { CheckCircle2, Crown, Gift, ShieldCheck, RefreshCw, Lock, Headphones, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -41,29 +43,25 @@ interface Plan {
   allowLeaderboard: boolean;
   allowMathTools: boolean;
   allowGames?: boolean;
+  /** Feature-by-feature access, as the server resolves it. */
+  effectiveFeatures?: Partial<Record<FeatureKey, boolean>>;
 }
 
 /**
  * The feature bullets to show on a plan card. Admin-entered `features` win;
- * otherwise we derive a list from what the plan unlocks, so a plan with no
- * hand-written features (e.g. Premium Student) still shows what it includes.
+ * otherwise the list is the plan's included features (from the server's
+ * per-feature map), so a plan with no hand-written features still shows what
+ * it includes.
  */
-function planFeatures(p: Plan, elementary: boolean): string[] {
+function planFeatures(p: Plan, elementary: boolean, name: (k: FeatureKey) => string): string[] {
   if (p.features && p.features.length > 0) return p.features;
+  const included = (k: FeatureKey) => p.effectiveFeatures?.[k] === true;
   // A grades 1-8 student only has the play area, so list what it unlocks.
-  if (elementary) {
-    const f: string[] = ["Find the Color & Number Memory"];
-    if (p.allowGames !== false) f.push("Every learning game: Tug of War, Find the Pair, Routing Robot");
-    if (p.allowGames !== false && p.allowAi) f.push("AI-made questions for your games");
-    return f;
-  }
-  const f: string[] = ["Solo quizzes, daily challenges & solo games", "Progress tracking"];
-  if (p.allowAi) f.push("AI Study (Textbook Chat & Whiteboard) & AI-generated quizzes");
-  if (p.allowMathTools) f.push("Graphing calculator & 3D geometry lab");
-  if (p.allowMultiplayer) f.push("Battle mode (multiplayer)");
-  if (p.allowRewards) f.push("Rewards & redemption");
-  if (p.allowLeaderboard) f.push("Leaderboard & rankings");
-  return f;
+  const keys = FEATURES.filter((f: FeatureDef) =>
+    elementary ? f.users.includes("play") : f.users.includes("student") && !f.schoolOnly,
+  ).map((f) => f.key as FeatureKey);
+  const list = keys.filter(included).map(name);
+  return elementary ? ["Find the Color & Number Memory", ...list] : ["Solo quizzes & progress tracking", ...list];
 }
 interface Subscription {
   id: string;
@@ -89,6 +87,7 @@ const CYCLES: { value: StudentBillingInterval; label: string }[] = [
  * for school-managed students — the API reports eligible:false for them.
  */
 export function StudentBillingPanel({ elementary = false }: { elementary?: boolean } = {}) {
+  const tf = useTranslations("features");
   const [eligible, setEligible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -329,7 +328,7 @@ export function StudentBillingPanel({ elementary = false }: { elementary?: boole
               ? isCurrentPlan
               : !!liveCurrent && liveCurrent.plan.id === p.id && liveCurrent.billingInterval === selectedCycle;
             const cycleLabel = CYCLES.find((c) => c.value === selectedCycle)?.label ?? "";
-            const feats = planFeatures(p, elementary);
+            const feats = planFeatures(p, elementary, (k) => tf(`names.${k}`));
             const twoColFeatures = feats.length > 4;
             const PlanIcon = isFree ? Gift : Crown;
 

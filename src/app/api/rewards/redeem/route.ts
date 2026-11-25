@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { createNotification } from "@/lib/notifications";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { featureDenial } from "@/lib/entitlements";
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -24,13 +24,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.rewards) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.rewards, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
+  const denied = await featureDenial(user, "rewards");
+  if (denied) return denied;
 
   let body: { rewardId?: string };
   try {

@@ -5,6 +5,7 @@ import path from "path";
 import { Readable } from "stream";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { canReadTextbook } from "@/lib/library-access";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 
@@ -21,6 +22,8 @@ import { UPLOAD_ROOT } from "@/lib/uploads";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "library");
+  if (featureRefusal) return featureRefusal;
   const { id } = await params;
 
   const tb = await db.textbook.findUnique({

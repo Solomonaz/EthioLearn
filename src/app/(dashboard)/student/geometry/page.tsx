@@ -19,8 +19,8 @@ export default function GeometryPage() {
   const ent = useEntitlements();
 
   // Plan gating — the 3D geometry lab requires a plan that includes the math tools.
-  if (!ent.loading && !ent.mathTools) {
-    return <UpgradeNotice feature="3D Geometry" planName={ent.planName} />;
+  if (!ent.loading && !ent.features.geometry3d) {
+    return <UpgradeNotice feature="geometry3d" planName={ent.planName} />;
   }
 
   return (

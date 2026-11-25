@@ -1283,9 +1283,9 @@ model PricingPlan {
   isActive        Boolean         @default(true) // available for assignment
   sortOrder       Int             @default(0)
 
-  // Entitlements — what the plan unlocks. Primarily for STUDENT plans; school
-  // students and school plans are always treated as full access regardless.
-  // Default true so existing/full plans keep every capability.
+  // Entitlements, before per-feature access (see featureAccess below). Kept in
+  // sync from featureAccess on every save, and the fallback for student plans
+  // saved before it existed. Default true so full plans keep every capability.
   allowAi          Boolean @default(true) // AI tutor, AI quiz generation
   allowMultiplayer Boolean @default(true) // battle / group games (solo is always allowed)
   allowRewards     Boolean @default(true) // rewards catalogue & redemption
@@ -1295,6 +1295,17 @@ model PricingPlan {
   // the entitlement dimension is present in the schema; the free-vs-PRO game
   // split is wired through getEntitlements() in Phase 2 when the games ship.
   allowGames       Boolean @default(true) // elementary game modes
+
+  // Per-feature access, keyed by the feature registry (src/lib/features.ts):
+  // { "<featureKey>": true | false }. A key that is missing falls back to the
+  // allow* column it replaced (student plans) or to on (school plans, whose
+  // allow* columns were never enforced), so plans saved before this column
+  // existed keep exactly the access they had. The allow* columns are kept in
+  // sync on every save for older readers.
+  featureAccess    Json?
+  // Whiteboard lessons per student per day on this plan; null = the platform
+  // default (PlatformSettings.whiteboardDailyLimit).
+  whiteboardDailyLimit Int?
 
   // ── Secondary teachers (SCHOOL plans only; null on student plans) ──
   // Every active secondary teacher adds `pricePerTeacher` to the term price.

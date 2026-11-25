@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { recordStudyActivity } from "@/lib/streak";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
@@ -28,6 +29,8 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const { id: activityId } = await params;
 

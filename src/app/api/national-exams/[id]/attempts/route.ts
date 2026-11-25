@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { cleanAnswers, examDeadline, finishAttempt, publicQuestion } from "@/lib/national-exam";
 
@@ -17,6 +18,8 @@ import { cleanAnswers, examDeadline, finishAttempt, publicQuestion } from "@/lib
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "nationalExam");
+  if (featureRefusal) return featureRefusal;
   if (user.role !== "STUDENT") return NextResponse.json({ error: "Only students can take a paper." }, { status: 403 });
   if (!validateCsrfOrigin(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
 

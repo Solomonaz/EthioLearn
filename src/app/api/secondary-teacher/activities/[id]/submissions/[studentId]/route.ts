@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
 /**
@@ -30,6 +31,8 @@ export async function PATCH(
   if (!user || user.role !== "SECONDARY_TEACHER" || !user.schoolId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const { id: activityId, studentId } = await params;
 

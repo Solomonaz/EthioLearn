@@ -6,8 +6,7 @@ import { usageActor, withUsageActor } from "@/lib/usage-logger";
 import { generateQuestionsBatched, runQualityPipeline, passesAutoServe, generationContentBudget } from "@/lib/ai-provider";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { featureDenial, getEntitlements } from "@/lib/entitlements";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { selectGenerationContent } from "@/lib/generation-content";
 import { avoidList, generationRunIndex, recentChapterQuestions } from "@/lib/question-dedupe";
@@ -42,7 +41,7 @@ export interface GenerationProgress {
  * Core generation runner that can be called synchronously or streamed via SSE.
  */
 async function runGeneration(
-  user: { id: string; role: string; grade?: number | null },
+  user: { id: string; role: string; grade?: number | null; schoolId: string | null; createdAt?: Date },
   body: any,
   onProgress?: (info: GenerationProgress) => void
 ) {
@@ -58,11 +57,11 @@ async function runGeneration(
     percent: 10,
   });
 
-  // Resolve Adaptive Difficulty — honour the platform switch. When adaptive is
-  // turned off, fall back to a fixed difficulty instead of calibrating.
+  // Resolve Adaptive Difficulty — honour the plan and the platform switch. When
+  // adaptive is unavailable, fall back to a fixed difficulty instead of calibrating.
   let adaptiveInsights: AdaptiveInsights | undefined = undefined;
   if (difficulty === "ADAPTIVE") {
-    if (await isAiFeatureEnabled("aiAdaptive")) {
+    if ((await getEntitlements(user)).features.adaptive) {
       adaptiveInsights = await getAdaptiveDifficultyInsights(user.id, {
         chapterId: chapterId === "all" ? null : chapterId,
         textbookId,
@@ -590,19 +589,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.ai) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
-  if (!(await isAiFeatureEnabled("aiQuizGen"))) {
-    return NextResponse.json(
-      { error: "AI quiz generation is currently turned off.", code: "AI_DISABLED" },
-      { status: 503 }
-    );
-  }
+  const denied = await featureDenial(user, "aiQuizzes");
+  if (denied) return denied;
 
   // Rate limit: 3 AI generations per minute for students (stricter than admins)
   const rl = rateLimit(`ai:student:gen:${user.id}`, 3, 60_000);

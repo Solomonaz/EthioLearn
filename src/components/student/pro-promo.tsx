@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { Lock, MessageSquare, Swords, LineChart, Trophy, Sparkles, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import type { EntitlementsInfo } from "@/hooks/use-entitlements";
+import { isLocked, type EntitlementsInfo } from "@/hooks/use-entitlements";
+import type { FeatureKey } from "@/lib/features";
 
 /**
  * Paid ("Pro") features, shown to free students instead of hidden so they know
  * what upgrading unlocks. One list drives the sidebar locks, the dashboard card
- * and the upgrade screen.
+ * and the upgrade screen. `features` are the plan features (lib/features) the
+ * card stands for.
  */
 export const PRO_FEATURES = [
   {
     key: "aiTutor",
-    navKeys: ["aiTutor", "whiteboardTutor"],
+    features: ["textbookChat", "whiteboard"],
     title: "AI Study: Textbook Chat & Whiteboard",
     desc: "Ask your textbook anything, and get your mistakes and homework photos explained out loud.",
     icon: MessageSquare,
@@ -21,7 +23,7 @@ export const PRO_FEATURES = [
   },
   {
     key: "battle",
-    navKeys: ["battle"],
+    features: ["battle"],
     title: "Battle Quiz",
     desc: "Compete live with friends on questions from your textbook.",
     icon: Swords,
@@ -29,7 +31,7 @@ export const PRO_FEATURES = [
   },
   {
     key: "mathTools",
-    navKeys: ["grapher", "geometry"],
+    features: ["graphing", "geometry3d"],
     title: "Grapher & 3D Geometry",
     desc: "Draw graphs and explore 3D shapes to understand maths visually.",
     icon: LineChart,
@@ -37,20 +39,39 @@ export const PRO_FEATURES = [
   },
   {
     key: "leaderboard",
-    navKeys: ["leaderboard"],
+    features: ["leaderboard"],
     title: "Leaderboard",
     desc: "See how you rank against other students.",
     icon: Trophy,
     href: "/student/leaderboard",
   },
-] as const;
+] as const satisfies readonly { key: string; features: readonly FeatureKey[]; title: string; desc: string; href: string; icon: unknown }[];
 
 export type ProFeatureKey = (typeof PRO_FEATURES)[number]["key"];
+
+/** The plan feature behind each student menu item (items without one are never gated). */
+export const NAV_FEATURES: Record<string, FeatureKey> = {
+  aiTutor: "textbookChat",
+  whiteboardTutor: "whiteboard",
+  geometry: "geometry3d",
+  grapher: "graphing",
+  battle: "battle",
+  leaderboard: "leaderboard",
+  rewards: "rewards",
+  nationalExam: "nationalExam",
+  library: "library",
+  myWork: "classActivities",
+};
 
 const BILLING_HREF = "/student/billing";
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How long after a trial ends the "trial ended" prompt keeps showing. */
 const TRIAL_ENDED_PROMPT_DAYS = 14;
+
+/** A student who could buy a plan (independent, pricing on, loaded). */
+function canBuy(ent: EntitlementsInfo): boolean {
+  return !ent.loading && ent.isIndependent && ent.pricingEnabled;
+}
 
 /**
  * Pro features this student could buy but doesn't have. Empty for school
@@ -59,20 +80,19 @@ const TRIAL_ENDED_PROMPT_DAYS = 14;
  */
 export function lockedProFeatures(ent: EntitlementsInfo): Set<ProFeatureKey> {
   const locked = new Set<ProFeatureKey>();
-  if (ent.loading || !ent.isIndependent || !ent.pricingEnabled) return locked;
-  if (ent.aiFeatures.aiTutor && !ent.ai) locked.add("aiTutor");
-  if (!ent.multiplayer) locked.add("battle");
-  if (!ent.mathTools) locked.add("mathTools");
-  if (!ent.leaderboard) locked.add("leaderboard");
+  if (!canBuy(ent)) return locked;
+  for (const f of PRO_FEATURES) {
+    if ((f.features as readonly FeatureKey[]).some((k) => isLocked(ent, k))) locked.add(f.key);
+  }
   return locked;
 }
 
 /** Sidebar nav keys (e.g. "grapher") whose feature is locked for this student. */
 export function lockedNavKeys(ent: EntitlementsInfo): Set<string> {
-  const locked = lockedProFeatures(ent);
   const keys = new Set<string>();
-  for (const f of PRO_FEATURES) {
-    if (locked.has(f.key)) f.navKeys.forEach((k) => keys.add(k));
+  if (!canBuy(ent)) return keys;
+  for (const [navKey, feature] of Object.entries(NAV_FEATURES)) {
+    if (isLocked(ent, feature)) keys.add(navKey);
   }
   return keys;
 }

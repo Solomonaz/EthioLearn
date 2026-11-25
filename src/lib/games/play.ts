@@ -38,7 +38,7 @@ export type PlayGameKey = "tug" | "find-pair" | "routing" | "memory" | "find-col
 
 /**
  * Games a grades 1-8 student may play without a plan that includes games
- * (the `games` entitlement). Kept to the two simple brain trainers so a free
+ * (the `playGames` plan feature). Kept to the two simple brain trainers so a free
  * account always has something to do, while the curriculum games are paid.
  */
 export const FREE_PLAY_GAMES: ReadonlySet<PlayGameKey> = new Set<PlayGameKey>([
@@ -46,7 +46,7 @@ export const FREE_PLAY_GAMES: ReadonlySet<PlayGameKey> = new Set<PlayGameKey>([
   "memory",
 ]);
 
-/** Whether a student with these entitlements may play `game`. */
-export function canPlayGame(game: PlayGameKey, ent: { games: boolean }): boolean {
-  return ent.games || FREE_PLAY_GAMES.has(game);
+/** Whether a student with these entitlements may play `game` (the plan's `playGames` feature). */
+export function canPlayGame(game: PlayGameKey, ent: { features: { playGames: boolean } }): boolean {
+  return ent.features.playGames || FREE_PLAY_GAMES.has(game);
 }

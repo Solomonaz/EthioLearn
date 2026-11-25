@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { featureDenial } from "@/lib/entitlements";
 import { addisWeekStart } from "@/lib/study-time";
 
 export async function GET(request: Request) {
@@ -11,13 +11,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.leaderboard) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.leaderboard, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
+  const denied = await featureDenial(user, "leaderboard");
+  if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "school";

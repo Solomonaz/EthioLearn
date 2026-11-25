@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 
 /**
  * A student's inbox of teacher-set activities.
@@ -13,6 +14,8 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const targets = await db.classActivityTarget.findMany({
     where: { studentId: user.id, activity: { status: "PUBLISHED" } },

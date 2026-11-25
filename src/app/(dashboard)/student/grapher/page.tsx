@@ -21,8 +21,8 @@ export default function GrapherPage() {
   const ent = useEntitlements();
 
   // Plan gating — graphing requires a plan that includes the math tools.
-  if (!ent.loading && !ent.mathTools) {
-    return <UpgradeNotice feature="Graphing" planName={ent.planName} />;
+  if (!ent.loading && !ent.features.graphing) {
+    return <UpgradeNotice feature="graphing" planName={ent.planName} />;
   }
 
   return (

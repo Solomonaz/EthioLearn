@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { resolveGradeScope } from "@/lib/grade-scope";
 
 /**
@@ -16,6 +17,8 @@ import { resolveGradeScope } from "@/lib/grade-scope";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "library");
+  if (featureRefusal) return featureRefusal;
   // The Library is a student feature; the super admin may look for checking.
   if (user.role !== "STUDENT" && user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import {
   StickyNote,
   X,
@@ -111,7 +112,14 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
 
+/** Study notes are a plan feature: hidden when the plan leaves them out. */
 export function StudentNotes() {
+  const ent = useEntitlements();
+  if (!ent.features.studyNotes) return null;
+  return <StudentNotesPanel />;
+}
+
+function StudentNotesPanel() {
   const pathname = usePathname() ?? "/student";
   const published = usePublishedNotesContext();
   const currentContext = published ?? pageLabel(pathname);

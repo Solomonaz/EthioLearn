@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import {
-  getRequester,
+  getRequester, classroomGamesDenial,
   ownerWhere,
   gameSetSchema,
   assertCorrectInOptions,
@@ -12,6 +12,8 @@ import {
 export async function GET() {
   const req = await getRequester();
   if (!req) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const gamesDenied = await classroomGamesDenial();
+  if (gamesDenied) return gamesDenied;
 
   const sets = await db.gameContent.findMany({
     where: { type: "MCQ", ...ownerWhere(req) },
@@ -51,6 +53,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const req = await getRequester();
   if (!req) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const gamesDenied = await classroomGamesDenial();
+  if (gamesDenied) return gamesDenied;
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }

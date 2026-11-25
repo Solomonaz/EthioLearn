@@ -522,7 +522,7 @@ export default function QuizLauncherPage() {
       {step === 1 && (
         <div className="grid gap-4">
           {/* AI-generated quizzes: need both the user's AI access AND the feature on. */}
-          {SOURCE_KEYS.filter((s) => s.value !== "AI" || (ent.ai && ent.aiFeatures.aiQuizGen)).map((src) => {
+          {SOURCE_KEYS.filter((s) => s.value !== "AI" || ent.features.aiQuizzes).map((src) => {
             const Icon = src.icon;
             return (
               <Card
@@ -658,7 +658,7 @@ export default function QuizLauncherPage() {
       {step === 3 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {/* AI Adaptive difficulty: need both the user's AI access AND the feature on. */}
-          {DIFFICULTY_KEYS.filter((d) => d.value !== "ADAPTIVE" || (ent.ai && ent.aiFeatures.aiAdaptive)).map((d) => {
+          {DIFFICULTY_KEYS.filter((d) => d.value !== "ADAPTIVE" || ent.features.adaptive).map((d) => {
             const counts = selectedChapter === "all" 
               ? textbookTotals?.difficultyCounts 
               : selectedChapter?.difficultyCounts;

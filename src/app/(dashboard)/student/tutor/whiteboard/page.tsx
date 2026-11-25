@@ -101,7 +101,7 @@ export default function WhiteboardPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  const allowed = ent.ai && ent.aiFeatures.aiTutor;
+  const allowed = ent.features.whiteboard;
 
   useEffect(() => {
     if (ent.loading || !allowed) return;
@@ -116,7 +116,7 @@ export default function WhiteboardPage() {
   }, [ent.loading, allowed]);
 
   if (!ent.loading && !allowed) {
-    return <UpgradeNotice feature="AI Study" planName={ent.planName} description={t("pitch")} />;
+    return <UpgradeNotice feature="whiteboard" planName={ent.planName} description={t("pitch")} />;
   }
 
   async function onFile(file: File | undefined) {

@@ -7,8 +7,7 @@ import { chatWithTutor } from "@/lib/ai-provider";
 import { recordStudyActivity } from "@/lib/streak";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { buildTutorContext } from "@/lib/tutor-context";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { featureDenial } from "@/lib/entitlements";
 import { rewriteQueryForRAG } from "@/lib/query-rewriter";
 import {
   getTutorDailyStatus,
@@ -68,23 +67,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.ai) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
-  if (!(await isAiFeatureEnabled("aiTutor"))) {
-    return NextResponse.json(
-      { error: "The AI tutor is currently turned off.", code: "AI_DISABLED" },
-      { status: 503 }
-    );
-  }
+  // Plan access + the platform tutor switch.
+  const denied = await featureDenial(user, "textbookChat");
+  if (denied) return denied;
 
   // Daily cap (the platform setting). The env super admin tests uncapped.
   const capped = user.role !== "SUPER_ADMIN";
-  const daily = capped ? await getTutorDailyStatus(user.id) : null;
+  const daily = capped ? await getTutorDailyStatus(user) : null;
   if (daily && tutorLimitReached(daily)) {
     return NextResponse.json(
       { error: tutorLimitMessage(daily.limit!), code: "DAILY_LIMIT", remainingToday: 0 },

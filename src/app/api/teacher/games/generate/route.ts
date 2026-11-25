@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { generateQuestions } from "@/lib/ai-provider";
-import { getRequester } from "../_shared";
+import { getRequester, classroomGamesDenial } from "../_shared";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { usageActor, withUsageActor } from "@/lib/usage-logger";
 import {
   getTeacherAiStatus,
@@ -42,9 +42,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!(await isAiFeatureEnabled("aiQuizGen"))) {
-    return NextResponse.json({ error: "AI generation is turned off" }, { status: 403 });
-  }
+  // The school plan's classroom games + teacher AI questions (+ the platform switch).
+  const denied = (await classroomGamesDenial()) ?? (await featureDenial(await getCurrentUser(), "teacherQuestionGen"));
+  if (denied) return denied;
 
   const body = await request.json().catch(() => null);
   const subject = String(body?.subject ?? "").trim() || "General";

@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { parsePlanInput, PLAN_AUDIENCES, type PlanAudience } from "@/lib/pricing";
+import { getFreePlanId } from "@/lib/entitlements";
+import { LEGACY_FREE_TIER, planFeatureMap } from "@/lib/features";
 
 // ─── GET: list plans (super-admin + school-admin can read) ──
 export async function GET(req: NextRequest) {
@@ -29,7 +31,17 @@ export async function GET(req: NextRequest) {
     orderBy: [{ audience: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
   });
 
-  return NextResponse.json({ plans });
+  // Each plan's effective per-feature access (stored, else the fallback it
+  // has always had), and which plan is the free tier for students without a
+  // paid plan.
+  const freePlanId = await getFreePlanId();
+  return NextResponse.json({
+    freePlanId,
+    plans: plans.map((p) => ({
+      ...p,
+      effectiveFeatures: planFeatureMap(p, p.id === freePlanId ? LEGACY_FREE_TIER : undefined),
+    })),
+  });
 }
 
 // ─── POST: create a plan (super-admin only) ──

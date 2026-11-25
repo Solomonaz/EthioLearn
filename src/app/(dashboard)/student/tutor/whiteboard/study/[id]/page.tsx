@@ -97,7 +97,7 @@ export default function StudyUploadPage() {
   const [listening, setListening] = useState(false);
   const [heardNothing, setHeardNothing] = useState(false);
   const stopListen = useRef<(() => void) | null>(null);
-  const allowed = ent.ai && ent.aiFeatures.aiTutor;
+  const allowed = ent.features.whiteboard;
 
   useEffect(() => {
     setCanTalk(speechInputSupported());
@@ -138,7 +138,7 @@ export default function StudyUploadPage() {
   }, [ent.loading, allowed, load, analyze]);
 
   if (!ent.loading && !allowed) {
-    return <UpgradeNotice feature="AI Study" planName={ent.planName} description={t("pitch")} />;
+    return <UpgradeNotice feature="whiteboard" planName={ent.planName} description={t("pitch")} />;
   }
 
   if (notFound) {

@@ -5,8 +5,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { bankPoolsFor } from "@/lib/quiz-selection";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
+import { featureDenial, getEntitlements } from "@/lib/entitlements";
 import { isInStudyScope } from "@/lib/grade-scope";
 
 export async function POST(request: Request) {
@@ -35,20 +34,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolve Adaptive Difficulty — AI Adaptive is an AI feature; gate it.
+    if (isDailyChallenge) {
+      const denied = await featureDenial(user, "dailyChallenge");
+      if (denied) return denied;
+    }
+
+    // Resolve Adaptive Difficulty — a plan feature; gate it.
     let adaptiveCalibrated: string | undefined = undefined;
     let adaptiveInsights: AdaptiveInsights | undefined = undefined;
     if (difficulty === "ADAPTIVE") {
       const ent = await getEntitlements(user);
-      if (!ent.ai) {
-        return NextResponse.json(
-          { error: UPGRADE_MESSAGES.ai, code: "UPGRADE_REQUIRED" },
-          { status: 403 }
-        );
+      if (!ent.planFeatures.adaptive) {
+        return (await featureDenial(user, "adaptive"))!;
       }
       // Honour the platform Adaptive-Difficulty switch; fall back to a fixed
       // difficulty when it's turned off.
-      if (await isAiFeatureEnabled("aiAdaptive")) {
+      if (ent.available.adaptive) {
         adaptiveInsights = await getAdaptiveDifficultyInsights(user.id, {
           chapterId: chapterId === "all" ? null : chapterId,
           textbookId,

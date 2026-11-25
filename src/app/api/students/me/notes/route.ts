@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
 const MAX_TITLE = 120; // characters of a note title
@@ -26,6 +27,8 @@ type NoteRow = {
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "studyNotes");
+  if (featureRefusal) return featureRefusal;
 
   const notes = await db.$queryRaw<NoteRow[]>`
     SELECT id, title, "updatedAt", "contextLabel", "contextPath",
@@ -48,6 +51,8 @@ function cleanString(v: unknown, max: number): string | null {
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "studyNotes");
+  if (featureRefusal) return featureRefusal;
   if (!validateCsrfOrigin(req)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }

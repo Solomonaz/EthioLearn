@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { rateLimit } from "@/lib/rate-limit";
 import { getMasteryLevel, INSIGHT_WINDOW_DAYS } from "@/lib/class-insights";
 import { subjectInFilter } from "@/lib/subject";
@@ -46,6 +47,8 @@ export async function GET(
   if (!user || user.role !== "SECONDARY_TEACHER" || !user.schoolId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
+  const featureRefusal = await featureDenial(user, "studentProgress");
+  if (featureRefusal) return featureRefusal;
 
   const rl = rateLimit("secondary-teacher:student:" + user.id, 120, 60_000);
   if (!rl.success) {

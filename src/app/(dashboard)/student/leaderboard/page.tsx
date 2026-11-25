@@ -180,8 +180,8 @@ export default function LeaderboardPage() {
   const activeScopeOption = SCOPE_OPTIONS.find((s) => s.value === scope)!;
 
   // Leaderboard is a premium feature — gate for plans without the entitlement.
-  if (!ent.loading && !ent.leaderboard) {
-    return <UpgradeNotice feature="Leaderboard" planName={ent.planName} />;
+  if (!ent.loading && !ent.features.leaderboard) {
+    return <UpgradeNotice feature="leaderboard" planName={ent.planName} />;
   }
 
   return (

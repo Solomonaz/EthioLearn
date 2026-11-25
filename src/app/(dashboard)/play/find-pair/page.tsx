@@ -20,7 +20,7 @@ export default function PlayFindPairPage() {
         ) : (
           <FindPairSetup
             audience="student"
-            aiLocked={!(ent.ai && ent.aiFeatures.aiQuizGen)}
+            aiLocked={!ent.features.aiGameQuestions}
             onStart={setMatch}
           />
         )

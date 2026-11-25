@@ -258,7 +258,7 @@ export default function StudentProgressPage() {
         <div className="space-y-8">
           
           {/* AI Recommendations — AI feature, hidden without an AI plan */}
-          {ent.ai && (
+          {ent.features.adaptive && (
           <section>
             <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-text-primary">
               <Brain className="h-5 w-5 text-purple-500" />

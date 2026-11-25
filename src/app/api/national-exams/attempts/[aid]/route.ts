@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { buildReview } from "@/lib/national-exam";
 
 /** GET /api/national-exams/attempts/[aid] — a finished attempt's score and full review. */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ aid: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "nationalExam");
+  if (featureRefusal) return featureRefusal;
   const { aid } = await params;
 
   const attempt = await db.nationalExamAttempt.findFirst({

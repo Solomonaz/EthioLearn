@@ -220,8 +220,8 @@ export default function TutorPage() {
   };
 
   // Plan gating — Textbook Chat (the AI tutor) requires an AI-enabled plan.
-  if (!ent.loading && !(ent.ai && ent.aiFeatures.aiTutor)) {
-    return <UpgradeNotice feature="AI Study" planName={ent.planName} />;
+  if (!ent.loading && !ent.features.textbookChat) {
+    return <UpgradeNotice feature="textbookChat" planName={ent.planName} />;
   }
 
   if (fetchingData) {

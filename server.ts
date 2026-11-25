@@ -10,6 +10,7 @@ import { getBattleSeconds } from "./src/lib/quiz-timing";
 import { deleteStaleUnverifiedStudents } from "./src/lib/unverified-cleanup";
 import { recordStudyActivity } from "./src/lib/streak";
 import { startReminderScheduler } from "./src/lib/reminders";
+import { getEntitlements } from "./src/lib/entitlements";
 
 // ── Fun facts pool (SRS §4.6.3) ──────────────────────────────────────────────
 const FUN_FACTS: Record<string, string[]> = {
@@ -239,6 +240,16 @@ app.prepare().then(() => {
         }
       }
       if (!room) { socket.emit("error", { message: "Room not found" }); return; }
+
+      // Joining by code is battle mode too: the plan must include it.
+      if (!room.players.has(userId) && userId !== "env_super_admin") {
+        const who = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true, createdAt: true } });
+        const ent = who ? await getEntitlements({ id: userId, role: who.role, schoolId: who.schoolId, createdAt: who.createdAt }) : null;
+        if (!ent?.features.battle) {
+          socket.emit("error", { message: "Battle mode isn't included in your plan.", code: "UPGRADE_REQUIRED" });
+          return;
+        }
+      }
 
       const existing = room.players.get(userId);
       if (existing) {

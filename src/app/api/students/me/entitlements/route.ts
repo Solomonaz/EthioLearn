@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { getEntitlements, getStudentTrial } from "@/lib/entitlements";
 import { getPlatformSettings, effectiveAiFlags } from "@/lib/platform-settings";
@@ -17,16 +16,9 @@ export async function GET() {
   const isSchoolStudent = isStudent && !!user.schoolId;
   const isIndependent = isStudent && !user.schoolId;
 
-  // Surface the plan name for independent students (for upgrade prompts).
-  let planName: string | null = null;
-  if (isIndependent) {
-    const sub = await db.subscription.findFirst({
-      where: { studentId: user.id, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
-      orderBy: { createdAt: "desc" },
-      select: { plan: { select: { name: true } } },
-    });
-    planName = sub?.plan?.name ?? null;
-  }
+  // The plan that decided access (for upgrade prompts): the student's own, the
+  // free plan, or the school's.
+  const planName = ent.planName;
 
   // Global platform flags so the client can hide billing (pricing off) and
   // individual AI features (per-feature switches) without a flash of locked UI.
@@ -38,7 +30,10 @@ export async function GET() {
   const trial = await getStudentTrial(user);
 
   return NextResponse.json({
-    ...ent,
+    features: ent.features,
+    available: ent.available,
+    antiCheat: ent.antiCheat,
+    viaSchool: ent.source === "school",
     isIndependent,
     isSchoolStudent,
     planName,

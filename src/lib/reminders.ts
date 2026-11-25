@@ -5,6 +5,7 @@ import { sendPushToUser, pushConfigured } from "./push";
 import { sendTelegramMessage, telegramConfigured } from "./telegram-bot";
 import { settleBrokenStreaks, streakStateOf, viewStreak, type StreakView } from "./streak";
 import { addisDayKey, addisHour, addisWeekday } from "./study-time";
+import { getEntitlements } from "./entitlements";
 
 /**
  * Study reminders — the loop that brings a student back after they leave.
@@ -157,6 +158,10 @@ export async function runReminderTick(
 
   const monday = addisWeekday(now) === 1;
   let telegramHalted = false;
+  // Study reminders are a plan feature. Only look each student's plan up when
+  // some plan actually leaves reminders out (the usual answer is none).
+  const someoneLocked =
+    (await db.pricingPlan.count({ where: { featureAccess: { path: ["reminders"], equals: false } } })) > 0;
   let cursor: string | undefined;
 
   for (;;) {
@@ -176,6 +181,8 @@ export async function runReminderTick(
         longestStreak: true,
         lastActiveAt: true,
         reminderMisses: true,
+        schoolId: true,
+        createdAt: true,
         _count: { select: { pushSubscriptions: true } },
       },
       orderBy: { id: "asc" },
@@ -186,6 +193,9 @@ export async function runReminderTick(
 
     for (const u of users) {
       result.considered++;
+      if (someoneLocked && !(await getEntitlements({ id: u.id, role: "STUDENT", schoolId: u.schoolId, createdAt: u.createdAt })).features.reminders) {
+        continue;
+      }
       const streak = viewStreak(streakStateOf(u), today);
       if (window === "evening" && !(streak.atRisk && streak.days > 0)) continue;
 

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 
 /** GET /api/national-exams/attempts — the student's finished papers, newest first, to track progress. */
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "nationalExam");
+  if (featureRefusal) return featureRefusal;
 
   const attempts = await db.nationalExamAttempt.findMany({
     where: { studentId: user.id, completedAt: { not: null }, exam: { status: "PUBLISHED" } },

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { getFreePlanId } from "@/lib/entitlements";
+import { LEGACY_FREE_TIER, planFeatureMap } from "@/lib/features";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import {
   computeCurrentPeriodEnd,
@@ -72,11 +74,19 @@ export async function GET() {
     [...plans].sort((a, b) => (a.price ?? 0) - (b.price ?? 0))[0] ??
     null;
 
+  // What each plan includes, feature by feature (the free plan as students
+  // without a paid plan actually get it).
+  const freePlanId = await getFreePlanId();
+  const withFeatures = <P extends Parameters<typeof planFeatureMap>[0] & { id: string }>(p: P) => ({
+    ...p,
+    effectiveFeatures: planFeatureMap(p, p.id === freePlanId ? LEGACY_FREE_TIER : undefined),
+  });
+
   return NextResponse.json({
     eligible: true,
-    subscription: current,
-    plans,
-    defaultPlanId: defaultPlan?.id ?? null,
+    subscription: current ? { ...current, plan: withFeatures(current.plan) } : null,
+    plans: plans.map(withFeatures),
+    defaultPlanId: freePlanId ?? defaultPlan?.id ?? null,
     hasPaidSubscription: !!liveSub,
   });
 }

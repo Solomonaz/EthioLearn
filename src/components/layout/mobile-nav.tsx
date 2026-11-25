@@ -41,10 +41,10 @@ export function MobileNav() {
 
   if (!hasMobileBottomNav(pathname)) return null;
 
-  // Hide plan-locked destinations (Battle → multiplayer, Ranks → leaderboard).
+  // Hide plan-locked destinations (Battle, Ranks).
   const navKeys = studentNavKeys.filter((item) => {
-    if (item.labelKey === "battle_short" && !ent.multiplayer) return false;
-    if (item.labelKey === "ranks" && !ent.leaderboard) return false;
+    if (item.labelKey === "battle_short" && !ent.features.battle) return false;
+    if (item.labelKey === "ranks" && !ent.features.leaderboard) return false;
     return true;
   });
 

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { usageActor } from "@/lib/usage-logger";
 import {
   getTeacherAiStatus,
@@ -72,12 +72,9 @@ async function merge(req: NextRequest, onProgress?: ProgressFn) {
     );
   }
 
-  if (!(await isAiFeatureEnabled("aiTeacherAssistant"))) {
-    return NextResponse.json(
-      { error: "AI features are currently switched off for this platform." },
-      { status: 503 },
-    );
-  }
+  // The school plan's teacher assistant (+ the platform switch).
+  const featureRefusal = await featureDenial(user, "teacherAssistant");
+  if (featureRefusal) return featureRefusal;
 
   // A merge is always written fresh, so it counts from the start.
   const denied = teacherAiDenial(await getTeacherAiStatus(user), TEACHER_AI_CREDITS.merge);

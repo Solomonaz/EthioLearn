@@ -288,7 +288,7 @@ export function PlatformSettingsPanel() {
           />
           <LimitRow
             label="Whiteboard lessons per student / day"
-            desc="New Whiteboard lessons, practice sets and practice “Explain” per student per day — their own allowance, since a read-aloud lesson costs several times a chat reply (about $0.01–0.04 each with a cloud voice). Replays are free. Blank = no cap."
+            desc="New Whiteboard lessons, practice sets and practice “Explain” per student per day — their own allowance, since a read-aloud lesson costs several times a chat reply (about $0.01–0.04 each with a cloud voice). Replays are free. This is the default: a plan's own “Whiteboard lessons per day” (Admin → Pricing) wins. Blank = no cap."
             max={10000}
             value={settings.whiteboardDailyLimit}
             disabled={aiOff || !settings.aiTutorEnabled}

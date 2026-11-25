@@ -347,7 +347,7 @@ export default function StudentDashboardPage() {
       </div>
 
       {/* ── AI Study Recommendations (SRS §4.3.3) — AI feature, full-access only ── */}
-      {ent.ai && studyRecommendations.length > 0 && (
+      {ent.features.adaptive && studyRecommendations.length > 0 && (
         <section>
           <div className="mb-3 flex items-center gap-2">
             <Brain className="h-5 w-5 text-purple-500" />
@@ -476,13 +476,13 @@ export default function StudentDashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <QuickAction href="/student/quiz" icon={BookOpen} label={t("takeQuiz")} desc={t("startNewQuizDesc")} color="bg-primary/10 text-primary" />
-        {ent.multiplayer && (
+        {ent.features.battle && (
           <QuickAction href="/student/battle" icon={Swords} label={t("battleMode")} desc={t("challengeClassmates")} color="bg-purple-50 text-purple-600" />
         )}
-        {ent.leaderboard && (
+        {ent.features.leaderboard && (
           <QuickAction href="/student/leaderboard" icon={Trophy} label={t("leaderboard")} desc={t("checkRankings")} color="bg-yellow-50 text-yellow-600" />
         )}
-        {ent.rewards && (
+        {ent.features.rewards && (
           <QuickAction href="/student/rewards" icon={Gift} label={t("rewards")} desc={t("redeemPoints")} color="bg-orange-50 text-orange-600" />
         )}
       </div>

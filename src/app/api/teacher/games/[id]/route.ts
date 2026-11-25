@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import {
-  getRequester,
+  getRequester, classroomGamesDenial,
   ownerWhere,
   gameSetSchema,
   assertCorrectInOptions,
@@ -14,6 +14,8 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_request: NextRequest, { params }: Params) {
   const req = await getRequester();
   if (!req) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const gamesDenied = await classroomGamesDenial();
+  if (gamesDenied) return gamesDenied;
   const { id } = await params;
 
   const set = await db.gameContent.findFirst({
@@ -47,6 +49,8 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   const req = await getRequester();
   if (!req) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const gamesDenied = await classroomGamesDenial();
+  if (gamesDenied) return gamesDenied;
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
@@ -83,6 +87,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
 export async function DELETE(request: NextRequest, { params }: Params) {
   const req = await getRequester();
   if (!req) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const gamesDenied = await classroomGamesDenial();
+  if (gamesDenied) return gamesDenied;
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }

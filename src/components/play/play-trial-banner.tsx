@@ -39,7 +39,7 @@ export function PlayTrialBanner({ ent }: { ent: EntitlementsInfo }) {
   }
 
   const since = now - end;
-  if (!ent.games && since >= 0 && since < TRIAL_ENDED_PROMPT_DAYS * DAY_MS) {
+  if (!ent.features.playGames && since >= 0 && since < TRIAL_ENDED_PROMPT_DAYS * DAY_MS) {
     return (
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-secondary/60 bg-secondary/15 px-4 py-3">
         <Sparkles className="h-5 w-5 shrink-0 text-secondary-dark" />

@@ -1,61 +1,55 @@
 /**
- * Plan-based entitlements — resolves what a given user is allowed to do.
+ * Plan-based entitlements — resolves which features (src/lib/features.ts) a
+ * user may use.
  *
- * Rules:
- *   • Non-students (admins) → full access.
- *   • School-registered students (have a schoolId) → full access, always.
- *   • Individual students (no school) → determined by their current plan:
- *       - a plan with allowAi/allowMultiplayer flags, or
- *       - NO active plan → the free defaults (no AI, no multiplayer; solo only).
- *       - within the sign-up free trial (PlatformSettings.studentTrialDays,
- *         counted from account creation) → full access, whatever the plan.
+ * Rules, in order:
+ *   • Pricing switched off platform-wide → every feature.
+ *   • Super admins → every feature.
+ *   • Independent students:
+ *       - within the sign-up free trial → every feature;
+ *       - a live subscription → that plan's features;
+ *       - otherwise the free tier: the active free (price 0) student plan's
+ *         features, or the old free defaults when there is none / it was never
+ *         saved with per-feature access.
+ *   • Anyone at a school (students, teachers, school admins) → the school's
+ *     live plan's features. A school with no live plan keeps every feature, as
+ *     before (teachers' AI is still stopped by lib/teacher-ai-allowance).
  *
- * Solo quizzes/games are never gated — the "free" tier can always play solo.
+ * On top of every plan, the platform switches (Admin → Settings) turn a
+ * feature off for everyone. Solo quizzes and the free games are never gated.
  */
 
+import { cache } from "react";
+import type { NextResponse } from "next/server";
 import { db } from "./db";
-import { getPlatformSettings } from "./platform-settings";
+import { getPlatformSettings, effectiveAiFlags, type PlatformSettings } from "./platform-settings";
+import {
+  FEATURES,
+  FEATURE_BY_KEY,
+  LEGACY_FREE_TIER,
+  allFeatures,
+  planFeatureMap,
+  type FeatureDef,
+  type FeatureKey,
+  type FeatureMap,
+} from "./features";
 
 export interface Entitlements {
-  /** AI tutor, AI quiz generation. */
-  ai: boolean;
-  /** Battle / group (multiplayer) games. Solo is always allowed. */
-  multiplayer: boolean;
-  /** Rewards catalogue & redemption. */
-  rewards: boolean;
-  /** Leaderboard / rankings. */
-  leaderboard: boolean;
-  /** Graphing calculator & 3D geometry lab. */
-  mathTools: boolean;
-  /**
-   * Every grades 1-8 game in the play area. Without it a grades 1-8 student
-   * still has the free games (see FREE_PLAY_GAMES in lib/games/play).
-   */
-  games: boolean;
+  /** What the user may use now: plan access AND the platform switches. */
+  features: FeatureMap;
+  /** Plan access alone (before the platform switches). */
+  planFeatures: FeatureMap;
+  /** Platform switches alone — false = turned off for everyone. */
+  available: FeatureMap;
   /** Anti-cheat tracking (tab-switch detection, clipboard lock). */
   antiCheat: boolean;
+  /** Whiteboard lessons per day from the plan; undefined = the platform default. */
+  whiteboardDailyLimit: number | null | undefined;
+  /** Where access comes from. */
+  source: "full" | "trial" | "plan" | "free" | "school";
+  /** Name of the plan that decided it, when one did. */
+  planName: string | null;
 }
-
-export const FULL_ACCESS: Entitlements = {
-  ai: true,
-  multiplayer: true,
-  rewards: true,
-  leaderboard: true,
-  mathTools: true,
-  games: true,
-  antiCheat: true,
-};
-// Individual student with no (or a free) plan: solo only — no AI, no multiplayer,
-// no rewards, no leaderboard, no advanced math tools.
-export const FREE_TIER: Entitlements = {
-  ai: false,
-  multiplayer: false,
-  rewards: false,
-  leaderboard: false,
-  mathTools: false,
-  games: false,
-  antiCheat: false,
-};
 
 const LIVE_STATUSES = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
 
@@ -100,83 +94,166 @@ export async function getStudentTrial(
   return { endsAt, active: endsAt.getTime() > Date.now() };
 }
 
-/**
- * Resolve the entitlements for a user. Reads their current subscription only
- * for individual students (the only ones whose access is plan-gated).
- */
-export async function getEntitlements(user: UserLike | null | undefined): Promise<Entitlements> {
-  const settings = await getPlatformSettings();
-  // Global platform switches override individual plans:
-  // - If AI is off platform-wide, nobody gets AI.
-  // - If Rewards is off platform-wide, nobody gets rewards.
-  // - Anti-cheat is active only when BOTH rewards and anti-cheat tracking are enabled.
-  const gate = (e: Entitlements): Entitlements => ({
-    ...e,
-    ai: e.ai && settings.aiEnabled,
-    rewards: e.rewards && settings.rewardsEnabled,
-    antiCheat: settings.rewardsEnabled && settings.antiCheatEnabled,
-  });
-
-  if (!user) return gate(FREE_TIER);
-
-  // Admins and other non-student roles are unrestricted (AI still master-gated).
-  if (user.role !== "STUDENT") return gate(FULL_ACCESS);
-
-  // Students who belong to a school always have full access (managed by school).
-  if (user.schoolId) return gate(FULL_ACCESS);
-
-  // Pricing turned OFF platform-wide → launch free: every individual student
-  // gets the full (non-AI) feature set, no plan required.
-  if (!settings.pricingEnabled) return gate(FULL_ACCESS);
-
-  // Sign-up free trial: full access until it ends, then back to the plan below.
-  const trial = await getStudentTrial(user);
-  if (trial?.active) return gate(FULL_ACCESS);
-
-  // Individual student → look up their current plan. A sub counts as live only
-  // while its status is live AND it hasn't passed its endDate (the paid-through
-  // date for a canceled-at-period-end sub, or a trial's end).
-  const sub = await db.subscription.findFirst({
-    where: {
-      studentId: user.id,
-      status: { in: [...LIVE_STATUSES] },
-      OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      plan: {
-        select: {
-          allowAi: true,
-          allowMultiplayer: true,
-          allowRewards: true,
-          allowLeaderboard: true,
-          allowMathTools: true,
-          allowGames: true,
-        },
-      },
-    },
-  });
-
-  if (!sub?.plan) return gate(FREE_TIER);
-  return gate({
-    ai: sub.plan.allowAi,
-    multiplayer: sub.plan.allowMultiplayer,
-    rewards: sub.plan.allowRewards,
-    leaderboard: sub.plan.allowLeaderboard,
-    mathTools: sub.plan.allowMathTools,
-    games: sub.plan.allowGames,
-    antiCheat: true,
-  });
+/** Platform switches per feature (Admin → Settings). */
+export function platformAvailability(settings: PlatformSettings): FeatureMap {
+  const ai = effectiveAiFlags(settings);
+  const out = {} as FeatureMap;
+  for (const f of FEATURES as readonly FeatureDef[]) {
+    const key = f.key as FeatureKey;
+    if (!f.platform) out[key] = true;
+    else if (f.platform === "rewards") out[key] = settings.rewardsEnabled;
+    else out[key] = ai[f.platform];
+  }
+  return out;
 }
 
-// Human-readable messages returned by the API when a capability is locked.
-export const UPGRADE_MESSAGES = {
-  ai: "AI features aren't included in your current plan. Upgrade to a full-access plan to use the AI tutor and AI-generated quizzes.",
-  multiplayer: "Battle mode isn't included in your current plan. Upgrade to a full-access plan to play against others.",
-  rewards: "Rewards aren't included in your current plan. Upgrade to a full-access plan to earn and redeem rewards.",
-  leaderboard: "The leaderboard isn't included in your current plan. Upgrade to a full-access plan to see rankings.",
-  mathTools: "The graphing calculator and 3D geometry lab aren't included in your current plan. Upgrade to a full-access plan to use them.",
-  games: "This game isn't included in your current plan. Upgrade to a full-access plan to play every game.",
+const PLAN_SELECT = {
+  name: true,
+  audience: true,
+  featureAccess: true,
+  whiteboardDailyLimit: true,
+  allowAi: true,
+  allowMultiplayer: true,
+  allowRewards: true,
+  allowLeaderboard: true,
+  allowMathTools: true,
+  allowGames: true,
 } as const;
 
-export type EntitlementKey = keyof Entitlements;
+const liveWhere = () => ({
+  status: { in: [...LIVE_STATUSES] },
+  OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+});
+
+/**
+ * The free tier's plan: the active student plan priced 0 (lowest sort order
+ * first). Students without a paid plan get its features. Null when there is none.
+ */
+export const getFreePlan = cache(async () =>
+  db.pricingPlan.findFirst({
+    where: { audience: "STUDENT", isActive: true, OR: [{ price: 0 }, { price: null }] },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true, ...PLAN_SELECT },
+  }),
+);
+
+/** The id of the free-tier plan (for the admin editor), or null. */
+export async function getFreePlanId(): Promise<string | null> {
+  return (await getFreePlan())?.id ?? null;
+}
+
+async function resolve(user: UserLike | null | undefined): Promise<Omit<Entitlements, "features" | "available" | "antiCheat">> {
+  const full = { planFeatures: allFeatures(true), whiteboardDailyLimit: undefined, source: "full" as const, planName: null };
+  const settings = await getPlatformSettings();
+  if (!user) return { ...full, planFeatures: { ...LEGACY_FREE_TIER }, source: "free" };
+  if (!settings.pricingEnabled || user.role === "SUPER_ADMIN") return full;
+
+  if (user.schoolId) {
+    const sub = await db.subscription.findFirst({
+      where: { schoolId: user.schoolId, ...liveWhere() },
+      orderBy: { createdAt: "desc" },
+      select: { plan: { select: PLAN_SELECT } },
+    });
+    if (!sub?.plan) return full;
+    return {
+      planFeatures: planFeatureMap(sub.plan),
+      whiteboardDailyLimit: sub.plan.whiteboardDailyLimit ?? undefined,
+      source: "school",
+      planName: sub.plan.name,
+    };
+  }
+
+  if (user.role !== "STUDENT") return full;
+
+  const trial = await getStudentTrial(user);
+  if (trial?.active) return { ...full, source: "trial" };
+
+  // A sub counts as live only while its status is live AND it hasn't passed
+  // its endDate (the paid-through date for a canceled-at-period-end sub).
+  const sub = await db.subscription.findFirst({
+    where: { studentId: user.id, ...liveWhere() },
+    orderBy: { createdAt: "desc" },
+    select: { plan: { select: PLAN_SELECT } },
+  });
+  if (sub?.plan) {
+    return {
+      planFeatures: planFeatureMap(sub.plan),
+      whiteboardDailyLimit: sub.plan.whiteboardDailyLimit ?? undefined,
+      source: "plan",
+      planName: sub.plan.name,
+    };
+  }
+
+  const free = await getFreePlan();
+  if (!free) return { ...full, planFeatures: { ...LEGACY_FREE_TIER }, source: "free" };
+  return {
+    planFeatures: planFeatureMap(free, LEGACY_FREE_TIER),
+    whiteboardDailyLimit: free.whiteboardDailyLimit ?? undefined,
+    source: "free",
+    planName: free.name,
+  };
+}
+
+// One resolution per user per request (several gates often run in one route).
+const resolveCached = cache((id: string, role: string, schoolId: string | null, createdAt: number | undefined) =>
+  resolve({ id, role, schoolId, createdAt: createdAt === undefined ? undefined : new Date(createdAt) }),
+);
+
+/** Resolve the entitlements for a user (null = signed out → free defaults). */
+export async function getEntitlements(user: UserLike | null | undefined): Promise<Entitlements> {
+  const settings = await getPlatformSettings();
+  const base = user
+    ? await resolveCached(user.id, user.role, user.schoolId, user.createdAt?.getTime())
+    : await resolve(null);
+  const available = platformAvailability(settings);
+  const features = {} as FeatureMap;
+  for (const k of Object.keys(available) as FeatureKey[]) features[k] = base.planFeatures[k] && available[k];
+  return {
+    ...base,
+    features,
+    available,
+    antiCheat: settings.rewardsEnabled && settings.antiCheatEnabled,
+  };
+}
+
+/** The message for a feature the user's plan doesn't include. */
+export function upgradeMessage(key: FeatureKey, viaSchool: boolean): string {
+  const label = FEATURE_BY_KEY[key].label;
+  return viaSchool
+    ? `${label} isn't included in your school's plan. Ask your school's Abugida administrator.`
+    : `${label} isn't included in your current plan. Upgrade to use it.`;
+}
+
+/**
+ * The server gate for a feature: null when the user may use it, else the
+ * refusal — 503 AI_DISABLED / FEATURE_DISABLED when an admin switched it off
+ * platform-wide, 403 UPGRADE_REQUIRED when their plan doesn't include it.
+ */
+export async function featureDenial(
+  user: UserLike | null | undefined,
+  key: FeatureKey,
+): Promise<NextResponse | null> {
+  const ent = await getEntitlements(user);
+  if (ent.features[key]) return null;
+  // Loaded here, not at the top: the custom server (server.ts) and the
+  // reminder scheduler import this file before Next is up, and a top-level
+  // next/server import crashes them (AsyncLocalStorage invariant).
+  const { NextResponse } = await import("next/server");
+  const def = FEATURE_BY_KEY[key];
+  if (!ent.planFeatures[key]) {
+    return NextResponse.json(
+      { error: upgradeMessage(key, ent.source === "school"), code: "UPGRADE_REQUIRED", feature: key },
+      { status: 403 },
+    );
+  }
+  return NextResponse.json(
+    {
+      error: `${def.label} is currently turned off.`,
+      code: def.ai ? "AI_DISABLED" : "FEATURE_DISABLED",
+      feature: key,
+    },
+    { status: 503 },
+  );
+}
+
+export type { FeatureKey, FeatureMap } from "./features";

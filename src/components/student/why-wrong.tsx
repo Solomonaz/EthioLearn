@@ -6,8 +6,7 @@ import { useTranslations } from "next-intl";
 import { Lock, MessageSquare, PenLine, Sparkles } from "lucide-react";
 import { MarkdownView } from "@/components/ui/markdown-view";
 import { Spinner } from "@/components/ui/spinner";
-import { useEntitlements } from "@/hooks/use-entitlements";
-import { lockedProFeatures } from "@/components/student/pro-promo";
+import { isLocked, useEntitlements } from "@/hooks/use-entitlements";
 import { primeSpeech, WhiteboardTutor } from "@/components/student/whiteboard-tutor";
 
 /**
@@ -66,29 +65,37 @@ export function WhyWrong({
   }, [cacheKey]);
 
   if (ent.loading) return null;
-  const locked = lockedProFeatures(ent).has("aiTutor");
-  const available = ent.ai && ent.aiFeatures.aiTutor;
-  if (!available && !locked) return null; // tutor switched off for everyone
+  // Each button is its own plan feature: on, sold with a Pro lock (a student
+  // who could buy it), or hidden (switched off / not sold to this user).
+  const canBuy = ent.isIndependent && ent.pricingEnabled;
+  const boardOn = ent.features.whiteboard;
+  const whyOn = ent.features.whyWrong;
+  const boardLocked = canBuy && isLocked(ent, "whiteboard");
+  const whyLocked = canBuy && isLocked(ent, "whyWrong");
+  if (!boardOn && !whyOn && !boardLocked && !whyLocked) return null;
 
-  if (locked) {
+  const lockedChip = (label: string) => (
+    <Link
+      key={label}
+      href="/student/billing"
+      className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-border/40"
+    >
+      <Lock className="h-3.5 w-3.5" />
+      {label}
+      <span className="rounded-full bg-secondary/30 px-1.5 py-0.5 text-[10px] font-bold uppercase text-warning">Pro</span>
+    </Link>
+  );
+
+  if (!boardOn && !whyOn) {
     return (
       <div className="mt-3 flex flex-wrap gap-2" data-testid="why-wrong-locked">
-        {[t("whiteboardTutor"), t("whyWrong")].map((label) => (
-          <Link
-            key={label}
-            href="/student/billing"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-border/40"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            {label}
-            <span className="rounded-full bg-secondary/30 px-1.5 py-0.5 text-[10px] font-bold uppercase text-warning">Pro</span>
-          </Link>
-        ))}
+        {boardLocked && lockedChip(t("whiteboardTutor"))}
+        {whyLocked && lockedChip(t("whyWrong"))}
       </div>
     );
   }
 
-  const whiteboardButton = (
+  const whiteboardButton = !boardOn ? (boardLocked ? lockedChip(t("whiteboardTutor")) : null) : (
     <button
       type="button"
       onClick={() => {
@@ -153,7 +160,7 @@ export function WhyWrong({
         >
           <MessageSquare className="h-4 w-4" /> {t("whyWrongFollowUp")}
         </Link>
-        <div className="mt-3">{whiteboardButton}</div>
+        {whiteboardButton && <div className="mt-3">{whiteboardButton}</div>}
         {whiteboard}
       </div>
     );
@@ -162,16 +169,20 @@ export function WhyWrong({
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       {whiteboardButton}
-      <button
-        type="button"
-        onClick={explain}
-        disabled={loading}
-        className="inline-flex items-center gap-2 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-70"
-        data-testid="why-wrong-button"
-      >
-        {loading ? <Spinner size="sm" /> : <Sparkles className="h-4 w-4" />}
-        {loading ? t("whyWrongLoading") : t("whyWrong")}
-      </button>
+      {whyOn ? (
+        <button
+          type="button"
+          onClick={explain}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-70"
+          data-testid="why-wrong-button"
+        >
+          {loading ? <Spinner size="sm" /> : <Sparkles className="h-4 w-4" />}
+          {loading ? t("whyWrongLoading") : t("whyWrong")}
+        </button>
+      ) : (
+        whyLocked && lockedChip(t("whyWrong"))
+      )}
       {error && <p className="w-full text-sm text-error">{error}</p>}
       {whiteboard}
     </div>

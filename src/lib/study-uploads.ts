@@ -2,7 +2,7 @@
  * Study uploads: photos / small PDFs a student sends to the Whiteboard.
  *
  * Shared rules for the /api/study-uploads routes. Every AI call keeps the AI
- * tutor's gates (Pro, the aiTutor switch, CSRF, the shared tutor rate limit;
+ * tutor's gates (the plan's Whiteboard feature, the aiTutor switch, CSRF, the shared tutor rate limit;
  * explanations and practice sets also use one daily tutor message). Files are
  * checked by their real bytes, owner-only, and deleted after 7 days.
  */
@@ -10,8 +10,8 @@ import { NextResponse } from "next/server";
 import { db } from "./db";
 import { validateCsrfOrigin } from "./csrf";
 import { rateLimit } from "./rate-limit";
-import { getEntitlements, UPGRADE_MESSAGES } from "./entitlements";
-import { getPlatformSettings, isAiFeatureEnabled } from "./platform-settings";
+import { featureDenial } from "./entitlements";
+import { getPlatformSettings } from "./platform-settings";
 import { getTutorDailyStatus, tutorLimitMessage, tutorLimitReached } from "./tutor-allowance";
 import { pdfPageCount } from "./pdf-text";
 import type { getCurrentUser } from "./get-session";
@@ -54,11 +54,11 @@ export async function tutorGates(
       ),
     };
   }
-  const ent = await getEntitlements(user);
-  if (!ent.ai) return { refusal: refuse(403, UPGRADE_MESSAGES.ai, "UPGRADE_REQUIRED") };
-  if (!(await isAiFeatureEnabled("aiTutor"))) return { refusal: refuse(503, "The AI tutor is currently turned off.", "AI_DISABLED") };
+  // The plan's Whiteboard feature + the platform tutor switch.
+  const denied = await featureDenial(user, "whiteboard");
+  if (denied) return { refusal: denied };
   const capped = user.role !== "SUPER_ADMIN";
-  const daily = capped ? await getTutorDailyStatus(user.id, "whiteboard") : null;
+  const daily = capped ? await getTutorDailyStatus(user, "whiteboard") : null;
   if (needsMessage && daily && tutorLimitReached(daily)) {
     return { refusal: refuse(429, tutorLimitMessage(daily.limit!, "whiteboard"), "DAILY_LIMIT", { remainingToday: 0 }) };
   }

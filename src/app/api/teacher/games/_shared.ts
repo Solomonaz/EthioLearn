@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 
 /**
  * Shared auth + validation for the teacher game-content endpoints.
@@ -31,6 +32,11 @@ export async function getRequester(): Promise<Requester | null> {
     ownerId: isEnvSuperAdmin ? null : user.id,
     isEnvSuperAdmin,
   };
+}
+
+/** The school plan's classroom-games feature: a refusal, or null when included. */
+export async function classroomGamesDenial() {
+  return featureDenial(await getCurrentUser(), "classroomGames");
 }
 
 /** Prisma `where` clause scoping content to its owner. */

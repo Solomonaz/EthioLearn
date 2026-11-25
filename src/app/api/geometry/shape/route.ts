@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { chatWithTutor } from "@/lib/ai-provider";
 import { readSolidFromImage } from "@/lib/gemini";
 
@@ -52,9 +52,9 @@ export async function POST(request: NextRequest) {
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  if (!(await isAiFeatureEnabled("aiMathTools"))) {
-    return NextResponse.json({ error: "Turn on AI to recognise shapes." }, { status: 403 });
-  }
+  // The plan's geometry3d tool and its AI helpers (+ the platform AI math switch).
+  const denied = (await featureDenial(user, "geometry3d")) ?? (await featureDenial(user, "aiMathTools"));
+  if (denied) return denied;
 
   const body = await request.json().catch(() => null);
   const prompt = String(body?.prompt ?? "").trim();

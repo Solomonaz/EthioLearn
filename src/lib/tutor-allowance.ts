@@ -13,9 +13,9 @@
  * midnight. Only replies actually delivered count, so a failed call never
  * uses up a message.
  *
- * The Whiteboard has its own, smaller allowance
- * (`PlatformSettings.whiteboardDailyLimit`, counted in the same row's
- * `whiteboard` column): a new lesson, practice set or practice "Explain" —
+ * The Whiteboard has its own, smaller allowance (the user's plan's
+ * `whiteboardDailyLimit`, else `PlatformSettings.whiteboardDailyLimit`;
+ * counted in the same row's `whiteboard` column): a new lesson, practice set or practice "Explain" —
  * read aloud by a paid voice — costs several times a chat reply, so it is
  * capped on its own instead of sharing the tutor's messages.
  *
@@ -26,6 +26,7 @@
 
 import { db } from "./db";
 import { getPlatformSettings } from "./platform-settings";
+import { getEntitlements } from "./entitlements";
 
 const ADDIS_OFFSET_MS = 3 * 60 * 60 * 1000;
 
@@ -44,17 +45,23 @@ function addisDay(now = new Date()): Date {
 /** Which daily allowance: tutor messages (chat, "Why was I wrong?") or Whiteboard lessons. */
 export type AllowanceKind = "tutor" | "whiteboard";
 
-export async function getTutorDailyStatus(userId: string, kind: AllowanceKind = "tutor"): Promise<TutorDailyStatus> {
-  const [settings, row] = await Promise.all([
+type AllowanceUser = { id: string; role: string; schoolId: string | null; createdAt?: Date };
+
+export async function getTutorDailyStatus(user: AllowanceUser, kind: AllowanceKind = "tutor"): Promise<TutorDailyStatus> {
+  const [settings, row, ent] = await Promise.all([
     getPlatformSettings(),
     db.tutorDailyUse.findUnique({
-      where: { userId_day: { userId, day: addisDay() } },
+      where: { userId_day: { userId: user.id, day: addisDay() } },
       select: { count: true, whiteboard: true },
     }),
+    kind === "whiteboard" ? getEntitlements(user) : null,
   ]);
-  return kind === "whiteboard"
-    ? { used: row?.whiteboard ?? 0, limit: settings.whiteboardDailyLimit }
-    : { used: row?.count ?? 0, limit: settings.tutorDailyMessageLimit };
+  if (kind === "whiteboard") {
+    // The plan's limit wins; a plan that sets none uses the platform default.
+    const planLimit = ent?.whiteboardDailyLimit;
+    return { used: row?.whiteboard ?? 0, limit: planLimit !== undefined ? planLimit : settings.whiteboardDailyLimit };
+  }
+  return { used: row?.count ?? 0, limit: settings.tutorDailyMessageLimit };
 }
 
 export function tutorLimitReached(status: TutorDailyStatus): boolean {

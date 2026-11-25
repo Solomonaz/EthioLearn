@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Bell, BellOff, CheckCircle2, Smartphone, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ interface ReminderStatus {
   paused: boolean;
   telegram: { available: boolean; linked: boolean; reachable: boolean };
   push: { available: boolean; vapidPublicKey: string | null; devices: number };
+  /** False when the student's plan leaves study reminders out. */
+  included?: boolean;
 }
 
 /**
@@ -26,6 +29,7 @@ interface ReminderStatus {
  * stays in the Account card above.
  */
 export function ReminderSettingsCard() {
+  const tf = useTranslations("features");
   const [status, setStatus] = useState<ReminderStatus | null>(null);
   const [thisDevice, setThisDevice] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -50,8 +54,10 @@ export function ReminderSettingsCard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (res.ok) setStatus(await res.json());
-    else toast.error("Couldn't save. Please try again.");
+    if (res.ok) {
+      const next = await res.json();
+      setStatus((prev) => ({ ...next, included: prev?.included }));
+    } else toast.error("Couldn't save. Please try again.");
   }
 
   async function toggleEnabled() {
@@ -83,6 +89,18 @@ export function ReminderSettingsCard() {
   if (!status) return null;
   const anyChannel = status.telegram.available || status.push.available;
   if (!anyChannel) return null;
+
+  // The plan leaves reminders out (and none are on): say so instead of a switch.
+  if (status.included === false && !status.enabled) {
+    return (
+      <Card id="reminders">
+        <CardContent className="flex items-center gap-3 py-4">
+          <BellOff className="h-5 w-5 shrink-0 text-text-muted" />
+          <p className="text-sm text-text-secondary">{tf("remindersLocked")}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card id="reminders">

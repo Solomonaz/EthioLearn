@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { compile } from "mathjs";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
-import { getEntitlements } from "@/lib/entitlements";
 import { explainGraphImage } from "@/lib/gemini";
 import { parseEquations } from "@/lib/graph-parse";
 
@@ -85,12 +84,9 @@ export async function POST(request: NextRequest) {
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  if (!(await isAiFeatureEnabled("aiMathTools"))) {
-    return NextResponse.json({ error: "Turn on AI to explain graphs." }, { status: 403 });
-  }
-  if (!(await getEntitlements(user)).mathTools) {
-    return NextResponse.json({ error: "Graphing isn't included in your plan." }, { status: 403 });
-  }
+  // The plan's graphing tool and its AI helpers (+ the platform AI math switch).
+  const denied = (await featureDenial(user, "graphing")) ?? (await featureDenial(user, "aiMathTools"));
+  if (denied) return denied;
 
   const body = await request.json().catch(() => null);
   const mimeType = String(body?.mimeType ?? "").toLowerCase();

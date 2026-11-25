@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { isFullClass, isSecondaryGrade } from "@/lib/teacher-band";
 import { subjectEquals } from "@/lib/subject";
 import { sseResponse } from "@/lib/sse";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { usageActor, withUsageActor } from "@/lib/usage-logger";
 import {
   getTeacherAiStatus,
@@ -95,6 +95,8 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
 
   const user = await getTeacher();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const rl = rateLimit("secondary-teacher:activity:create:" + user.id, 20, 60_000);
   if (!rl.success) {
@@ -341,12 +343,9 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
           { status: 400 },
         );
       }
-      if (!(await isAiFeatureEnabled("aiTeacherAssistant"))) {
-        return NextResponse.json(
-          { error: "AI features are currently switched off for this platform." },
-          { status: 503 },
-        );
-      }
+      // The school plan's teacher assistant (+ the platform switch).
+      const assistantRefusal = await featureDenial(user, "teacherAssistant");
+      if (assistantRefusal) return assistantRefusal;
       // School must be paid up; the allowance is checked only if the library
       // has nothing, since a library set costs nothing.
       const aiStatus = await getTeacherAiStatus(user);
@@ -666,6 +665,8 @@ async function createActivity(req: NextRequest, emit?: Emit): Promise<Response> 
   // than whatever the bank happened to hold. The generated rows are persisted
   // like any other, so the next teacher benefits too.
   if (wantsAi) {
+    const genRefusal = await featureDenial(user, "teacherQuestionGen");
+    if (genRefusal) return genRefusal;
     // Checked against the full request up front; charged below for what was
     // actually delivered.
     const denied = teacherAiDenial(await getTeacherAiStatus(user), questionCredits(questionCount));
@@ -857,6 +858,8 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const user = await getTeacher();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const featureRefusal = await featureDenial(user, "classActivities");
+  if (featureRefusal) return featureRefusal;
 
   const { searchParams } = req.nextUrl;
   const classId = searchParams.get("classId")?.trim() || "";

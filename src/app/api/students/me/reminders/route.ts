@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial, getEntitlements } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { pushConfigured, vapidPublicKey } from "@/lib/push";
 import { telegramConfigured } from "@/lib/telegram-bot";
@@ -45,7 +46,9 @@ export async function GET() {
   }
   const s = await status(user.id);
   if (!s) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(s);
+  // Reminders are a plan feature: the settings card shows it locked.
+  const included = (await getEntitlements(user)).features.reminders;
+  return NextResponse.json({ ...s, included });
 }
 
 export async function PATCH(req: Request) {
@@ -57,6 +60,11 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
   const body = (await req.json().catch(() => ({}))) as { enabled?: unknown; resume?: unknown };
+  // Turning reminders off is always allowed; turning them on needs the feature.
+  if (body.enabled === true || body.resume === true) {
+    const denied = await featureDenial(user, "reminders");
+    if (denied) return denied;
+  }
   const data: { remindersEnabled?: boolean; remindersPausedAt?: null; reminderMisses?: number } = {};
   if (typeof body.enabled === "boolean") data.remindersEnabled = body.enabled;
   if (body.enabled === true || body.resume === true) {

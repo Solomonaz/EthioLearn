@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { featureDenial } from "@/lib/entitlements";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -21,13 +21,8 @@ export async function GET() {
     });
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.rewards) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.rewards, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
+  const denied = await featureDenial(user, "rewards");
+  if (denied) return denied;
 
   // Get all rewards for the user's school, ordered by pointsCost ASC
   // If user has no school, return all rewards (fallback for dev/testing)

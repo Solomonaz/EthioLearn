@@ -5,6 +5,8 @@
  * and on the API when a subscription is actually created.
  */
 
+import { isFeatureKey, legacyFlagsFrom, planFeatureMap, type FeatureMap } from "./features";
+
 export type PlanAudience = "SCHOOL" | "STUDENT";
 export type PricingModel = "FLAT" | "PER_STUDENT" | "TIERED" | "PER_TEACHER";
 export type BillingInterval =
@@ -358,6 +360,10 @@ export interface PlanInputData {
   yearlyDiscountPct: number;
   pricePerTeacher: number | null;
   teacherAiMonthlyLimit: number | null;
+  /** Per-feature access (lib/features); undefined = leave what is stored. */
+  featureAccess?: FeatureMap;
+  /** Whiteboard lessons per day; null = the platform default. */
+  whiteboardDailyLimit: number | null;
 }
 
 /**
@@ -413,6 +419,35 @@ export function parsePlanInput(
   const allowLeaderboard = body.allowLeaderboard === undefined ? true : Boolean(body.allowLeaderboard);
   const allowMathTools = body.allowMathTools === undefined ? true : Boolean(body.allowMathTools);
   const allowGames = body.allowGames === undefined ? true : Boolean(body.allowGames);
+  // Whiteboard lessons per student per day (blank = the platform default).
+  let whiteboardDailyLimit: number | null = null;
+  if (!isBlank(body.whiteboardDailyLimit)) {
+    const limit = Number(body.whiteboardDailyLimit);
+    if (!Number.isInteger(limit) || limit < 0 || limit > 1000) {
+      return { error: "Whiteboard lessons per day must be a whole number from 0 to 1000" };
+    }
+    whiteboardDailyLimit = limit;
+  }
+
+  // Per-feature access. Every feature the plan's audience offers is saved
+  // explicitly (missing ones from the allow* flags, as before), and the allow*
+  // columns are re-derived from the map so older readers agree with it.
+  let featureAccess: FeatureMap | undefined;
+  let legacy = { allowAi, allowMultiplayer, allowRewards, allowLeaderboard, allowMathTools, allowGames };
+  if (body.featureAccess !== undefined) {
+    if (!body.featureAccess || typeof body.featureAccess !== "object" || Array.isArray(body.featureAccess)) {
+      return { error: "featureAccess must be an object of feature: true/false" };
+    }
+    const unknown = Object.keys(body.featureAccess).filter((k) => !isFeatureKey(k));
+    if (unknown.length) return { error: `Unknown feature: ${unknown.join(", ")}` };
+    featureAccess = planFeatureMap({
+      audience: audience as PlanAudience,
+      featureAccess: body.featureAccess,
+      ...legacy,
+    });
+    legacy = legacyFlagsFrom(featureAccess);
+  }
+
   const features = Array.isArray(body.features)
     ? body.features.map((f) => String(f).trim()).filter(Boolean)
     : [];
@@ -489,12 +524,9 @@ export function parsePlanInput(
       features,
       isActive,
       sortOrder,
-      allowAi,
-      allowMultiplayer,
-      allowRewards,
-      allowLeaderboard,
-      allowMathTools,
-      allowGames,
+      ...legacy,
+      featureAccess,
+      whiteboardDailyLimit,
       quarterlyDiscountPct,
       yearlyDiscountPct,
       pricePerTeacher,

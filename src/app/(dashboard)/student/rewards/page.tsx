@@ -378,8 +378,8 @@ export default function RewardsPage() {
   }
 
   // Rewards are a premium feature — gate for plans without the entitlement.
-  if (!ent.loading && !ent.rewards) {
-    return <UpgradeNotice feature="Rewards" planName={ent.planName} />;
+  if (!ent.loading && !ent.features.rewards) {
+    return <UpgradeNotice feature="rewards" planName={ent.planName} />;
   }
 
   if (loading) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
 
 // Guard rails so a note can't grow unbounded in the DB.
@@ -14,6 +15,8 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(_req: Request, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "studyNotes");
+  if (featureRefusal) return featureRefusal;
 
   const { id } = await params;
   const note = await db.studentNote.findFirst({
@@ -34,6 +37,8 @@ export async function GET(_req: Request, { params }: Ctx) {
 export async function PATCH(req: Request, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "studyNotes");
+  if (featureRefusal) return featureRefusal;
   if (!validateCsrfOrigin(req)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
@@ -82,6 +87,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
 export async function DELETE(req: Request, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "studyNotes");
+  if (featureRefusal) return featureRefusal;
   if (!validateCsrfOrigin(req)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }

@@ -27,7 +27,7 @@ export default function PlayTugPage() {
           <TugSetup
             audience="student"
             grade={grade}
-            aiLocked={!(ent.ai && ent.aiFeatures.aiQuizGen)}
+            aiLocked={!ent.features.aiGameQuestions}
             onStart={setMatch}
           />
         )

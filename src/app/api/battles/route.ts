@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { normalizeOption, generateRoomCode } from "@/lib/utils";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { featureDenial } from "@/lib/entitlements";
 
 // POST /api/battles — Create a battle room
 export async function POST(request: Request) {
@@ -11,13 +11,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.multiplayer) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.multiplayer, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
+  const denied = await featureDenial(user, "battle");
+  if (denied) return denied;
 
   try {
     const body = await request.json();
@@ -184,13 +179,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.multiplayer) {
-    return NextResponse.json(
-      { error: UPGRADE_MESSAGES.multiplayer, code: "UPGRADE_REQUIRED" },
-      { status: 403 }
-    );
-  }
+  const denied = await featureDenial(user, "battle");
+  if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
   const roomCode = searchParams.get("roomCode");

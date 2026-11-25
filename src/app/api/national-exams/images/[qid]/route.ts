@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { IMAGE_CONTENT_TYPES, readExamImage } from "@/lib/national-exam";
 
 /**
@@ -12,6 +13,8 @@ import { IMAGE_CONTENT_TYPES, readExamImage } from "@/lib/national-exam";
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ qid: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "nationalExam");
+  if (featureRefusal) return featureRefusal;
   const { qid } = await params;
   const q = await db.nationalExamQuestion.findUnique({
     where: { id: qid },

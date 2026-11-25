@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { rateLimit } from "@/lib/rate-limit";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
 import { generateQuestions } from "@/lib/ai-provider";
 import { getCurrentUser } from "@/lib/get-session";
-import { getEntitlements, UPGRADE_MESSAGES } from "@/lib/entitlements";
+import { featureDenial } from "@/lib/entitlements";
 import { isElementaryStudent } from "@/lib/teacher-band";
 import { usageActor, withUsageActor } from "@/lib/usage-logger";
 
@@ -28,16 +27,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
 
-  const ent = await getEntitlements(user);
-  if (!ent.games) {
-    return NextResponse.json({ error: UPGRADE_MESSAGES.games }, { status: 403 });
-  }
-  if (!ent.ai) {
-    return NextResponse.json({ error: UPGRADE_MESSAGES.ai }, { status: 403 });
-  }
-  if (!(await isAiFeatureEnabled("aiQuizGen"))) {
-    return NextResponse.json({ error: "AI generation is turned off" }, { status: 403 });
-  }
+  // AI questions for the grades 1-8 games (+ the platform quiz-generation switch).
+  const denied = await featureDenial(user, "aiGameQuestions");
+  if (denied) return denied;
 
   const body = await request.json().catch(() => null);
   const subject = String(body?.subject ?? "").trim().slice(0, 60) || "General";

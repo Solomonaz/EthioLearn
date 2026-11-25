@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { rateLimit } from "@/lib/rate-limit";
 import { usageActor } from "@/lib/usage-logger";
-import { isAiFeatureEnabled } from "@/lib/platform-settings";
-import { getEntitlements } from "@/lib/entitlements";
 import { chatWithTutor } from "@/lib/ai-provider";
 
 /**
@@ -30,12 +29,9 @@ export async function POST(request: NextRequest) {
   if (!validateCsrfOrigin(request)) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
-  if (!(await isAiFeatureEnabled("aiMathTools"))) {
-    return NextResponse.json({ error: "AI is turned off" }, { status: 403 });
-  }
-  if (!(await getEntitlements(user)).mathTools) {
-    return NextResponse.json({ error: "The 3D geometry lab isn't included in your plan." }, { status: 403 });
-  }
+  // The plan's geometry3d tool and its AI helpers (+ the platform AI math switch).
+  const denied = (await featureDenial(user, "geometry3d")) ?? (await featureDenial(user, "aiMathTools"));
+  if (denied) return denied;
 
   const body = await request.json().catch(() => null);
   const question = String(body?.question ?? "").trim();

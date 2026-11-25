@@ -27,6 +27,15 @@ import {
   validateTiers,
   type BillingInterval,
 } from "@/lib/pricing";
+import {
+  FEATURE_GROUPS,
+  allFeatures,
+  featuresForAudience,
+  type FeatureDef,
+  type FeatureGroup,
+  type FeatureKey,
+  type FeatureMap,
+} from "@/lib/features";
 
 // ── Types ──────────────────────────────────────────────────
 interface Tier {
@@ -58,6 +67,9 @@ interface Plan {
   yearlyDiscountPct: number;
   pricePerTeacher: number | null;
   teacherAiMonthlyLimit: number | null;
+  whiteboardDailyLimit: number | null;
+  /** Per-feature access as the server resolves it (stored, else its fallback). */
+  effectiveFeatures: FeatureMap;
   tiers: Tier[];
   _count?: { subscriptions: number };
 }
@@ -85,12 +97,12 @@ interface EditorState {
   trialDays: string;
   features: string;
   isActive: boolean;
-  allowAi: boolean;
-  allowMultiplayer: boolean;
-  allowRewards: boolean;
-  allowLeaderboard: boolean;
-  allowMathTools: boolean;
-  allowGames: boolean;
+  /** One switch per feature (lib/features). */
+  featureAccess: FeatureMap;
+  /** "" = the platform default. */
+  whiteboardDailyLimit: string;
+  /** This plan is what students without a paid plan get. */
+  isFreeTier: boolean;
   quarterlyDiscountPct: string;
   yearlyDiscountPct: string;
   // Secondary teachers (school plans). "" = teachers not charged / no cap.
@@ -112,12 +124,9 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
     trialDays: "0",
     features: "",
     isActive: true,
-    allowAi: true,
-    allowMultiplayer: true,
-    allowRewards: true,
-    allowLeaderboard: true,
-    allowMathTools: true,
-    allowGames: true,
+    featureAccess: allFeatures(true),
+    whiteboardDailyLimit: "",
+    isFreeTier: false,
     quarterlyDiscountPct: "0",
     yearlyDiscountPct: "0",
     pricePerTeacher: "",
@@ -126,7 +135,7 @@ function blankEditor(audience: "SCHOOL" | "STUDENT"): EditorState {
   };
 }
 
-function editorFromPlan(plan: Plan): EditorState {
+function editorFromPlan(plan: Plan, freePlanId: string | null): EditorState {
   return {
     id: plan.id,
     audience: plan.audience,
@@ -139,12 +148,9 @@ function editorFromPlan(plan: Plan): EditorState {
     trialDays: String(plan.trialDays),
     features: plan.features.join(", "),
     isActive: plan.isActive,
-    allowAi: plan.allowAi ?? true,
-    allowMultiplayer: plan.allowMultiplayer ?? true,
-    allowRewards: plan.allowRewards ?? true,
-    allowLeaderboard: plan.allowLeaderboard ?? true,
-    allowMathTools: plan.allowMathTools ?? true,
-    allowGames: plan.allowGames ?? true,
+    featureAccess: { ...allFeatures(true), ...plan.effectiveFeatures },
+    whiteboardDailyLimit: plan.whiteboardDailyLimit != null ? String(plan.whiteboardDailyLimit) : "",
+    isFreeTier: plan.id === freePlanId,
     quarterlyDiscountPct: String(plan.quarterlyDiscountPct ?? 0),
     yearlyDiscountPct: String(plan.yearlyDiscountPct ?? 0),
     pricePerTeacher: plan.pricePerTeacher != null ? String(plan.pricePerTeacher) : "",
@@ -165,6 +171,7 @@ export default function AdminPricingPage() {
   const role = (session?.user as { role?: string } | undefined)?.role;
 
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [freePlanId, setFreePlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -179,6 +186,7 @@ export default function AdminPricingPage() {
       if (!res.ok) throw new Error("Failed to load pricing plans");
       const data = await res.json();
       setPlans(data.plans ?? []);
+      setFreePlanId(data.freePlanId ?? null);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -206,12 +214,11 @@ export default function AdminPricingPage() {
       billingInterval: editor.billingInterval,
       trialDays: Number(editor.trialDays) || 0,
       isActive: editor.isActive,
-      allowAi: editor.allowAi,
-      allowMultiplayer: editor.allowMultiplayer,
-      allowRewards: editor.allowRewards,
-      allowLeaderboard: editor.allowLeaderboard,
-      allowMathTools: editor.allowMathTools,
-      allowGames: editor.allowGames,
+      // Only the features this audience offers (student plans skip school-only ones).
+      featureAccess: Object.fromEntries(
+        featuresForAudience(editor.audience).map((f) => [f.key, editor.featureAccess[f.key as FeatureKey]]),
+      ),
+      whiteboardDailyLimit: editor.whiteboardDailyLimit.trim(),
       quarterlyDiscountPct: Number(editor.quarterlyDiscountPct) || 0,
       yearlyDiscountPct: Number(editor.yearlyDiscountPct) || 0,
       features: editor.features
@@ -337,10 +344,11 @@ export default function AdminPricingPage() {
             icon={<Building2 className="h-5 w-5 text-primary" />}
             plans={schoolPlans}
             onNew={() => setEditor(blankEditor("SCHOOL"))}
-            onEdit={(p) => setEditor(editorFromPlan(p))}
+            onEdit={(p) => setEditor(editorFromPlan(p, freePlanId))}
             onDelete={handleDelete}
             deletingId={deletingId}
             disabled={!!editor}
+            freePlanId={freePlanId}
           />
           <PlanSection
             title="Student Plans"
@@ -348,10 +356,11 @@ export default function AdminPricingPage() {
             icon={<GraduationCap className="h-5 w-5 text-primary" />}
             plans={studentPlans}
             onNew={() => setEditor(blankEditor("STUDENT"))}
-            onEdit={(p) => setEditor(editorFromPlan(p))}
+            onEdit={(p) => setEditor(editorFromPlan(p, freePlanId))}
             onDelete={handleDelete}
             deletingId={deletingId}
             disabled={!!editor}
+            freePlanId={freePlanId}
           />
         </>
       )}
@@ -370,6 +379,7 @@ function PlanSection({
   onDelete,
   deletingId,
   disabled,
+  freePlanId,
 }: {
   title: string;
   subtitle: string;
@@ -380,6 +390,7 @@ function PlanSection({
   onDelete: (p: Plan) => void;
   deletingId: string | null;
   disabled: boolean;
+  freePlanId: string | null;
 }) {
   return (
     <Card>
@@ -456,28 +467,7 @@ function PlanSection({
                         )}
                       </p>
                     )}
-                  {plan.audience === "STUDENT" && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
-                      <span className={plan.allowAi ? "text-success" : "text-text-muted"}>
-                        {plan.allowAi ? "✓" : "✗"} AI features
-                      </span>
-                      <span className={plan.allowMultiplayer ? "text-success" : "text-text-muted"}>
-                        {plan.allowMultiplayer ? "✓" : "✗"} Battle mode
-                      </span>
-                      <span className={plan.allowRewards ? "text-success" : "text-text-muted"}>
-                        {plan.allowRewards ? "✓" : "✗"} Rewards
-                      </span>
-                      <span className={plan.allowLeaderboard ? "text-success" : "text-text-muted"}>
-                        {plan.allowLeaderboard ? "✓" : "✗"} Leaderboard
-                      </span>
-                      <span className={plan.allowMathTools ? "text-success" : "text-text-muted"}>
-                        {plan.allowMathTools ? "✓" : "✗"} Graphing &amp; 3D Geometry
-                      </span>
-                      <span className={plan.allowGames ? "text-success" : "text-text-muted"}>
-                        {plan.allowGames ? "✓" : "✗"} Grades 1-8 games
-                      </span>
-                    </div>
-                  )}
+                  <PlanFeatureSummary plan={plan} isFreeTier={plan.id === freePlanId} />
                   {plan.pricingModel === "TIERED" && plan.tiers.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {plan.tiers.map((t, i) => (
@@ -759,78 +749,7 @@ function PlanEditor({
           <Input value={editor.features} onChange={(e) => set({ features: e.target.value })} disabled={saving} placeholder="Unlimited quizzes, AI tutor, Priority support" />
         </Field>
 
-        {/* Entitlements — what the plan unlocks. Only meaningful for STUDENT plans;
-            school students always get full access regardless. */}
-        {isSchool ? (
-          <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-text-secondary">
-            School plans always include full access (AI features and battle mode) for all their students.
-          </p>
-        ) : (
-          <Field label="Plan access">
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={editor.allowAi}
-                  onChange={(e) => set({ allowAi: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                AI features (AI tutor, AI-generated quizzes)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={editor.allowMultiplayer}
-                  onChange={(e) => set({ allowMultiplayer: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                Battle mode (multiplayer games) — solo games are always allowed
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={editor.allowRewards}
-                  onChange={(e) => set({ allowRewards: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                Rewards (earn &amp; redeem rewards)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={editor.allowLeaderboard}
-                  onChange={(e) => set({ allowLeaderboard: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                Leaderboard (rankings)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={editor.allowMathTools}
-                  onChange={(e) => set({ allowMathTools: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                Graphing &amp; 3D Geometry (graphing calculator + 3D geometry lab)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  checked={editor.allowGames}
-                  onChange={(e) => set({ allowGames: e.target.checked })}
-                  disabled={saving}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                Grades 1-8 games (all games; two stay free without a plan)
-              </label>
-            </div>
-          </Field>
-        )}
+        <PlanAccessEditor editor={editor} set={set} saving={saving} />
 
         <label className="flex items-center gap-2 text-sm text-text-primary">
           <input
@@ -1002,5 +921,122 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-xs font-semibold uppercase text-text-muted">{label}</label>
       {children}
     </div>
+  );
+}
+
+// ── Plan access: one switch per feature, grouped ─────────────────────────
+
+/** One line on a plan card: how many features it includes, and which are left out. */
+function PlanFeatureSummary({ plan, isFreeTier }: { plan: Plan; isFreeTier: boolean }) {
+  const offered = featuresForAudience(plan.audience);
+  const off = offered.filter((f) => plan.effectiveFeatures?.[f.key as FeatureKey] === false);
+  return (
+    <div className="mt-1.5 space-y-1 text-xs">
+      <p className={off.length === 0 ? "text-success" : "text-text-secondary"}>
+        ✓ {offered.length - off.length} of {offered.length} features
+        {plan.whiteboardDailyLimit != null && ` · ${plan.whiteboardDailyLimit} Whiteboard lessons/day`}
+        {isFreeTier && " · free tier (students without a paid plan)"}
+      </p>
+      {off.length > 0 && <p className="text-text-muted">✗ Not included: {off.map((f) => f.label).join(", ")}</p>}
+    </div>
+  );
+}
+
+function PlanAccessEditor({
+  editor,
+  set,
+  saving,
+}: {
+  editor: EditorState;
+  set: (patch: Partial<EditorState>) => void;
+  saving: boolean;
+}) {
+  const offered = featuresForAudience(editor.audience);
+  const groups = (Object.keys(FEATURE_GROUPS) as FeatureGroup[])
+    .map((g) => ({ id: g, items: offered.filter((f) => f.group === g) }))
+    .filter((g) => g.items.length > 0);
+  const toggle = (key: FeatureKey, on: boolean) => set({ featureAccess: { ...editor.featureAccess, [key]: on } });
+  const setGroup = (items: FeatureDef[], on: boolean) =>
+    set({ featureAccess: { ...editor.featureAccess, ...Object.fromEntries(items.map((f) => [f.key, on])) } });
+  const isSchool = editor.audience === "SCHOOL";
+
+  return (
+    <Field label="Plan access">
+      <div className="space-y-3" data-testid="plan-access">
+        <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-text-secondary">
+          {isSchool
+            ? "Applies to everyone at a school on this plan: its students, teachers and school admins. "
+            : editor.isFreeTier
+              ? "This is the free tier: students without a paid plan get exactly these features. "
+              : "What a student on this plan can use. "}
+          A feature switched off in Admin → Settings stays off for everyone, whatever the plan says.
+        </p>
+        {groups.map((g) => {
+          const allOn = g.items.every((f) => editor.featureAccess[f.key as FeatureKey]);
+          return (
+            <fieldset key={g.id} className="min-w-0 rounded-lg border border-border p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <legend className="text-sm font-semibold text-text-primary">{FEATURE_GROUPS[g.id]}</legend>
+                <button
+                  type="button"
+                  onClick={() => setGroup(g.items, !allOn)}
+                  disabled={saving}
+                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  {allOn ? "Turn all off" : "Turn all on"}
+                </button>
+              </div>
+              <div className="space-y-2.5">
+                {g.items.map((f) => {
+                  const key = f.key as FeatureKey;
+                  const id = `feature-${key}`;
+                  return (
+                    <div key={key}>
+                      <label htmlFor={id} className="flex items-start gap-2 text-sm text-text-primary">
+                        <input
+                          id={id}
+                          type="checkbox"
+                          checked={editor.featureAccess[key]}
+                          onChange={(e) => toggle(key, e.target.checked)}
+                          disabled={saving}
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary"
+                        />
+                        <span className="min-w-0">
+                          <span className="font-medium">{f.label}</span>
+                          {f.ai && (
+                            <span className="ml-1.5 rounded bg-purple-500/15 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase text-purple-600 dark:text-purple-300">
+                              AI
+                            </span>
+                          )}
+                          <span className="block text-xs text-text-secondary">{f.description}</span>
+                        </span>
+                      </label>
+                      {key === "whiteboard" && editor.featureAccess.whiteboard && (
+                        <div className="ml-6 mt-2 flex flex-wrap items-center gap-2">
+                          <label htmlFor="whiteboard-limit" className="text-xs text-text-secondary">
+                            Whiteboard lessons per day
+                          </label>
+                          <Input
+                            id="whiteboard-limit"
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            value={editor.whiteboardDailyLimit}
+                            onChange={(e) => set({ whiteboardDailyLimit: e.target.value })}
+                            disabled={saving}
+                            placeholder="Platform default"
+                            className="w-40"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
+    </Field>
   );
 }

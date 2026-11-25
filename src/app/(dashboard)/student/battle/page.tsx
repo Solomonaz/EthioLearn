@@ -312,8 +312,8 @@ export default function BattleLobbyPage() {
   const canStart = isHost && players.length >= 2 && roomStatus === "waiting";
 
   // Plan gating — battle mode requires a plan that allows multiplayer.
-  if (!ent.loading && !ent.multiplayer) {
-    return <UpgradeNotice feature="Battle Mode" planName={ent.planName} />;
+  if (!ent.loading && !ent.features.battle) {
+    return <UpgradeNotice feature="battle" planName={ent.planName} />;
   }
 
   return (

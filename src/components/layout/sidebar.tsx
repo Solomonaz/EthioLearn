@@ -51,8 +51,9 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useEntitlements } from "@/hooks/use-entitlements";
-import { lockedNavKeys, ProBadge } from "@/components/student/pro-promo";
+import { lockedNavKeys, NAV_FEATURES, ProBadge } from "@/components/student/pro-promo";
 import { FREE_PLAY_GAMES, type PlayGameKey } from "@/lib/games/play";
+import type { FeatureKey } from "@/lib/features";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -90,6 +91,14 @@ const TEACHER_COLORS: Record<string, string> = {
   billing: "#F59E0B",
   settings: "#64748B",
   contactUs: "#0EA5E9",
+};
+
+/** The school-plan feature behind each secondary-teacher menu item. */
+const SECONDARY_TEACHER_FEATURES: Record<string, FeatureKey> = {
+  activities: "classActivities",
+  assistant: "teacherAssistant",
+  grapher: "graphing",
+  geometry: "geometry3d",
 };
 
 const ELEMENTARY_SCHOOL_ADMIN_KEYS = new Set(["dashboard", "teachers", "subjects", "subscription"]);
@@ -160,11 +169,9 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "appTour",     href: "/student?tour=1",         icon: Compass },
   ].filter((item) => {
     if (lockedKeys.has(item.labelKey)) return true;
-    if ((item.labelKey === "aiTutor" || item.labelKey === "whiteboardTutor") && !(ent.ai && ent.aiFeatures.aiTutor)) return false;
-    if ((item.labelKey === "grapher" || item.labelKey === "geometry") && !ent.mathTools) return false;
-    if (item.labelKey === "battle" && !ent.multiplayer) return false;
-    if (item.labelKey === "rewards" && !ent.rewards) return false;
-    if (item.labelKey === "leaderboard" && !ent.leaderboard) return false;
+    // A feature the plan leaves out (and nobody can buy here) is hidden.
+    const feature = NAV_FEATURES[item.labelKey];
+    if (feature && !ent.features[feature]) return false;
     if (item.labelKey === "billing" && !ent.pricingEnabled) return false;
     // Homework only comes from school teachers; self-registered students have none.
     if (item.labelKey === "myWork" && ent.isIndependent) return false;
@@ -206,7 +213,10 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   ].filter(
     // An elementary school has no students on the school side, so its admin
     // manages teachers, its subject list and the subscription only.
-    (item) => ent.schoolLevel !== "ELEMENTARY" || ELEMENTARY_SCHOOL_ADMIN_KEYS.has(item.labelKey) || item.labelKey === "contactUs",
+    (item) =>
+      (ent.schoolLevel !== "ELEMENTARY" || ELEMENTARY_SCHOOL_ADMIN_KEYS.has(item.labelKey) || item.labelKey === "contactUs") &&
+      // Rewards management only when the school's plan includes rewards.
+      (item.labelKey !== "rewards" || ent.features.rewards),
   );
 
   const teacherNavItems: NavItem[] = [
@@ -219,7 +229,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "teacherCreate", href: "/teacher/games/create", icon: PencilRuler },
     { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
     { labelKey: "contactUs",     href: "/teacher/contact",      icon: MessageCircle },
-  ];
+  ].filter((item) => ent.features.classroomGames || item.labelKey === "dashboard" || item.labelKey === "contactUs");
 
   // A game's nav item, keyed for its colour, its href and its free/Pro status.
   const playGames: (NavItem & { game: PlayGameKey })[] = [
@@ -238,7 +248,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
   ].filter((item) => item.labelKey !== "billing" || (ent.pricingEnabled && ent.isIndependent));
   // Paid games show a Pro lock for a free account (the page offers the upgrade).
   const playLockedKeys = new Set(
-    ent.loading || ent.games
+    ent.loading || ent.features.playGames
       ? []
       : playGames.filter((g) => !FREE_PLAY_GAMES.has(g.game)).map((g) => g.labelKey),
   );
@@ -253,7 +263,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "geometry",   href: "/secondary-teacher/geometry",   icon: Boxes },
     { labelKey: "profile",    href: "/secondary-teacher/profile",    icon: User },
     { labelKey: "contactUs",  href: "/secondary-teacher/contact",    icon: MessageCircle },
-  ];
+  ].filter((item) => {
+    // Tools the school's plan leaves out are hidden.
+    const feature = SECONDARY_TEACHER_FEATURES[item.labelKey];
+    return !feature || ent.features[feature];
+  });
 
   let navItems: NavItem[] = studentNavItems;
   let sectionLabelKey = "sectionStudent";

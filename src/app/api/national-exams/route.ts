@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { featureDenial } from "@/lib/entitlements";
 import { examDeadline } from "@/lib/national-exam";
 
 /**
@@ -10,6 +11,8 @@ import { examDeadline } from "@/lib/national-exam";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const featureRefusal = await featureDenial(user, "nationalExam");
+  if (featureRefusal) return featureRefusal;
 
   const [exams, attempts] = await Promise.all([
     db.nationalExam.findMany({
