@@ -1176,5 +1176,15 @@
       "answered": "Answered",
       "closed": "Closed"
     }
+  },
+  "errorPage": {
+    "title": "Something went wrong on our side",
+    "body": "This page couldn't load. It's not something you did. Please try again in a moment — if it keeps happening, let us know and we'll fix it.",
+    "offlineTitle": "You're offline",
+    "offlineBody": "Check your internet connection, then try again.",
+    "retry": "Try again",
+    "home": "Go to home",
+    "report": "Report the problem",
+    "code": "Error code:"
   }
 }
