@@ -280,6 +280,7 @@ model User {
   uploadedTextbooks    Textbook[]        @relation("TextbookUploader")
   approvedRedemptions  Redemption[]      @relation("RedemptionApprover")
   notifications        Notification[]
+  supportMessages      SupportMessage[]
   achievements         UserAchievement[]
   createdTournaments   Tournament[]      @relation("TournamentCreator")
   sessions             UserSession[]
@@ -1658,4 +1659,26 @@ model StudyUpload {
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("study_uploads")
+}
+
+/// A message a user sent to the Abugida team from "Contact us" (any signed-in
+/// role except the super admin). The super admin answers in Admin → Messages;
+/// the user sees the reply on their contact page and gets a notification.
+model SupportMessage {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// payment | account | bug | content | idea | other
+  topic     String
+  body      String
+  /// open | answered | closed
+  status    String    @default("open")
+  reply     String?
+  repliedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("support_messages")
 }

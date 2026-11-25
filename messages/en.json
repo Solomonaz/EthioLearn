@@ -126,6 +126,8 @@
     "footerCopyright": "© 2026 Abugida"
   },
   "nav": {
+    "contactUs": "Contact us",
+    "messages": "Messages",
     "dashboard": "Dashboard",
     "quiz": "Take Quiz",
     "grapher": "Graphing",
@@ -1140,5 +1142,37 @@
     "tabFile": "Your file",
     "tabGuide": "Guide",
     "foundTopics": "Topics I found — tap one to explain it"
+  },
+  "contact": {
+    "title": "Contact us",
+    "intro": "Questions about payment, your account, a problem, or an idea? Write to the Abugida team. We usually answer within a day or two, and you'll get a notification when we reply.",
+    "topicLabel": "What is it about?",
+    "topics": {
+      "payment": "Payment",
+      "account": "My account",
+      "bug": "Something is broken",
+      "content": "Questions or textbooks",
+      "idea": "An idea",
+      "other": "Something else"
+    },
+    "messageLabel": "Your message",
+    "placeholder": "Tell us what happened or what you need. Include the page or question if it helps.",
+    "privacyNote": "Never send passwords or bank PINs.",
+    "send": "Send message",
+    "sent": "Sent! We'll reply here.",
+    "pickTopic": "Choose what it's about first.",
+    "tooShort": "Please write a little more (at least 10 characters).",
+    "rateLimited": "You've sent a few messages just now. Please wait a few minutes.",
+    "dailyLimit": "You've sent the most messages for today. We'll get back to you.",
+    "sendFailed": "Couldn't send. Please try again.",
+    "orReach": "Or reach us directly:",
+    "yourMessages": "Your messages",
+    "noMessages": "No messages yet.",
+    "teamReply": "Abugida team",
+    "status": {
+      "open": "Waiting for reply",
+      "answered": "Answered",
+      "closed": "Closed"
+    }
   }
 }

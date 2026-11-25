@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   X,
   ChevronLeft,
@@ -48,6 +50,7 @@ export function PaymentModal({
   onClose: () => void;
   onSubmitted: () => void;
 }) {
+  const pathname = usePathname() ?? "";
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [agreed, setAgreed] = useState(false);
@@ -220,7 +223,14 @@ export function PaymentModal({
             </div>
           ) : accounts.length === 0 ? (
             <div className="rounded-xl border border-border bg-background/50 px-4 py-6 text-center text-sm text-text-secondary">
-              No payment accounts are set up yet. Please contact the administrator to complete payment.
+              No payment accounts are set up yet.{" "}
+              <Link
+                href={`${pathname.startsWith("/play") ? "/play" : "/student"}/contact?topic=payment`}
+                className="font-semibold text-primary underline"
+              >
+                Contact us
+              </Link>{" "}
+              to complete payment.
             </div>
           ) : (
             <>

@@ -44,6 +44,8 @@ import {
   PanelLeftOpen,
   FileCheck2,
   ChevronDown,
+  MessageCircle,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/logo";
@@ -87,6 +89,7 @@ const TEACHER_COLORS: Record<string, string> = {
   randomPicker: "#10B981",
   billing: "#F59E0B",
   settings: "#64748B",
+  contactUs: "#0EA5E9",
 };
 
 const ELEMENTARY_SCHOOL_ADMIN_KEYS = new Set(["dashboard", "teachers", "subjects", "subscription"]);
@@ -150,6 +153,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "quizHistory", href: "/student/history",        icon: History },
     { labelKey: "billing",     href: "/student/billing",        icon: CreditCard },
     { labelKey: "settings",    href: "/student/settings",       icon: Settings },
+    { labelKey: "contactUs",   href: "/student/contact",        icon: MessageCircle },
     // Replays the welcome tour (student dashboard opens it on ?tour=1).
     { labelKey: "appTour",     href: "/student?tour=1",         icon: Compass },
   ].filter((item) => {
@@ -177,6 +181,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "rewards",    href: "/admin/rewards",      icon: Gift },
     { labelKey: "pricing",    href: "/admin/pricing",      icon: CreditCard },
     { labelKey: "payments",   href: "/admin/payments",     icon: Receipt },
+    { labelKey: "messages",   href: "/admin/messages",     icon: Inbox },
     { labelKey: "analytics",  href: "/admin/analytics",    icon: BarChart2 },
     { labelKey: "retention",  href: "/admin/retention",    icon: Repeat },
     { labelKey: "aiUsage",    href: "/admin/usage",        icon: Coins },
@@ -195,10 +200,11 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "analytics",  href: "/school-admin/analytics",    icon: BarChart2 },
     { labelKey: "subscription", href: "/school-admin/subscription", icon: CreditCard },
     { labelKey: "settings",   href: "/school-admin/settings",     icon: Settings },
+    { labelKey: "contactUs",  href: "/school-admin/contact",      icon: MessageCircle },
   ].filter(
     // An elementary school has no students on the school side, so its admin
     // manages teachers, its subject list and the subscription only.
-    (item) => ent.schoolLevel !== "ELEMENTARY" || ELEMENTARY_SCHOOL_ADMIN_KEYS.has(item.labelKey),
+    (item) => ent.schoolLevel !== "ELEMENTARY" || ELEMENTARY_SCHOOL_ADMIN_KEYS.has(item.labelKey) || item.labelKey === "contactUs",
   );
 
   const teacherNavItems: NavItem[] = [
@@ -210,6 +216,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "findPair",      href: "/teacher/games/find-pair", icon: Puzzle },
     { labelKey: "teacherCreate", href: "/teacher/games/create", icon: PencilRuler },
     { labelKey: "randomPicker",  href: "/teacher/games/picker", icon: Shuffle },
+    { labelKey: "contactUs",     href: "/teacher/contact",      icon: MessageCircle },
   ];
 
   // A game's nav item, keyed for its colour, its href and its free/Pro status.
@@ -225,6 +232,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     ...playGames,
     { labelKey: "billing",   href: "/play/billing",  icon: CreditCard },
     { labelKey: "settings",  href: "/play/settings", icon: Settings },
+    { labelKey: "contactUs", href: "/play/contact",  icon: MessageCircle },
   ].filter((item) => item.labelKey !== "billing" || (ent.pricingEnabled && ent.isIndependent));
   // Paid games show a Pro lock for a free account (the page offers the upgrade).
   const playLockedKeys = new Set(
@@ -242,6 +250,7 @@ export function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }
     { labelKey: "grapher",    href: "/secondary-teacher/grapher",    icon: LineChart },
     { labelKey: "geometry",   href: "/secondary-teacher/geometry",   icon: Boxes },
     { labelKey: "profile",    href: "/secondary-teacher/profile",    icon: User },
+    { labelKey: "contactUs",  href: "/secondary-teacher/contact",    icon: MessageCircle },
   ];
 
   let navItems: NavItem[] = studentNavItems;
