@@ -119,6 +119,7 @@ export async function POST(
         activityId,
         mode: "SOLO",
         totalQuestions: questions.length,
+        questionIds: questions.map((q) => q.id),
       },
       select: { id: true },
     }));

@@ -788,6 +788,12 @@ model Quiz {
 
   isDailyChallenge Boolean @default(false)
 
+  // The questions this quiz was served, set when it is created. Submit grades
+  // only these (a client can't add other questions or skip some to raise the
+  // score). Empty on quizzes made before this existed (and activity quizzes,
+  // whose questions are the activity's pinned ones).
+  questionIds String[] @default([])
+
   gameRoomId String?
   gameRoom   GameRoom? @relation(fields: [gameRoomId], references: [id])
 

@@ -3,8 +3,9 @@
 /**
  * TokenRefreshProvider
  *
- * Silently rotates the 15-minute access token before it expires so the user
- * stays signed in without interruption (SRS §4.1.2).
+ * Silently rotates the session token (a new session id) every 13 minutes while
+ * the app is open (SRS §4.1.2). The cookie itself lasts the full 30-day rolling
+ * session, so leaving the app never signs the user out.
  *
  * Robustness (prevents the "app kicks me to /login mid-work" problem):
  *  • Cross-tab lock (Web Locks API) so concurrent tabs don't rotate — and thus
@@ -17,7 +18,7 @@
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 
-// Refresh 2 minutes before the 15-min access token expires
+// Rotate the session id every 13 minutes while the app is open
 const REFRESH_INTERVAL_MS = 13 * 60 * 1000;
 
 export function TokenRefreshProvider({

@@ -67,36 +67,50 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const reviewerExists = await db.user.findUnique({ where: { id: user.id }, select: { id: true } });
   const reviewedById = reviewerExists ? user.id : null;
 
+  // Claim the request while it is still PENDING, in one statement, so two
+  // admins (or a double click) can't both approve it and activate twice.
+  const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 300) : null;
+  const claimed = await db.paymentRequest.updateMany({
+    where: { id, status: "PENDING" },
+    data:
+      action === "reject"
+        ? { status: "REJECTED", adminNote: note, reviewedById, reviewedAt: new Date() }
+        : { status: "APPROVED", reviewedById, reviewedAt: new Date() },
+  });
+  if (claimed.count === 0) {
+    return NextResponse.json({ error: "This payment was already reviewed." }, { status: 409 });
+  }
+
   if (action === "reject") {
-    const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 300) : null;
-    const updated = await db.paymentRequest.update({
+    const updated = await db.paymentRequest.findUniqueOrThrow({
       where: { id },
-      data: { status: "REJECTED", adminNote: note, reviewedById, reviewedAt: new Date() },
       select: { id: true, status: true, adminNote: true, reviewedAt: true },
     });
     notifyPaymentRejected(request.studentId, request.plan.name, note).catch(console.error);
     return NextResponse.json({ request: updated });
   }
 
-  // approve → activate the subscription for the paid term, then mark approved.
-  const subscription = await activateSubscription({
-    studentId: request.studentId,
-    planId: request.planId,
-    billingInterval: request.billingInterval,
-    amount: request.amount,
-    currency: request.currency,
-    trialDays: request.plan.trialDays,
-    createdById: reviewedById,
-  });
+  // approve → activate the subscription for the paid term (a payment buys the
+  // term, never the plan's trial). If that fails, put the request back.
+  let subscription;
+  try {
+    subscription = await activateSubscription({
+      studentId: request.studentId,
+      planId: request.planId,
+      billingInterval: request.billingInterval,
+      amount: request.amount,
+      currency: request.currency,
+      trialDays: 0,
+      createdById: reviewedById,
+    });
+  } catch (err) {
+    await db.paymentRequest.update({ where: { id }, data: { status: "PENDING", reviewedById: null, reviewedAt: null } });
+    throw err;
+  }
 
   const updated = await db.paymentRequest.update({
     where: { id },
-    data: {
-      status: "APPROVED",
-      reviewedById,
-      reviewedAt: new Date(),
-      subscriptionId: subscription.id,
-    },
+    data: { subscriptionId: subscription.id },
     select: { id: true, status: true, reviewedAt: true, subscriptionId: true },
   });
 

@@ -40,11 +40,12 @@ export async function activateSubscription(args: ActivateArgs) {
   const startDate = new Date();
   let status: "ACTIVE" | "TRIAL" = "ACTIVE";
   let endDate: Date | null = null;
-  if (trialDays > 0) {
+  // Money paid always buys the full term; a trial applies only to an unpaid start.
+  if (amount > 0) {
+    endDate = computeCurrentPeriodEnd(startDate, billingInterval);
+  } else if (trialDays > 0) {
     status = "TRIAL";
     endDate = new Date(startDate.getTime() + trialDays * 24 * 60 * 60 * 1000);
-  } else if (amount > 0) {
-    endDate = computeCurrentPeriodEnd(startDate, billingInterval);
   }
 
   const planInclude = { plan: { include: { tiers: { orderBy: { minStudents: "asc" as const } } } } };

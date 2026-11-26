@@ -74,6 +74,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // The env super admin has no users row, so recording it as the approver
+  // would break the foreign key; record nobody then.
+  const approvedById = (await db.user.findUnique({ where: { id: user.id }, select: { id: true } })) ? user.id : null;
+
   if (action === "approve") {
     if (redemption.status !== "PENDING") {
       return NextResponse.json(
@@ -86,7 +90,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       where: { id },
       data: {
         status: "APPROVED",
-        approvedById: user.id,
+        approvedById,
       },
       include: {
         student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true, grade: true, totalPoints: true } },
@@ -109,39 +113,44 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const [updated] = await db.$transaction([
-      db.redemption.update({
-        where: { id },
-        data: {
-          status: "DENIED",
-          approvedById: user.id,
-        },
-        include: {
-          student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true, grade: true, totalPoints: true } },
-          reward: { select: { id: true, name: true, tier: true, pointsCost: true } },
-          approvedBy: { select: { name: true } },
-        },
-      }),
-      db.user.update({
+    // Claim it while still PENDING inside the transaction, so a double click
+    // (or two admins) can't refund the points twice.
+    const updated = await db.$transaction(async (tx) => {
+      const claimed = await tx.redemption.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: "DENIED", approvedById },
+      });
+      if (claimed.count === 0) return null;
+      await tx.user.update({
         where: { id: redemption.studentId },
-        data: {
-          totalPoints: { increment: redemption.reward.pointsCost },
-        },
-      }),
+        // Give back what redeeming took: the spendable (redeemable) balance.
+        data: { redeemablePoints: { increment: redemption.reward.pointsCost } },
+      });
       // Restore inventory since the reward was never fulfilled
-      db.reward.update({
+      await tx.reward.update({
         where: { id: redemption.rewardId },
         data: { inventoryCount: { increment: 1 } },
-      }),
-      db.pointLedger.create({
+      });
+      await tx.pointLedger.create({
         data: {
           actionType: "REDEMPTION_REFUND",
           points: redemption.reward.pointsCost,
           description: `Refund for denied redemption of "${redemption.reward.name}"`,
           userId: redemption.studentId,
         },
-      }),
-    ]);
+      });
+      return tx.redemption.findUniqueOrThrow({
+        where: { id },
+        include: {
+          student: { select: { id: true, name: true, phoneNumber: true, email: true, username: true, grade: true, totalPoints: true } },
+          reward: { select: { id: true, name: true, tier: true, pointsCost: true } },
+          approvedBy: { select: { name: true } },
+        },
+      });
+    });
+    if (!updated) {
+      return NextResponse.json({ error: "This redemption was already reviewed." }, { status: 409 });
+    }
 
     // Notify student of denial (fire-and-forget)
     createNotification(

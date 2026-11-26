@@ -24,9 +24,10 @@ export async function GET() {
   const denied = await featureDenial(user, "rewards");
   if (denied) return denied;
 
-  // Get all rewards for the user's school, ordered by pointsCost ASC
-  // If user has no school, return all rewards (fallback for dev/testing)
-  const rewardsWhere = user.schoolId ? { schoolId: user.schoolId } : {};
+  // Rewards belong to a school (Reward.schoolId is required): a student sees
+  // only their own school's. A student without a school has none — never
+  // every school's.
+  const rewardsWhere = { schoolId: user.schoolId ?? "__no_school__" };
 
   const rewards = await db.reward.findMany({
     where: rewardsWhere,

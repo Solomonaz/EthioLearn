@@ -13,23 +13,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decode, encode } from "next-auth/jwt";
 import { rotateSession } from "@/lib/session-store";
+import { validateCsrfOrigin } from "@/lib/csrf";
 
 const SECRET = process.env.NEXTAUTH_SECRET!;
-const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
+// The rotated cookie keeps the full rolling session length (auth.ts
+// session.maxAge, lib/session-store SESSION_TTL_MS). It used to be 15 minutes,
+// which signed out anyone who left the app for a quarter of an hour after a
+// rotation. Rotation still swaps the session id every few minutes while the
+// app is open, and revoking a session still ends it at once.
+const TOKEN_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 
 export async function POST(req: NextRequest) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
   // ── 1. Read & decode the current JWT cookie ──────────────────────────────
-  const isSecure = process.env.NODE_ENV === "production";
-  const cookieName = isSecure
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token";
+  // Whichever name the browser holds (https uses the __Secure- prefix).
+  const secureName = "__Secure-next-auth.session-token";
+  const plainName = "next-auth.session-token";
+  const cookieName = req.cookies.get(secureName) ? secureName : plainName;
+  const isSecure = cookieName === secureName;
 
   const sessionToken = req.cookies.get(cookieName)?.value;
   if (!sessionToken) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const token = await decode({ token: sessionToken, secret: SECRET });
+  // An expired/tampered/old-secret cookie throws: treat it as signed out.
+  const token = await decode({ token: sessionToken, secret: SECRET }).catch(() => null);
   if (!token?.id) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
@@ -61,13 +73,13 @@ export async function POST(req: NextRequest) {
     ...token,
     sessionId: newSessionId ?? sessionId,
     iat: now,
-    exp: now + ACCESS_TOKEN_TTL,
+    exp: now + TOKEN_TTL,
   };
 
   const newJwt = await encode({
     token: newToken,
     secret: SECRET,
-    maxAge: ACCESS_TOKEN_TTL,
+    maxAge: TOKEN_TTL,
   });
 
   // ── 5. Write the refreshed cookie ────────────────────────────────────────
@@ -76,7 +88,7 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     secure: isSecure,
     sameSite: "lax",
-    maxAge: ACCESS_TOKEN_TTL,
+    maxAge: TOKEN_TTL,
     path: "/",
   });
 

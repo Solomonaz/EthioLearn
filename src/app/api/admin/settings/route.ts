@@ -16,30 +16,15 @@ export async function GET() {
     return NextResponse.json({ isSuperAdmin: true, school: null });
   }
 
-  let schoolId = user.schoolId;
-
-  // Self-healing: a school admin missing a schoolId gets attached to a school.
+  // A school admin without a school has nothing to manage here. (This used to
+  // "self-heal" by attaching them to whichever school came first — handing
+  // them someone else's school.) A super admin links them under Schools.
+  const schoolId = user.schoolId;
   if (!schoolId) {
-    const existingSchool = await db.school.findFirst();
-    if (existingSchool) {
-      schoolId = existingSchool.id;
-    } else {
-      const newSchool = await db.school.create({
-        data: {
-          name: "Default School",
-          region: "Addis Ababa",
-          city: "Addis Ababa",
-          type: "PUBLIC",
-        },
-      });
-      schoolId = newSchool.id;
-    }
-
-    // Link the school admin to the school for future requests.
-    await db.user.update({
-      where: { id: user.id },
-      data: { schoolId },
-    });
+    return NextResponse.json(
+      { error: "Your account isn't linked to a school yet. Ask the Abugida team to link it." },
+      { status: 403 },
+    );
   }
 
   const school = await db.school.findUnique({
@@ -78,13 +63,12 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  let schoolId = user.schoolId;
+  const schoolId = user.schoolId;
   if (!schoolId) {
-    const existingSchool = await db.school.findFirst();
-    if (!existingSchool) {
-      return NextResponse.json({ error: "No school exists yet. Visit Settings to create one." }, { status: 400 });
-    }
-    schoolId = existingSchool.id;
+    return NextResponse.json(
+      { error: "Your account isn't linked to a school yet. Ask the Abugida team to link it." },
+      { status: 403 },
+    );
   }
 
   if (!validateCsrfOrigin(request)) {

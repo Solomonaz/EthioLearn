@@ -21,10 +21,12 @@ export const getCurrentUser = cache(async () => {
 
   if (!sessionToken) return null;
 
+  // An expired, tampered or old-secret cookie makes decode() throw: that is
+  // "signed out" (401 / login page), never a 500.
   const token = await decode({
     token: sessionToken,
     secret: process.env.NEXTAUTH_SECRET!,
-  });
+  }).catch(() => null);
 
   if (!token?.id) return null;
 

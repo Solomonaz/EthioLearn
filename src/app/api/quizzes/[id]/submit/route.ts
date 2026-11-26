@@ -10,6 +10,7 @@ import { normalizeOption } from "@/lib/utils";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { answerKey, normalizeMathText } from "@/lib/math-notation";
 import { recordStudyActivity } from "@/lib/streak";
+import { challengeDoneToday } from "@/lib/daily-challenge";
 
 // ── Anti-gaming constants (SRS §4.9.2) ───────────────────────────────────────
 const MAX_SCORED_QUIZZES_PER_DAY = 20;
@@ -94,6 +95,32 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // ── Only this quiz's own questions, each once ────────────────────────────
+    // The questions served are recorded on the quiz (or are the activity's
+    // pinned ones). Anything else is dropped, a question answered twice counts
+    // once, and the score is out of every question served — so skipping hard
+    // ones or adding easy ones from elsewhere can't raise it. Quizzes made
+    // before questionIds existed keep the old behaviour (answers as sent).
+    let served: string[] = quiz.questionIds ?? [];
+    if (served.length === 0 && quiz.activityId) {
+      served = (
+        await db.classActivityQuestion.findMany({ where: { activityId: quiz.activityId }, select: { questionId: true } })
+      ).map((r) => r.questionId);
+    }
+    const servedSet = served.length ? new Set(served) : null;
+    const seenIds = new Set<string>();
+    answers = answers.filter((a) => {
+      if (!a || typeof a.questionId !== "string" || seenIds.has(a.questionId)) return false;
+      if (servedSet && !servedSet.has(a.questionId)) return false;
+      seenIds.add(a.questionId);
+      return true;
+    }).map((a) => ({ ...a, studentAnswer: typeof a.studentAnswer === "string" ? a.studentAnswer : String(a.studentAnswer ?? "") }));
+    if (answers.length === 0) {
+      return NextResponse.json({ error: "Answer at least one question of this quiz." }, { status: 400 });
+    }
+    // Score out of every question served (an unanswered one is wrong).
+    const scoreOutOf = servedSet ? servedSet.size : answers.length;
 
     // ── Anti-gaming: daily scored quiz cap (SRS §4.9.2) ──────────────────────
     const todayStart = new Date();
@@ -202,7 +229,7 @@ export async function POST(
     const newStreak = studied?.streakDays ?? Math.max(1, user.streakDays || 0);
 
     const correctCount = gradedAnswers.filter((a) => a.isCorrect).length;
-    const score = Math.round((correctCount / gradedAnswers.length) * 100);
+    const score = Math.round((correctCount / Math.max(scoreOutOf, gradedAnswers.length)) * 100);
 
     // ── Anti-gaming: daily cap, accuracy floor, and an un-fakeable time gate ──
     // Elapsed is measured server-side from Quiz.startedAt, so a client can't
@@ -221,7 +248,9 @@ export async function POST(
     // The Daily Challenge is the one exception. It is one curated quiz per day,
     // so it cannot be farmed by definition, and it is the reason students come
     // back daily — it scores exactly as it always has.
-    const isPractice = !quiz.isDailyChallenge;
+    // Only the first daily-challenge quiz completed today counts as one.
+    const countsAsChallenge = quiz.isDailyChallenge && !(await challengeDoneToday(user.id, quizId));
+    const isPractice = !countsAsChallenge;
 
     const pointsBlocked =
       exceedsDailyLimit || score < MIN_SCORE_FOR_POINTS || tooFast || isPractice;
@@ -387,6 +416,16 @@ export async function POST(
     const repeatCount = gradedAnswers.filter((a) => masteredBefore.has(a.questionId)).length;
     const answerPoints = weightedBaseArr.map((b) => Math.round(b * accuracyFactor));
 
+    // Claim the quiz (completedAt still null) in one statement, so two
+    // submissions racing past the check above can't both be scored.
+    const claimed = await db.quiz.updateMany({
+      where: { id: quizId, completedAt: null },
+      data: { completedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 });
+    }
+
     // Save quiz answers
     await db.quizAnswer.createMany({
       data: gradedAnswers.map((a, i) => ({
@@ -412,7 +451,7 @@ export async function POST(
 
     // If it's a Daily Challenge, award extra points only for 60%+ performance
     let challengePoints = 0;
-    if (!pointsBlocked && quiz.isDailyChallenge && correctCount >= 3) {
+    if (!pointsBlocked && countsAsChallenge && correctCount >= 3) {
       const { today: dStart, tomorrow } = (() => {
         const d = new Date();
         d.setHours(0, 0, 0, 0);

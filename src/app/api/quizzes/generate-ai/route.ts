@@ -486,8 +486,11 @@ async function runGeneration(
       data: {
         studentId: user.id,
         mode: mode as any,
-        isDailyChallenge,
+        // AI quizzes are never the daily challenge (that is a bank quiz of
+        // today's chapter, see /api/quizzes/generate).
+        isDailyChallenge: false,
         totalQuestions: allQuizQuestions.length,
+        questionIds: allQuizQuestions.map((q) => q.id),
       } as any,
     });
 

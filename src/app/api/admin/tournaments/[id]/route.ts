@@ -63,7 +63,7 @@ interface UpdateTournamentBody {
   competitionEnd?: string;
   maxPlayers?: number;
   subject?: string;
-  grade?: string;
+  grade?: string | number | null;
   difficulty?: string;
   rules?: any;
 }
@@ -151,7 +151,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   if (body.grade !== undefined) {
-    updateData.grade = body.grade?.trim() || null;
+    // Tournament.grade is a number (1-12) or empty; the form may send a string.
+    const raw = body.grade === null ? "" : String(body.grade).trim();
+    if (raw === "") updateData.grade = null;
+    else {
+      const g = Number(raw);
+      if (!Number.isInteger(g) || g < 1 || g > 12) {
+        return NextResponse.json({ error: "Grade must be a whole number from 1 to 12" }, { status: 400 });
+      }
+      updateData.grade = g;
+    }
   }
 
   if (body.difficulty !== undefined) {

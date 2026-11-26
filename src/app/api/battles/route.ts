@@ -224,7 +224,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Game already in progress" }, { status: 409 });
     }
 
-    return NextResponse.json({ room });
+    // Never send the questions: quizConfig holds every correctIndex, and the
+    // socket server is the only thing that needs them.
+    const { quizConfig, ...rest } = room;
+    const cfg = (quizConfig ?? {}) as { subject?: unknown; questions?: unknown[] };
+    return NextResponse.json({
+      room: {
+        ...rest,
+        quizConfig: { subject: cfg.subject ?? null, questionCount: Array.isArray(cfg.questions) ? cfg.questions.length : 0 },
+      },
+    });
   } catch (error) {
     console.error("Battle fetch error:", error);
     return NextResponse.json(

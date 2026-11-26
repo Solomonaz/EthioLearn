@@ -6,6 +6,7 @@ import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { bankPoolsFor } from "@/lib/quiz-selection";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { featureDenial, getEntitlements } from "@/lib/entitlements";
+import { isDailyChallengeQuiz } from "@/lib/daily-challenge";
 import { isInStudyScope } from "@/lib/grade-scope";
 
 export async function POST(request: Request) {
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
     if (isDailyChallenge) {
       const denied = await featureDenial(user, "dailyChallenge");
       if (denied) return denied;
+      // The server decides: only today's chapter, once per day. Otherwise it's practice.
+      isDailyChallenge = await isDailyChallengeQuiz(user, chapterId);
     }
 
     // Resolve Adaptive Difficulty — a plan feature; gate it.
@@ -176,6 +179,7 @@ export async function POST(request: Request) {
         mode,
         isDailyChallenge,
         totalQuestions: selected.length,
+        questionIds: selected.map((q) => q.id),
       } as any,
     });
 

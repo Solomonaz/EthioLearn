@@ -1,6 +1,6 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { challengeChapters, challengeDoneToday, DAILY_CHALLENGE_QUESTIONS, getTodayRange, subjectsOf, todaysChallenge } from "@/lib/daily-challenge";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { featureDenial } from "@/lib/entitlements";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -15,32 +15,7 @@ import { validateCsrfOrigin } from "@/lib/csrf";
  *
  * GET   → { completed } or { chapterId, chapterTitle, subject, subjects, chosenSubject }
  * PATCH { subject: string | null } → save the subject choice.
- * POST  → record today's challenge as done (bonus points).
  */
-
-function getTodayRange() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return { today, tomorrow };
-}
-
-/** The grade's chapters that have questions, with their subject. */
-async function challengeChapters(grade: number | null) {
-  return db.chapter.findMany({
-    where: {
-      questionCount: { gt: 0 },
-      textbook: { processingStatus: "COMPLETED", grade: grade ?? undefined },
-    },
-    select: { id: true, title: true, textbook: { select: { subject: true } } },
-    orderBy: { id: "asc" },
-  });
-}
-
-function subjectsOf(chapters: { textbook: { subject: string } }[]): string[] {
-  return [...new Set(chapters.map((c) => c.textbook.subject))].sort((a, b) => a.localeCompare(b));
-}
 
 export async function GET() {
   const user = await requireCompleteProfile();
@@ -63,22 +38,16 @@ export async function GET() {
   if (todayEntry) {
     return NextResponse.json({ completed: true, pointsEarned: 50 });
   }
-
-  const [chapters, me] = await Promise.all([
-    challengeChapters(user.grade ?? null),
-    db.user.findUnique({ where: { id: user.id }, select: { dailyChallengeSubject: true } }),
-  ]);
-  if (chapters.length === 0) {
-    return NextResponse.json({ completed: false, chapterId: null });
+  // Taken today without earning the bonus still uses up today's challenge.
+  if (await challengeDoneToday(user.id)) {
+    return NextResponse.json({ completed: true, pointsEarned: 0 });
   }
 
-  const subjects = subjectsOf(chapters);
-  // A saved subject that no longer has questions falls back to any subject.
-  const chosen = me?.dailyChallengeSubject && subjects.includes(me.dailyChallengeSubject) ? me.dailyChallengeSubject : null;
-  const pool = chosen ? chapters.filter((c) => c.textbook.subject === chosen) : chapters;
-  const dayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-  const hash = crypto.createHash("sha256").update(`${user.id}|${dayKey}|${chosen ?? "*"}`).digest();
-  const chapter = pool[hash.readUInt32BE(0) % pool.length];
+  const pick = await todaysChallenge(user);
+  if (!pick) {
+    return NextResponse.json({ completed: false, chapterId: null });
+  }
+  const { chapter, subjects, chosen } = pick;
 
   return NextResponse.json({
     completed: false,
@@ -87,7 +56,7 @@ export async function GET() {
     subject: chapter.textbook.subject,
     subjects,
     chosenSubject: chosen,
-    questionCount: 5,
+    questionCount: DAILY_CHALLENGE_QUESTIONS,
   });
 }
 
@@ -112,61 +81,5 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ subject });
 }
 
-export async function POST(request: Request) {
-  const user = await requireCompleteProfile();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const featureRefusal = await featureDenial(user, "dailyChallenge");
-  if (featureRefusal) return featureRefusal;
-
-  if (!validateCsrfOrigin(request)) {
-    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
-  }
-
-  const { today, tomorrow } = getTodayRange();
-
-  let body: { score?: number } = {};
-  try {
-    const text = await request.text();
-    if (text) body = JSON.parse(text);
-  } catch (e) {
-    // No body or invalid json
-  }
-  const { score }: { score?: number } = body;
-
-  if (score !== undefined && score < 60) {
-     return NextResponse.json({ message: "Quiz completed, but score too low for bonus." }, { status: 200 });
-  }
-
-  const todayEntry = await db.pointLedger.findFirst({
-    where: {
-      userId: user.id,
-      actionType: "DAILY_CHALLENGE",
-      createdAt: { gte: today, lt: tomorrow },
-    },
-  });
-
-  if (todayEntry) {
-    return NextResponse.json({ error: "Already completed today" }, { status: 400 });
-  }
-
-  await db.pointLedger.create({
-    data: {
-      userId: user.id,
-      actionType: "DAILY_CHALLENGE",
-      points: 50,
-      description: "Daily challenge completed",
-    },
-  });
-
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      totalPoints: { increment: 50 },
-      lastActiveAt: new Date(),
-    },
-  });
-
-  return NextResponse.json({ success: true, pointsEarned: 50 });
-}
+// No POST: the challenge bonus is paid by quiz submit (POST /api/quizzes/[id]/submit)
+// for a server-recognised daily-challenge quiz — never on the client's word.

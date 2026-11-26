@@ -104,6 +104,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "A school is required to create a tournament" }, { status: 400 });
   }
 
+  // A tournament records its creator (a required link to a users row). The
+  // env super admin has no row, so it can't be one — say so instead of a 500.
+  if (!(await db.user.findUnique({ where: { id: user.id }, select: { id: true } }))) {
+    return NextResponse.json(
+      { error: "Sign in with a personal admin account to create tournaments." },
+      { status: 400 },
+    );
+  }
+
   const tournament = await db.tournament.create({
     data: {
       name: name.trim(),

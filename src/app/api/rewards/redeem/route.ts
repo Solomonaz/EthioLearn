@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
     where: { id: rewardId },
   });
 
-  if (!reward) {
+  // Only a reward of the student's own school (another school's is "not found").
+  if (!reward || !user.schoolId || reward.schoolId !== user.schoolId) {
     return NextResponse.json({ error: "Reward not found" }, { status: 404 });
   }
 
@@ -98,39 +99,49 @@ export async function POST(request: NextRequest) {
   // Perform atomically: deduct redeemable points, decrement inventory, create
   // redemption, log ledger. totalPoints (leaderboard/XP) is intentionally left
   // untouched so spending prizes never lowers a student's rank or level.
-  const [updatedUser, , redemption] = await db.$transaction([
-    db.user.update({
-      where: { id: user.id },
-      data: { redeemablePoints: { decrement: reward.pointsCost } },
-      select: { redeemablePoints: true },
-    }),
-    db.reward.update({
-      where: { id: rewardId },
-      data: { inventoryCount: { decrement: 1 } },
-    }),
-    db.redemption.create({
-      data: {
-        studentId: user.id,
-        rewardId,
-        status: "PENDING",
-      },
-      select: {
-        id: true,
-        rewardId: true,
-        status: true,
-        createdAt: true,
-      },
-    }),
-    db.pointLedger.create({
-      data: {
-        userId: user.id,
-        actionType: "REWARD_REDEMPTION",
-        points: -reward.pointsCost,
-        description: `Redeemed reward: ${reward.name}`,
-        quizId: null,
-      },
-    }),
-  ]);
+  // The balance and stock are re-checked INSIDE the transaction with
+  // conditional updates, so two quick requests can't push either below zero.
+  const OUT_OF_STOCK = "OUT_OF_STOCK";
+  const NOT_ENOUGH = "NOT_ENOUGH_POINTS";
+  let updatedUser: { redeemablePoints: number };
+  let redemption: { id: string; rewardId: string; status: string; createdAt: Date };
+  try {
+    ({ updatedUser, redemption } = await db.$transaction(async (tx) => {
+      const paid = await tx.user.updateMany({
+        where: { id: user.id, redeemablePoints: { gte: reward.pointsCost } },
+        data: { redeemablePoints: { decrement: reward.pointsCost } },
+      });
+      if (paid.count === 0) throw new Error(NOT_ENOUGH);
+      const taken = await tx.reward.updateMany({
+        where: { id: rewardId, inventoryCount: { gt: 0 } },
+        data: { inventoryCount: { decrement: 1 } },
+      });
+      if (taken.count === 0) throw new Error(OUT_OF_STOCK);
+      const created = await tx.redemption.create({
+        data: { studentId: user.id, rewardId, status: "PENDING" },
+        select: { id: true, rewardId: true, status: true, createdAt: true },
+      });
+      await tx.pointLedger.create({
+        data: {
+          userId: user.id,
+          actionType: "REWARD_REDEMPTION",
+          points: -reward.pointsCost,
+          description: `Redeemed reward: ${reward.name}`,
+          quizId: null,
+        },
+      });
+      const balance = await tx.user.findUniqueOrThrow({ where: { id: user.id }, select: { redeemablePoints: true } });
+      return { updatedUser: balance, redemption: created };
+    }));
+  } catch (err) {
+    if (err instanceof Error && err.message === OUT_OF_STOCK) {
+      return NextResponse.json({ error: "This reward is currently out of stock" }, { status: 400 });
+    }
+    if (err instanceof Error && err.message === NOT_ENOUGH) {
+      return NextResponse.json({ error: "Insufficient points", required: reward.pointsCost }, { status: 400 });
+    }
+    throw err;
+  }
 
   // Notify school admins about pending redemption (fire-and-forget)
   if (reward.schoolId) {

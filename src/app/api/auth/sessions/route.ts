@@ -19,7 +19,7 @@ async function getCurrentSessionId(): Promise<string | null> {
   const token = await decode({
     token: sessionToken,
     secret: process.env.NEXTAUTH_SECRET!,
-  });
+  }).catch(() => null);
   return (token?.sessionId as string | undefined) ?? null;
 }
 
