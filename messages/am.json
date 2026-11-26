@@ -702,7 +702,7 @@
     "statusInactive": "ንቁ ያልሆነ",
     "statusSuspended": "ታግዷል",
     "statusUnverified": "ያልተረጋገጠ",
-    "statusUnverifiedHint": "ኢሜይሉ አልተረጋገጠም። ይህ መለያ በኢሜይል መግባት አይችልም፤ ካልተጠቀመበት ከ7 ቀናት በኋላ ይሰረዛል።",
+    "statusUnverifiedHint": "ኢሜይሉ አልተረጋገጠም። ተማሪው እስኪያረጋግጠው ድረስ ይህ መለያ በኢሜይል መግባት አይችልም።",
     "sortPoints": "ከፍተኛ ነጥቦች",
     "sortName": "ስም (ሀ-ፐ)",
     "sortRecent": "በቅርቡ ንቁ",

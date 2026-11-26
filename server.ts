@@ -7,7 +7,6 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { decode } from "next-auth/jwt";
 import { checkBattleAchievements } from "./src/lib/achievements";
 import { getBattleSeconds } from "./src/lib/quiz-timing";
-import { deleteStaleUnverifiedStudents } from "./src/lib/unverified-cleanup";
 import { recordStudyActivity } from "./src/lib/streak";
 import { startReminderScheduler } from "./src/lib/reminders";
 import { getEntitlements } from "./src/lib/entitlements";
@@ -810,15 +809,6 @@ app.prepare().then(() => {
 
   const PORT = process.env.PORT || 3001;
   httpServer.listen(PORT, () => { console.log(`> Ready on http://localhost:${PORT}`); });
-
-  // Remove email sign-ups that never confirmed their address (after 7 days).
-  // Runs shortly after start, then twice a day. A single app instance runs.
-  const cleanUnverified = () =>
-    deleteStaleUnverifiedStudents()
-      .then((n) => { if (n > 0) console.log(`[cleanup] Removed ${n} unconfirmed sign-up(s).`); })
-      .catch((err) => console.error("[cleanup] Unconfirmed sign-up cleanup failed:", err));
-  setTimeout(cleanUnverified, 60_000);
-  setInterval(cleanUnverified, 12 * 60 * 60 * 1000);
 
   // Study reminders (Telegram + web push) and nightly streak settling.
   startReminderScheduler();
