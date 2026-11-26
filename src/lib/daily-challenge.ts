@@ -17,8 +17,8 @@ export const DAILY_CHALLENGE_QUESTIONS = 5;
  * streak and reminders use (the server runs in UTC, where midnight is 3 AM
  * in Addis).
  */
-export function getTodayRange() {
-  const key = addisDayKey();
+export function getTodayRange(now: Date = new Date()) {
+  const key = addisDayKey(now);
   return { today: addisDayStart(key), tomorrow: addisDayStart(addDays(key, 1)), key };
 }
 
@@ -41,24 +41,37 @@ export function subjectsOf(chapters: { textbook: { subject: string } }[]): strin
   return [...new Set(chapters.map((c) => c.textbook.subject))].sort((a, b) => a.localeCompare(b));
 }
 
+/** The student's chosen challenge subjects (new list, else the old single choice). */
+export function chosenSubjectsOf(me: { dailyChallengeSubjects?: string[] | null; dailyChallengeSubject?: string | null } | null): string[] {
+  if (me?.dailyChallengeSubjects?.length) return me.dailyChallengeSubjects;
+  return me?.dailyChallengeSubject ? [me.dailyChallengeSubject] : [];
+}
+
 /**
- * Today's challenge chapter for this student (stable for the day: a hash of
- * the student, the day and their chosen subject), or null when their grade has
- * no chapters with questions.
+ * Today's challenge chapter for this student, or null when their grade has no
+ * chapters with questions. Stable for the day (a hash of the student and the
+ * day): first one of their chosen subjects, so every subject gets its turn
+ * whatever its chapter count, then a chapter of it.
  */
-export async function todaysChallenge(user: { id: string; role: string; schoolId?: string | null; grade: number | null }) {
-  const { key: dayKey } = getTodayRange();
+export async function todaysChallenge(
+  user: { id: string; role: string; schoolId?: string | null; grade: number | null },
+  now: Date = new Date(),
+) {
+  const { key: dayKey } = getTodayRange(now);
   const [chapters, me] = await Promise.all([
     challengeChapters(user),
-    db.user.findUnique({ where: { id: user.id }, select: { dailyChallengeSubject: true } }),
+    db.user.findUnique({ where: { id: user.id }, select: { dailyChallengeSubject: true, dailyChallengeSubjects: true } }),
   ]);
   if (chapters.length === 0) return null;
   const subjects = subjectsOf(chapters);
-  // A saved subject that no longer has questions falls back to any subject.
-  const chosen = me?.dailyChallengeSubject && subjects.includes(me.dailyChallengeSubject) ? me.dailyChallengeSubject : null;
-  const pool = chosen ? chapters.filter((c) => c.textbook.subject === chosen) : chapters;
-  const hash = crypto.createHash("sha256").update(`${user.id}|${dayKey}|${chosen ?? "*"}`).digest();
-  return { chapter: pool[hash.readUInt32BE(0) % pool.length], subjects, chosen };
+  // Chosen subjects that no longer have questions are skipped; none left =
+  // any subject.
+  const chosen = chosenSubjectsOf(me).filter((s) => subjects.includes(s));
+  const candidates = chosen.length ? chosen : subjects;
+  const hash = crypto.createHash("sha256").update(`${user.id}|${dayKey}|${chosen.join(",") || "*"}`).digest();
+  const subject = candidates[hash.readUInt32BE(0) % candidates.length];
+  const pool = chapters.filter((c) => c.textbook.subject === subject);
+  return { chapter: pool[hash.readUInt32BE(4) % pool.length], subjects, chosen };
 }
 
 /** Whether today's challenge already counted (a completed daily-challenge quiz today). */

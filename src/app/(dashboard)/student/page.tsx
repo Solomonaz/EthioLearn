@@ -28,6 +28,7 @@ import { useEntitlements } from "@/hooks/use-entitlements";
 import { TrialBanner, ProFeaturesCard } from "@/components/student/pro-promo";
 import { StreakCard, type StreakInfo, type ReminderInfo } from "@/components/student/streak-card";
 import { CoachTour } from "@/components/student/coach-tour";
+import { ChallengeSubjects } from "@/components/student/challenge-subjects";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -39,8 +40,8 @@ interface ChallengeData {
   subject?: string;
   /** Subjects the student can choose for the challenge (their grade's). */
   subjects?: string[];
-  /** The subject they chose; null = any subject. */
-  chosenSubject?: string | null;
+  /** The subjects they chose (the challenge rotates among them); [] = any. */
+  chosenSubjects?: string[];
   questionCount?: number;
   pointsEarned?: number;
 }
@@ -168,14 +169,16 @@ export default function StudentDashboardPage() {
     }
   }
 
-  /** The student picks the challenge subject (saved on their account). */
-  async function chooseChallengeSubject(subject: string | null) {
+  /** The student picks their challenge subjects (saved on their account). */
+  async function chooseChallengeSubjects(subjects: string[]) {
     setChallengeSaving(true);
+    // Show the choice at once; the refetch below brings today's new chapter.
+    setChallenge((c) => (c ? { ...c, chosenSubjects: subjects } : c));
     try {
       const res = await fetch("/api/students/me/daily-challenge", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject }),
+        body: JSON.stringify({ subjects }),
       });
       if (res.ok) await fetchChallenge();
     } finally {
@@ -292,6 +295,12 @@ export default function StudentDashboardPage() {
               <p className="mt-1 text-sm text-text-secondary">
                 {t("challengeBonus")}
               </p>
+              <ChallengeSubjects
+                subjects={challenge.subjects ?? []}
+                chosen={challenge.chosenSubjects ?? []}
+                saving={challengeSaving}
+                onChange={chooseChallengeSubjects}
+              />
             </CardContent>
           </Card>
         ) : (
@@ -303,25 +312,12 @@ export default function StudentDashboardPage() {
               <p className="mt-1 text-sm text-text-secondary">
                 {t("challengeDetails", { subject: challenge.subject ?? "" })}
               </p>
-              {challenge.subjects && challenge.subjects.length > 1 && (
-                <label className="mt-3 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-                  <span className="font-medium">{t("challengeSubject")}</span>
-                  <select
-                    value={challenge.chosenSubject ?? ""}
-                    onChange={(e) => chooseChallengeSubject(e.target.value || null)}
-                    disabled={challengeSaving}
-                    className="min-w-0 max-w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
-                    data-testid="challenge-subject"
-                  >
-                    <option value="">{t("challengeAnySubject")}</option>
-                    {challenge.subjects.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <ChallengeSubjects
+                subjects={challenge.subjects ?? []}
+                chosen={challenge.chosenSubjects ?? []}
+                saving={challengeSaving}
+                onChange={chooseChallengeSubjects}
+              />
               <div className="mt-3">
                 <Link
                   href={`/student/quiz?challenge=true&chapterId=${challenge.chapterId}&count=5`}

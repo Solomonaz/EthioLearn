@@ -210,9 +210,13 @@ model User {
   // above the quality threshold — protects the prize economy from point farming.
   redeemablePoints Int       @default(0)
   streakDays       Int       @default(0)
-  /// The subject the student chose for the daily challenge (a textbook
-  /// subject, e.g. "Physics"). Null = any subject for their grade.
+  /// Old single choice for the daily challenge (kept for accounts that set it
+  /// before dailyChallengeSubjects existed; read as a one-subject list).
   dailyChallengeSubject String?
+  /// The subjects the student studies, chosen for the daily challenge
+  /// (textbook subjects, e.g. ["Physics", "Chemistry"]) — so a natural-science
+  /// student never gets History. Empty = any subject for their grade.
+  dailyChallengeSubjects String[] @default([])
   // ── Study habit (lib/streak.ts) ──
   /// Last Addis Ababa calendar day ("YYYY-MM-DD") with real study activity —
   /// the streak's anchor. Null on accounts that predate it (lastActiveAt is the
