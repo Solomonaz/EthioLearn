@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isHttpUrl } from "@/lib/safe-url";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -131,7 +132,10 @@ export async function PATCH(
     if (videoUrl !== null && typeof videoUrl !== "string") {
       return NextResponse.json({ error: "videoUrl must be a string or null" }, { status: 400 });
     }
-    updateData.videoUrl = videoUrl ?? null;
+    if (videoUrl && !isHttpUrl(videoUrl)) {
+      return NextResponse.json({ error: "The video link must start with http:// or https://" }, { status: 400 });
+    }
+    updateData.videoUrl = videoUrl || null;
   }
 
   if (type !== undefined) {

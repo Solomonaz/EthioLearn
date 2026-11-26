@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { streakStateOf, viewStreak } from "@/lib/streak";
+import { addisDayKey } from "@/lib/study-time";
 import { GRADE_LOCKED_MESSAGE, isElementaryGrade, isSecondaryGrade } from "@/lib/teacher-band";
 import { ACHIEVEMENTS } from "@/lib/achievements";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -64,67 +66,12 @@ export async function GET() {
   const totalCorrect = quizzes.reduce((sum, q) => sum + q.correctAnswers, 0);
   const totalQuestions = quizzes.reduce((sum, q) => sum + q.totalQuestions, 0);
 
-  // ── Streak calculation ─────────────────────────────────────────────────────
-
-  const quizDates = quizzes
-    .filter((q) => q.completedAt !== null)
-    .map((q) => q.completedAt!.toISOString().split("T")[0])
-    .filter((d, i, arr) => arr.indexOf(d) === i)
-    .sort()
-    .reverse();
-
-  const today = new Date().toISOString().split("T")[0];
-
-  // Current streak — count consecutive days backwards from today (or yesterday)
-  let currentStreak = 0;
-  {
-    const msPerDay = 86400000;
-    const todayMs = new Date(today).getTime();
-
-    // Allow streak to start from today or yesterday
-    const startOffset =
-      quizDates[0] === today
-        ? 0
-        : quizDates[0] ===
-            new Date(todayMs - msPerDay).toISOString().split("T")[0]
-          ? 1
-          : null;
-
-    if (startOffset !== null) {
-      for (let i = 0; i < quizDates.length; i++) {
-        const expected = new Date(todayMs - (i + startOffset) * msPerDay)
-          .toISOString()
-          .split("T")[0];
-        if (quizDates[i] === expected) {
-          currentStreak++;
-        } else {
-          break;
-        }
-      }
-      if (startOffset === 1 && currentStreak > 0) {
-        // Streak started yesterday, still valid
-      }
-    }
-  }
-
-  // Longest streak — scan all unique quiz dates
-  let longestStreak = 0;
-  {
-    const sorted = [...quizDates].sort();
-    const msPerDay = 86400000;
-    let run = sorted.length > 0 ? 1 : 0;
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = new Date(sorted[i - 1]).getTime();
-      const curr = new Date(sorted[i]).getTime();
-      if (curr - prev === msPerDay) {
-        run++;
-      } else {
-        if (run > longestStreak) longestStreak = run;
-        run = 1;
-      }
-    }
-    if (run > longestStreak) longestStreak = run;
-  }
+  // ── Streak ──────────────────────────────────────────────────────────────
+  // The app's one streak (lib/streak: Addis Ababa days, with freezes) — not a
+  // second count from quiz dates in UTC, which disagreed with the dashboard.
+  const streak = viewStreak(streakStateOf(user), addisDayKey());
+  const currentStreak = streak.days;
+  const longestStreak = streak.longest;
 
   const joinedDaysAgo = Math.floor(
     (Date.now() - user.createdAt.getTime()) / 86400000

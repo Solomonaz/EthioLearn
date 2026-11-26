@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { readableTextbookWhere } from "@/lib/library-access";
 import { normalizeOption, generateRoomCode } from "@/lib/utils";
 import { featureDenial } from "@/lib/entitlements";
 
 // POST /api/battles — Create a battle room
 export async function POST(request: Request) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,7 +47,8 @@ export async function POST(request: Request) {
         subject: { equals: subject, mode: "insensitive" },
         grade,
         processingStatus: "COMPLETED",
-        approvalStatus: "APPROVED",
+        // Approved books from the national library or the student's own school.
+        ...readableTextbookWhere(user),
       },
       include: { chapters: { select: { id: true } } },
     });

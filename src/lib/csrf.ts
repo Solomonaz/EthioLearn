@@ -11,8 +11,9 @@ import { NextRequest } from "next/server";
 export function validateCsrfOrigin(request: Request | NextRequest): boolean {
   const appUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, "");
 
-  // If NEXTAUTH_URL is not configured, skip check (avoids breaking local dev)
-  if (!appUrl) return true;
+  // Without NEXTAUTH_URL there is nothing to compare with: allowed in local
+  // dev, refused in production (fail closed rather than skip the check).
+  if (!appUrl) return process.env.NODE_ENV !== "production";
 
   let appHost: string;
   try {

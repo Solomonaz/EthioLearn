@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
 import { db } from "@/lib/db";
 
 export async function POST(req: Request) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

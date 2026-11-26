@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isSafeAvatar } from "@/lib/safe-url";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
@@ -146,6 +147,11 @@ export async function PATCH(req: Request) {
   }
 
   // Build update data — only include provided fields
+  // A preset, a site path or an http(s) address — never javascript:/data:.
+  if (avatarUrl !== undefined && avatarUrl !== null && avatarUrl !== "" && !isSafeAvatar(avatarUrl)) {
+    return NextResponse.json({ error: "Invalid avatar" }, { status: 400 });
+  }
+
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name.trim();
   if (email !== undefined && (normalizedEmail || null) !== user.email) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
@@ -7,9 +8,13 @@ import { bankPoolsFor } from "@/lib/quiz-selection";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { featureDenial, getEntitlements } from "@/lib/entitlements";
 import { isDailyChallengeQuiz } from "@/lib/daily-challenge";
+import { canStudyFrom } from "@/lib/library-access";
 import { isInStudyScope } from "@/lib/grade-scope";
 
 export async function POST(request: Request) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,6 +38,12 @@ export async function POST(request: Request) {
         { error: "Chapter ID is required" },
         { status: 400 }
       );
+    }
+
+    // Only books this student may study: approved, national library or their
+    // own school, within their study grades.
+    if (!(await canStudyFrom(user, { chapterId, textbookId }))) {
+      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
     }
 
     if (isDailyChallenge) {

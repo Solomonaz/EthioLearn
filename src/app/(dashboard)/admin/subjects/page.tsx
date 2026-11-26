@@ -205,6 +205,8 @@ export default function AdminSubjectsPage() {
                       className="flex items-center justify-between px-6 py-4"
                     >
                       <span className="font-medium text-text-primary">{subject.name}</span>
+                      {/* Shared by every school: only the super admin removes one. */}
+                      {isSuperAdmin && (
                       <button
                         onClick={() => handleDelete(subject.id)}
                         disabled={deletingId === subject.id}
@@ -216,6 +218,7 @@ export default function AdminSubjectsPage() {
                           <Trash2 className="h-4 w-4" />
                         )}
                       </button>
+                      )}
                     </div>
                   ))}
                 </div>

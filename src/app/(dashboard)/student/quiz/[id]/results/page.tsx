@@ -27,6 +27,7 @@ import { useQuizStore } from "@/stores/quiz-store";
 import { MathText } from "@/components/ui/math-text";
 import { WhyWrong } from "@/components/student/why-wrong";
 import { GuideSays } from "@/components/student/guide-mascot";
+import { isHttpUrl } from "@/lib/safe-url";
 
 interface AnswerResultOption {
   label: string;
@@ -396,7 +397,7 @@ export default function QuizResultsPage() {
                   )}
 
                   {/* Video Explanation */}
-                  {a.videoUrl && (() => {
+                  {a.videoUrl && isHttpUrl(a.videoUrl) && (() => {
                     const embedUrl = getYouTubeEmbedUrl(a.videoUrl);
                     return embedUrl ? (
                       <div className="mt-3">

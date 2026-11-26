@@ -3,6 +3,7 @@
  * DELETE /api/auth/sessions — Revoke ALL sessions except the current one.
  */
 import { NextResponse } from "next/server";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { getCurrentUser } from "@/lib/get-session";
 import { getUserSessions, revokeSession, validateSession } from "@/lib/session-store";
 import { decode } from "next-auth/jwt";
@@ -45,7 +46,10 @@ export async function GET() {
 }
 
 // ── DELETE — revoke all OTHER sessions ──────────────────────────────────────
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  if (!validateCsrfOrigin(req)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

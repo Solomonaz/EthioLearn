@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { validateCsrfOrigin } from "@/lib/csrf";
-import { subjectLevelFor } from "@/lib/subject";
 
 export async function DELETE(
   req: NextRequest,
@@ -11,8 +10,13 @@ export async function DELETE(
   try {
     const { id } = await params;
     const user = await getCurrentUser();
-    if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "SCHOOL_ADMIN")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    // Subjects are one shared list per level (Subject has no school), so
+    // deleting one removes it for every school at that level: super admin only.
+    if (!user || user.role !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        { error: "Subjects are shared by every school. Ask the Abugida team to remove one." },
+        { status: 403 },
+      );
     }
 
     if (!validateCsrfOrigin(req)) {
@@ -22,7 +26,7 @@ export async function DELETE(
     // A school admin may only remove subjects from their own level's list —
     // an elementary school must not be able to delete a secondary subject.
     const subject = await db.subject.findUnique({ where: { id }, select: { level: true } });
-    if (!subject || (user.role === "SCHOOL_ADMIN" && subject.level !== subjectLevelFor(user))) {
+    if (!subject) {
       return NextResponse.json({ error: "Subject not found" }, { status: 404 });
     }
 

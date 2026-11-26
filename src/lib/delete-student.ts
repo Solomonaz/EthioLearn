@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { deleteStoredFile } from "./uploads";
 
 /**
  * Permanently delete STUDENT accounts and everything they own, in one
@@ -10,7 +11,11 @@ export async function deleteStudents(ids: string[]): Promise<number> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return 0;
 
-  return db.$transaction(async (tx) => {
+  // Homework files on disk: their rows cascade with the user, so note the
+  // paths first and remove the files once the accounts are really gone.
+  const files = await db.submissionFile.findMany({ where: { studentId: { in: unique } }, select: { storedPath: true } });
+
+  const count = await db.$transaction(async (tx) => {
     const found = await tx.user.count({ where: { id: { in: unique }, role: "STUDENT" } });
     if (found !== unique.length) throw new Error("Only student accounts can be deleted.");
 
@@ -42,4 +47,8 @@ export async function deleteStudents(ids: string[]): Promise<number> {
     if (res.count !== unique.length) throw new Error("Could not delete every account — nothing was deleted.");
     return res.count;
   });
+
+  // Best effort: a file that is already gone is fine.
+  await Promise.all(files.map((f) => deleteStoredFile(f.storedPath)));
+  return count;
 }

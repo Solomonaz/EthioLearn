@@ -239,6 +239,11 @@ export async function GET(req: NextRequest) {
   const daysBack = getDaysBack(period);
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
 
+  // A school admin with no school linked has no data to see (an empty filter
+  // here would mean every school's numbers).
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
+    return NextResponse.json({ error: "Your account isn't linked to a school yet." }, { status: 403 });
+  }
   const schoolId = user.schoolId ?? undefined;
   const studentFilter = schoolId
     ? { schoolId, role: "STUDENT" as const }

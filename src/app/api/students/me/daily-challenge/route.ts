@@ -73,7 +73,7 @@ export async function PATCH(request: Request) {
   if (subject !== null && (typeof subject !== "string" || subject.length > 100)) {
     return NextResponse.json({ error: "Choose a subject." }, { status: 400 });
   }
-  if (subject !== null && !subjectsOf(await challengeChapters(user.grade ?? null)).includes(subject)) {
+  if (subject !== null && !subjectsOf(await challengeChapters(user)).includes(subject)) {
     return NextResponse.json({ error: "That subject has no challenge questions for your grade." }, { status: 400 });
   }
   if (user.id === "env_super_admin") return NextResponse.json({ subject });

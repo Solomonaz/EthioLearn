@@ -9,7 +9,9 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const unreadOnly = searchParams.get("unreadOnly") === "true";
-  const limit = parseInt(searchParams.get("limit") || "20");
+  // 1-100; anything else (abc, -5, 1e9) falls back to 20.
+  const requested = parseInt(searchParams.get("limit") || "20", 10);
+  const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 100) : 20;
 
   const [stored, storedUnread] = await Promise.all([
     db.notification.findMany({

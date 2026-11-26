@@ -324,12 +324,15 @@ export const authOptions: NextAuthOptions = {
             (profile as any).id ??
             account.providerAccountId;
 
-          await resolveSocialUser(
+          const dbUser = await resolveSocialUser(
             account.provider as "google" | "facebook",
             String(providerId),
             profile.email,
             profile.name,
           );
+          // A deactivated or suspended account can't sign in this way either
+          // (the password sign-in already refuses them) → ?error=AccessDenied.
+          if (!dbUser.isActive || dbUser.suspendedAt) return false;
         } catch {
           return false;
         }
@@ -342,10 +345,14 @@ export const authOptions: NextAuthOptions = {
       // ── Step 1: Fresh sign-in ──────────────────────────────────────────────
       if (user) {
         if (account?.provider === "google" || account?.provider === "facebook") {
-          // Look up the DB user we created/found in signIn callback
-          const dbUser = await db.user.findUnique({
-            where: { email: user.email!.trim().toLowerCase() },
-          });
+          // Look up the DB user we created/found in signIn callback: by the
+          // provider's account id (always there), else by email (a Facebook
+          // profile may have none — `user.email!` used to throw here).
+          const idField = account.provider === "google" ? "googleId" : "facebookId";
+          const email = user.email?.trim().toLowerCase();
+          const dbUser =
+            (await db.user.findFirst({ where: { [idField]: account.providerAccountId } as any })) ??
+            (email ? await db.user.findUnique({ where: { email } }) : null);
           if (dbUser) {
             token.id           = dbUser.id;
             token.role         = dbUser.role;

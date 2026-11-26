@@ -10,7 +10,7 @@ import { normalizeOption } from "@/lib/utils";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { answerKey, normalizeMathText } from "@/lib/math-notation";
 import { recordStudyActivity } from "@/lib/streak";
-import { challengeDoneToday } from "@/lib/daily-challenge";
+import { challengeDoneToday, getTodayRange } from "@/lib/daily-challenge";
 
 // ── Anti-gaming constants (SRS §4.9.2) ───────────────────────────────────────
 const MAX_SCORED_QUIZZES_PER_DAY = 20;
@@ -123,10 +123,8 @@ export async function POST(
     const scoreOutOf = servedSet ? servedSet.size : answers.length;
 
     // ── Anti-gaming: daily scored quiz cap (SRS §4.9.2) ──────────────────────
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    // Days are Addis Ababa days, like the streak and the daily challenge.
+    const { today: todayStart, tomorrow: tomorrowStart } = getTodayRange();
 
     const todayCompletedCount = await db.quiz.count({
       where: {
@@ -452,13 +450,7 @@ export async function POST(
     // If it's a Daily Challenge, award extra points only for 60%+ performance
     let challengePoints = 0;
     if (!pointsBlocked && countsAsChallenge && correctCount >= 3) {
-      const { today: dStart, tomorrow } = (() => {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        const next = new Date(d);
-        next.setDate(next.getDate() + 1);
-        return { today: d, tomorrow: next };
-      })();
+      const { today: dStart, tomorrow } = getTodayRange();
 
       const existingDone = await db.pointLedger.findFirst({
         where: {

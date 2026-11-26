@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { readableTextbookWhere } from "@/lib/library-access";
 
 /**
  * GET /api/battles/options
@@ -24,7 +25,8 @@ export async function GET() {
   }
 
   const textbooks = await db.textbook.findMany({
-    where: { grade, processingStatus: "COMPLETED", approvalStatus: "APPROVED" },
+    // Approved books from the national library or the student's own school.
+    where: { grade, processingStatus: "COMPLETED", ...readableTextbookWhere(user) },
     select: { subject: true, chapters: { select: { id: true } } },
   });
 

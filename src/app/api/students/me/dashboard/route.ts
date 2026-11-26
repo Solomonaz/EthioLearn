@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireCompleteProfile } from "@/lib/get-session";
+import { readableTextbookWhere } from "@/lib/library-access";
 import { getDailyMessage } from "@/lib/motivational-messages";
 import { getStudyScope } from "@/lib/grade-scope";
 import { recentStudyCalendar, streakStateOf, viewStreak, FREEZE_EVERY, MAX_FREEZES } from "@/lib/streak";
@@ -54,7 +55,8 @@ export async function GET() {
       // 4. Available subjects
       db.textbook.findMany({
         where: {
-          approvalStatus: "APPROVED",
+          // Approved books from the national library or the student's own school.
+          ...readableTextbookWhere(user),
           ...(studyScope.length > 0 ? { grade: { in: studyScope } } : {}),
         },
         select: {

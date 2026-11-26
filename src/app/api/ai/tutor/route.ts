@@ -8,6 +8,7 @@ import { recordStudyActivity } from "@/lib/streak";
 import { validateCsrfOrigin } from "@/lib/csrf";
 import { buildTutorContext } from "@/lib/tutor-context";
 import { featureDenial } from "@/lib/entitlements";
+import { canReadTextbook } from "@/lib/library-access";
 import { rewriteQueryForRAG } from "@/lib/query-rewriter";
 import {
   getTutorDailyStatus,
@@ -97,7 +98,9 @@ export async function POST(req: Request) {
       },
     });
 
-    if (!chapter) {
+    // Only a book this student may study (approved, national library or own
+    // school, within their study grades) — not any chapter id they send.
+    if (!chapter || !canReadTextbook(user, chapter.textbook)) {
       return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
     }
 

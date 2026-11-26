@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { rateLimit } from "@/lib/rate-limit";
@@ -7,6 +8,7 @@ import { generateQuestionsBatched, runQualityPipeline, passesAutoServe, generati
 import { normalizeOption, shuffleArray } from "@/lib/utils";
 import { getAdaptiveDifficultyInsights, AdaptiveInsights } from "@/lib/adaptive-learning";
 import { featureDenial, getEntitlements } from "@/lib/entitlements";
+import { canStudyFrom } from "@/lib/library-access";
 import { isInStudyScope } from "@/lib/grade-scope";
 import { selectGenerationContent } from "@/lib/generation-content";
 import { avoidList, generationRunIndex, recentChapterQuestions } from "@/lib/question-dedupe";
@@ -49,6 +51,11 @@ async function runGeneration(
 
   if (!textbookId) {
     throw new ApiError("Textbook ID is required", 400);
+  }
+  // Only books this student may study (approved, national library or own
+  // school, within their study grades).
+  if (!(await canStudyFrom(user, { textbookId }))) {
+    throw new ApiError("Textbook not found", 404);
   }
 
   onProgress?.({
@@ -587,6 +594,9 @@ function createSseStream(
 }
 
 export async function POST(request: Request) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

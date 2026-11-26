@@ -172,6 +172,9 @@ export function validateQuestions(input: unknown): GeneratedQuestion[] {
     } else if (type === "ORDERING") {
       if (options.length < 2) continue;
       if (!correctAnswer.includes("|")) continue;
+    } else if (type === "FILL_IN_BLANK") {
+      // Exactly one blank: there is one answer, and the quiz shows one box.
+      if ((q.questionText.match(/_{3,}/g) || []).length !== 1) continue;
     }
 
     validated.push({

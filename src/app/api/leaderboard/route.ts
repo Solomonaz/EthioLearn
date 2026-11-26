@@ -43,18 +43,17 @@ function buildUserScopeWhere(
   },
   type: string
 ): Prisma.UserWhereInput {
-  const base: Prisma.UserWhereInput = { role: "STUDENT" };
+  // School students rank within their school; students without a school rank
+  // among other students without a school (never mixed into schools' boards).
+  const base: Prisma.UserWhereInput = { role: "STUDENT", schoolId: user.schoolId ?? null };
 
   if (type === "class") {
-    if (user.schoolId) base.schoolId = user.schoolId;
     if (user.grade != null) base.grade = user.grade;
     if (user.section != null) base.section = user.section;
   } else if (type === "grade") {
-    if (user.schoolId) base.schoolId = user.schoolId;
     if (user.grade != null) base.grade = user.grade;
   } else {
     // school (default)
-    if (user.schoolId) base.schoolId = user.schoolId;
   }
 
   return base;
@@ -139,7 +138,8 @@ async function getAllTimeLeaderboard(
     // User is outside top 50 — count those ranked above them
     const countAbove = await db.user.count({
       where: {
-        ...buildUserScopeWhere(user, type),
+        // Same scope and subject filter as the list above.
+        ...withSubjectFilter(buildUserScopeWhere(user, type), subject),
         totalPoints: { gt: user.totalPoints },
       },
     });

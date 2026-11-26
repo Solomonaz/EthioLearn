@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isHttpUrl } from "@/lib/safe-url";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { Difficulty, Prisma, QuestionType } from "@prisma/client";
@@ -232,6 +233,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { chapterId, questionText, options, correctAnswer, difficulty, explanation, videoUrl, type } = body;
+  // Only a web address (http/https) — it becomes a link on the results page.
+  if (videoUrl !== undefined && videoUrl !== null && videoUrl !== "" && !isHttpUrl(videoUrl)) {
+    return NextResponse.json({ error: "The video link must start with http:// or https://" }, { status: 400 });
+  }
 
   if (!chapterId || typeof chapterId !== "string" || chapterId.trim() === "") {
     return NextResponse.json({ error: "chapterId is required" }, { status: 400 });
@@ -289,7 +294,7 @@ export async function POST(request: NextRequest) {
           ? (difficulty as Difficulty)
           : Difficulty.MEDIUM,
       explanation: explanation ?? null,
-      videoUrl: videoUrl ?? null,
+      videoUrl: videoUrl || null,
       type:
         type && validTypes.includes(type) ? (type as QuestionType) : QuestionType.MCQ,
     },

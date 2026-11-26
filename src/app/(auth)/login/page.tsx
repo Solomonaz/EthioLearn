@@ -20,6 +20,7 @@ import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   SessionRevoked: "Your session was signed out from another device. Please sign in again.",
   OAuthCallback:  "Social sign-in failed. Please try again.",
+  AccessDenied:   "This account can't sign in right now. Contact the Abugida team if you think this is a mistake.",
   Default:        "Sign-in failed. Please try again.",
 };
 

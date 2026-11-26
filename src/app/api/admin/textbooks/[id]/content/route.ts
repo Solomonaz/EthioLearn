@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateCsrfOrigin } from "@/lib/csrf";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
 import { canManageTextbook, canViewTextbook } from "@/lib/textbook-access";
@@ -10,6 +11,9 @@ interface RouteParams {
 const MAX_CONTENT_LENGTH = 200_000; // 200K chars for full book
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user || !["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

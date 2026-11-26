@@ -49,6 +49,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Reward not found" }, { status: 404 });
   }
 
+  // Redemption window: a SEMESTER reward is open only between its dates, and
+  // maxRedemptionsPerWindow caps how often one student redeems it per window
+  // (month, quarter, semester, or ever for ANYTIME). Denied ones don't count.
+  const now = new Date();
+  let windowStart: Date | null = null;
+  if (reward.redemptionWindow === "SEMESTER") {
+    if ((reward.windowStartDate && now < reward.windowStartDate) || (reward.windowEndDate && now > reward.windowEndDate)) {
+      return NextResponse.json({ error: "This reward can't be redeemed right now." }, { status: 400 });
+    }
+    windowStart = reward.windowStartDate;
+  } else if (reward.redemptionWindow === "MONTHLY") {
+    windowStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (reward.redemptionWindow === "QUARTERLY") {
+    windowStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  }
+  if (reward.maxRedemptionsPerWindow != null && reward.maxRedemptionsPerWindow > 0) {
+    const usedInWindow = await db.redemption.count({
+      where: {
+        studentId: user.id,
+        rewardId: reward.id,
+        status: { not: "DENIED" },
+        ...(windowStart ? { createdAt: { gte: windowStart } } : {}),
+      },
+    });
+    if (usedInWindow >= reward.maxRedemptionsPerWindow) {
+      return NextResponse.json(
+        { error: `You can redeem this reward ${reward.maxRedemptionsPerWindow} time${reward.maxRedemptionsPerWindow === 1 ? "" : "s"} per ${reward.redemptionWindow === "ANYTIME" ? "student" : reward.redemptionWindow.toLowerCase().replace("ly", "")}.` },
+        { status: 400 },
+      );
+    }
+  }
+
   // Check inventory (inventoryCount <= 0 means out of stock)
   if (reward.inventoryCount <= 0) {
     return NextResponse.json(

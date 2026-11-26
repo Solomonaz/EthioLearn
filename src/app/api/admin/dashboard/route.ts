@@ -15,6 +15,11 @@ export async function GET() {
     return NextResponse.json(await elementaryDashboard(user.schoolId));
   }
 
+  // A school admin with no school linked has no data to see (an empty filter
+  // here would mean every school's numbers).
+  if (user.role === "SCHOOL_ADMIN" && !user.schoolId) {
+    return NextResponse.json({ error: "Your account isn't linked to a school yet." }, { status: 403 });
+  }
   const schoolId = user.schoolId;
   const schoolFilter = schoolId ? { schoolId } : {};
   const studentFilter = schoolId

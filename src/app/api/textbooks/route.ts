@@ -65,12 +65,11 @@ export async function GET(request: Request) {
   // "biology" must still answer a request for "Biology".
   if (subject) where.subject = subjectFilter(subject);
 
-  // School scoping:
-  //   • Textbooks with schoolId = student's school  → that school's curriculum
-  //   • Textbooks with schoolId = null              → global/system-wide books
-  // Students without a schoolId can see all textbooks (single-tenant / dev mode)
-  if (user.schoolId) {
-    where.OR = [{ schoolId: user.schoolId }, { schoolId: null }];
+  // School scoping: the national library (schoolId = null) plus the user's
+  // own school's books. A user without a school sees the national library
+  // only — never another school's private books. The super admin sees all.
+  if (user.role !== "SUPER_ADMIN") {
+    where.OR = user.schoolId ? [{ schoolId: user.schoolId }, { schoolId: null }] : [{ schoolId: null }];
   }
 
   // School requests awaiting (or refused) approval are invisible outside admin.

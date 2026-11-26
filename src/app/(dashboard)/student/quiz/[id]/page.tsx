@@ -30,7 +30,11 @@ function FillInBlankRenderer({ text, value, onChange }: { text: string; value: s
       {parts.map((part, i) => (
         <span key={i} className="flex items-center gap-2">
           <MathText text={part} />
-          {i < parts.length - 1 && (
+          {/* A fill-in question has one answer: the first blank is the box;
+              any extra blank in an old question stays a plain line rather
+              than a second box that mirrors the first. */}
+          {i > 0 && i < parts.length - 1 && <span aria-hidden>_______</span>}
+          {i === 0 && parts.length > 1 && (
             <input
               type="text"
               autoFocus={i === 0}

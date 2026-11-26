@@ -80,14 +80,36 @@ function getSessionToken(cookieHeader: string): string | null {
   );
 }
 
-async function verifyAdminToken(cookieHeader: string): Promise<boolean> {
+/**
+ * The signed-in admin behind a request to the live-games list, checked against
+ * the database (current role, active, not suspended, session not revoked) —
+ * not just the role written in the cookie, which outlives a demotion. Null
+ * for anyone else.
+ */
+async function liveGamesViewer(cookieHeader: string): Promise<{ role: string; schoolId: string | null } | null> {
   try {
     const rawToken = getSessionToken(cookieHeader);
-    if (!rawToken) return false;
+    if (!rawToken) return null;
     const token = await decode({ token: rawToken, secret: process.env.NEXTAUTH_SECRET! });
-    return !!token && ["SUPER_ADMIN", "SCHOOL_ADMIN"].includes(String(token.role ?? ""));
+    if (!token?.id) return null;
+    if (token.id === "env_super_admin") return { role: "SUPER_ADMIN", schoolId: null };
+    if (token.sessionId) {
+      const session = await prisma.userSession.findUnique({
+        where: { sessionId: token.sessionId as string },
+        select: { isRevoked: true, expiresAt: true },
+      });
+      if (!session || session.isRevoked || session.expiresAt < new Date()) return null;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: String(token.id) },
+      select: { role: true, schoolId: true, isActive: true, suspendedAt: true },
+    });
+    if (!user || !user.isActive || user.suspendedAt) return null;
+    if (user.role === "SUPER_ADMIN") return { role: user.role, schoolId: null };
+    if (user.role === "SCHOOL_ADMIN" && user.schoolId) return { role: user.role, schoolId: user.schoolId };
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -127,6 +149,8 @@ interface RoomState {
   currentTimeLimit?: number; // seconds allotted to the current question
   rematchRequesters: Set<string>;
   subject?: string; // for fun facts
+  /** GameRoom.maxPlayers — joining stops at this many players. */
+  maxPlayers?: number;
 }
 
 function serializePlayers(room: RoomState) {
@@ -147,13 +171,23 @@ app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     const parsedUrl = parse(req.url!, true);
     if (parsedUrl.pathname === "/api/admin/games/live" && req.method === "GET") {
-      const isAdmin = await verifyAdminToken(req.headers.cookie ?? "");
-      if (!isAdmin) {
+      const viewer = await liveGamesViewer(req.headers.cookie ?? "");
+      if (!viewer) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized" }));
         return;
       }
-      const roomList = Array.from(rooms.values()).map((room) => ({
+      // A school admin sees only rooms hosted by their own school's students.
+      let visible = Array.from(rooms.values());
+      if (viewer.role === "SCHOOL_ADMIN") {
+        const hosts = await prisma.user.findMany({
+          where: { id: { in: visible.map((r) => r.hostId) }, schoolId: viewer.schoolId },
+          select: { id: true },
+        });
+        const own = new Set(hosts.map((h) => h.id));
+        visible = visible.filter((r) => own.has(r.hostId));
+      }
+      const roomList = visible.map((room) => ({
         roomCode: room.roomCode,
         status: room.status,
         playerCount: room.players.size,
@@ -216,7 +250,13 @@ app.prepare().then(() => {
       if (!room) {
         try {
           const dbRoom = await prisma.gameRoom.findUnique({ where: { roomCode } });
-          if (dbRoom && dbRoom.quizConfig && (dbRoom.status === "WAITING" || dbRoom.status === "ACTIVE")) {
+          if (dbRoom && dbRoom.status === "ACTIVE") {
+            // In progress when the server restarted: its scores and timers are
+            // gone, so it can't resume (restoring it left it stuck in countdown).
+            socket.emit("error", { message: "This game ended when the server restarted. Start a new one." });
+            return;
+          }
+          if (dbRoom && dbRoom.quizConfig && dbRoom.status === "WAITING") {
             const config = dbRoom.quizConfig as any;
             const questions = config.questions as Array<{ question: string; options: string[]; correctIndex: number }>;
             if (questions?.length) {
@@ -227,7 +267,8 @@ app.prepare().then(() => {
                 players: new Map(),
                 questions,
                 currentQuestion: 0,
-                status: dbRoom.status === "ACTIVE" ? "countdown" : "waiting",
+                status: "waiting",
+                maxPlayers: dbRoom.maxPlayers,
                 questionStartedAt: 0,
                 rematchRequesters: new Set(),
                 subject: config.subject ?? undefined,
@@ -242,8 +283,12 @@ app.prepare().then(() => {
       if (!room) { socket.emit("error", { message: "Room not found" }); return; }
 
       // Joining by code is battle mode too: the plan must include it.
+      let displayName = String(name ?? "").trim().slice(0, 40) || "Player";
       if (!room.players.has(userId) && userId !== "env_super_admin") {
-        const who = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true, createdAt: true } });
+        const who = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, schoolId: true, createdAt: true, name: true } });
+        // The name shown to other players is the account's own, not whatever
+        // the browser sends (no impersonation, no 10,000-character names).
+        if (who?.name) displayName = who.name.slice(0, 40);
         const ent = who ? await getEntitlements({ id: userId, role: who.role, schoolId: who.schoolId, createdAt: who.createdAt }) : null;
         if (!ent?.features.battle) {
           socket.emit("error", { message: "Battle mode isn't included in your plan.", code: "UPGRADE_REQUIRED" });
@@ -286,8 +331,15 @@ app.prepare().then(() => {
       }
 
       if (room.status !== "waiting") { socket.emit("error", { message: "Game already in progress" }); return; }
+      if (room.maxPlayers === undefined && room.gameRoomId) {
+        room.maxPlayers = (await prisma.gameRoom.findUnique({ where: { id: room.gameRoomId }, select: { maxPlayers: true } }))?.maxPlayers;
+      }
+      if (room.maxPlayers && room.players.size >= room.maxPlayers) {
+        socket.emit("error", { message: `This room is full (${room.maxPlayers} players).` });
+        return;
+      }
       socket.join(roomCode);
-      room.players.set(userId, { userId, name, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0, streak: 0, bestStreak: 0 });
+      room.players.set(userId, { userId, name: displayName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0, streak: 0, bestStreak: 0 });
       if (room.gameRoomId) {
         prisma.gamePlayer.upsert({
           where: { userId_gameRoomId: { userId, gameRoomId: room.gameRoomId } },
@@ -325,10 +377,14 @@ app.prepare().then(() => {
           return;
         }
 
+        // The host's real name (not the browser's), and the room's player cap.
+        const host = await prisma.user.findUnique({ where: { id: hostId }, select: { name: true } });
+        const hostDisplay = (host?.name ?? String(hostName ?? "").trim()).slice(0, 40) || "Host";
         rooms.set(roomCode, {
           gameRoomId: dbRoom.id,
+          maxPlayers: dbRoom.maxPlayers,
           roomCode, hostId,
-          players: new Map([[hostId, { userId: hostId, name: hostName, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0, streak: 0, bestStreak: 0 }]]),
+          players: new Map([[hostId, { userId: hostId, name: hostDisplay, score: 0, answered: 0, socketId: socket.id, correctAnswers: 0, totalAnswerTimeMs: 0, streak: 0, bestStreak: 0 }]]),
           questions, currentQuestion: 0, status: "waiting", questionStartedAt: 0, rematchRequesters: new Set(),
           subject: config.subject ?? undefined,
         });
@@ -502,7 +558,7 @@ app.prepare().then(() => {
               if (textbook && textbook.chapters.length > 0) {
                 const chapterIds = textbook.chapters.map((c: any) => c.id);
                 const allQuestions = await prisma.question.findMany({
-                  where: { chapterId: { in: chapterIds }, type: "MCQ" },
+                  where: { chapterId: { in: chapterIds }, type: "MCQ", status: "PUBLISHED" },
                 });
 
                 if (allQuestions.length > 0) {
@@ -716,7 +772,10 @@ app.prepare().then(() => {
         groupStats: { avgScore: groupAvgScore, avgAccuracy: groupAvgAccuracy, avgAnswerTimeMs: groupAvgAnswerTimeMs },
       });
 
-      const winner = finalScores[0];
+      // The win bonus needs a real, outright winner: more than 0 points and
+      // ahead of second place (a 0-0 game or a tie pays nobody).
+      const [top, second] = finalScores;
+      const winner = top && top.score > 0 && (!second || top.score > second.score) ? top : null;
       if (winner) {
         prisma.user.update({ where: { id: winner.userId }, data: { totalPoints: { increment: 150 } } }).catch(console.error);
         prisma.pointLedger.create({ data: { userId: winner.userId, actionType: "BATTLE_WIN", points: 150, description: `Battle win in room ${roomCode}` } }).catch(console.error);

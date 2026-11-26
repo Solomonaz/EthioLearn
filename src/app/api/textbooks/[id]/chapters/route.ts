@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/get-session";
+import { canReadTextbook } from "@/lib/library-access";
 
 export async function GET(
   _request: Request,
@@ -13,17 +14,23 @@ export async function GET(
 
   const { id } = await params;
 
-  const textbook = await (db as any).textbook.findUnique({
+  const book = await db.textbook.findUnique({
     where: { id },
-    select: { id: true, title: true, grade: true, subject: true },
+    select: { id: true, title: true, grade: true, subject: true, schoolId: true, approvalStatus: true },
   });
 
-  if (!textbook) {
+  // Another school's private book, an unapproved one or (for a student) a
+  // grade outside their study scope is "not found".
+  if (!book || !canReadTextbook(user, book)) {
     return NextResponse.json({ error: "Textbook not found" }, { status: 404 });
   }
 
+  const textbook = { id: book.id, title: book.title, grade: book.grade, subject: book.subject };
+
   const chapters = await (db as any).chapter.findMany({
     where: { textbookId: id },
+    // The chapter list never needs the chapter's full text.
+    omit: { content: true },
     include: {
       _count: { select: { questions: { where: { status: "PUBLISHED" } } } },
     },
